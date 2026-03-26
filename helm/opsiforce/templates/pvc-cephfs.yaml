@@ -1,0 +1,15 @@
+{{- if eq .Values.storage.type "pvc" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "opsiforce.fullname" . }}-cephfs
+  labels:
+    {{- include "opsiforce.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ .Values.storage.className }}
+  resources:
+    requests:
+      storage: {{ .Values.storage.size }}
+{{- end }}

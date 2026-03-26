@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opsiforce-backend.fullname" . }}
+  labels:
+    app: {{ include "opsiforce-backend.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "opsiforce-backend.fullname" . }}
+  template:
+    metadata:
+      annotations:
+        rollme: {{ randAlphaNum 5 | quote }}
+      labels:
+        app: {{ include "opsiforce-backend.fullname" . }}
+    spec:
+      serviceAccountName: {{ .Values.serviceAccountName }}
+      containers:
+        - name: opsiforce-backend
+          lifecycle:
+            preStop:
+              exec:
+                command: [ sh, -c, "sleep 30" ]
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "opsiforce-backend.fullname" . }}-config
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.containerPort }}
+          resources:
+            requests:
+              cpu: {{ .Values.backend.resources.requests.cpu }}
+              memory: {{ .Values.backend.resources.requests.memory }}
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ .Values.backend.containerPort }}
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ .Values.backend.containerPort }}

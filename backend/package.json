@@ -1,0 +1,52 @@
+{
+  "name": "@opsiforce/backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "nest start --watch",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "lint": "eslint src/",
+    "lint:fix": "eslint src/ --fix",
+    "prettier": "prettier --write src/",
+    "ts": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx ./db/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "create-opsiforce-db": "kubectl run -n local psql-client --restart=Never -i --tty --rm --env PGPASSWORD=dbpass1 --image=postgres:16 -- psql -h local-pg-postgresql -d postgres -U admin -c \"CREATE DATABASE opsiforce;\" || :",
+    "build-chat-image": "minikube image build -t opsiforce-chat:local -f docker/Dockerfile.chat ../../opsiforce",
+    "install-chat": "helm upgrade --install --wait --namespace local --create-namespace local-opsiforce-chat ../helm/opsiforce-chat --set chat.image.repository=opsiforce-chat --set chat.image.tag=local --set chat.image.pullPolicy=Never",
+    "opsiforce-install-proxy": "helm upgrade --install --wait --create-namespace --namespace local local-opsiforce-proxy ../../opsiforce/helm/opsiforce-proxy --set ingress.enabled=false --set proxy.backendService=http://host.minikube.internal:3001 --set proxy.frontendService=http://host.minikube.internal:8084 --set oauth2Proxy.enabled=true --set oauth2Proxy.image=quay.io/oauth2-proxy/oauth2-proxy:v7.13.0 --set oauth2Proxy.redisPath=redis://redis-session-storage-local-master.local.svc.cluster.local:6379/0 --set oauth2Proxy.clientId=opsiforce --set oauth2Proxy.clientSecret=opsiforce --set oauth2Proxy.cookieSecret=localsecretlocal --set oauth2Proxy.redirectUrl=http://localhost:4110 --set oauth2Proxy.issuerUrl=http://sima-keycloak-local-service:8086/realms/sima --set oauth2Proxy.logoutUrl='http://sima-keycloak-local-service:8086/realms/sima/protocol/openid-connect/logout?id_token_hint={id_token}'",
+    "port-forward-proxy": "sh -c 'while true; do kubectl port-forward services/local-opsiforce-proxy 4110:4180 -n local; sleep 1; done'",
+    "setup-minikube-storage": "minikube ssh 'sudo mkdir -p /data/opsiforce/projects && sudo chmod 777 /data/opsiforce'",
+    "build-agent-image": "minikube image ls | grep -q opsiforce-agent:1.2.27 || minikube image build -t opsiforce-agent:1.2.27 -f docker/Dockerfile.agent ..",
+    "opsiforce-install-infra": "helm upgrade --install --wait --namespace opsiforce --create-namespace opsiforce-infra ../helm/opsiforce --set fullnameOverride=opsiforce --set storage.type=hostPath --set storage.hostPath=/data/opsiforce",
+    "kubectl-proxy": "sh -c 'lsof -ti :8001 | xargs kill 2>/dev/null; while true; do kubectl proxy --port=8001; sleep 1; done'",
+    "minikube-dev": "env-cmd -f ./local-envs.sh --use-shell 'yarn run setup-minikube-storage && yarn run build-agent-image && yarn run opsiforce-install-infra && yarn run create-opsiforce-db && yarn run db:migrate && concurrently \"yarn run opsiforce-install-proxy\" \"yarn run port-forward-proxy\" \"yarn run kubectl-proxy\" \"yarn run dev\" \"yarn run db:studio\"'"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.0",
+    "@fastify/http-proxy": "^11.0.0",
+    "@kubernetes/client-node": "^1.0.0",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-fastify": "^11.0.0",
+    "@nestjs/schedule": "^5.0.0",
+    "drizzle-orm": "^0.45.1",
+    "fastify": "^5.0.0",
+    "ioredis": "^5.4.0",
+    "postgres": "^3.4.8",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@types/node": "^22.0.0",
+    "concurrently": "^9.2.1",
+    "drizzle-kit": "^0.31.10",
+    "env-cmd": "^11.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.8.0"
+  }
+}

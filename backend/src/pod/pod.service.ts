@@ -1,0 +1,113 @@
+import { Injectable, Logger } from "@nestjs/common"
+import { ConfigService } from "@nestjs/config"
+import * as k8s from "@kubernetes/client-node"
+import { buildPodSpec, PodTemplateOptions } from "./pod.template"
+
+@Injectable()
+export class PodService {
+  private readonly coreApi: k8s.CoreV1Api
+  private readonly logger = new Logger(PodService.name)
+  private readonly namespace: string
+
+  constructor(private readonly configService: ConfigService) {
+    const kc = new k8s.KubeConfig()
+    kc.loadFromDefault()
+    this.coreApi = kc.makeApiClient(k8s.CoreV1Api)
+    this.namespace = this.configService.getOrThrow<string>("k8sNamespace")
+  }
+
+  private baseOptions(podName: string): PodTemplateOptions {
+    return {
+      podName,
+      namespace: this.namespace,
+      agentImage: this.configService.getOrThrow<string>("agentImage"),
+      agentPort: this.configService.getOrThrow<number>("agentPort"),
+      storageType: this.configService.getOrThrow<"cephfs" | "hostPath">("storageType"),
+      cephfsPvcName: this.configService.getOrThrow<string>("cephfsPvcName"),
+      storageHostPath: this.configService.getOrThrow<string>("storageHostPath"),
+      imagePullPolicy: this.configService.getOrThrow<string>("agentImagePullPolicy"),
+      resources: this.configService.get("agentResources"),
+      nodeSelector: this.configService.get("agentNodeSelector"),
+      tolerations: this.configService.get("agentTolerations"),
+      affinity: this.configService.get("agentAffinity"),
+    }
+  }
+
+  async createWarmPod(podName: string): Promise<k8s.V1Pod> {
+    const options = this.baseOptions(podName)
+
+    const spec = buildPodSpec(options)
+    const response = await this.coreApi.createNamespacedPod({
+      namespace: this.namespace,
+      body: spec,
+    })
+    return response
+  }
+
+  async createAssignedPod(projectId: string, directory: string): Promise<{ podName: string }> {
+    const podName = `opsiforce-agent-${projectId.slice(0, 8)}`
+    const options: PodTemplateOptions = {
+      ...this.baseOptions(podName),
+      subPath: directory,
+      projectId,
+    }
+
+    const spec = buildPodSpec(options)
+    await this.coreApi.createNamespacedPod({
+      namespace: this.namespace,
+      body: spec,
+    })
+
+    this.logger.log(`Created assigned pod ${podName} for project ${projectId}`)
+    return { podName }
+  }
+
+  async assignPodToProject(warmPodName: string, projectId: string, directory: string): Promise<{ podName: string }> {
+    await this.deletePod(warmPodName).catch(() => {})
+    return this.createAssignedPod(projectId, directory)
+  }
+
+  async deletePod(podName: string): Promise<void> {
+    await this.coreApi.deleteNamespacedPod({
+      name: podName,
+      namespace: this.namespace,
+    })
+  }
+
+  async waitForReady(podName: string, timeoutMs = 60000): Promise<string> {
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      try {
+        const pod = await this.getPod(podName)
+        const ready = pod.status?.conditions?.find(
+          (c) => c.type === "Ready" && c.status === "True",
+        )
+        if (ready && pod.status?.podIP) {
+          return pod.status.podIP
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 2000))
+    }
+    throw new Error(`Pod ${podName} not ready after ${timeoutMs}ms`)
+  }
+
+  async listPods(labelSelector?: string): Promise<k8s.V1Pod[]> {
+    const response = await this.coreApi.listNamespacedPod({
+      namespace: this.namespace,
+      labelSelector,
+    })
+    return response.items
+  }
+
+  async getPod(podName: string): Promise<k8s.V1Pod> {
+    return this.coreApi.readNamespacedPod({
+      name: podName,
+      namespace: this.namespace,
+    })
+  }
+
+  async getPodIp(podName: string): Promise<string | undefined> {
+    const pod = await this.getPod(podName)
+    return pod.status?.podIP
+  }
+}

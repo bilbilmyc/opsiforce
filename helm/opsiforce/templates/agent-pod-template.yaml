@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opsiforce.fullname" . }}-agent-pod-template
+  labels:
+    {{- include "opsiforce.labels" . | nindent 4 }}
+data:
+  pod-template.json: |
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "labels": {
+          "app": "opsiforce-agent",
+          "managed-by": "opsiforce-backend"
+        }
+      },
+      "spec": {
+        {{- if .Values.agent.nodeSelector }}
+        "nodeSelector": {{ .Values.agent.nodeSelector | toJson }},
+        {{- end }}
+        {{- if .Values.agent.tolerations }}
+        "tolerations": {{ .Values.agent.tolerations | toJson }},
+        {{- end }}
+        {{- if .Values.agent.affinity }}
+        "affinity": {{ .Values.agent.affinity | toJson }},
+        {{- end }}
+        "containers": [
+          {
+            "name": "agent",
+            "image": "{{ .Values.agent.image.repository }}:{{ .Values.agent.image.tag }}",
+            "imagePullPolicy": "{{ .Values.agent.image.pullPolicy }}",
+            "ports": [
+              {
+                "containerPort": {{ .Values.agent.port }},
+                "protocol": "TCP"
+              }
+            ],
+            "resources": {
+              "requests": {
+                "cpu": "{{ .Values.agent.resources.requests.cpu }}",
+                "memory": "{{ .Values.agent.resources.requests.memory }}"
+              },
+              "limits": {
+                "cpu": "{{ .Values.agent.resources.limits.cpu }}",
+                "memory": "{{ .Values.agent.resources.limits.memory }}"
+              }
+            },
+            "volumeMounts": [
+              {
+                "name": "workspace",
+                "mountPath": "/workspace"
+              }
+            ]
+          }
+        ],
+        "volumes": [
+          {{- if eq .Values.storage.type "pvc" }}
+          {
+            "name": "workspace",
+            "persistentVolumeClaim": {
+              "claimName": "{{ include "opsiforce.fullname" . }}-cephfs"
+            }
+          },
+          {{- else }}
+          {
+            "name": "workspace",
+            "hostPath": {
+              "path": "{{ .Values.storage.hostPath }}",
+              "type": "DirectoryOrCreate"
+            }
+          },
+          {{- end }}
+        ]
+      }
+    }

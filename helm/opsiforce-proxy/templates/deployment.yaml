@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opsiforce-proxy.fullname" . }}
+  labels:
+    app: {{ include "opsiforce-proxy.fullname" . }}
+spec:
+    replicas: {{ .Values.replicaCount }}
+    selector:
+        matchLabels:
+          app: {{ include "opsiforce-proxy.fullname" . }}
+    template:
+        metadata:
+          annotations:
+              rollme: {{ randAlphaNum 5 | quote }}
+          labels:
+              app: {{ include "opsiforce-proxy.fullname" . }}
+        spec:
+          volumes:
+            - name: nginx-conf
+              configMap:
+                name: {{ include "opsiforce-proxy.fullname" . }}
+                items:
+                  - key: nginx.conf
+                    path: nginx.conf
+          containers:
+          - name: {{ .Chart.Name }}
+            image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            lifecycle:
+              preStop:
+                exec:
+                  command: [ sh, -c, "sleep 30" ]
+            ports:
+              - name: http
+                containerPort: {{ .Values.service.port }}
+                protocol: TCP
+            livenessProbe:
+                {{- toYaml .Values.livenessProbe | nindent 12 }}
+            readinessProbe:
+                {{- toYaml .Values.readinessProbe | nindent 12 }}
+            resources:
+                {{- toYaml .Values.resources | nindent 12 }}
+            volumeMounts:
+              - name: nginx-conf
+                mountPath: /etc/nginx/nginx.conf
+                subPath: nginx.conf
+                readOnly: true
+          {{- if .Values.oauth2Proxy.enabled }}
+          - name: opsiforce-oauth2-proxy
+            image: {{ .Values.oauth2Proxy.image }}
+            readinessProbe:
+                httpGet:
+                  path: /ping
+                  port: 4180
+            livenessProbe:
+                httpGet:
+                  path: /ping
+                  port: 4180
+            lifecycle:
+              preStop:
+                exec:
+                  command: [ sh, -c, "sleep 30" ]
+            resources:
+              {{- toYaml .Values.resources | nindent 18 }}
+            args:
+                - --provider=keycloak-oidc
+                - --http-address=0.0.0.0:4180
+                - --upstream="http://localhost:{{ .Values.service.port }}/"
+                - --client-id={{ .Values.oauth2Proxy.clientId }}
+                - --cookie-secret={{ .Values.oauth2Proxy.cookieSecret }}
+                - --session-store-type=redis
+                - --redis-connection-url={{ .Values.oauth2Proxy.redisPath }}
+                - --skip-provider-button=true
+                - --email-domain=*
+                - --oidc-email-claim=preferred_username
+                - --pass-access-token=true
+                - --client-secret={{ .Values.oauth2Proxy.clientSecret }}
+                - --oidc-issuer-url={{ .Values.oauth2Proxy.issuerUrl }}
+                - --backend-logout-url={{ .Values.oauth2Proxy.logoutUrl }}
+                - --cookie-secure=false
+                - --skip-jwt-bearer-tokens=true
+                - --cookie-csrf-per-request=true
+                - --redirect-url={{ .Values.oauth2Proxy.redirectUrl }}
+                - --cookie-refresh=4m
+          {{- end }}

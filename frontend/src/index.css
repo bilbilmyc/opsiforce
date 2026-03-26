@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+:root {
+  --color-bg: #f8f9fb;
+  --color-surface: #ffffff;
+  --color-surface-hover: #f0f2f5;
+  --color-border: #e5e7eb;
+  --color-text: #1a1a2e;
+  --color-text-muted: #6b7280;
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-light: #eef2ff;
+  --color-success: #10b981;
+  --color-error: #ef4444;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ── Strip opencode chrome: only keep the chat ── */
+
+.oc-chat-only header.h-10.shrink-0 {
+  display: none !important;
+}
+
+.oc-chat-only .w-16.shrink-0.bg-background-base.flex.flex-col {
+  display: none !important;
+}
+
+.oc-chat-only aside {
+  display: none !important;
+}
+
+.oc-chat-only .flex-col.md\:flex-row > :first-child {
+  flex: 1 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+.oc-chat-only main {
+  border-top: none !important;
+}
+
+.oc-chat-only {
+  overflow: hidden !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.oc-chat-only .w-16.shrink-0 {
+  display: none !important;
+  width: 0 !important;
+}

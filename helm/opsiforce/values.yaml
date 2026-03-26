@@ -1,0 +1,31 @@
+nameOverride: ""
+fullnameOverride: ""
+
+storage:
+  type: hostPath
+  className: cephfs
+  size: 10Gi
+  hostPath: /tmp/opsiforce-data
+
+agent:
+  image:
+    repository: 471112501003.dkr.ecr.us-east-1.amazonaws.com/opsiforce
+    tag: agent
+    pullPolicy: Always
+  port: 4096
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+
+warmPool:
+  size: 0
+
+timeout:
+  idleMinutes: 30

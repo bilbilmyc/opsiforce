@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opsiforce-backend.fullname" . }}-config
+  labels:
+    {{- include "opsiforce-backend.labels" . | nindent 4 }}
+data:
+  DATABASE_URL: {{ .Values.config.databaseUrl | quote }}
+  REDIS_URL: {{ .Values.config.redisUrl | quote }}
+  K8S_NAMESPACE: {{ .Values.config.k8sNamespace | quote }}
+  WARM_POOL_SIZE: {{ .Values.config.warmPoolSize | quote }}
+  AGENT_IMAGE: {{ .Values.config.agentImage | quote }}
+  AGENT_IMAGE_PULL_POLICY: {{ .Values.config.agentImagePullPolicy | quote }}
+  AGENT_PORT: {{ .Values.config.agentPort | quote }}
+  CEPHFS_PVC_NAME: {{ .Values.config.cephfsPvcName | quote }}
+  STORAGE_TYPE: {{ .Values.config.storageType | quote }}
+  STORAGE_HOST_PATH: {{ .Values.config.storageHostPath | quote }}
+  TIMEOUT_IDLE_MINUTES: {{ .Values.config.timeoutIdleMinutes | quote }}
+  PLATFORM_VERSION: {{ .Values.config.platformVersion | quote }}
+  {{- if .Values.config.agentResources }}
+  AGENT_RESOURCES: {{ .Values.config.agentResources | toJson | quote }}
+  {{- end }}
+  {{- if .Values.config.agentNodeSelector }}
+  AGENT_NODE_SELECTOR: {{ .Values.config.agentNodeSelector | toJson | quote }}
+  {{- end }}
+  {{- if .Values.config.agentTolerations }}
+  AGENT_TOLERATIONS: {{ .Values.config.agentTolerations | toJson | quote }}
+  {{- end }}
+  {{- if .Values.config.agentAffinity }}
+  AGENT_AFFINITY: {{ .Values.config.agentAffinity | toJson | quote }}
+  {{- end }}

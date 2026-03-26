@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opsiforce-proxy.fullname" . }}
+  annotations:
+    service.kubernetes.io/topology-mode: "Auto"
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    {{- if .Values.oauth2Proxy.enabled }}
+    - port: 4180
+      targetPort: 4180
+      protocol: TCP
+      name: http
+    {{- else }}
+    - port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
+      protocol: TCP
+      name: http
+    {{- end }}
+  selector:
+    app: {{ include "opsiforce-proxy.fullname" . }}

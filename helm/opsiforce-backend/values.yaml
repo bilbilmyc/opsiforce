@@ -1,0 +1,76 @@
+replicaCount: 1
+
+backend:
+  image:
+    repository: 471112501003.dkr.ecr.us-east-1.amazonaws.com/opsiforce
+    tag: backend
+    pullPolicy: Always
+  containerPort: 3001
+  resources:
+    requests:
+      cpu: 50m
+      memory: 300M
+
+serviceAccountName: ""
+
+config:
+  databaseUrl: ""
+  redisUrl: ""
+  k8sNamespace: ""
+  warmPoolSize: "0"
+  agentImage: ""
+  agentImagePullPolicy: "Always"
+  agentPort: "4096"
+  cephfsPvcName: ""
+  storageType: "hostPath"
+  storageHostPath: "/tmp/opsiforce-data"
+  timeoutIdleMinutes: "30"
+  platformVersion: ""
+  agentResources: {}
+  agentNodeSelector: {}
+  agentTolerations: []
+  agentAffinity: {}
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext: {}
+
+securityContext: {}
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources: {}
+
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: http
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
