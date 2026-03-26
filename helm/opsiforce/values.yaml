@@ -5,8 +5,8 @@ imagePullSecrets:
   - name: ghcr-pull-secret
 
 storage:
-  type: hostPath
-  className: cephfs
+  type: pvc
+  className: ceph-filesystem
   size: 10Gi
   hostPath: /tmp/opsiforce-data
 
