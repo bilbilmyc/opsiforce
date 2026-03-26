@@ -7,7 +7,7 @@ imagePullSecrets:
 storage:
   type: pvc
   className: ceph-filesystem
-  size: 10Gi
+  size: 100Gi
   hostPath: /tmp/opsiforce-data
 
 agent:
