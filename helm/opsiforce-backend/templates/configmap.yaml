@@ -29,3 +29,6 @@ data:
   {{- if .Values.config.agentAffinity }}
   AGENT_AFFINITY: {{ .Values.config.agentAffinity | toJson | quote }}
   {{- end }}
+  {{- if .Values.imagePullSecrets }}
+  IMAGE_PULL_SECRETS: {{ .Values.imagePullSecrets | toJson | quote }}
+  {{- end }}

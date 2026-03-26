@@ -30,6 +30,7 @@ export class PodService {
       nodeSelector: this.configService.get("agentNodeSelector"),
       tolerations: this.configService.get("agentTolerations"),
       affinity: this.configService.get("agentAffinity"),
+      imagePullSecrets: this.configService.get("imagePullSecrets"),
     }
   }
 

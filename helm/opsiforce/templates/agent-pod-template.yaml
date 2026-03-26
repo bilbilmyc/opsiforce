@@ -25,6 +25,9 @@ data:
         {{- if .Values.agent.affinity }}
         "affinity": {{ .Values.agent.affinity | toJson }},
         {{- end }}
+        {{- if .Values.imagePullSecrets }}
+        "imagePullSecrets": {{ .Values.imagePullSecrets | toJson }},
+        {{- end }}
         "containers": [
           {
             "name": "agent",

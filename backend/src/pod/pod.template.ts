@@ -15,6 +15,7 @@ export interface PodTemplateOptions {
   nodeSelector?: Record<string, string>
   tolerations?: Array<Record<string, string>>
   affinity?: Record<string, unknown>
+  imagePullSecrets?: Array<{ name: string }>
 }
 
 export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
@@ -49,6 +50,9 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
         : {}),
       ...(options.affinity && Object.keys(options.affinity).length > 0
         ? { affinity: options.affinity }
+        : {}),
+      ...(options.imagePullSecrets && options.imagePullSecrets.length > 0
+        ? { imagePullSecrets: options.imagePullSecrets }
         : {}),
       containers: [
         {

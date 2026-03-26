@@ -20,7 +20,15 @@ oauth2Proxy:
   redirectUrl:
   redisPath:
 
-imagePullSecrets: []
+valkey:
+  enabled: true
+  replica:
+    enabled: false
+  auth:
+    enabled: false
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
 nameOverride: ""
 fullnameOverride: ""
 
@@ -42,15 +50,12 @@ service:
   port: 80
 
 ingress:
+  enabled: false
+
+ingressRoute:
   enabled: true
-  className: ""
-  annotations: {}
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
+  hostname: opsiforce.dev.opsima.com
+  traefikTarget: traefik.traefik.1d27b1e1-ef9f-407a-889a-6d80fc8fdd07.northamerica-central-1a.cfke.cloudfleet.dev
 
 resources:
   requests:
@@ -76,4 +81,28 @@ nodeSelector: {}
 
 tolerations: []
 
-affinity: {}
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: cfke.io/region
+              operator: In
+              values:
+                - northamerica
+            - key: cfke.io/subregion
+              operator: In
+              values:
+                - east
+            - key: node.kubernetes.io/instance-type
+              operator: NotIn
+              values:
+                - cpx11
+                - cpx21
+                - cpx22
+                - cpx32
+                - cpx31
+                - ccx13
+                - ccx23
+                - cx23
+                - cx33

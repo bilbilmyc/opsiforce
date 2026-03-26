@@ -2,7 +2,7 @@ replicaCount: 1
 
 frontend:
   image:
-    repository: 471112501003.dkr.ecr.us-east-1.amazonaws.com/opsiforce
+    repository: ghcr.io/simadevelopment/opsiforce
     tag: frontend
     pullPolicy: Always
   containerPort: 80
@@ -11,7 +11,8 @@ frontend:
       cpu: 50m
       memory: 128Mi
 
-imagePullSecrets: []
+imagePullSecrets:
+  - name: ghcr-pull-secret
 nameOverride: ""
 fullnameOverride: ""
 
@@ -56,4 +57,28 @@ nodeSelector: {}
 
 tolerations: []
 
-affinity: {}
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: cfke.io/region
+              operator: In
+              values:
+                - northamerica
+            - key: cfke.io/subregion
+              operator: In
+              values:
+                - east
+            - key: node.kubernetes.io/instance-type
+              operator: NotIn
+              values:
+                - cpx11
+                - cpx21
+                - cpx22
+                - cpx32
+                - cpx31
+                - ccx13
+                - ccx23
+                - cx23
+                - cx33
