@@ -1,11 +1,12 @@
-FROM node:24-alpine AS builder
+FROM node:24-alpine
 
 WORKDIR /app
+
+ENV NODE_OPTIONS="--max-http-header-size=128000"
 
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn ./.yarn
 COPY packages/opsiforce/frontend ./packages/opsiforce/frontend
-COPY packages/opsiforce/opencode ./packages/opsiforce/opencode
 
 RUN yarn workspaces focus --all
 
@@ -13,10 +14,6 @@ WORKDIR /app/packages/opsiforce/frontend
 
 RUN yarn build
 
-FROM nginx:alpine
-
-COPY --from=builder /app/packages/opsiforce/frontend/dist /usr/share/nginx/html
-
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["yarn", "dlx", "serve", "-s", "dist", "-l", "80"]

@@ -411,7 +411,7 @@ Backend polls for readiness every 2s with a 60s timeout (`PodService.waitForRead
 | K8S_NAMESPACE | opsiforce | Namespace for agent pods |
 | K8S_API_PROXY_URL | "" | K8s API proxy URL for routing (local: `http://localhost:8001` via `kubectl proxy`) |
 | WARM_POOL_SIZE | 2 | Number of warm pods to maintain |
-| AGENT_IMAGE | opsiforce-agent:1.2.27 | Docker image for agent pods (tag = opencode version) |
+| AGENT_IMAGE | opsiforce-agent:1.3.2 | Docker image for agent pods (tag = opencode version) |
 | AGENT_IMAGE_PULL_POLICY | IfNotPresent | K8s imagePullPolicy (Never for minikube, Always for prod) |
 | AGENT_PORT | 4096 | Port opencode serve listens on |
 | CEPHFS_PVC_NAME | opsiforce-cephfs | PVC name for shared storage |

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "NODE_OPTIONS='--max-http-header-size=128000' vite",
     "build": "vite build",
     "preview": "vite preview",
     "ts": "tsc --noEmit",

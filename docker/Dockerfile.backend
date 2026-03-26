@@ -25,6 +25,7 @@ COPY --from=builder /app/packages/opsiforce/backend/package.json ./packages/opsi
 WORKDIR /app/packages/opsiforce/backend/
 
 ENV NODE_ENV="production"
+ENV NODE_OPTIONS="--max-http-header-size=128000"
 
 RUN yarn workspaces focus --all --production
 
