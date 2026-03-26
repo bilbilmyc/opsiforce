@@ -21,7 +21,7 @@ config:
   agentImage: ""
   agentImagePullPolicy: "Always"
   agentPort: "4096"
-  cephfsPvcName: ""
+  cephfsPvcName: "opsiforce-cephfs"
   storageType: "cephfs"
   storageHostPath: "/tmp/opsiforce-data"
   timeoutIdleMinutes: "30"
