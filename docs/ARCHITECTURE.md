@@ -79,44 +79,116 @@ The frontend integrates OpenCode at the source level — OpenCode's Solid.js com
 1. User types in OpenCode UI (embedded in frontend)
 2. OpenCode SDK → POST /api/proxy/{projectId}/session/{sid}/message
 3. proxy → backend (NestJS)
-4. ProxyMiddleware touches timeout (Redis SETEX pod:touch TTL 1800)
+4. ProxyController touches timeout (Redis SETEX opsiforce:timeout:{id} TTL 1800)
 5. ProxyController resolves project → pod IP from DB
 6. Backend proxies request to http://{podIp}:4096/session/{sid}/message
 7. opencode serve processes message, streams SSE response back
 8. Response streams through backend → proxy → frontend
 ```
 
-### Pod timeout
+### Pod timeout (Redis keyspace notifications)
+
+Idle timeout is **event-driven, not polling-based**. Redis notifies the backend the instant a timeout key expires — zero polling, zero delay.
+
+#### The Redis key lifecycle
+
+Every proxy request resets a 30-minute countdown:
 
 ```
-Every 60 seconds (TimeoutCron.handleIdleTimeouts):
-  1. List all active projects from DB
-  2. For each: check Redis key "opsiforce:timeout:{projectId}" TTL
-  3. If key expired (no activity in 30 min):
-     a. Mark pod as terminating, delete K8s pod
-     b. Clear pod from pods table and Redis key
-     c. Update project status to "suspended", clear podName/podIp
-  4. Replenish warm pool to configured size
-
-Every 30 minutes (TimeoutCron.handleOrphanedProjects):
-  1. List all active projects from DB
-  2. For each: verify K8s pod still exists
-  3. If pod gone (killed externally, OOM, node eviction):
-     a. Clean up pods table and Redis key
-     b. Update project status to "suspended"
+SETEX opsiforce:timeout:{projectId} 1800 "{timestamp}"
+       ↑ key name                    ↑ TTL (30 min)
 ```
 
-### Resuming a suspended project
+If the user keeps sending requests, the TTL keeps resetting to 1800. The key only expires when there's been **no activity for a full 30 minutes**.
+
+#### How expiration detection works
+
+Redis has a built-in feature: **keyspace notifications**. When enabled (`notify-keyspace-events Ex`), Redis publishes a message on a pub/sub channel every time a key expires:
 
 ```
-1. User clicks suspended project in sidebar
-2. Frontend POST /api/projects/{id}/resume → proxy → backend
-3. Backend ProjectService:
-   a. Claims warm pod from pool (or creates directly if pool exhausted)
-   b. Deletes warm pod, creates assigned pod with subPath = "projects/{project-id}"
-   c. Waits for pod ready, records new podName/podIp
-   d. opencode serve starts in existing directory (finds .opencode/ state)
-   e. Session is restored — user continues where they left off
+Channel:  __keyevent@{db}__:expired        (db = Redis database number from REDIS_URL)
+Message:  opsiforce:timeout:{projectId}    (the key that just expired)
+```
+
+`TimeoutListener` subscribes to this channel using a **dedicated Redis connection** (Redis requires a separate connection for pub/sub — a subscribed client can't run normal commands like SETEX/DEL).
+
+#### What TimeoutListener does
+
+```
+On startup:
+  1. CONFIG SET notify-keyspace-events Ex    (enable notifications, idempotent)
+  2. Create dedicated subscriber Redis connection
+  3. SUBSCRIBE __keyevent@{db}__:expired
+  4. Sweep: check all active projects' Redis TTLs, suspend any already expired
+     (catches events missed while backend was down)
+
+At runtime (event-driven):
+  5. Redis key expires → message arrives on subscriber
+  6. Parse key → extract projectId
+  7. Load project from DB, verify status is "active"
+  8. Kill K8s pod, clean up pods table
+  9. Set project status to "suspended", clear podName/podIp
+  10. Replenish warm pool
+
+On Redis reconnection:
+  - ioredis auto-resubscribes to the channel
+  - Sweep again (catch events missed during the connection gap)
+```
+
+#### Why a dedicated Redis connection?
+
+Redis protocol rule: once a connection calls `SUBSCRIBE`, it enters **subscriber mode** and can only receive pub/sub messages. It can no longer run `SETEX`, `TTL`, `DEL`, etc. So:
+
+- `TimeoutService.redis` — normal connection for SETEX/TTL/DEL (used by touchActivity, isExpired, clear)
+- `TimeoutListener.subscriber` — pub/sub connection, only receives expiration events
+
+#### Why the startup sweep?
+
+Redis pub/sub is fire-and-forget. If nobody is subscribed when an event fires, it's lost. Two scenarios:
+
+1. **Backend restarts** — key expires at 14:05, backend starts at 14:06 → event lost
+2. **Redis connection drops briefly** — ioredis reconnects, but events during the gap are lost
+
+The sweep queries all active projects, checks their Redis TTLs, and suspends any that already expired. Runs once on startup and again on every reconnection.
+
+#### Timeline example
+
+```
+14:00:00  User sends a message → SETEX timeout:abc 1800   (expires at 14:30)
+14:10:00  User sends a message → SETEX timeout:abc 1800   (expires at 14:40)
+14:15:00  User sends a message → SETEX timeout:abc 1800   (expires at 14:45)
+14:15:01  User closes laptop...
+
+14:45:00  Redis expires key "timeout:abc"
+14:45:00  Redis publishes → __keyevent@2__:expired → "opsiforce:timeout:abc"
+14:45:00  TimeoutListener receives event → kills pod, suspends project (instant)
+
+15:30:00  User opens laptop, clicks project
+15:30:00  Frontend → GET /api/proxy/abc/session
+15:30:00  ProxyController: project suspended, no podIp → auto-reassign
+15:30:00  → Returns 503 "Pod is restarting"
+15:30:10  Pod ready, project active → UI loads with full chat history
+```
+
+#### Production Redis configuration
+
+`notify-keyspace-events Ex` is set at application startup via `CONFIG SET`. For production, also set it in the Valkey/Redis server configuration so it persists across Redis restarts.
+
+### Auto-reassignment (pod died or project suspended)
+
+```
+When a proxy request detects a dead/missing pod:
+1. ProxyController fetch to pod fails (K8s 404 or connection refused)
+2. Calls ProjectService.reassignPod(projectId):
+   a. Cleans up old pod from DB
+   b. Sets project status to "pending"
+   c. Async: claims warm pod → creates assigned pod → status becomes "active"
+3. Returns 503 {"error": "Pod is restarting, please retry"}
+4. Frontend retries, pod is ready in ~10s
+
+Also handles suspended projects:
+  - ProxyService.resolveUpstream() finds no podName/podIp
+  - Throws ServiceUnavailableException → same reassignment flow
 ```
 
 ---
@@ -132,8 +204,8 @@ packages/opsiforce/
 │   │   ├── config/              Environment configuration
 │   │   ├── proxy/               Dynamic HTTP proxy (project → pod IP routing)
 │   │   ├── pod/                 K8s pod CRUD + warm pool + pod spec builder
-│   │   ├── project/             Project CRUD + resume/stop + history
-│   │   └── timeout/             Redis TTL tracking + cron cleanup
+│   │   ├── project/             Project CRUD + auto-reassignment
+│   │   └── timeout/             Redis TTL tracking + keyspace notification listener
 │   └── db/
 │       ├── schema.ts            Drizzle schema (projects + pods tables)
 │       ├── index.ts             Database connection
@@ -177,7 +249,7 @@ packages/opsiforce/
 | title | text | User-provided name (nullable) |
 | description | text | Optional context (nullable) |
 | directory | text | CephFS subPath: "projects/{id}" |
-| status | enum | pending, starting, active, suspended, stopped |
+| status | enum | pending, active, suspended |
 | pod_name | text | Current K8s pod name (null when suspended/stopped) |
 | pod_ip | text | Current pod cluster IP |
 | session_id | text | opencode session ID for resume |
@@ -258,7 +330,7 @@ Without these, sessions are lost on pod deletion. The `.xdg/` prefix keeps XDG s
 
 ### What happens during pod switch
 
-When a project is suspended (idle timeout, pod eviction, user stop) and later resumed:
+When a project is suspended (idle timeout, pod eviction) and later accessed via proxy:
 
 1. **Old pod is gone** — K8s deleted it, but the volume subPath `projects/{project-id}` still has all data
 2. **New pod is created** — from warm pool or directly, with the same `subPath: "projects/{project-id}"`
@@ -305,9 +377,9 @@ The backend maintains X warm pods always running (configurable via `WARM_POOL_SI
 ```
 Pod lifecycle:
   WARM → (assign to project) → delete warm pod → create assigned pod → ACTIVE
-  ACTIVE → (30min idle) → TIMED_OUT → delete pod → project suspended → replenish warm pool
-  ACTIVE → (user stops) → STOPPED → delete pod → replenish warm pool
-  ACTIVE → (externally killed) → detected by orphan cron → project suspended → user resumes → new pod
+  ACTIVE → (30min idle) → Redis key expires → TimeoutListener suspends → replenish warm pool
+  ACTIVE → (externally killed) → next proxy request detects → auto-reassign → ACTIVE
+  ACTIVE → (user deletes project) → delete pod → delete project from DB
 ```
 
 Warm pods have no subPath mount (empty working directory). When assigned:
@@ -315,7 +387,9 @@ Warm pods have no subPath mount (empty working directory). When assigned:
 2. A new pod is created with the correct `subPath: "projects/{project-id}"`
 3. K8s volumes are immutable after pod creation — this is why we delete+create, not patch
 
-If the warm pool is exhausted, both `create` and `resume` fall back to creating a pod directly (no warm pod needed). Pod template overrides (resources, nodeSelector, tolerations, affinity) are configurable via env vars / Helm values.
+If the warm pool is exhausted, pod creation falls back to creating directly (no warm pod needed). Pod template overrides (resources, nodeSelector, tolerations, affinity) are configurable via env vars / Helm values.
+
+On startup, `PodPoolService.cleanupOrphanedPods()` deletes any K8s pods that have no matching DB record (e.g., from a previous backend session or DB reset).
 
 ---
 
@@ -358,8 +432,6 @@ The Dockerfile accepts a build arg `OPENCODE_CONFIG` (defaults to `agent-config/
 | GET | /api/projects | List all projects (history, newest first) |
 | GET | /api/projects/:id | Get project details |
 | PATCH | /api/projects/:id | Update project metadata (title, description) |
-| POST | /api/projects/:id/resume | Resume suspended project (new pod, same data) |
-| POST | /api/projects/:id/stop | Stop project (kill pod, preserve data) |
 | DELETE | /api/projects/:id | Delete project (kill pod, delete data) |
 
 ### Health
@@ -374,7 +446,7 @@ The Dockerfile accepts a build arg `OPENCODE_CONFIG` (defaults to `agent-config/
 |--------|------|-------------|
 | ALL | /api/proxy/:projectId/* | HTTP proxy — resolves project → pod IP, forwards request. Streams SSE responses for chat. |
 
-Every proxied request touches the Redis timeout key, keeping the pod alive while in use.
+Every proxied request resets the Redis timeout TTL (30 min), keeping the pod alive while in use. If the pod is dead or the project is suspended, the proxy triggers automatic reassignment and returns 503.
 
 ### Proxy routing modes
 
@@ -389,7 +461,7 @@ Local dev uses `kubectl proxy` (port 8001) because the backend runs outside mini
 
 ### Activity tracking detail
 
-`ProxyMiddleware` intercepts every `/proxy/{projectId}/*` request and calls `ProjectService.touchActivity(projectId)` — updates both Redis TTL and `projects.lastActiveAt` in PostgreSQL.
+`ProxyController` calls `ProjectService.touchActivity(projectId)` on every proxied request — resets both the Redis TTL (SETEX 1800s) and `projects.lastActiveAt` in PostgreSQL.
 
 ---
 
@@ -532,11 +604,8 @@ curl -X POST http://localhost:3001/api/projects
 # Get a specific project
 curl http://localhost:3001/api/projects/{project-id}
 
-# Resume a suspended project
-curl -X POST http://localhost:3001/api/projects/{project-id}/resume
-
-# Stop a project
-curl -X POST http://localhost:3001/api/projects/{project-id}/stop
+# Delete a project (kills pod, removes from DB)
+curl -X DELETE http://localhost:3001/api/projects/{project-id}
 
 # Health check
 curl http://localhost:3001/api/health

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from "@nestjs/common"
+import { Injectable, NotFoundException, Logger } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { eq } from "drizzle-orm"
 import crypto from "crypto"
@@ -7,7 +7,7 @@ import { projects, pods } from "../../db/schema"
 import { PodService } from "../pod/pod.service"
 import { PodPoolService } from "../pod/pod.pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
-import { CreateProjectDto, UpdateProjectDto, ProjectResponse } from "./project.types"
+import { CreateProjectDto, UpdateProjectDto, ProjectResponse, ProjectStatus } from "./project.types"
 
 @Injectable()
 export class ProjectService {
@@ -32,7 +32,7 @@ export class ProjectService {
         title: dto?.title ?? null,
         description: dto?.description ?? null,
         directory,
-        status: "pending",
+        status: ProjectStatus.Pending,
         platformVersion,
       })
       .returning()
@@ -56,23 +56,28 @@ export class ProjectService {
       }
 
       const assigned = await this.podService.assignPodToProject(claimedPod.podName, projectId, directory)
-      await this.waitForPodReady(assigned.podName, projectId)
+      const podIp = await this.waitForPodReady(assigned.podName, projectId)
+
+      await db
+        .update(pods)
+        .set({ podName: assigned.podName, projectId, podIp, updatedAt: new Date() })
+        .where(eq(pods.id, claimedPod.id))
     } catch (err) {
       await db
         .update(projects)
-        .set({ status: "suspended", updatedAt: new Date() })
+        .set({ status: ProjectStatus.Suspended, updatedAt: new Date() })
         .where(eq(projects.id, projectId))
       throw err
     }
   }
 
-  private async waitForPodReady(podName: string, projectId: string): Promise<void> {
+  private async waitForPodReady(podName: string, projectId: string): Promise<string> {
     const podIp = await this.podService.waitForReady(podName)
 
     await db
       .update(projects)
       .set({
-        status: "active",
+        status: ProjectStatus.Active,
         podName,
         podIp,
         lastActiveAt: new Date(),
@@ -82,6 +87,7 @@ export class ProjectService {
 
     await this.timeoutService.touch(projectId)
     this.logger.log(`Project ${projectId} active on pod ${podName} (${podIp})`)
+    return podIp
   }
 
   async findAll(): Promise<ProjectResponse[]> {
@@ -108,61 +114,24 @@ export class ProjectService {
   async remove(id: string): Promise<void> {
     const project = await this.findOne(id)
 
-    if (project.status === "active" || project.status === "starting") {
-      await this.stop(id)
+    if (project.podName) {
+      await db
+        .update(pods)
+        .set({ status: "terminating", updatedAt: new Date() })
+        .where(eq(pods.podName, project.podName))
+
+      await this.podService.deletePod(project.podName).catch(() => {})
+
+      await db.delete(pods).where(eq(pods.podName, project.podName))
     }
 
+    await this.timeoutService.clear(id)
     await db.delete(projects).where(eq(projects.id, id))
   }
 
-  async resume(id: string): Promise<ProjectResponse> {
+  async reassignPod(id: string): Promise<void> {
     const project = await this.findOne(id)
-
-    if (project.status === "active" || project.status === "starting") {
-      throw new BadRequestException(`Project ${id} is already ${project.status}`)
-    }
-
-    const claimedPod = await this.podPoolService.claimWarmPod()
-
-    let podName: string
-
-    if (claimedPod) {
-      const assigned = await this.podService.assignPodToProject(claimedPod.podName, id, project.directory)
-      podName = assigned.podName
-    } else {
-      this.logger.warn(`No warm pods available for resume ${id}, creating directly`)
-      const assigned = await this.podService.createAssignedPod(id, project.directory)
-      podName = assigned.podName
-    }
-
-    const podIp = await this.podService.waitForReady(podName)
-
-    const [updated] = await db
-      .update(projects)
-      .set({
-        status: "active",
-        podName,
-        podIp,
-        lastActiveAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(projects.id, id))
-      .returning()
-
-    if (claimedPod) {
-      await db
-        .update(pods)
-        .set({ projectId: id, podName, podIp, updatedAt: new Date() })
-        .where(eq(pods.id, claimedPod.id))
-    }
-
-    await this.timeoutService.touch(id)
-
-    return updated
-  }
-
-  async stop(id: string): Promise<ProjectResponse> {
-    const project = await this.findOne(id)
+    if (project.status === ProjectStatus.Pending) return
 
     if (project.podName) {
       await db
@@ -177,18 +146,19 @@ export class ProjectService {
 
     await this.timeoutService.clear(id)
 
-    const [updated] = await db
+    await db
       .update(projects)
       .set({
-        status: "stopped",
+        status: ProjectStatus.Pending,
         podName: null,
         podIp: null,
         updatedAt: new Date(),
       })
       .where(eq(projects.id, id))
-      .returning()
 
-    return updated
+    this.assignPod(id, project.directory).catch((err) => {
+      this.logger.warn(`Failed to reassign pod to project ${id}: ${err.message}`)
+    })
   }
 
   async touchActivity(projectId: string): Promise<void> {

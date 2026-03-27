@@ -48,6 +48,9 @@ export class PodService {
 
   async createAssignedPod(projectId: string, directory: string): Promise<{ podName: string }> {
     const podName = `opsiforce-agent-${projectId.slice(0, 8)}`
+
+    await this.waitForPodDeletion(podName)
+
     const options: PodTemplateOptions = {
       ...this.baseOptions(podName),
       subPath: directory,
@@ -62,6 +65,18 @@ export class PodService {
 
     this.logger.log(`Created assigned pod ${podName} for project ${projectId}`)
     return { podName }
+  }
+
+  private async waitForPodDeletion(podName: string, timeoutMs = 30000): Promise<void> {
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      try {
+        await this.getPod(podName)
+        await new Promise((r) => setTimeout(r, 1000))
+      } catch {
+        return
+      }
+    }
   }
 
   async assignPodToProject(warmPodName: string, projectId: string, directory: string): Promise<{ podName: string }> {

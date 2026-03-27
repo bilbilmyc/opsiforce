@@ -1,11 +1,11 @@
 import { Module } from "@nestjs/common"
 import { TimeoutService } from "./timeout.service"
-import { TimeoutCron } from "./timeout.cron"
+import { TimeoutListener } from "./timeout.listener"
 import { PodModule } from "../pod/pod.module"
 
 @Module({
   imports: [PodModule],
-  providers: [TimeoutService, TimeoutCron],
+  providers: [TimeoutService, TimeoutListener],
   exports: [TimeoutService],
 })
 export class TimeoutModule {}

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common"
+import { Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { eq } from "drizzle-orm"
 import { db } from "../../db"
@@ -23,13 +23,15 @@ export class ProxyService {
       .where(eq(projects.id, projectId))
 
     if (!project) throw new NotFoundException(`Project ${projectId} not found`)
-    if (project.status !== "active") throw new NotFoundException(`Project ${projectId} is not active`)
 
     if (this.k8sApiProxyUrl && project.podName) {
       return `${this.k8sApiProxyUrl}/api/v1/namespaces/${this.k8sNamespace}/pods/${project.podName}:${this.agentPort}/proxy`
     }
 
-    if (!project.podIp) throw new NotFoundException(`Project ${projectId} has no assigned pod`)
-    return `http://${project.podIp}:${this.agentPort}`
+    if (project.podIp) {
+      return `http://${project.podIp}:${this.agentPort}`
+    }
+
+    throw new ServiceUnavailableException(`Project ${projectId} has no active pod`)
   }
 }

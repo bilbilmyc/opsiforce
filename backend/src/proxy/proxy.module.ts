@@ -1,6 +1,5 @@
-import { Module, NestModule, MiddlewareConsumer } from "@nestjs/common"
+import { Module } from "@nestjs/common"
 import { ProxyService } from "./proxy.service"
-import { ProxyMiddleware } from "./proxy.middleware"
 import { ProxyController } from "./proxy.controller"
 import { ProjectModule } from "../project/project.module"
 
@@ -10,8 +9,4 @@ import { ProjectModule } from "../project/project.module"
   controllers: [ProxyController],
   exports: [ProxyService],
 })
-export class ProxyModule implements NestModule {
-  configure(consumer: MiddlewareConsumer) {
-    consumer.apply(ProxyMiddleware).forRoutes("proxy")
-  }
-}
+export class ProxyModule {}

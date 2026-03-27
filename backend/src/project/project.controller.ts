@@ -38,14 +38,4 @@ export class ProjectController {
   remove(@Param("id") id: string) {
     return this.projectService.remove(id)
   }
-
-  @Post(":id/resume")
-  resume(@Param("id") id: string) {
-    return this.projectService.resume(id)
-  }
-
-  @Post(":id/stop")
-  stop(@Param("id") id: string) {
-    return this.projectService.stop(id)
-  }
 }

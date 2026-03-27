@@ -17,7 +17,7 @@ export default function ProjectSidebar(props: {
     refetchInterval: (query: { state: { data: Project[] | undefined } }) => {
       const data = query.state.data
       if (!data) return false
-      const hasTransitional = data.some((r) => r.status === "pending" || r.status === "starting")
+      const hasTransitional = data.some((r) => r.status === "pending")
       return hasTransitional ? 2000 : false
     },
   }))

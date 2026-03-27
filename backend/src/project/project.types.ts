@@ -1,3 +1,13 @@
+import { projects } from "../../db/schema"
+
+export const ProjectStatus = {
+  Pending: "pending",
+  Active: "active",
+  Suspended: "suspended",
+} as const
+
+export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus]
+
 export interface CreateProjectDto {
   title?: string
   description?: string
@@ -8,17 +18,4 @@ export interface UpdateProjectDto {
   description?: string
 }
 
-export interface ProjectResponse {
-  id: string
-  title: string | null
-  description: string | null
-  directory: string
-  status: "pending" | "starting" | "active" | "suspended" | "stopped"
-  podName: string | null
-  podIp: string | null
-  sessionId: string | null
-  platformVersion: string
-  lastActiveAt: Date | null
-  createdAt: Date
-  updatedAt: Date
-}
+export type ProjectResponse = typeof projects.$inferSelect

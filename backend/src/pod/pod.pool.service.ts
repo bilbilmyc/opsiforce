@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { eq } from "drizzle-orm"
 import { db } from "../../db"
-import { pods } from "../../db/schema"
+import { pods, projects } from "../../db/schema"
 import { PodService } from "./pod.service"
 import crypto from "crypto"
 
@@ -19,6 +19,7 @@ export class PodPoolService implements OnModuleInit {
   }
 
   async onModuleInit() {
+    await this.cleanupOrphanedPods()
     await this.initialize()
   }
 
@@ -90,5 +91,23 @@ export class PodPoolService implements OnModuleInit {
       await new Promise((resolve) => setTimeout(resolve, 2000))
     }
     return undefined
+  }
+
+  private async cleanupOrphanedPods(): Promise<void> {
+    const k8sPods = await this.podService.listPods("app=opsiforce-agent")
+    const dbPodRows = await db.select({ podName: pods.podName }).from(pods)
+    const dbProjectRows = await db.select({ podName: projects.podName }).from(projects)
+
+    const knownNames = new Set([
+      ...dbPodRows.map((p) => p.podName),
+      ...dbProjectRows.map((p) => p.podName).filter(Boolean),
+    ])
+
+    for (const k8sPod of k8sPods) {
+      const name = k8sPod.metadata?.name
+      if (!name || knownNames.has(name)) continue
+      this.logger.warn(`Deleting orphaned K8s pod: ${name}`)
+      await this.podService.deletePod(name).catch(() => {})
+    }
   }
 }

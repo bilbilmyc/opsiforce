@@ -26,7 +26,7 @@ export interface Project {
   id: string
   title: string | null
   description: string | null
-  status: "pending" | "starting" | "active" | "suspended" | "stopped"
+  status: "pending" | "active" | "suspended"
   lastActiveAt: string | null
   createdAt: string
 }

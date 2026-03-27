@@ -1,6 +1,5 @@
 import { Module } from "@nestjs/common"
 import { ConfigModule } from "@nestjs/config"
-import { ScheduleModule } from "@nestjs/schedule"
 import configuration from "./config/configuration"
 import { PodModule } from "./pod/pod.module"
 import { ProjectModule } from "./project/project.module"
@@ -14,7 +13,6 @@ import { HealthController } from "./health.controller"
       isGlobal: true,
       load: [configuration],
     }),
-    ScheduleModule.forRoot(),
     PodModule,
     ProjectModule,
     TimeoutModule,
