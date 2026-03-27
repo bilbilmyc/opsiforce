@@ -26,6 +26,8 @@ valkey:
     enabled: false
   auth:
     enabled: false
+  valkeyConfig: |
+    notify-keyspace-events Ex
   resources:
     requests:
       cpu: 50m

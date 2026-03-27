@@ -1,4 +1,4 @@
-import { Injectable, OnModuleDestroy, Logger } from "@nestjs/common"
+import { Injectable, OnModuleDestroy } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import Redis from "ioredis"
 
@@ -6,7 +6,6 @@ const TIMEOUT_KEY_PREFIX = "opsiforce:timeout:"
 
 @Injectable()
 export class TimeoutService implements OnModuleDestroy {
-  private readonly logger = new Logger(TimeoutService.name)
   private readonly redis: Redis
   private readonly ttlSeconds: number
   readonly redisUrl: string
@@ -21,11 +20,6 @@ export class TimeoutService implements OnModuleDestroy {
 
   async onModuleDestroy() {
     await this.redis.quit()
-  }
-
-  async enableKeyspaceNotifications(): Promise<void> {
-    await this.redis.config("SET", "notify-keyspace-events", "Ex")
-    this.logger.log("Redis keyspace notifications enabled (notify-keyspace-events Ex)")
   }
 
   async touch(projectId: string): Promise<void> {

@@ -21,8 +21,6 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   async onModuleInit() {
-    await this.timeoutService.enableKeyspaceNotifications()
-
     this.subscriber = new Redis(this.timeoutService.redisUrl)
     const channel = `__keyevent@${this.timeoutService.dbNumber}__:expired`
 

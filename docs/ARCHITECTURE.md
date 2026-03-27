@@ -170,9 +170,14 @@ The sweep queries all active projects, checks their Redis TTLs, and suspends any
 15:30:10  Pod ready, project active → UI loads with full chat history
 ```
 
-#### Production Redis configuration
+#### Redis configuration
 
-`notify-keyspace-events Ex` is set at application startup via `CONFIG SET`. For production, also set it in the Valkey/Redis server configuration so it persists across Redis restarts.
+`notify-keyspace-events Ex` must be enabled on the Redis instance the backend connects to. Each environment configures this independently:
+
+- **Local** (minikube): Shared Bitnami Redis — enabled via `--set 'commonConfiguration=notify-keyspace-events Ex'` in the `install-session-redis` script (`package.json`). The shared values file (`infra/k8s/session-stroage/values.yml`) stays clean of opsiforce-specific config.
+- **Production** (CloudFleet): Valkey subchart in `opsiforce-proxy` — configured via `valkeyConfig` in `helm/opsiforce-proxy/values.yaml`. The backend's `REDIS_URL` is set in CI/CD to point at this Valkey instance (`redis://opsiforce-proxy-{env}-valkey:6379`).
+
+The Valkey subchart serves both the OAuth2 Proxy (session cookies) and the opsiforce backend (timeout tracking).
 
 ### Auto-reassignment (pod died or project suspended)
 
