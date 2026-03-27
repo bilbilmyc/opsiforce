@@ -1,7 +1,7 @@
 DATABASE_URL=postgres://admin:dbpass1@localhost:5435/opsiforce
 REDIS_URL=redis://localhost:6382/2
 K8S_NAMESPACE=opsiforce
-WARM_POOL_SIZE=2
+WARM_POOL_SIZE=1
 AGENT_IMAGE=opsiforce-agent:1.3.2
 AGENT_IMAGE_PULL_POLICY=Never
 AGENT_PORT=4096
@@ -11,3 +11,4 @@ STORAGE_HOST_PATH=/data/opsiforce
 TIMEOUT_IDLE_MINUTES=30
 PLATFORM_VERSION=0.1.0
 K8S_API_PROXY_URL=http://localhost:8001
+OPENAI_API_KEY=

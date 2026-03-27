@@ -31,6 +31,7 @@ export class PodService {
       tolerations: this.configService.get("agentTolerations"),
       affinity: this.configService.get("agentAffinity"),
       imagePullSecrets: this.configService.get("imagePullSecrets"),
+      openaiApiKey: this.configService.get("openaiApiKey"),
     }
   }
 

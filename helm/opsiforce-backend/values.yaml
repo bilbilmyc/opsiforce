@@ -29,6 +29,7 @@ config:
   agentResources: {}
   agentNodeSelector: {}
   agentTolerations: []
+  openaiApiKey: ""
   agentAffinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:

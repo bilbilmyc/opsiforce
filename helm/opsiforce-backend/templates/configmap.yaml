@@ -32,3 +32,6 @@ data:
   {{- if .Values.imagePullSecrets }}
   IMAGE_PULL_SECRETS: {{ .Values.imagePullSecrets | toJson | quote }}
   {{- end }}
+  {{- if .Values.config.openaiApiKey }}
+  OPENAI_API_KEY: {{ .Values.config.openaiApiKey | quote }}
+  {{- end }}

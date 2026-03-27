@@ -53,7 +53,7 @@ agent:
   tolerations: []
 
 warmPool:
-  size: 0
+  size: 1
 
 timeout:
   idleMinutes: 30

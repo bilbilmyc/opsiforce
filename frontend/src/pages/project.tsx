@@ -1,12 +1,24 @@
-import { createSignal, onMount, type Component, type ParentProps } from "solid-js"
-import { AppBaseProviders, AppInterface } from "@opencode-ai/app/app"
-import { PlatformProvider, type Platform } from "@opencode-ai/app/context/platform"
-import { ServerConnection } from "@opencode-ai/app/context/server"
-import { useTheme } from "@opencode-ai/ui/theme/context"
-import { useLayout } from "@opencode-ai/app/context/layout"
-import { MemoryRouter, createMemoryHistory, type BaseRouterProps } from "@solidjs/router"
-import { base64Encode } from "@opencode-ai/util/encode"
-import { api, type OpenCodeSession, type Project } from "~/api/client"
+import {
+  createSignal,
+  onMount,
+  type Component,
+  type ParentProps,
+} from "solid-js";
+import { AppBaseProviders, AppInterface } from "@opencode-ai/app/app";
+import {
+  PlatformProvider,
+  type Platform,
+} from "@opencode-ai/app/context/platform";
+import { ServerConnection } from "@opencode-ai/app/context/server";
+import { useTheme } from "@opencode-ai/ui/theme/context";
+import { useLayout } from "@opencode-ai/app/context/layout";
+import {
+  MemoryRouter,
+  createMemoryHistory,
+  type BaseRouterProps,
+} from "@solidjs/router";
+import { base64Encode } from "@opencode-ai/util/encode";
+import { api, type OpenCodeSession, type Project } from "~/api/client";
 
 const platform: Platform = {
   platform: "web",
@@ -16,142 +28,135 @@ const platform: Platform = {
   forward: () => window.history.forward(),
   restart: async () => window.location.reload(),
   notify: async () => {},
-}
+};
 
 function ForceLight(props: ParentProps) {
-  const theme = useTheme()
-  onMount(() => theme.setColorScheme("light"))
-  return <>{props.children}</>
+  const theme = useTheme();
+  onMount(() => theme.setColorScheme("light"));
+  return <>{props.children}</>;
 }
 
 function HidePanels() {
-  const layout = useLayout()
+  const layout = useLayout();
   onMount(() => {
-    layout.sidebar.close()
-  })
-  return null
+    layout.sidebar.close();
+  });
+  return null;
 }
 
-function createDirectoryRouter(directory: string, sessionId?: string): Component<BaseRouterProps> {
-  const encoded = base64Encode(directory)
-  const initialPath = sessionId ? `/${encoded}/session/${sessionId}` : `/${encoded}/session`
+function createDirectoryRouter(
+  directory: string,
+  sessionId?: string,
+): Component<BaseRouterProps> {
+  const encoded = base64Encode(directory);
+  const initialPath = sessionId
+    ? `/${encoded}/session/${sessionId}`
+    : `/${encoded}/session`;
 
   return (props) => {
-    const history = createMemoryHistory()
-    history.set({ value: initialPath })
+    const history = createMemoryHistory();
+    history.set({ value: initialPath });
 
     return (
       <MemoryRouter root={props.root} history={history}>
         {props.children}
       </MemoryRouter>
-    )
-  }
+    );
+  };
 }
 
-export default function ProjectView(props: {
-  project: Project
-  onBack: () => void
-}) {
-  const [stopping, setStopping] = createSignal(false)
-  const [router, setRouter] = createSignal<Component<BaseRouterProps> | null>(null)
+export default function ProjectView(props: { project: Project }) {
+  const [router, setRouter] = createSignal<Component<BaseRouterProps> | null>(
+    null,
+  );
 
-  const tunnelUrl = () => `${window.location.origin}/api/proxy/${props.project.id}`
+  const tunnelUrl = () =>
+    `${window.location.origin}/api/proxy/${props.project.id}`;
 
   const server = (): ServerConnection.Http => ({
     type: "http",
     http: { url: tunnelUrl() },
-  })
+  });
 
-  const serverKey = () => ServerConnection.Key.make(tunnelUrl())
+  const serverKey = () => ServerConnection.Key.make(tunnelUrl());
 
   onMount(async () => {
-    const proxyBase = `/api/proxy/${props.project.id}`
+    const proxyBase = `/api/proxy/${props.project.id}`;
 
-    let directory: string | undefined
+    let directory: string | undefined;
     try {
-      const pathRes = await fetch(`${proxyBase}/path`)
+      const pathRes = await fetch(`${proxyBase}/path`);
       if (pathRes.ok) {
-        const pathData = (await pathRes.json()) as { directory?: string }
-        directory = pathData.directory
+        const pathData = (await pathRes.json()) as { directory?: string };
+        directory = pathData.directory;
       }
     } catch {
       /* pod may not be ready */
     }
-    if (!directory) directory = "/data"
+    if (!directory) return;
 
-    let latestSessionId: string | undefined
+    let latestSessionId: string | undefined;
     try {
-      const sessions = await api.get<OpenCodeSession[]>(`/proxy/${props.project.id}/session`)
+      const sessions = await api.get<OpenCodeSession[]>(
+        `/proxy/${props.project.id}/session`,
+      );
+
       if (Array.isArray(sessions) && sessions.length > 0) {
         const sorted = sessions
           .filter((s) => !s.parentID)
-          .sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0))
+          .sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0));
         if (sorted.length > 0) {
-          latestSessionId = sorted[0].id
+          latestSessionId = sorted[0].id;
         }
       }
     } catch {
       /* no sessions yet */
     }
 
-    setRouter(() => createDirectoryRouter(directory!, latestSessionId))
-  })
-
-  async function handleStop() {
-    setStopping(true)
-    await api.post(`/projects/${props.project.id}/stop`)
-    props.onBack()
-  }
+    setRouter(() => createDirectoryRouter(directory!, latestSessionId));
+  });
 
   return (
     <div class="h-full w-full flex flex-col overflow-hidden">
-      <div class="h-10 flex items-center justify-between px-4 bg-white border-b border-gray-200 shrink-0 z-50">
-        <div class="flex items-center gap-3">
-          <button
-            onClick={props.onBack}
-            class="text-gray-500 hover:text-gray-900 transition-colors text-sm flex items-center gap-1"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-            </svg>
-            Back
-          </button>
-          <span class="text-gray-200">|</span>
-          <span class="font-medium text-sm text-gray-900">
-            {props.project.title ?? `Project ${new Date(props.project.createdAt).toLocaleDateString()}`}
-          </span>
+      <div class="flex-1 min-h-0 flex">
+        <div class="flex-1 min-w-0 flex flex-col oc-chat-only">
+          {router() ? (
+            <PlatformProvider value={platform}>
+              <AppBaseProviders>
+                <ForceLight>
+                  <AppInterface
+                    defaultServer={serverKey()}
+                    servers={[server()]}
+                    router={router()!}
+                    disableHealthCheck
+                  >
+                    <HidePanels />
+                  </AppInterface>
+                </ForceLight>
+              </AppBaseProviders>
+            </PlatformProvider>
+          ) : (
+            <div class="flex items-center justify-center h-full gap-2 text-muted-foreground">
+              <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                />
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
+              </svg>
+              <span class="text-sm">Connecting...</span>
+            </div>
+          )}
         </div>
-        <button
-          onClick={handleStop}
-          disabled={stopping()}
-          class="px-3 py-1 text-xs font-medium text-red-500 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
-        >
-          {stopping() ? "Stopping..." : "Stop"}
-        </button>
-      </div>
-
-      <div class="flex-1 min-h-0 oc-chat-only">
-        {router() ? (
-          <PlatformProvider value={platform}>
-            <AppBaseProviders>
-              <ForceLight>
-                <AppInterface
-                  defaultServer={serverKey()}
-                  servers={[server()]}
-                  router={router()!}
-                  disableHealthCheck
-                >
-                  <HidePanels />
-                </AppInterface>
-              </ForceLight>
-            </AppBaseProviders>
-          </PlatformProvider>
-        ) : (
-          <div class="flex items-center justify-center h-full text-gray-400">
-            Starting...
-          </div>
-        )}
       </div>
     </div>
-  )
+  );
 }

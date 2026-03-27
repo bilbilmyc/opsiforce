@@ -16,6 +16,7 @@ export interface PodTemplateOptions {
   tolerations?: Array<Record<string, string>>
   affinity?: Record<string, unknown>
   imagePullSecrets?: Array<{ name: string }>
+  openaiApiKey?: string
 }
 
 export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
@@ -54,6 +55,20 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
       ...(options.imagePullSecrets && options.imagePullSecrets.length > 0
         ? { imagePullSecrets: options.imagePullSecrets }
         : {}),
+      initContainers: [
+        {
+          name: "init-config",
+          image: options.agentImage,
+          imagePullPolicy: options.imagePullPolicy,
+          command: [
+            "sh", "-c",
+            "cp -n /opt/opencode/AGENTS.md /workspace/AGENTS.md; " +
+            "mkdir -p /workspace/.xdg/config/opencode; " +
+            "cp -n /opt/opencode/opencode.json /workspace/.xdg/config/opencode/opencode.json",
+          ],
+          volumeMounts,
+        },
+      ],
       containers: [
         {
           name: "opencode",
@@ -65,6 +80,11 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
           env: [
             { name: "XDG_DATA_HOME", value: "/workspace/.xdg/share" },
             { name: "XDG_CONFIG_HOME", value: "/workspace/.xdg/config" },
+            { name: "XDG_CACHE_HOME", value: "/workspace/.xdg/cache" },
+            { name: "XDG_STATE_HOME", value: "/workspace/.xdg/state" },
+            ...(options.openaiApiKey
+              ? [{ name: "OPENAI_API_KEY", value: options.openaiApiKey }]
+              : []),
           ],
           volumeMounts,
           readinessProbe: {

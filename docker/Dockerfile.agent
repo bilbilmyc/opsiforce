@@ -1,9 +1,11 @@
 FROM oven/bun:1.3-debian
+ARG OPENCODE_CONFIG=agent-config/opencode.json
 RUN bun install -g opencode-ai@1.3.2
 RUN apt-get update && apt-get install -y --no-install-recommends git openssh-client wget && rm -rf /var/lib/apt/lists/*
-RUN mkdir -p /workspace
+RUN mkdir -p /workspace /opt/opencode
 WORKDIR /workspace
-COPY agent-config/AGENTS.md /workspace/AGENTS.md
+COPY agent-config/AGENTS.md /opt/opencode/AGENTS.md
+COPY ${OPENCODE_CONFIG} /opt/opencode/opencode.json
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s \
   CMD wget -q --spider http://localhost:4096/global/health || exit 1
 EXPOSE 4096

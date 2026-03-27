@@ -98,7 +98,7 @@ Every 60 seconds (TimeoutCron.handleIdleTimeouts):
      c. Update project status to "suspended", clear podName/podIp
   4. Replenish warm pool to configured size
 
-Every 30 seconds (TimeoutCron.handleOrphanedProjects):
+Every 30 minutes (TimeoutCron.handleOrphanedProjects):
   1. List all active projects from DB
   2. For each: verify K8s pod still exists
   3. If pod gone (killed externally, OOM, node eviction):
@@ -149,7 +149,9 @@ packages/opsiforce/
 │       └── api/                TanStack Query client + query factories
 │
 ├── agent-config/
-│   └── AGENTS.md                Global rules baked into agent image at /workspace/AGENTS.md
+│   ├── AGENTS.md                System instructions — copied to /workspace/ by init container
+│   ├── opencode.json            Prod config (openai/gpt-5.3-codex) — copied to XDG_CONFIG_HOME by init container
+│   └── opencode.local.json      Local dev config (openai/gpt-5-nano) — selected via Docker build arg
 │
 ├── docker/
 │   ├── Dockerfile.agent         opencode CLI + git (bun-based)
@@ -157,8 +159,8 @@ packages/opsiforce/
 │   └── Dockerfile.frontend      Solid.js app (multi-stage → nginx)
 │
 └── helm/
-    ├── opsiforce/               Infra: PVC, RBAC, ConfigMaps, agent pod template
-    ├── opsiforce-proxy/         nginx + OAuth2 Proxy (routes between services)
+    ├── opsiforce/               Infra: PVC, RBAC
+    ├── opsiforce-proxy/         nginx + OAuth2 Proxy + Traefik IngressRoute (routes between services)
     ├── opsiforce-frontend/      Solid.js deployment + service
     └── opsiforce-backend/       NestJS deployment + service + configmap + HPA
 ```
@@ -201,7 +203,7 @@ packages/opsiforce/
 ## Storage
 
 ### Production (CloudFleet cluster)
-- **CephFS PVC** (`opsiforce-data`) — ReadWriteMany
+- **CephFS PVC** (`opsiforce-cephfs`) — ReadWriteMany
 - StorageClass: `ceph-filesystem` (rook-ceph operator)
 - Each agent pod mounts with `subPath: "projects/{project-id}"`
 - Data persists across pod restarts/deletions
@@ -243,11 +245,13 @@ Layer 3 — Activity tracking (Redis)
 
 OpenCode stores its session database in `$XDG_DATA_HOME/opencode/opencode.db` (SQLite). By default, `XDG_DATA_HOME` points to `~/.local/share/` — **ephemeral container storage** that dies with the pod.
 
-The pod template sets these env vars to redirect state to the persistent volume:
+The pod template sets these env vars to redirect all XDG directories to the persistent volume:
 
 ```
-XDG_DATA_HOME=/workspace/.xdg/share    → opencode.db, session diffs, logs
-XDG_CONFIG_HOME=/workspace/.xdg/config → user config
+XDG_DATA_HOME=/workspace/.xdg/share     → opencode.db, session diffs, auth tokens
+XDG_CONFIG_HOME=/workspace/.xdg/config  → opencode.json (model/provider config), AGENTS.md
+XDG_CACHE_HOME=/workspace/.xdg/cache    → model lists, LSP server binaries, npm cache
+XDG_STATE_HOME=/workspace/.xdg/state    → logs
 ```
 
 Without these, sessions are lost on pod deletion. The `.xdg/` prefix keeps XDG state separate from OpenCode's project-level `.opencode/` directory.
@@ -272,7 +276,8 @@ The user sees the same chat history, same files, same context — on a completel
 | File changes in `/workspace` | Active terminal sessions (PTY connections drop) |
 | OpenCode session state & diffs | Network connections from the agent |
 | Working directory contents | Temporary files outside `/workspace` (e.g. `/tmp`) |
-| User config (XDG_CONFIG_HOME) | OpenCode cache (`~/.cache/opencode/` — regenerated) |
+| User config (XDG_CONFIG_HOME) | In-flight HTTP connections from the agent |
+| OpenCode cache (XDG_CACHE_HOME) | |
 
 ### Session restore flow (frontend)
 
@@ -314,13 +319,32 @@ If the warm pool is exhausted, both `create` and `resume` fall back to creating 
 
 ---
 
-## AGENTS.md Injection (#1461)
+## Agent Config Injection (#1461)
 
-`agent-config/AGENTS.md` is baked into the agent Docker image at `/workspace/AGENTS.md` via Dockerfile COPY.
+`agent-config/` contains files baked into the agent Docker image at `/opt/opencode/` and copied to the workspace volume by an init container on pod startup.
+
+### Files
+
+| File | Purpose | Destination on volume |
+|------|---------|----------------------|
+| `AGENTS.md` | System instructions injected into every OpenCode session | `/workspace/AGENTS.md` |
+| `opencode.json` | Prod config — default model (`openai/gpt-5.3-codex`), provider list, tool permissions | `/workspace/.xdg/config/opencode/opencode.json` |
+| `opencode.local.json` | Local dev config — default model (`openai/gpt-5-nano`), same structure | Same path (selected via Docker build arg) |
+
+### Why init container instead of COPY
+
+The volume mounts at `/workspace`, which shadows all files baked into that path by the Dockerfile. Files are staged to `/opt/opencode/` (outside the mount point) and an init container copies them to the volume with `cp -n` (no-clobber — won't overwrite user customizations on pod restart).
+
+### Config selection
+
+The Dockerfile accepts a build arg `OPENCODE_CONFIG` (defaults to `agent-config/opencode.json`). The local dev build script passes `--build-arg OPENCODE_CONFIG=agent-config/opencode.local.json` to select the local config.
+
+### Notes
 
 - OpenCode reads `AGENTS.md` from its working directory automatically (project-level rules)
-- Update by editing `agent-config/AGENTS.md` and rebuilding the agent image
-- Use sparingly — this consumes context window on every project
+- OpenCode reads `opencode.json` from `$XDG_CONFIG_HOME/opencode/` as global config
+- `OPENAI_API_KEY` is injected as a pod env var at runtime (never baked into the image)
+- Use AGENTS.md sparingly — it consumes context window on every session
 
 ---
 
@@ -423,6 +447,8 @@ Backend polls for readiness every 2s with a 60s timeout (`PodService.waitForRead
 | AGENT_NODE_SELECTOR | {} | JSON — K8s nodeSelector for agent pods |
 | AGENT_TOLERATIONS | [] | JSON — K8s tolerations for agent pods |
 | AGENT_AFFINITY | {} | JSON — K8s affinity rules for agent pods |
+| IMAGE_PULL_SECRETS | [] | JSON — K8s imagePullSecrets for agent pods |
+| OPENAI_API_KEY | "" | OpenAI API key — injected into agent pods as env var (never baked into image) |
 
 Default `AGENT_RESOURCES`:
 ```json
@@ -544,7 +570,7 @@ Handled by CI/CD — see [CI/CD & Deployment](#cicd--deployment) below.
 
 GitHub Actions workflow: `.github/workflows/opsiforce.yml`
 
-All 3 Docker images are built in parallel, then deployed sequentially via 4 Helm charts to AWS EKS.
+All 3 Docker images are built in parallel (inline jobs, not reusable workflows), then deployed sequentially via 4 Helm charts to CloudFleet.
 
 ```
                         opsiforce.yml
@@ -552,7 +578,7 @@ All 3 Docker images are built in parallel, then deployed sequentially via 4 Helm
          ┌───────────────────┼───────────────────┐
          ▼                   ▼                   ▼
   backend-build       frontend-build        agent-build
-  (docker-build.yml)  (docker-build.yml)   (docker-build.yml)
+  (inline job)        (inline job)          (inline job)
          │                   │                   │
          └───────────────────┼───────────────────┘
                              ▼
@@ -567,8 +593,8 @@ All 3 Docker images are built in parallel, then deployed sequentially via 4 Helm
 
 ### Triggers
 
-| Event | Condition | Builds | Pushes to ECR | Deploys |
-|-------|-----------|--------|---------------|---------|
+| Event | Condition | Builds | Pushes to GHCR | Deploys |
+|-------|-----------|--------|----------------|---------|
 | Push to `main` | Path matches `packages/opsiforce/**` or workflow files | Yes | Yes | Yes → `opsiforce-development` |
 | Push to `production-opsiforce` | Same path filter | Yes | Yes | Yes → `opsiforce-production` |
 | Pull request to `main` or `production-opsiforce` | Same path filter | Yes | No | No |
@@ -578,7 +604,7 @@ Concurrency: pushes cancel previous in-flight runs on the same branch. PRs get p
 
 ### Docker Images
 
-All images are stored in a single AWS ECR repository: `471112501003.dkr.ecr.us-east-1.amazonaws.com/opsiforce`.
+All images are stored in a single GHCR repository: `ghcr.io/simadevelopment/opsiforce`.
 
 Images are distinguished by tag prefix:
 
@@ -586,7 +612,7 @@ Images are distinguished by tag prefix:
 |-------|-----------|------|-----------------|
 | **backend** | `docker/Dockerfile.backend` | `node:24-alpine` (multi-stage) | Yarn PnP production build of NestJS. CMD: `yarn run start` |
 | **frontend** | `docker/Dockerfile.frontend` | `node:24-alpine` → `nginx:alpine` (multi-stage) | Static Solid.js build served by nginx. Includes OpenCode source (at `frontend/opencode/`) resolved at build time by Vite plugin. |
-| **agent** | `docker/Dockerfile.agent` | `oven/bun:1.3-debian` | Installs `opencode-ai@1.3.2` globally + git + openssh. Copies `agent-config/AGENTS.md` to `/workspace/`. CMD: `opencode serve --port 4096` |
+| **agent** | `docker/Dockerfile.agent` | `oven/bun:1.3-debian` | Installs `opencode-ai@1.3.2` globally + git + openssh. Stages `AGENTS.md` + `opencode.json` to `/opt/opencode/` (init container copies to volume). CMD: `opencode serve --port 4096` |
 
 ### Image Tagging
 
@@ -600,14 +626,7 @@ Tags follow the pattern: `{component}-{environment}-{sha7}` (versioned) + `{comp
 
 Same pattern for `frontend-*` and `agent-*`.
 
-Tag generation is handled by `.github/workflows/docker-tags.py` — a Python script that computes the final comma-separated tag list from inputs.
-
-### Reusable Workflows
-
-| Workflow | Purpose | Used by |
-|----------|---------|---------|
-| `docker-build.yml` | Build & push Docker image to ECR. Uses Buildx (`linux/amd64`), OIDC auth to AWS. | 3 build jobs |
-| `helm-deploy.yml` | Generic `helm upgrade --install` to EKS. Not currently used by opsiforce (deploy is inline). | Available but unused |
+Tag generation is handled inline in each build job using shell variable expansion.
 
 ### Deploy Phase
 
@@ -615,38 +634,48 @@ Runs only on push (not PRs). Waits for all 3 builds to succeed.
 
 **Steps:**
 
-1. Authenticate to AWS via OIDC (`arn:aws:iam::471112501003:role/github_actions`)
-2. `aws eks update-kubeconfig --name sima --region us-east-1`
-3. Determine environment from branch:
+1. Install CloudFleet CLI, Helm, and kubectl
+2. Authenticate to CloudFleet cluster via `cloudfleet clusters kubeconfig {cluster-id}`
+3. Create GHCR image pull secret in target namespace
+4. Create opsiforce database on CNPG (CloudNativePG) if it doesn't exist
+5. Determine environment from branch:
 
-| Branch | Namespace | ENV_SUFFIX |
-|--------|-----------|------------|
-| `main` | `opsiforce-development` | `development` |
-| `production-opsiforce` | `opsiforce-production` | `production` |
+| Branch | Namespace | ENV_SUFFIX | Hostname |
+|--------|-----------|------------|----------|
+| `main` | `opsiforce-development` | `development` | `opsiforce.dev.opsima.com` |
+| `production-opsiforce` | `opsiforce-production` | `production` | `opsiforce.opsima.com` |
 
-4. Deploy 4 Helm charts sequentially (each with `--wait`):
+6. Deploy 4 Helm charts sequentially (each with `--wait`):
 
 ```bash
-# 1. Infra (RBAC, PVC, ConfigMaps, agent pod template)
+# 1. Infra (RBAC, PVC)
 helm upgrade --install opsiforce-infra-{env} ./helm/opsiforce \
+  --set agent.image.repository=ghcr.io/simadevelopment/opsiforce \
   --set agent.image.tag=agent-{env}-{sha7}
 
 # 2. Backend (NestJS deployment + service + config)
 helm upgrade --install opsiforce-backend-{env} ./helm/opsiforce-backend \
+  --set backend.image.repository=ghcr.io/simadevelopment/opsiforce \
   --set backend.image.tag=backend-{env}-{sha7} \
+  --set config.databaseUrl="{DATABASE_URL}" \
   --set serviceAccountName=opsiforce-opsiforce-infra-{env}-agent \
-  --set config.agentImage=...opsiforce:agent-{env}-{sha7} \
+  --set config.k8sNamespace={namespace} \
+  --set config.agentImage=ghcr.io/simadevelopment/opsiforce:agent-{env}-{sha7} \
   --set config.cephfsPvcName=opsiforce-opsiforce-infra-{env}-cephfs \
   --set config.platformVersion={sha7}
 
 # 3. Frontend (nginx serving static Solid.js build)
 helm upgrade --install opsiforce-frontend-{env} ./helm/opsiforce-frontend \
+  --set frontend.image.repository=ghcr.io/simadevelopment/opsiforce \
   --set frontend.image.tag=frontend-{env}-{sha7}
 
-# 4. Proxy (nginx router + optional OAuth2 Proxy)
+# 4. Proxy (nginx + OAuth2 Proxy + Traefik IngressRoute)
 helm upgrade --install opsiforce-proxy-{env} ./helm/opsiforce-proxy \
   --set proxy.backendService=http://opsiforce-backend-opsiforce-backend-{env}:3001 \
-  --set proxy.frontendService=http://opsiforce-frontend-opsiforce-frontend-{env}:80
+  --set proxy.frontendService=http://opsiforce-frontend-opsiforce-frontend-{env}:80 \
+  --set ingressRoute.hostname={hostname} \
+  --set ingressRoute.traefikTarget={traefik-dns} \
+  --set oauth2Proxy.redisPath=redis://opsiforce-proxy-{env}-valkey:6379
 ```
 
 Deploy order matters: infra creates the ServiceAccount and PVC that backend needs; backend must be up before proxy routes to it.
@@ -663,7 +692,6 @@ Shared infrastructure that other charts depend on.
 |----------|----------------|
 | `rbac.yaml` | ServiceAccount + Role + RoleBinding — grants backend permission to CRUD pods, read logs, exec into pods |
 | `pvc-cephfs.yaml` | CephFS PVC (`ReadWriteMany`) — only created when `storage.type == "pvc"` (production) |
-| `agent-pod-template.yaml` | JSON pod spec template — backend reads this to create agent pods with correct image, resources, volumes |
 
 #### 2. `opsiforce-backend`
 
@@ -688,10 +716,11 @@ Shared infrastructure that other charts depend on.
 | `deployment.yaml` | nginx container + optional OAuth2 Proxy sidecar (Keycloak OIDC). preStop: 30s sleep. |
 | `service.yaml` | ClusterIP:80 |
 | `configmap.yaml` | nginx.conf — routes: `/api` (HTTP to backend, buffering off for SSE), `/` (to frontend) |
+| `ingressroute.yaml` | Traefik IngressRoute — TLS via Let's Encrypt, external-dns annotation for automatic DNS |
 
 OAuth2 Proxy sidecar (when `oauth2Proxy.enabled`):
 - Provider: `keycloak-oidc`
-- Session store: Redis
+- Session store: Valkey (Redis-compatible, deployed as Helm subchart of opsiforce-proxy)
 - Listens on `:4180`, upstreams to nginx on `:80`
 - Passes access token, skips JWT bearer tokens, CSRF per-request
 
