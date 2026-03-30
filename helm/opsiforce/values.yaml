@@ -45,3 +45,29 @@ warmPool:
 
 timeout:
   idleMinutes: 30
+
+valkey:
+  enabled: true
+  replica:
+    enabled: false
+  auth:
+    enabled: false
+  valkeyConfig: |
+    notify-keyspace-events Ex
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: cfke.io/region
+                operator: In
+                values:
+                  - northamerica
+              - key: cfke.io/subregion
+                operator: In
+                values:
+                  - east
