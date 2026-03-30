@@ -59,6 +59,7 @@
   --sidebar-accent: 240 5% 92%;
   --sidebar-accent-foreground: 240 5.9% 10%;
   --sidebar-muted-foreground: 240 4% 44%;
+  --main-left: 0px !important;
 }
 
 html,
@@ -137,10 +138,17 @@ body {
 }
 
 .oc-chat-only {
-  --main-left: 0px !important;
   overflow: hidden !important;
   width: 100% !important;
   min-width: 0 !important;
+}
+
+.oc-chat-only [style*="--main-left"] {
+  --main-left: 0px !important;
+}
+
+.oc-chat-only button[aria-label="More options"] {
+  display: none !important;
 }
 
 .oc-chat-only .w-16.shrink-0 {

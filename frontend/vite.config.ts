@@ -1,4 +1,5 @@
 import { defineConfig, type Plugin } from "vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import solidPlugin from "vite-plugin-solid";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
@@ -123,8 +124,16 @@ function opencodeResolver(): Plugin {
   };
 }
 
-export default defineConfig({
-  plugins: [opencodeResolver(), solidPlugin(), tailwindcss()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    opencodeResolver(),
+    tanstackRouter({
+      target: "solid",
+      autoCodeSplitting: mode !== "production",
+    }),
+    solidPlugin(),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       "@/": OC_APP_SRC + "/",
@@ -157,4 +166,4 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
   },
-});
+}));

@@ -1,15 +1,15 @@
 import { For, Show } from "solid-js"
 import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-query"
+import { useNavigate, useMatch } from "@tanstack/solid-router"
 import { api, type Project } from "~/api/client"
 import { Button } from "~/components/ui/button"
 import ProjectCard from "./project-card"
 
-export default function ProjectSidebar(props: {
-  activeProjectId: string | undefined
-  onOpenProject: (project: Project) => void
-  onProjectDeleted: (id: string) => void
-}) {
+export default function ProjectSidebar() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
+  const projectMatch = useMatch({ from: "/projects/$projectId", shouldThrow: false })
+  const activeProjectId = () => projectMatch()?.params.projectId
 
   const projects = createQuery(() => ({
     queryKey: ["projects", "list"],
@@ -18,7 +18,7 @@ export default function ProjectSidebar(props: {
       const data = query.state.data
       if (!data) return false
       const hasTransitional = data.some((r) => r.status === "pending")
-      return hasTransitional ? 2000 : false
+      return hasTransitional ? 3000 : false
     },
   }))
 
@@ -26,7 +26,7 @@ export default function ProjectSidebar(props: {
     mutationFn: () => api.post<Project>("/projects"),
     onSuccess: (project: Project) => {
       qc.invalidateQueries({ queryKey: ["projects"] })
-      props.onOpenProject(project)
+      navigate({ to: "/projects/$projectId", params: { projectId: project.id } })
     },
   }))
 
@@ -40,7 +40,7 @@ export default function ProjectSidebar(props: {
     mutationFn: (id: string) => api.delete<void>(`/projects/${id}`),
     onSuccess: (_: void, id: string) => {
       qc.invalidateQueries({ queryKey: ["projects"] })
-      props.onProjectDeleted(id)
+      if (activeProjectId() === id) navigate({ to: "/" })
     },
   }))
 
@@ -92,8 +92,8 @@ export default function ProjectSidebar(props: {
                   {(project) => (
                     <ProjectCard
                       project={project}
-                      isActive={project.id === props.activeProjectId}
-                      onSelect={() => props.onOpenProject(project)}
+                      isActive={project.id === activeProjectId()}
+                      onSelect={() => navigate({ to: "/projects/$projectId", params: { projectId: project.id } })}
                       onRename={(id, title) => renameProject.mutate({ id, title })}
                       onDelete={(id) => deleteProject.mutate(id)}
                     />

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, Logger } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
-import { eq } from "drizzle-orm"
+import { eq, desc } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
 import { projects, pods } from "../../db/schema"
@@ -91,7 +91,10 @@ export class ProjectService {
   }
 
   async findAll(): Promise<ProjectResponse[]> {
-    return db.select().from(projects)
+    return db
+      .select()
+      .from(projects)
+      .orderBy(desc(projects.lastActiveAt), desc(projects.createdAt))
   }
 
   async findOne(id: string): Promise<ProjectResponse> {
