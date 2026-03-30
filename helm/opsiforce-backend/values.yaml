@@ -112,15 +112,3 @@ affinity:
               operator: In
               values:
                 - east
-            - key: node.kubernetes.io/instance-type
-              operator: NotIn
-              values:
-                - cpx11
-                - cpx21
-                - cpx22
-                - cpx32
-                - cpx31
-                - ccx13
-                - ccx23
-                - cx23
-                - cx33
