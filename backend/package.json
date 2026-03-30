@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "NODE_OPTIONS='--max-http-header-size=128000' yarn nest start --watch",
     "build": "nest build",
-    "start": "NODE_OPTIONS='--max-http-header-size=128000' node dist/src/main.js",
+    "start": "NODE_OPTIONS='--max-http-header-size=128000' yarn node dist/src/main.js",
     "lint": "eslint src/",
     "lint:fix": "eslint src/ --fix",
     "prettier": "prettier --write src/",
