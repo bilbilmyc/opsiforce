@@ -36,7 +36,8 @@
     "ioredis": "^5.4.0",
     "postgres": "^3.4.8",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.0"
+    "rxjs": "^7.8.0",
+    "tsx": "^4.21.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -44,7 +45,6 @@
     "concurrently": "^9.2.1",
     "drizzle-kit": "^0.31.10",
     "env-cmd": "^11.0.0",
-    "tsx": "^4.21.0",
     "typescript": "^5.8.0"
   }
 }

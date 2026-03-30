@@ -1,5 +1,7 @@
 replicaCount: 1
 
+npmMigrationJob: true
+
 backend:
   image:
     repository: ghcr.io/simadevelopment/opsiforce

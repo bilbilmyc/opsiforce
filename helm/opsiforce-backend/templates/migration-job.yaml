@@ -1,0 +1,37 @@
+{{- if .Values.npmMigrationJob }}
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "opsiforce-backend.fullname" . }}-npm-migrations
+  labels:
+    app: {{ include "opsiforce-backend.fullname" . }}-npm-migrations
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  template:
+    metadata:
+      name: {{ include "opsiforce-backend.fullname" . }}-npm-migrations
+      labels:
+        app: {{ include "opsiforce-backend.fullname" . }}-npm-migrations
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: npm-migrations
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          resources:
+            requests:
+              cpu: 150m
+              memory: 256M
+          command: ["yarn", "run", "db:migrate"]
+          env:
+            - name: DATABASE_URL
+              value: {{ .Values.config.databaseUrl | quote }}
+      restartPolicy: Never
+
+{{- end }}
