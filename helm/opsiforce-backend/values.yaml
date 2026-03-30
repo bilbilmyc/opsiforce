@@ -19,7 +19,7 @@ config:
   databaseUrl: ""
   redisUrl: ""
   k8sNamespace: ""
-  warmPoolSize: "0"
+  warmPoolSize: "1"
   agentImage: ""
   agentImagePullPolicy: "Always"
   agentPort: "4096"
