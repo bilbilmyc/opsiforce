@@ -12,6 +12,11 @@ RUN yarn workspaces focus --all
 
 WORKDIR /app/packages/opsiforce/frontend
 
+ARG VITE_WEBAPP_DOMAIN=localhost:3002
+ENV VITE_WEBAPP_DOMAIN=$VITE_WEBAPP_DOMAIN
+ARG VITE_VSCODE_DOMAIN=localhost:3003
+ENV VITE_VSCODE_DOMAIN=$VITE_VSCODE_DOMAIN
+
 RUN yarn build
 
 EXPOSE 80

@@ -50,6 +50,16 @@ ingressRoute:
   hostname: opsiforce.dev.opsima.com
   traefikTarget: traefik.traefik.1d27b1e1-ef9f-407a-889a-6d80fc8fdd07.northamerica-central-1a.cfke.cloudfleet.dev
 
+webappProxy:
+  enabled: true
+  backendService: ""
+  appsHostname: apps.dev.opsima.com
+
+vscodeProxy:
+  enabled: true
+  backendService: ""
+  appsHostname: code.dev.opsima.com
+
 resources:
   requests:
     cpu: 100m

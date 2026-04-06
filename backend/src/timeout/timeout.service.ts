@@ -2,19 +2,22 @@ import { Injectable, OnModuleDestroy } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import Redis from "ioredis"
 
-const TIMEOUT_KEY_PREFIX = "opsiforce:timeout:"
+const AGENT_KEY_PREFIX = "opsiforce:timeout:"
+const APP_KEY_PREFIX = "opsiforce:app-timeout:"
 
 @Injectable()
 export class TimeoutService implements OnModuleDestroy {
   private readonly redis: Redis
-  private readonly ttlSeconds: number
+  private readonly agentTtlSeconds: number
+  private readonly appTtlSeconds: number
   readonly redisUrl: string
   readonly dbNumber: number
 
   constructor(private readonly configService: ConfigService) {
     this.redisUrl = this.configService.getOrThrow<string>("redisUrl")
     this.redis = new Redis(this.redisUrl)
-    this.ttlSeconds = this.configService.getOrThrow<number>("timeoutIdleMinutes") * 60
+    this.agentTtlSeconds = this.configService.getOrThrow<number>("timeoutIdleMinutes") * 60
+    this.appTtlSeconds = this.configService.getOrThrow<number>("appTimeoutIdleMinutes") * 60
     this.dbNumber = this.parseDbNumber(this.redisUrl)
   }
 
@@ -24,24 +27,39 @@ export class TimeoutService implements OnModuleDestroy {
 
   async touch(projectId: string): Promise<void> {
     await this.redis.setex(
-      `${TIMEOUT_KEY_PREFIX}${projectId}`,
-      this.ttlSeconds,
+      `${AGENT_KEY_PREFIX}${projectId}`,
+      this.agentTtlSeconds,
       Date.now().toString(),
     )
   }
 
-  async isExpired(projectId: string): Promise<boolean> {
-    const ttl = await this.redis.ttl(`${TIMEOUT_KEY_PREFIX}${projectId}`)
-    return ttl <= 0
+  async touchApp(projectId: string): Promise<void> {
+    await this.redis.setex(
+      `${APP_KEY_PREFIX}${projectId}`,
+      this.appTtlSeconds,
+      Date.now().toString(),
+    )
+  }
+
+  async isFullyExpired(projectId: string): Promise<boolean> {
+    const agentTtl = await this.redis.ttl(`${AGENT_KEY_PREFIX}${projectId}`)
+    const appTtl = await this.redis.ttl(`${APP_KEY_PREFIX}${projectId}`)
+    return agentTtl <= 0 && appTtl <= 0
   }
 
   async clear(projectId: string): Promise<void> {
-    await this.redis.del(`${TIMEOUT_KEY_PREFIX}${projectId}`)
+    await this.redis.del(
+      `${AGENT_KEY_PREFIX}${projectId}`,
+      `${APP_KEY_PREFIX}${projectId}`,
+    )
   }
 
-  parseExpiredKey(key: string): string | null {
-    const match = key.match(/^opsiforce:timeout:(.+)/)
-    return match ? match[1] : null
+  parseExpiredKey(key: string): { projectId: string; type: "agent" | "app" } | null {
+    const agentMatch = key.match(/^opsiforce:timeout:(.+)/)
+    if (agentMatch) return { projectId: agentMatch[1], type: "agent" }
+    const appMatch = key.match(/^opsiforce:app-timeout:(.+)/)
+    if (appMatch) return { projectId: appMatch[1], type: "app" }
+    return null
   }
 
   private parseDbNumber(url: string): number {

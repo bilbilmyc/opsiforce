@@ -25,10 +25,10 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
     const channel = `__keyevent@${this.timeoutService.dbNumber}__:expired`
 
     this.subscriber.on("message", (_channel, key) => {
-      const projectId = this.timeoutService.parseExpiredKey(key)
-      if (projectId) {
-        this.suspendProject(projectId).catch((err) => {
-          this.logger.warn(`Failed to suspend project ${projectId}: ${err.message}`)
+      const parsed = this.timeoutService.parseExpiredKey(key)
+      if (parsed) {
+        this.handleKeyExpiry(parsed.projectId, parsed.type).catch((err) => {
+          this.logger.warn(`Failed to handle expiry for project ${parsed.projectId}: ${err.message}`)
         })
       }
     })
@@ -45,6 +45,15 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
 
   async onModuleDestroy() {
     await this.subscriber?.quit()
+  }
+
+  private async handleKeyExpiry(projectId: string, type: "agent" | "app"): Promise<void> {
+    const fullyExpired = await this.timeoutService.isFullyExpired(projectId)
+    if (!fullyExpired) {
+      this.logger.debug(`Project ${projectId} ${type} timeout expired, but other key still active — skipping`)
+      return
+    }
+    await this.suspendProject(projectId)
   }
 
   private async suspendProject(projectId: string): Promise<void> {
@@ -93,7 +102,7 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
         .where(eq(projects.status, ProjectStatus.Active))
 
       for (const project of activeProjects) {
-        const expired = await this.timeoutService.isExpired(project.id)
+        const expired = await this.timeoutService.isFullyExpired(project.id)
         if (expired) {
           await this.suspendProject(project.id)
         }

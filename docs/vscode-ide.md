@@ -1,0 +1,126 @@
+# VS Code IDE
+
+Browser-based VS Code (code-server) embedded in agent pods for terminal, file management, and editing.
+
+---
+
+## How It Works
+
+Each agent pod runs code-server alongside the OpenCode agent. Both share the same `/workspace` volume — files edited in VS Code are immediately visible to the AI agent and vice versa.
+
+### Components
+
+| Component | Port | Purpose |
+|-----------|------|---------|
+| OpenCode agent | 4096 | AI coding assistant |
+| code-server | 8080 | VS Code web IDE |
+| Webapp dev server | 3101 | User app preview |
+
+### Process management
+
+All processes run in the same container, managed by the `guard` wrapper in `entrypoint.sh`.
+
+---
+
+## Proxy Routing
+
+VS Code uses **subdomain-based routing** (same approach as the webapp proxy) because code-server serves assets at absolute paths that break under path-based reverse proxies.
+
+| Service | Routing | Backend Port | Target |
+|---------|---------|-------------|--------|
+| OpenCode agent | Path-based (`/api/proxy/{id}/*`) | 3001 | pod:4096 |
+| VS Code IDE | Subdomain (`{id}.code.domain`) | 3003 | pod:8080 |
+| Webapp preview | Subdomain (`{id}.apps.domain`) | 3002 | pod:3101 |
+
+### How it works
+
+```
+Browser → http://{projectId}.code.dev.opsima.com/
+  → Traefik IngressRoute (*.code.dev.opsima.com → backend:3003)
+  → vscode-proxy-server (extracts projectId from subdomain)
+  → resolves pod IP from DB
+  → proxies HTTP + WebSocket to pod:8080
+```
+
+### Local dev
+
+In local dev, pod IPs aren't reachable from the host (minikube network isolation). The VS Code proxy server manages `kubectl port-forward` tunnels automatically:
+
+1. First request for a project → spawns `kubectl port-forward {podName} {freePort}:8080`
+2. Subsequent requests → reuse cached local port
+3. Port-forwards cleaned up on process exit
+
+This bypasses `kubectl proxy` which has HTTP/2 stream errors with code-server's large responses.
+
+### WebSocket
+
+The proxy server handles WebSocket upgrades natively (via `server.on("upgrade")`). The `origin` header is stripped from WebSocket requests — code-server performs origin checking that would reject the proxy's origin. This is safe because authentication is handled at the proxy layer (OAuth2 + TenantGuard).
+
+---
+
+## Persistence
+
+VS Code state stored on persistent volume at `/workspace/.xdg/code-server/`:
+
+| Path | What |
+|------|------|
+| `/workspace/.xdg/code-server/user-data/` | Settings, keybindings, UI state |
+| `/workspace/.xdg/code-server/extensions/` | Installed extensions |
+
+This follows the same XDG pattern as OpenCode (`/workspace/.xdg/share/opencode/`). Both survive pod restarts and reassignment.
+
+### Extensions
+
+Users install extensions via the VS Code UI — these persist on the volume across pod restarts.
+
+---
+
+## Frontend Integration
+
+The project view has a tab bar (Chat / Code) above the main content area:
+
+- **Chat tab**: OpenCode AI interface (source-level Solid.js integration)
+- **Code tab**: VS Code in an iframe (`{projectId}.{vscodeDomain}/?folder=/workspace`)
+
+The Code tab is lazy-loaded — the iframe only mounts on first click. After that, both panels stay in the DOM (toggled via CSS `display: none`) to avoid reloading when switching tabs.
+
+Frontend env vars:
+- `VITE_VSCODE_DOMAIN` — VS Code proxy domain (default: `localhost:3003`, prod: `code.dev.opsima.com`)
+
+---
+
+## Authentication
+
+No separate VS Code authentication. code-server runs with `--auth none` because:
+1. nginx oauth2-proxy handles user login (OIDC via Keycloak)
+2. Subdomain IngressRoute routes through the same auth layer
+3. Pod is only reachable through the proxy (no public port)
+
+The proxy strips `X-Frame-Options`, `Content-Security-Policy`, and `Content-Encoding` response headers for iframe compatibility.
+
+---
+
+## Configuration
+
+### Backend env vars
+
+| Env var | Default | Description |
+|---------|---------|-------------|
+| VSCODE_PORT | 8080 | Port code-server listens on inside the pod |
+| VSCODE_PROXY_PORT | 3003 | Port the VS Code proxy server listens on (backend side) |
+
+### Helm values
+
+| Chart | Key | Default | Description |
+|-------|-----|---------|-------------|
+| opsiforce-backend | `config.vscodePort` | 8080 | Agent pod code-server port |
+| opsiforce-backend | `backend.vscodeProxyPort` | 3003 | Backend VS Code proxy port |
+| opsiforce-proxy | `vscodeProxy.enabled` | true | Enable VS Code IngressRoute |
+| opsiforce-proxy | `vscodeProxy.appsHostname` | code.dev.opsima.com | Wildcard domain for VS Code |
+| opsiforce-proxy | `vscodeProxy.backendService` | (set in CI) | Backend service name |
+
+### CI/CD
+
+- Frontend build arg: `VITE_VSCODE_DOMAIN` set per environment in `.github/workflows/opsiforce.yml`
+- Helm deploy: `--set vscodeProxy.*` values set per environment
+- DNS: `*.code.dev.opsima.com` wildcard managed by external-dns via IngressRoute annotation

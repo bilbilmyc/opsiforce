@@ -1,0 +1,39 @@
+replicaCount: 1
+
+image:
+  repository: maximhq/bifrost
+  tag: "v1.4.19"
+  pullPolicy: IfNotPresent
+
+containerPort: 8080
+
+config:
+  openaiApiKey: ""
+  masterKey: ""
+  databaseUrl: ""
+
+nameOverride: ""
+fullnameOverride: ""
+
+imagePullSecrets: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: cfke.io/region
+              operator: In
+              values:
+                - northamerica
+            - key: cfke.io/subregion
+              operator: In
+              values:
+                - east

@@ -2,6 +2,7 @@ import {
   createSignal,
   createEffect,
   onMount,
+  onCleanup,
   type Component,
   type ParentProps,
 } from "solid-js";
@@ -21,6 +22,7 @@ import {
 } from "@solidjs/router";
 import { base64Encode } from "@opencode-ai/util/encode";
 import { api, type OpenCodeSession, type Project } from "~/api/client";
+import FileUpload from "~/components/file-upload";
 
 const platform: Platform = {
   platform: "web",
@@ -71,6 +73,13 @@ export default function ProjectView(props: { projectId: string }) {
   const [router, setRouter] = createSignal<Component<BaseRouterProps> | null>(
     null,
   );
+  const [activeTab, setActiveTab] = createSignal<"chat" | "code">("chat");
+  const [codeTabOpened, setCodeTabOpened] = createSignal(false);
+  const [previewOpen, setPreviewOpen] = createSignal(false);
+  const [webappReady, setWebappReady] = createSignal(false);
+  const [appName, setAppName] = createSignal<string | undefined>();
+  const [userDismissed, setUserDismissed] = createSignal(false);
+  const [copied, setCopied] = createSignal(false);
   const qc = useQueryClient();
 
   const project = createQuery(() => ({
@@ -79,7 +88,9 @@ export default function ProjectView(props: { projectId: string }) {
     refetchInterval: (query: { state: { data: Project | undefined } }) => {
       const data = query.state.data;
       if (!data) return 3000;
-      return data.status === "pending" ? 3000 : false;
+      return data.status === "pending" || data.status === "suspended"
+        ? 3000
+        : false;
     },
   }));
 
@@ -146,17 +157,97 @@ export default function ProjectView(props: { projectId: string }) {
 
   createEffect(() => {
     const status = project.data?.status;
+    if (status === "suspended") {
+      fetch(`/api/proxy/${props.projectId}/ping`).catch(() => {});
+    }
     if (status === "active" && !connecting) {
       connecting = true;
       connect();
     }
   });
 
+  const webappDomain = import.meta.env.VITE_WEBAPP_DOMAIN || "localhost:3002";
+  const webappProtocol = webappDomain.includes("localhost") ? "http" : "https";
+  const webappUrl = () => `${webappProtocol}://${props.projectId}.${webappDomain}/`;
+
+  let statusInterval: ReturnType<typeof setInterval> | undefined;
+
+  createEffect(() => {
+    if (project.data?.status !== "active" || webappReady()) {
+      if (statusInterval) clearInterval(statusInterval);
+      return;
+    }
+
+    async function checkStatus() {
+      try {
+        const res = await fetch(`${webappProtocol}://${props.projectId}.${webappDomain}/api/app-meta`);
+        if (res.ok) {
+          const data = await res.json() as { exists?: boolean; name?: string; description?: string };
+          if (data.exists) {
+            setWebappReady(true);
+            if (data.name) setAppName(data.name);
+            if (!userDismissed()) setPreviewOpen(true);
+            if (statusInterval) clearInterval(statusInterval);
+          }
+        }
+      } catch { /* webapp not ready yet */ }
+    }
+
+    checkStatus();
+    statusInterval = setInterval(checkStatus, 5000);
+  });
+
+  onCleanup(() => {
+    if (statusInterval) clearInterval(statusInterval);
+  });
+
+  function reloadPreview() {
+    const iframe = document.getElementById("webapp-preview") as HTMLIFrameElement;
+    if (iframe) iframe.src = iframe.src;
+  }
+
+  function copyPreviewUrl() {
+    navigator.clipboard.writeText(webappUrl());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }
+
+  const vscodeDomain = import.meta.env.VITE_VSCODE_DOMAIN || "localhost:3003";
+  const vscodeProtocol = vscodeDomain.includes("localhost") ? "http" : "https";
+  const vscodeUrl = () => `${vscodeProtocol}://${props.projectId}.${vscodeDomain}/?folder=/workspace`;
 
   return (
     <div class="h-full w-full flex flex-col overflow-hidden">
+      {router() && (
+        <div class="h-8 flex items-center gap-1 px-2 bg-sidebar border-b border-border shrink-0">
+          <button
+            onClick={() => setActiveTab("chat")}
+            class={`h-6 px-3 rounded text-xs font-medium transition-colors ${
+              activeTab() === "chat"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            Chat
+          </button>
+          <button
+            onClick={() => { setActiveTab("code"); setCodeTabOpened(true); }}
+            class={`h-6 px-3 rounded text-xs font-medium transition-colors ${
+              activeTab() === "code"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            Code
+          </button>
+        </div>
+      )}
+
       <div class="flex-1 min-h-0 flex">
-        <div class="flex-1 min-w-0 flex flex-col oc-chat-only">
+        <div
+          class="flex-1 min-w-0 flex flex-col oc-chat-only"
+          style={{ display: activeTab() === "chat" ? "flex" : "none" }}
+        >
           {router() ? (
             <PlatformProvider value={platform}>
               <AppBaseProviders>
@@ -192,7 +283,94 @@ export default function ProjectView(props: { projectId: string }) {
               <span class="text-sm">Connecting...</span>
             </div>
           )}
+          {router() && <FileUpload projectId={props.projectId} />}
         </div>
+
+        {router() && codeTabOpened() && (
+          <div
+            class="flex-1 min-w-0 flex flex-col"
+            style={{ display: activeTab() === "code" ? "flex" : "none" }}
+          >
+            <iframe
+              src={vscodeUrl()}
+              class="flex-1 w-full border-0"
+              allow="clipboard-read; clipboard-write"
+            />
+          </div>
+        )}
+
+        {!previewOpen() && webappReady() && (
+          <button
+            onClick={() => { setPreviewOpen(true); setUserDismissed(false); }}
+            class="shrink-0 w-8 bg-sidebar border-l border-border flex items-center justify-center hover:bg-accent transition-colors"
+            title="Open preview"
+          >
+            <svg class="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+        )}
+
+        {previewOpen() && (
+          <div class="w-[45%] shrink-0 border-l border-border flex flex-col bg-background">
+            <div class="h-8 flex items-center justify-between px-2 bg-sidebar border-b border-border shrink-0">
+              <div class="flex items-center gap-1.5">
+                <button
+                  onClick={() => { setPreviewOpen(false); setUserDismissed(true); }}
+                  class="w-6 h-6 flex items-center justify-center rounded hover:bg-accent transition-colors"
+                  title="Close preview"
+                >
+                  <svg class="w-3.5 h-3.5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                <span class="text-[11px] font-medium text-muted-foreground">
+                  {appName() || "Preview"}
+                </span>
+              </div>
+              <div class="flex items-center gap-1">
+                <button
+                  onClick={copyPreviewUrl}
+                  class="h-6 px-2 flex items-center gap-1 rounded hover:bg-accent transition-colors text-[11px] text-muted-foreground"
+                  title="Copy preview URL"
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d={copied()
+                        ? "M5 13l4 4L19 7"
+                        : "M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10"
+                      }
+                    />
+                  </svg>
+                  {copied() ? "Copied" : "URL"}
+                </button>
+                <button
+                  onClick={reloadPreview}
+                  class="h-6 px-2 flex items-center gap-1 rounded hover:bg-accent transition-colors text-[11px] text-muted-foreground"
+                  title="Reload preview"
+                >
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  Reload
+                </button>
+              </div>
+            </div>
+            <iframe
+              id="webapp-preview"
+              src={webappUrl()}
+              class="flex-1 w-full border-0"
+            />
+          </div>
+        )}
       </div>
     </div>
   );

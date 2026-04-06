@@ -8,8 +8,17 @@ metadata:
     app: {{ include "opsiforce-backend.fullname" . }}
 spec:
   ports:
-    - protocol: TCP
+    - name: api
+      protocol: TCP
       port: {{ .Values.backend.containerPort }}
       targetPort: {{ .Values.backend.containerPort }}
+    - name: webapp-proxy
+      protocol: TCP
+      port: {{ .Values.backend.webappProxyPort | default 3002 }}
+      targetPort: {{ .Values.backend.webappProxyPort | default 3002 }}
+    - name: vscode-proxy
+      protocol: TCP
+      port: {{ .Values.backend.vscodeProxyPort | default 3003 }}
+      targetPort: {{ .Values.backend.vscodeProxyPort | default 3003 }}
   selector:
     app: {{ include "opsiforce-backend.fullname" . }}

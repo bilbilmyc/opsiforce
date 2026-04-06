@@ -36,9 +36,20 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "opsiforce-backend.fullname" . }}-config
+            {{- if or .Values.config.openaiApiKey .Values.config.bifrostMasterKey }}
+            - secretRef:
+                name: {{ include "opsiforce-backend.fullname" . }}-secret
+            {{- end }}
+          volumeMounts:
+            - name: workspace-data
+              mountPath: {{ .Values.config.storageMountPath | default "/workspace-data" }}
           ports:
             - name: http
               containerPort: {{ .Values.backend.containerPort }}
+            - name: webapp-proxy
+              containerPort: {{ .Values.backend.webappProxyPort | default 3002 }}
+            - name: vscode-proxy
+              containerPort: {{ .Values.backend.vscodeProxyPort | default 3003 }}
           resources:
             requests:
               cpu: {{ .Values.backend.resources.requests.cpu }}
@@ -51,3 +62,14 @@ spec:
             httpGet:
               path: /api/health
               port: {{ .Values.backend.containerPort }}
+      volumes:
+        {{- if eq .Values.config.storageType "cephfs" }}
+        - name: workspace-data
+          persistentVolumeClaim:
+            claimName: {{ .Values.config.cephfsPvcName }}
+        {{- else }}
+        - name: workspace-data
+          hostPath:
+            path: {{ .Values.config.storageHostPath }}
+            type: DirectoryOrCreate
+        {{- end }}

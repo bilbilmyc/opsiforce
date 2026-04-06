@@ -8,6 +8,8 @@ backend:
     tag: backend
     pullPolicy: Always
   containerPort: 3001
+  webappProxyPort: 3002
+  vscodeProxyPort: 3003
   resources:
     requests:
       cpu: 50m
@@ -23,15 +25,23 @@ config:
   agentImage: ""
   agentImagePullPolicy: "Always"
   agentPort: "4096"
+  webappPort: "3101"
+  vscodePort: "8080"
   cephfsPvcName: "opsiforce-cephfs"
   storageType: "cephfs"
   storageHostPath: "/tmp/opsiforce-data"
+  storageMountPath: "/workspace-data"
   timeoutIdleMinutes: "30"
+  appTimeoutIdleMinutes: "10080"
   platformVersion: ""
+  agentName: "app-builder"
   agentResources: {}
   agentNodeSelector: {}
   agentTolerations: []
   openaiApiKey: ""
+  bifrostProxyUrl: ""
+  bifrostPodProxyUrl: ""
+  bifrostMasterKey: ""
   agentAffinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:

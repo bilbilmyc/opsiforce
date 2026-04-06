@@ -17,6 +17,23 @@ export interface PodTemplateOptions {
   affinity?: Record<string, unknown>
   imagePullSecrets?: Array<{ name: string }>
   openaiApiKey?: string
+  agentName?: string
+  bifrostProxyUrl?: string
+  bifrostApiKey?: string
+  dynamicSkills?: DynamicSkill[]
+}
+
+export interface DynamicSkill {
+  name: string
+  content: string
+}
+
+function buildDynamicSkillCommands(skills: DynamicSkill[]): string {
+  if (skills.length === 0) return ""
+  return "; " + skills.map((s) => {
+    const escaped = s.content.replace(/'/g, "'\\''")
+    return `mkdir -p /workspace/.opencode/skills/${s.name} && printf '%s' '${escaped}' > /workspace/.opencode/skills/${s.name}/SKILL.md`
+  }).join("; ")
 }
 
 export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
@@ -29,6 +46,8 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
       ...(options.subPath ? { subPath: options.subPath } : {}),
     },
   ]
+
+  const dynamicSkillCmds = buildDynamicSkillCommands(options.dynamicSkills ?? [])
 
   return {
     apiVersion: "v1",
@@ -62,9 +81,16 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
           imagePullPolicy: options.imagePullPolicy,
           command: [
             "sh", "-c",
-            "cp -n /opt/opencode/AGENTS.md /workspace/AGENTS.md; " +
-            "mkdir -p /workspace/.xdg/config/opencode; " +
-            "cp -n /opt/opencode/opencode.json /workspace/.xdg/config/opencode/opencode.json",
+            `AGENT="\${AGENT_NAME:-app-builder}"; ` +
+            "mkdir -p /workspace/.xdg/config/opencode /workspace/.xdg/code-server /workspace/.opencode/agents; " +
+            "cp -n /opt/opencode/opencode.json /workspace/.xdg/config/opencode/opencode.json; " +
+            "cp -n /opt/agents/$AGENT/agent.md /workspace/.opencode/agents/$AGENT.md; " +
+            "if [ ! -d /workspace/app ]; then " +
+            "cp -r /opt/agents/$AGENT/template/. /workspace/; " +
+            "cd /workspace && printf '.config/\\n.cache/\\n.bun/\\n.opencode/\\n.xdg/\\nnode_modules/\\ndata/\\n' > .gitignore && " +
+            "git init && git config user.email 'agent@opsiforce.com' && git config user.name 'OpsiForce' && git add -A && git commit -m 'Initial template'; " +
+            "fi" +
+            dynamicSkillCmds,
           ],
           volumeMounts,
         },
@@ -74,17 +100,27 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
           name: "opencode",
           image: options.agentImage,
           imagePullPolicy: options.imagePullPolicy,
-          command: ["opencode", "serve", "--port", String(options.agentPort), "--hostname", "0.0.0.0"],
           workingDir: "/workspace",
-          ports: [{ containerPort: options.agentPort }],
+          ports: [
+            { containerPort: options.agentPort },
+            { containerPort: 3100 },
+            { containerPort: 3101 },
+            { containerPort: 8080 },
+          ],
           env: [
             { name: "XDG_DATA_HOME", value: "/workspace/.xdg/share" },
             { name: "XDG_CONFIG_HOME", value: "/workspace/.xdg/config" },
             { name: "XDG_CACHE_HOME", value: "/workspace/.xdg/cache" },
             { name: "XDG_STATE_HOME", value: "/workspace/.xdg/state" },
-            ...(options.openaiApiKey
-              ? [{ name: "OPENAI_API_KEY", value: options.openaiApiKey }]
-              : []),
+            { name: "AGENT_NAME", value: options.agentName || "app-builder" },
+            ...(options.bifrostApiKey && options.bifrostProxyUrl
+              ? [
+                  { name: "OPENAI_API_KEY", value: options.bifrostApiKey },
+                  { name: "OPENAI_BASE_URL", value: options.bifrostProxyUrl },
+                ]
+              : options.openaiApiKey
+                ? [{ name: "OPENAI_API_KEY", value: options.openaiApiKey }]
+                : []),
           ],
           volumeMounts,
           readinessProbe: {
@@ -92,7 +128,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
               path: "/global/health",
               port: options.agentPort,
             },
-            initialDelaySeconds: 3,
+            initialDelaySeconds: 5,
             periodSeconds: 5,
           },
           resources: options.resources ?? {

@@ -1,5 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "default_agent": "app-builder",
   "provider": {
     "openai": {
       "models": {
@@ -22,6 +23,9 @@
     "todowrite": "allow",
     "todoread": "allow",
     "mcp": "allow",
-    "external_directory": "allow"
+    "external_directory": "allow",
+    "websearch": "allow",
+    "question": "allow",
+    "skill": "allow"
   }
 }

@@ -3,6 +3,7 @@ import { FastifyReply, FastifyRequest } from "fastify"
 import { Readable } from "stream"
 import { ProxyService } from "./proxy.service"
 import { ProjectService } from "../project/project.service"
+import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
 
 @Controller("proxy")
 export class ProxyController {
@@ -14,13 +15,14 @@ export class ProxyController {
   @All(":projectId/*")
   async proxyRequest(
     @Param("projectId") projectId: string,
+    @CurrentTenant() tenant: TenantContext,
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply,
   ) {
     this.projectService.touchActivity(projectId).catch(() => {})
 
     try {
-      const upstream = await this.proxyService.resolveUpstream(projectId)
+      const upstream = await this.proxyService.resolveUpstream(projectId, tenant.tenantId)
       const targetPath = req.url.replace(`/api/proxy/${projectId}`, "") || "/"
       const targetUrl = `${upstream}${targetPath}`
 
@@ -44,7 +46,7 @@ export class ProxyController {
       if (response.status >= 400) {
         const text = await response.text()
         if (this.isK8sPodError(text)) {
-          await this.projectService.reassignPod(projectId).catch(() => {})
+          await this.projectService.reassignPod(projectId, tenant.tenantId).catch(() => {})
           reply.status(503).header("content-type", "application/json")
             .send(JSON.stringify({ error: "Pod is restarting, please retry" }))
           return
@@ -73,7 +75,7 @@ export class ProxyController {
     } catch (err) {
       if (err instanceof NotFoundException) throw err
 
-      await this.projectService.reassignPod(projectId).catch(() => {})
+      await this.projectService.reassignPod(projectId, tenant.tenantId).catch(() => {})
       reply.status(503).header("content-type", "application/json")
         .send(JSON.stringify({ error: "Pod is restarting, please retry" }))
     }

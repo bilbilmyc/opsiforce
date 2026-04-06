@@ -8,6 +8,20 @@
       "when": 1774534318647,
       "tag": "0000_cold_bloodstrike",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1775040425541,
+      "tag": "0001_add-tenants",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775420610110,
+      "tag": "0002_add-project-api-keys",
+      "breakpoints": true
     }
   ]
 }

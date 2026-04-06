@@ -6,11 +6,26 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers["Content-Type"] = "application/json"
   }
 
+  const tenant = localStorage.getItem("tenant")
+  if (tenant) {
+    headers["x-tenant-name"] = tenant
+  }
+
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
   if (!res.ok) {
+    if (res.status === 401) {
+      window.location.reload()
+      throw new Error("Unauthorized")
+    }
+    if (res.status === 403 && window.location.pathname !== "/permission-denied") {
+      localStorage.removeItem("tenant")
+      window.location.href = "/permission-denied"
+      throw new Error("Forbidden")
+    }
     throw new Error(`API error: ${res.status}`)
   }
-  return res.json()
+  const text = await res.text()
+  return text ? JSON.parse(text) : undefined
 }
 
 export const api = {
@@ -22,8 +37,15 @@ export const api = {
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 }
 
+export interface Tenant {
+  id: string
+  name: string
+  displayName: string
+}
+
 export interface Project {
   id: string
+  tenantId: string
   title: string | null
   description: string | null
   status: "pending" | "active" | "suspended"

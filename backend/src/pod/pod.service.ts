@@ -1,7 +1,13 @@
 import { Injectable, Logger } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import * as k8s from "@kubernetes/client-node"
-import { buildPodSpec, PodTemplateOptions } from "./pod.template"
+import { buildPodSpec, PodTemplateOptions, DynamicSkill } from "./pod.template"
+
+export interface TenantPodOptions {
+  bifrostApiKey?: string
+  bifrostProxyUrl?: string
+  dynamicSkills?: DynamicSkill[]
+}
 
 @Injectable()
 export class PodService {
@@ -46,7 +52,7 @@ export class PodService {
     return response
   }
 
-  async createAssignedPod(projectId: string, directory: string): Promise<{ podName: string }> {
+  async createAssignedPod(projectId: string, directory: string, tenantOptions?: TenantPodOptions): Promise<{ podName: string }> {
     const podName = `opsiforce-agent-${projectId.slice(0, 8)}`
 
     await this.waitForPodDeletion(podName)
@@ -55,6 +61,7 @@ export class PodService {
       ...this.baseOptions(podName),
       subPath: directory,
       projectId,
+      ...tenantOptions,
     }
 
     const spec = buildPodSpec(options)
@@ -79,9 +86,9 @@ export class PodService {
     }
   }
 
-  async assignPodToProject(warmPodName: string, projectId: string, directory: string): Promise<{ podName: string }> {
+  async assignPodToProject(warmPodName: string, projectId: string, directory: string, tenantOptions?: TenantPodOptions): Promise<{ podName: string }> {
     await this.deletePod(warmPodName).catch(() => {})
-    return this.createAssignedPod(projectId, directory)
+    return this.createAssignedPod(projectId, directory, tenantOptions)
   }
 
   async deletePod(podName: string): Promise<void> {

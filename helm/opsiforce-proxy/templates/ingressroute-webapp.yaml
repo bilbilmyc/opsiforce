@@ -1,0 +1,24 @@
+{{- if and .Values.ingressRoute.enabled .Values.webappProxy.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "opsiforce-proxy.fullname" . }}-webapp
+  labels:
+    {{- include "opsiforce-proxy.labels" . | nindent 4 }}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: "*.{{ .Values.webappProxy.appsHostname }}"
+    external-dns.alpha.kubernetes.io/target: {{ .Values.ingressRoute.traefikTarget }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: HostRegexp(`{id:[a-f0-9-]+}.{{ .Values.webappProxy.appsHostname }}`)
+      kind: Rule
+      services:
+        - name: {{ .Values.webappProxy.backendService }}
+          port: 3002
+  tls:
+    certResolver: letsencrypt
+    domains:
+      - main: "*.{{ .Values.webappProxy.appsHostname }}"
+{{- end }}

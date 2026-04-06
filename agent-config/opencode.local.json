@@ -1,5 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "default_agent": "app-builder",
   "model": "opencode/gpt-5-nano",
   "permission": {
     "read": "allow",
@@ -12,6 +13,8 @@
     "todowrite": "allow",
     "todoread": "allow",
     "mcp": "allow",
-    "external_directory": "allow"
+    "external_directory": "allow",
+    "websearch": "allow",
+    "skill": "allow"
   }
 }

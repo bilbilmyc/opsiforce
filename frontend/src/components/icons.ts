@@ -1,0 +1,8 @@
+export { default as Lock } from "lucide-solid/icons/lock"
+export { default as LogOut } from "lucide-solid/icons/log-out"
+export { default as Plus } from "lucide-solid/icons/plus"
+export { default as ChevronDown } from "lucide-solid/icons/chevron-down"
+export { default as Building2 } from "lucide-solid/icons/building-2"
+export { default as PanelLeft } from "lucide-solid/icons/panel-left"
+export { default as FolderKanban } from "lucide-solid/icons/folder-kanban"
+export { default as Menu } from "lucide-solid/icons/menu"
