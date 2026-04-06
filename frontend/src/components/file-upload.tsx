@@ -1,4 +1,5 @@
-import { createSignal, Show, onCleanup, type Component } from "solid-js"
+import { createSignal, Show, type Component } from "solid-js"
+import { toast } from "solid-sonner"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -9,32 +10,16 @@ import {
 const FileUpload: Component<{ projectId: string }> = (props) => {
   const [uploading, setUploading] = createSignal(false)
   const [progress, setProgress] = createSignal(0)
-  const [toast, setToast] = createSignal<{
-    message: string
-    type: "success" | "error"
-  } | null>(null)
 
   let fileInputRef: HTMLInputElement | undefined
   let folderInputRef: HTMLInputElement | undefined
   let activeXhr: XMLHttpRequest | undefined
-  let toastTimer: ReturnType<typeof setTimeout> | undefined
-
-  onCleanup(() => {
-    if (toastTimer) clearTimeout(toastTimer)
-  })
-
-  function showToast(message: string, type: "success" | "error") {
-    if (toastTimer) clearTimeout(toastTimer)
-    setToast({ message, type })
-    toastTimer = setTimeout(() => setToast(null), 4000)
-  }
 
   async function uploadFiles(files: FileList | File[]) {
     const fileArray = Array.from(files)
     if (!fileArray.length) return
     setUploading(true)
     setProgress(0)
-    setToast(null)
 
     const formData = new FormData()
     for (const file of fileArray) {
@@ -76,15 +61,9 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
         xhr.onabort = () => reject(new Error("Upload cancelled"))
         xhr.send(formData)
       })
-      showToast(
-        `${result.uploaded} file${result.uploaded !== 1 ? "s" : ""} uploaded`,
-        "success",
-      )
+      toast.success(`${result.uploaded} file${result.uploaded !== 1 ? "s" : ""} uploaded`)
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : "Upload failed",
-        "error",
-      )
+      toast.error(err instanceof Error ? err.message : "Upload failed")
     } finally {
       activeXhr = undefined
       setUploading(false)
@@ -190,67 +169,6 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
           </div>
         </Show>
       </div>
-
-      <Show when={toast()}>
-        {(t) => (
-          <div
-            class={`fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-lg border px-4 py-2.5 shadow-lg transition-all animate-in fade-in-0 slide-in-from-bottom-2 ${
-              t().type === "success"
-                ? "border-border bg-background text-foreground"
-                : "border-destructive/30 bg-destructive/10 text-destructive"
-            }`}
-          >
-            {t().type === "success" ? (
-              <svg
-                class="h-4 w-4 text-emerald-500"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
-            ) : (
-              <svg
-                class="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M12 9v2m0 4h.01M12 3a9 9 0 100 18 9 9 0 000-18z"
-                />
-              </svg>
-            )}
-            <span class="text-sm">{t().message}</span>
-            <button
-              onClick={() => setToast(null)}
-              class="ml-1 text-muted-foreground hover:text-foreground"
-            >
-              <svg
-                class="h-3.5 w-3.5"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
-            </button>
-          </div>
-        )}
-      </Show>
 
       <input
         ref={fileInputRef}

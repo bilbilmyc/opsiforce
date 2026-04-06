@@ -20,20 +20,7 @@ export interface PodTemplateOptions {
   agentName?: string
   bifrostProxyUrl?: string
   bifrostApiKey?: string
-  dynamicSkills?: DynamicSkill[]
-}
-
-export interface DynamicSkill {
-  name: string
-  content: string
-}
-
-function buildDynamicSkillCommands(skills: DynamicSkill[]): string {
-  if (skills.length === 0) return ""
-  return "; " + skills.map((s) => {
-    const escaped = s.content.replace(/'/g, "'\\''")
-    return `mkdir -p /workspace/.opencode/skills/${s.name} && printf '%s' '${escaped}' > /workspace/.opencode/skills/${s.name}/SKILL.md`
-  }).join("; ")
+  bifrostBackendApiKey?: string
 }
 
 export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
@@ -46,8 +33,6 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
       ...(options.subPath ? { subPath: options.subPath } : {}),
     },
   ]
-
-  const dynamicSkillCmds = buildDynamicSkillCommands(options.dynamicSkills ?? [])
 
   return {
     apiVersion: "v1",
@@ -89,8 +74,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             "cp -r /opt/agents/$AGENT/template/. /workspace/; " +
             "cd /workspace && printf '.config/\\n.cache/\\n.bun/\\n.opencode/\\n.xdg/\\nnode_modules/\\ndata/\\n' > .gitignore && " +
             "git init && git config user.email 'agent@opsiforce.com' && git config user.name 'OpsiForce' && git add -A && git commit -m 'Initial template'; " +
-            "fi" +
-            dynamicSkillCmds,
+            "fi",
           ],
           volumeMounts,
         },
@@ -103,8 +87,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
           workingDir: "/workspace",
           ports: [
             { containerPort: options.agentPort },
-            { containerPort: 3100 },
-            { containerPort: 3101 },
+            { containerPort: 3000 },
             { containerPort: 8080 },
           ],
           env: [
@@ -117,6 +100,12 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
               ? [
                   { name: "OPENAI_API_KEY", value: options.bifrostApiKey },
                   { name: "OPENAI_BASE_URL", value: options.bifrostProxyUrl },
+                  ...(options.bifrostBackendApiKey
+                    ? [
+                        { name: "APP_LLM_API_KEY", value: options.bifrostBackendApiKey },
+                        { name: "APP_LLM_BASE_URL", value: options.bifrostProxyUrl },
+                      ]
+                    : []),
                 ]
               : options.openaiApiKey
                 ? [{ name: "OPENAI_API_KEY", value: options.openaiApiKey }]

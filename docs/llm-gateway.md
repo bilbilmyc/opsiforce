@@ -1,6 +1,6 @@
 # LLM Gateway
 
-Bifrost AI Gateway sits between agent pods and OpenAI, providing per-project virtual keys, usage tracking, and budget enforcement.
+Bifrost AI Gateway sits between agent pods and OpenAI, providing per-project virtual keys, usage tracking, and model governance.
 
 ## Architecture
 
@@ -8,13 +8,45 @@ Bifrost AI Gateway sits between agent pods and OpenAI, providing per-project vir
 Opsiforce Backend ──── Admin API (master key) ──→ Bifrost (ClusterIP)
        │                                              │ holds real OPENAI_API_KEY
        │ pod gets:                                    │ validates virtual keys
-       │   OPENAI_API_KEY=<virtual key>               │ logs tokens/cost/latency
-       │   OPENAI_BASE_URL=http://bifrost:8080/v1     │ enforces budgets
+       │   OPENAI_API_KEY=<chat virtual key>          │ logs tokens/cost/latency
+       │   OPENAI_BASE_URL=http://bifrost:8080/v1     │ enforces model allowlists
+       │   APP_LLM_API_KEY=<backend virtual key>      │
+       │   APP_LLM_BASE_URL=http://bifrost:8080/v1    │
        ▼                                              ▼
   Agent Pod ──── LLM calls ──────────────────────→ Bifrost ──→ OpenAI
 ```
 
 Bifrost runs as internal-only K8s service (ClusterIP + NetworkPolicy). Real OpenAI key lives only in Bifrost's Secret. Agent pods get per-project virtual keys.
+
+## Dual Key Design
+
+Each project gets two Bifrost virtual keys for separate usage tracking:
+
+| Key Type | Purpose | Env Vars | Allowed Models |
+|----------|---------|----------|----------------|
+| `chat` | OpenCode agent (coding) | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | gpt-5.3-codex, o4-mini, gpt-5.4-mini, gpt-4.1 |
+| `backend` | App AI features | `APP_LLM_API_KEY`, `APP_LLM_BASE_URL` | gpt-4.1, gpt-5.4-mini |
+
+Both keys route through the same Bifrost instance with different virtual key tokens. The `key_type` column in `project_api_keys` distinguishes them.
+
+**Why separate keys?**
+- **Usage attribution** — "How much did the coding agent cost?" vs "How much do the app's AI features cost?"
+- **Model restrictions** — Backend keys limited to cheaper/faster models
+- **Budget enforcement** — Independent budget limits per key type
+
+### Budget Enforcement
+
+Each virtual key can have a per-project spending cap enforced by Bifrost's governance plugin. When the budget is exceeded, Bifrost rejects further requests. Budgets are managed via the API:
+
+```
+GET  /api/usage/projects/:id/budgets              → current budget config per key type
+PUT  /api/usage/projects/:id/budgets              → update budget for a key type
+     body: { keyType: "chat"|"backend", maxBudget: 50, budgetDuration: "1M" }
+```
+
+Duration values: `1m` (minute), `1h` (hour), `1d` (day), `1w` (week), `1M` (month), `1Y` (year).
+
+Keys are created without budgets by default. Set `maxBudget: 0` to remove a limit. Budget is stored in both Bifrost (for enforcement) and the `project_api_keys` table (for reference).
 
 ## Infrastructure
 
@@ -37,24 +69,37 @@ In production, both URLs point to the same in-cluster address. In local dev, the
 
 ## Virtual Key Lifecycle
 
-1. **Created** — `ProjectService.assignPod()` calls `BifrostService.createProjectKey()` → POST to Bifrost Admin API
-2. **Stored** — `project_api_keys` table stores `bifrost_key_id` + `bifrost_key_token` per project
-3. **Injected** — pod gets `OPENAI_API_KEY=<virtual key>` and `OPENAI_BASE_URL=<bifrost url>`
-4. **Used** — agent calls Bifrost transparently; every request logged with token counts + cost
-5. **Revoked** — `ProjectService.remove()` calls `BifrostService.revokeProjectKey()` → DELETE on Bifrost
+1. **Created** — `ProjectService.assignPod()` calls `BifrostService.createProjectKey()` twice (chat + backend) via `Promise.all`
+2. **Stored** — `project_api_keys` table stores two rows per project, each with `key_type`, `bifrost_key_id`, and `bifrost_key_token`
+3. **Injected** — pod gets `OPENAI_API_KEY`/`OPENAI_BASE_URL` (chat) + `APP_LLM_API_KEY`/`APP_LLM_BASE_URL` (backend)
+4. **Used** — agent and app call Bifrost transparently; every request logged with token counts + cost, attributed to the correct key type
+5. **Revoked** — `ProjectService.remove()` calls `BifrostService.revokeProjectKeys()` which revokes all active keys for the project
 
 ## Usage API
 
 ```
 GET /api/usage                    → aggregate usage for current tenant
-GET /api/usage/projects/:id       → usage for specific project
+GET /api/usage/projects/:id       → usage for specific project (includes byKeyType breakdown)
+```
+
+Project usage response includes `byKeyType` array with per-key-type stats:
+```json
+{
+  "projectId": "...",
+  "totalRequests": 150,
+  "totalCost": 0.42,
+  "byKeyType": [
+    { "keyType": "chat", "totalRequests": 120, "totalCost": 0.35 },
+    { "keyType": "backend", "totalRequests": 30, "totalCost": 0.07 }
+  ]
+}
 ```
 
 Returns zeros when Bifrost is not configured (no `BIFROST_PROXY_URL`).
 
 ## Dynamic Skills
 
-When Bifrost is enabled, an `ai-api` skill is injected into each project pod at creation time. This teaches the agent that `OPENAI_API_KEY` and `OPENAI_BASE_URL` are set, enabling apps the agent builds to use AI features.
+The `llm-api` skill is included in the app-builder template at `.opencode/skills/llm-api/SKILL.md`. It teaches the agent that `APP_LLM_API_KEY` and `APP_LLM_BASE_URL` are set, with examples for text generation, structured output (JSON mode + JSON schema), streaming, and multi-turn conversation.
 
 ## Configuration
 

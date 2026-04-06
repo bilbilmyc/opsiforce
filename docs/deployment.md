@@ -169,14 +169,13 @@ Images are distinguished by tag prefix:
 
 Same pattern for `frontend-*`.
 
-**Agent** tags: `agent-{environment}-{platformVersion}` — version from `agent-config/agent-version.json`. No SHA suffix.
+**Agent** tags follow the same `agent-{environment}-{sha}` + `agent-{environment}` pattern as backend/frontend.
 
-| Event | Tag | Pushed? |
-|-------|-----|---------|
-| Push to `main` | `agent-development-0.2.0` | Yes |
-| Push to `production-opsiforce` | `agent-production-0.2.0` | Yes |
-
-Agent image version only changes when `agent-version.json` is bumped (Dockerfile, template, or skills changes).
+| Event | Tag (SHA) | Tag (latest) | Pushed? |
+|-------|-----------|--------------|---------|
+| Push to `main` | `agent-development-abc1234` | `agent-development` | Yes |
+| Push to `production-opsiforce` | `agent-production-abc1234` | `agent-production` | Yes |
+| Pull request | `agent-pr-123-abc1234` | `agent-pr-123` | No (build only) |
 
 Tag generation is handled inline in each build job using shell variable expansion.
 
@@ -271,7 +270,7 @@ Bifrost AI Gateway — LLM proxy with per-project virtual keys, usage tracking, 
 |----------|----------------|
 | `deployment.yaml` | NestJS container (port 3001). Uses serviceAccount from infra chart. Health: `/api/health`. preStop: 30s sleep for graceful drain. |
 | `service.yaml` | ClusterIP:80 → 3001 |
-| `configmap.yaml` | All backend env vars (DATABASE_URL, REDIS_URL, K8S_NAMESPACE, AGENT_IMAGE, WEBAPP_PORT, AGENT_NAME, etc.) injected via `envFrom` |
+| `configmap.yaml` | All backend env vars (DATABASE_URL, REDIS_URL, K8S_NAMESPACE, AGENT_IMAGE, APP_PORT, AGENT_NAME, etc.) injected via `envFrom` |
 | `hpa.yaml` | HorizontalPodAutoscaler (disabled by default, CPU-based) |
 
 #### 4. `opsiforce-frontend`

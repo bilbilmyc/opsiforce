@@ -21,7 +21,7 @@ opsiforce-proxy (nginx + OAuth2 Proxy)
                          ├── PostgreSQL (projects + pods state via Drizzle ORM)
                          ├── Redis (pod timeout TTL tracking)
                          ├── Bifrost AI Gateway (LLM proxy — virtual keys, usage tracking)
-                         └── Agent Pod (opencode serve :4096 + code-server :8080 + app dev server :3101)
+                         └── Agent Pod (opencode serve :4096 + code-server :8080 + app dev server :3000)
                                 │
                                 └── CephFS volume (subPath: projects/{tenant}/{project-id})
 ```
@@ -57,7 +57,7 @@ The frontend integrates OpenCode at the source level — OpenCode's Solid.js com
 | **opsiforce-proxy** | `nginx:alpine` + oauth2-proxy sidecar | 80 | Routes traffic between services. OAuth2 Proxy for auth. |
 | **opsiforce-frontend** | `nginx:alpine` (static) | 80 | Solid.js app — projects sidebar + OpenCode UI embedded via source-level imports (Vite resolver plugin). Single SPA, no iframe. |
 | **opsiforce-backend** | `node:24-alpine` | 3001 | NestJS + Fastify. Manages K8s pods, proxies to agent pods, tracks timeouts. Pure API. |
-| **opsiforce-agent** | `node:24-slim` + bun | 4096, 3100, 3101, 8080 | OpenCode + code-server (VS Code IDE) + app dev server. One pod per project. CephFS subPath mount. Image tagged with platform version from `agent-config/agent-version.json`. |
+| **opsiforce-agent** | `node:24-slim` + bun | 4096, 3000, 8080 | OpenCode + code-server (VS Code IDE) + app dev server. One pod per project. CephFS subPath mount. Image tagged with commit SHA in CI/CD. Agent image version in `agent-config/agent-image-version.json` (local dev), platform version in `backend/platform-version.json`. 34 skills, 95 pre-installed packages. |
 
 ---
 
@@ -72,6 +72,7 @@ packages/opsiforce/
 │   │   ├── config/              Environment configuration
 │   │   ├── proxy/               Dynamic HTTP proxy (agent), subdomain proxy servers (webapp + VS Code)
 │   │   ├── pod/                 K8s pod CRUD + warm pool + pod spec builder
+│   │   ├── permission/           RBAC — parses Keycloak roles from x-forwarded-groups header
 │   │   ├── project/             Project CRUD + auto-reassignment
 │   │   └── timeout/             Redis TTL tracking + keyspace notification listener
 │   └── db/
@@ -86,10 +87,11 @@ packages/opsiforce/
 │       ├── app.tsx             Root: sidebar + project view routing
 │       ├── pages/project.tsx   Split-pane: OpenCode chat (left) + app preview iframe (right)
 │       ├── components/         Project sidebar, create dialog
-│       └── api/                TanStack Query client + query factories
+│       ├── constants/          Permission string constants
+│       └── api/                TanStack Query client + query factories + permissions hook
 │
 ├── agent-config/
-│   ├── agent-version.json       Platform version (single source of truth for image tagging)
+│   ├── agent-image-version.json  Agent Docker image version (local dev tagging)
 │   ├── agents/
 │   │   └── app-builder/         Default agent — template, skills, agent definition
 │   │       ├── agent.md         OpenCode agent def (→ .opencode/agents/app-builder.md)

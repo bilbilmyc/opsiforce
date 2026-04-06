@@ -46,8 +46,8 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.backend.containerPort }}
-            - name: webapp-proxy
-              containerPort: {{ .Values.backend.webappProxyPort | default 3002 }}
+            - name: app-proxy
+              containerPort: {{ .Values.backend.appProxyPort | default 3002 }}
             - name: vscode-proxy
               containerPort: {{ .Values.backend.vscodeProxyPort | default 3003 }}
           resources:

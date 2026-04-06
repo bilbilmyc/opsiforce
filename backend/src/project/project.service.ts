@@ -9,19 +9,6 @@ import { PodPoolService } from "../pod/pod.pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
 import { BifrostService } from "../bifrost/bifrost.service"
 import { CreateProjectDto, UpdateProjectDto, ProjectResponse, ProjectStatus } from "./project.types"
-import type { DynamicSkill } from "../pod/pod.template"
-import { readFileSync, existsSync } from "fs"
-import { join } from "path"
-
-const DYNAMIC_SKILLS_DIR = join(process.cwd(), "dynamic-skills")
-
-function loadSkill(name: string): string {
-  const path = join(DYNAMIC_SKILLS_DIR, `${name}.md`)
-  if (!existsSync(path)) return ""
-  return readFileSync(path, "utf-8")
-}
-
-const AI_API_SKILL_CONTENT = loadSkill("ai-api")
 
 @Injectable()
 export class ProjectService {
@@ -65,18 +52,18 @@ export class ProjectService {
     if (!this.bifrostService.isEnabled()) return undefined
 
     try {
-      const { keyToken } = await this.bifrostService.createProjectKey(projectId, tenantId)
-      const dynamicSkills: DynamicSkill[] = AI_API_SKILL_CONTENT
-        ? [{ name: "ai-api", content: AI_API_SKILL_CONTENT }]
-        : []
+      const [chatKey, backendKey] = await Promise.all([
+        this.bifrostService.createProjectKey(projectId, tenantId, "chat"),
+        this.bifrostService.createProjectKey(projectId, tenantId, "backend"),
+      ])
 
       return {
-        bifrostApiKey: keyToken,
+        bifrostApiKey: chatKey.keyToken,
+        bifrostBackendApiKey: backendKey.keyToken,
         bifrostProxyUrl: this.bifrostService.getPodProxyUrl(),
-        dynamicSkills,
       }
     } catch (err) {
-      this.logger.warn(`Failed to create Bifrost key for project ${projectId}: ${(err as Error).message}`)
+      this.logger.warn(`Failed to create Bifrost keys for project ${projectId}: ${(err as Error).message}`)
       return undefined
     }
   }
@@ -155,6 +142,18 @@ export class ProjectService {
       .returning()
 
     if (!project) throw new NotFoundException(`Project ${id} not found`)
+
+    if (dto.timeoutIdleMinutes !== undefined) {
+      await this.timeoutService.touch(id).catch((err) => {
+        this.logger.warn(`Failed to refresh agent timeout for project ${id}: ${(err as Error).message}`)
+      })
+    }
+    if (dto.appTimeoutIdleMinutes !== undefined) {
+      await this.timeoutService.touchApp(id).catch((err) => {
+        this.logger.warn(`Failed to refresh app timeout for project ${id}: ${(err as Error).message}`)
+      })
+    }
+
     return project
   }
 
@@ -173,8 +172,8 @@ export class ProjectService {
     }
 
     if (this.bifrostService.isEnabled()) {
-      await this.bifrostService.revokeProjectKey(id).catch((err) => {
-        this.logger.warn(`Failed to revoke Bifrost key for project ${id}: ${(err as Error).message}`)
+      await this.bifrostService.revokeProjectKeys(id).catch((err) => {
+        this.logger.warn(`Failed to revoke Bifrost keys for project ${id}: ${(err as Error).message}`)
       })
     }
 

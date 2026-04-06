@@ -64,8 +64,7 @@ Backend polls for readiness every 2s with a 60s timeout (`PodService.waitForRead
 |------|---------|-------|
 | 4096 | OpenCode agent | AI coding assistant (readiness probe target) |
 | 8080 | code-server | VS Code web IDE |
-| 3100 | Backend dev server | User app backend |
-| 3101 | Frontend dev server | User app frontend / webapp preview |
+| 3000 | App dev server | User app (single port) |
 
 ---
 
@@ -82,9 +81,9 @@ When Bifrost is configured (`BIFROST_PROXY_URL` + `BIFROST_MASTER_KEY` set), pod
 
 The OpenAI SDK in OpenCode reads both env vars automatically — the agent doesn't know it's talking to Bifrost.
 
-### Dynamic skills
+### LLM API skill
 
-When Bifrost is enabled, an `ai-api` skill is injected via the init container into `/workspace/.opencode/skills/ai-api/SKILL.md`. This teaches the agent that apps it builds can use the AI API. Skill content lives at `backend/dynamic-skills/ai-api.md`.
+The `llm-api` skill is included in the app-builder template at `.opencode/skills/llm-api/SKILL.md`. It teaches the agent that apps it builds can use the LLM API via `APP_LLM_API_KEY` / `APP_LLM_BASE_URL`.
 
 See [LLM Gateway](llm-gateway.md) for the full architecture.
 
@@ -98,7 +97,7 @@ See [LLM Gateway](llm-gateway.md) for the full architecture.
 
 ```
 agent-config/
-├── agent-version.json           ← platform version (used for image tagging)
+├── agent-image-version.json     ← agent Docker image version (local dev tagging)
 ├── agents/app-builder/          ← default agent profile
 │   ├── agent.md                 ← OpenCode agent definition + system prompt
 │   ├── config.json              ← agent metadata (name, description, ports)

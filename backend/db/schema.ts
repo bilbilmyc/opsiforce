@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, pgEnum } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, pgEnum, real, integer } from "drizzle-orm/pg-core"
 
 export const projectStatusEnum = pgEnum("project_status", [
   "pending",
@@ -13,6 +13,8 @@ export const podStatusEnum = pgEnum("pod_status", [
   "assigned",
   "terminating",
 ])
+
+export const keyTypeEnum = pgEnum("key_type", ["chat", "backend"])
 
 export const tenants = pgTable("tenants", {
   id: text("id").primaryKey(),
@@ -36,6 +38,8 @@ export const projects = pgTable("projects", {
   podIp: text("pod_ip"),
   sessionId: text("session_id"),
   platformVersion: text("platform_version").notNull(),
+  timeoutIdleMinutes: integer("timeout_idle_minutes"),
+  appTimeoutIdleMinutes: integer("app_timeout_idle_minutes"),
   lastActiveAt: timestamp("last_active_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -49,8 +53,11 @@ export const projectApiKeys = pgTable("project_api_keys", {
   tenantId: text("tenant_id")
     .references(() => tenants.id)
     .notNull(),
+  keyType: keyTypeEnum("key_type").notNull().default("chat"),
   bifrostKeyId: text("bifrost_key_id").notNull(),
   bifrostKeyToken: text("bifrost_key_token").notNull(),
+  maxBudget: real("max_budget"),
+  budgetDuration: text("budget_duration"),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -1,12 +1,12 @@
 import { Injectable, Logger } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import * as k8s from "@kubernetes/client-node"
-import { buildPodSpec, PodTemplateOptions, DynamicSkill } from "./pod.template"
+import { buildPodSpec, PodTemplateOptions } from "./pod.template"
 
 export interface TenantPodOptions {
   bifrostApiKey?: string
+  bifrostBackendApiKey?: string
   bifrostProxyUrl?: string
-  dynamicSkills?: DynamicSkill[]
 }
 
 @Injectable()

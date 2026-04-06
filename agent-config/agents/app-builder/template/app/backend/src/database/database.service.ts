@@ -1,5 +1,5 @@
 import { Injectable, OnModuleInit } from "@nestjs/common"
-import { Database } from "bun:sqlite"
+import { Database, type SQLQueryBindings } from "bun:sqlite"
 import * as path from "path"
 import * as fs from "fs"
 
@@ -15,15 +15,15 @@ export class DatabaseService implements OnModuleInit {
     this.runMigrations()
   }
 
-  queryAll<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T[] {
+  queryAll<T = Record<string, unknown>>(sql: string, params: SQLQueryBindings[] = []): T[] {
     return this.db.prepare(sql).all(...params) as T[]
   }
 
-  queryOne<T = Record<string, unknown>>(sql: string, params: unknown[] = []): T | undefined {
+  queryOne<T = Record<string, unknown>>(sql: string, params: SQLQueryBindings[] = []): T | undefined {
     return this.db.prepare(sql).get(...params) as T | undefined
   }
 
-  run(sql: string, params: unknown[] = []) {
+  run(sql: string, params: SQLQueryBindings[] = []) {
     return this.db.prepare(sql).run(...params)
   }
 

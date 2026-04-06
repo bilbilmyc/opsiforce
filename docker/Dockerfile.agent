@@ -21,7 +21,6 @@ WORKDIR /workspace
 COPY ${OPENCODE_CONFIG} /opt/opencode/opencode.json
 
 COPY agent-config/agents/ /opt/agents/
-RUN cd /opt/agents/app-builder/template/app && bun install
 
 COPY agent-config/scripts/guard.sh /usr/local/bin/guard
 COPY agent-config/scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
@@ -32,6 +31,6 @@ ENV OPENCODE_ENABLE_EXA=true
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s \
   CMD wget -q --spider http://localhost:4096/global/health || exit 1
 
-EXPOSE 4096 3100 3101 8080
+EXPOSE 4096 3000 8080
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

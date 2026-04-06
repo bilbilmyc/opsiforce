@@ -1,23 +1,25 @@
 import { Injectable, OnModuleDestroy } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import Redis from "ioredis"
+import { eq } from "drizzle-orm"
+import { db } from "../../db"
+import { projects } from "../../db/schema"
 
 const AGENT_KEY_PREFIX = "opsiforce:timeout:"
 const APP_KEY_PREFIX = "opsiforce:app-timeout:"
 
 @Injectable()
 export class TimeoutService implements OnModuleDestroy {
+  private static readonly DEFAULT_AGENT_TIMEOUT_MINUTES = 30
+  private static readonly DEFAULT_APP_TIMEOUT_MINUTES = 10080
+
   private readonly redis: Redis
-  private readonly agentTtlSeconds: number
-  private readonly appTtlSeconds: number
   readonly redisUrl: string
   readonly dbNumber: number
 
   constructor(private readonly configService: ConfigService) {
     this.redisUrl = this.configService.getOrThrow<string>("redisUrl")
     this.redis = new Redis(this.redisUrl)
-    this.agentTtlSeconds = this.configService.getOrThrow<number>("timeoutIdleMinutes") * 60
-    this.appTtlSeconds = this.configService.getOrThrow<number>("appTimeoutIdleMinutes") * 60
     this.dbNumber = this.parseDbNumber(this.redisUrl)
   }
 
@@ -25,18 +27,32 @@ export class TimeoutService implements OnModuleDestroy {
     await this.redis.quit()
   }
 
+  private async getProjectTtl(projectId: string): Promise<{ agentTtl: number; appTtl: number }> {
+    const [project] = await db
+      .select({ timeoutIdleMinutes: projects.timeoutIdleMinutes, appTimeoutIdleMinutes: projects.appTimeoutIdleMinutes })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+
+    return {
+      agentTtl: (project?.timeoutIdleMinutes ?? TimeoutService.DEFAULT_AGENT_TIMEOUT_MINUTES) * 60,
+      appTtl: (project?.appTimeoutIdleMinutes ?? TimeoutService.DEFAULT_APP_TIMEOUT_MINUTES) * 60,
+    }
+  }
+
   async touch(projectId: string): Promise<void> {
+    const { agentTtl } = await this.getProjectTtl(projectId)
     await this.redis.setex(
       `${AGENT_KEY_PREFIX}${projectId}`,
-      this.agentTtlSeconds,
+      agentTtl,
       Date.now().toString(),
     )
   }
 
   async touchApp(projectId: string): Promise<void> {
+    const { appTtl } = await this.getProjectTtl(projectId)
     await this.redis.setex(
       `${APP_KEY_PREFIX}${projectId}`,
-      this.appTtlSeconds,
+      appTtl,
       Date.now().toString(),
     )
   }

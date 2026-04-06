@@ -9,6 +9,7 @@ import { SidebarProvider, useSidebar } from "~/components/ui/sidebar"
 import { Button } from "~/components/ui/button"
 import { Menu } from "~/components/icons"
 import { HotjarScript } from "~/scripts/hotjar"
+import { Toaster } from "solid-sonner"
 
 const queryClient = new QueryClient()
 
@@ -36,6 +37,7 @@ function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <Toaster position="bottom-right" richColors />
       <HotjarScript />
       <Show when={!isPermissionDenied()} fallback={<Outlet />}>
         <SidebarProvider>

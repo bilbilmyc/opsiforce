@@ -22,6 +22,27 @@
       "when": 1775420610110,
       "tag": "0002_add-project-api-keys",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775470618002,
+      "tag": "0003_add-key-type",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775471588233,
+      "tag": "0004_add-key-budget",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775473933841,
+      "tag": "0005_add-project-timeouts",
+      "breakpoints": true
     }
   ]
 }

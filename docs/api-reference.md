@@ -22,8 +22,12 @@ Backend API endpoints, proxy routing modes, and environment variables.
 |--------|------|-------------|
 | GET | /api/usage | Aggregate token/cost usage for current tenant (all projects) |
 | GET | /api/usage/projects/:id | Token/cost usage for a specific project |
+| GET | /api/usage/projects/:id/budgets | Get budget config for a project's keys |
+| PUT | /api/usage/projects/:id/budgets | Update budget for a key type |
 
-Returns `{ totalRequests, totalTokens, totalCost, averageLatency, successRate }`. Returns zeros when Bifrost is not configured. See [LLM Gateway](llm-gateway.md) for details.
+Usage returns `{ totalRequests, totalTokens, totalCost, averageLatency, successRate, byKeyType? }`. The `byKeyType` array breaks down usage by key type (`chat` vs `backend`). Returns zeros when Bifrost is not configured.
+
+Budget PUT body: `{ keyType: "chat"|"backend", maxBudget: number, budgetDuration: "1M"|"1d"|... }`. Set `maxBudget` to `0` to remove the limit. See [LLM Gateway](llm-gateway.md) for details.
 
 ### Health
 
@@ -38,7 +42,7 @@ Returns `{ totalRequests, totalTokens, totalCost, averageLatency, successRate }`
 | ALL | /api/proxy/:projectId/* | HTTP proxy to OpenCode server (port 4096). Streams SSE responses for chat. |
 
 Webapp and VS Code use **subdomain-based proxy servers** (not path-based):
-- Webapp: `{projectId}.{WEBAPP_DOMAIN}` → backend:3002 → pod:3101
+- Webapp: `{projectId}.{WEBAPP_DOMAIN}` → backend:3002 → pod:3000
 - VS Code: `{projectId}.{VSCODE_DOMAIN}` → backend:3003 → pod:8080
 
 **Timeout behavior:** Agent proxy (`/api/proxy`) resets the agent timeout key (default 30 min). Webapp proxy (`/api/webapp`) resets the app timeout key (default 7 days). Pod suspended only when both keys expire. If the pod is dead or the project is suspended, the proxy triggers automatic reassignment and returns 503.
@@ -71,10 +75,10 @@ Local dev uses `kubectl proxy` (port 8001) because the backend runs outside mini
 | K8S_NAMESPACE | opsiforce | Namespace for agent pods |
 | K8S_API_PROXY_URL | "" | K8s API proxy URL for routing (local: `http://localhost:8001` via `kubectl proxy`) |
 | WARM_POOL_SIZE | 2 | Number of warm pods to maintain |
-| AGENT_IMAGE | (derived) | Docker image for agent pods. Defaults to `opsiforce-agent:${PLATFORM_VERSION}`. Prod overrides via Helm. |
+| AGENT_IMAGE | (derived) | Docker image for agent pods. Defaults to `opsiforce-agent:${agentImageVersion}` (from `agent-config/agent-image-version.json`). Prod overrides via Helm. |
 | AGENT_IMAGE_PULL_POLICY | IfNotPresent | K8s imagePullPolicy (Never for minikube, Always for prod) |
 | AGENT_PORT | 4096 | Port opencode serve listens on |
-| WEBAPP_PORT | 3101 | Port for webapp preview proxy (Vite dev server in pod) |
+| APP_PORT | 3000 | Port for app preview proxy (single app port in pod) |
 | VSCODE_PORT | 8080 | Port for code-server (VS Code IDE) in agent pod |
 | VSCODE_PROXY_PORT | 3003 | Port for VS Code subdomain proxy server |
 | AGENT_NAME | app-builder | Which agent profile to load (matches folder in `agent-config/agents/`) |
@@ -83,7 +87,7 @@ Local dev uses `kubectl proxy` (port 8001) because the backend runs outside mini
 | STORAGE_HOST_PATH | /tmp/opsiforce-data | hostPath directory (minikube only) |
 | TIMEOUT_IDLE_MINUTES | 30 | Agent chat idle timeout (minutes) |
 | APP_TIMEOUT_IDLE_MINUTES | 10080 | App preview idle timeout (7 days) |
-| PLATFORM_VERSION | (from agent-version.json) | Version recorded per project, used for agent image tagging |
+| PLATFORM_VERSION | (from `backend/platform-version.json`) | Version recorded per project. Read directly from file, no env var needed. |
 | AGENT_RESOURCES | (see below) | JSON — pod resource requests/limits |
 | AGENT_NODE_SELECTOR | {} | JSON — K8s nodeSelector for agent pods |
 | AGENT_TOLERATIONS | [] | JSON — K8s tolerations for agent pods |

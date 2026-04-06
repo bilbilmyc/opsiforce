@@ -25,7 +25,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     throw new Error(`API error: ${res.status}`)
   }
   const text = await res.text()
-  return text ? JSON.parse(text) : undefined
+  return text ? JSON.parse(text) : (undefined as T)
 }
 
 export const api = {
@@ -34,6 +34,8 @@ export const api = {
     request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body: unknown) =>
     request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown) =>
+    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 }
 
@@ -49,6 +51,8 @@ export interface Project {
   title: string | null
   description: string | null
   status: "pending" | "active" | "suspended"
+  timeoutIdleMinutes: number | null
+  appTimeoutIdleMinutes: number | null
   lastActiveAt: string | null
   createdAt: string
 }

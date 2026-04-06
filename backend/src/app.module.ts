@@ -11,6 +11,7 @@ import { TenantModule } from "./tenant/tenant.module"
 import { TenantGuard } from "./tenant/tenant.guard"
 import { HealthController } from "./health.controller"
 import { BifrostModule } from "./bifrost/bifrost.module"
+import { PermissionModule } from "./permission/permission.module"
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { BifrostModule } from "./bifrost/bifrost.module"
     ProxyModule,
     UploadModule,
     BifrostModule,
+    PermissionModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: TenantGuard }],

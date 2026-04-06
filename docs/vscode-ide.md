@@ -14,7 +14,7 @@ Each agent pod runs code-server alongside the OpenCode agent. Both share the sam
 |-----------|------|---------|
 | OpenCode agent | 4096 | AI coding assistant |
 | code-server | 8080 | VS Code web IDE |
-| Webapp dev server | 3101 | User app preview |
+| Webapp dev server | 3000 | User app preview |
 
 ### Process management
 
@@ -30,7 +30,7 @@ VS Code uses **subdomain-based routing** (same approach as the webapp proxy) bec
 |---------|---------|-------------|--------|
 | OpenCode agent | Path-based (`/api/proxy/{id}/*`) | 3001 | pod:4096 |
 | VS Code IDE | Subdomain (`{id}.code.domain`) | 3003 | pod:8080 |
-| Webapp preview | Subdomain (`{id}.apps.domain`) | 3002 | pod:3101 |
+| Webapp preview | Subdomain (`{id}.apps.domain`) | 3002 | pod:3000 |
 
 ### How it works
 

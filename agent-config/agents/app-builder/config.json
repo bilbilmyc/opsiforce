@@ -2,8 +2,6 @@
   "name": "App Builder",
   "description": "Build web apps with React, Tailwind, shadcn/ui, and NestJS",
   "default": true,
-  "ports": {
-    "backend": 3100,
-    "frontend": 3101
-  }
+  "port": 3000,
+  "version": "0.1.0"
 }

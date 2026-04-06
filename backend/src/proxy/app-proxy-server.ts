@@ -2,7 +2,7 @@ import http from "http"
 import { Readable, pipeline } from "stream"
 import { ProxyService } from "./proxy.service"
 
-export function createWebappProxyServer(proxyService: ProxyService) {
+export function createAppProxyServer(proxyService: ProxyService) {
   const server = http.createServer(async (req, res) => {
     setCorsHeaders(res, req)
 
@@ -25,7 +25,7 @@ export function createWebappProxyServer(proxyService: ProxyService) {
       if (!res.headersSent) {
         res.writeHead(503, { "content-type": "application/json" })
       }
-      res.end(JSON.stringify({ error: "Webapp not available" }))
+      res.end(JSON.stringify({ error: "App not available" }))
     }
   })
 
@@ -56,7 +56,7 @@ function setCorsHeaders(res: http.ServerResponse, req: http.IncomingMessage) {
 }
 
 async function proxyHttp(proxyService: ProxyService, projectId: string, req: http.IncomingMessage, res: http.ServerResponse) {
-  const upstream = await proxyService.resolveWebappUpstreamByProjectId(projectId)
+  const upstream = await proxyService.resolveAppUpstreamByProjectId(projectId)
   const upstreamPath = new URL(upstream).pathname
   const targetUrl = `${upstream}${req.url}`
 
@@ -98,7 +98,7 @@ async function proxyHttp(proxyService: ProxyService, projectId: string, req: htt
 }
 
 async function proxyWs(proxyService: ProxyService, projectId: string, req: http.IncomingMessage, socket: import("stream").Duplex) {
-  const upstream = await proxyService.resolveWebappUpstreamByProjectId(projectId)
+  const upstream = await proxyService.resolveAppUpstreamByProjectId(projectId)
   const upstreamUrl = new URL(upstream)
 
   const proxyReq = http.request({

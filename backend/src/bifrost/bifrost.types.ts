@@ -1,13 +1,21 @@
+export type KeyType = "chat" | "backend"
+
 export interface BifrostProviderConfig {
   provider: string
   weight?: number
   allowed_models?: string[]
 }
 
+export interface BifrostBudget {
+  max_limit: number
+  reset_duration: string
+}
+
 export interface CreateVirtualKeyRequest {
   name: string
   description?: string
   provider_configs?: BifrostProviderConfig[]
+  budget?: BifrostBudget
   is_active?: boolean
 }
 
@@ -49,6 +57,15 @@ export interface BifrostCostHistogram {
   models: string[]
 }
 
+export interface KeyTypeUsage {
+  keyType: KeyType
+  totalRequests: number
+  totalTokens: number
+  totalCost: number
+  averageLatency: number
+  successRate: number
+}
+
 export interface ProjectUsageResponse {
   projectId: string
   totalRequests: number
@@ -56,6 +73,19 @@ export interface ProjectUsageResponse {
   totalCost: number
   averageLatency: number
   successRate: number
+  byKeyType?: KeyTypeUsage[]
+}
+
+export interface ProjectBudgetEntry {
+  keyType: KeyType
+  maxBudget: number | null
+  budgetDuration: string | null
+}
+
+export interface UpdateBudgetRequest {
+  keyType: KeyType
+  maxBudget: number
+  budgetDuration: string
 }
 
 export interface TenantUsageResponse {
@@ -64,4 +94,5 @@ export interface TenantUsageResponse {
   totalTokens: number
   totalCost: number
   projects: ProjectUsageResponse[]
+  byKeyType?: KeyTypeUsage[]
 }

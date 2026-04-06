@@ -14,9 +14,8 @@ How requests flow through the Opsiforce system for key user actions.
    b. If Bifrost configured: creates virtual key via Bifrost Admin API, stores in project_api_keys
    c. Claims warm pod from pool (PodPoolService)
    d. Deletes warm pod, creates new pod with subPath = "projects/{project-id}"
-      - If Bifrost: injects OPENAI_API_KEY=<virtual key> + OPENAI_BASE_URL=<bifrost url>
+      - If Bifrost: injects OPENAI_API_KEY=<chat key> + APP_LLM_API_KEY=<backend key> + base URLs
       - If no Bifrost: injects OPENAI_API_KEY=<direct key>
-      - Injects dynamic skills (ai-api) into init container
    e. Waits for readiness probe (/global/health on :4096)
    f. Records pod IP in DB, sets project status to active
    g. Returns project ID to frontend

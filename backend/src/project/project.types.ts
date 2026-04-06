@@ -16,6 +16,8 @@ export interface CreateProjectDto {
 export interface UpdateProjectDto {
   title?: string
   description?: string
+  timeoutIdleMinutes?: number | null
+  appTimeoutIdleMinutes?: number | null
 }
 
 export type ProjectResponse = typeof projects.$inferSelect

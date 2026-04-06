@@ -1,4 +1,5 @@
 import {
+  Show,
   createSignal,
   createEffect,
   onMount,
@@ -7,6 +8,10 @@ import {
   type ParentProps,
 } from "solid-js";
 import { createQuery, useQueryClient } from "@tanstack/solid-query";
+import { usePermissions } from "~/api/permissions";
+import { Permission } from "~/constants/permissions";
+import { MessageSquare, Code as CodeIcon } from "~/components/icons";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { AppBaseProviders, AppInterface } from "@opencode-ai/app/app";
 import {
   PlatformProvider,
@@ -70,6 +75,9 @@ function createDirectoryRouter(
 }
 
 export default function ProjectView(props: { projectId: string }) {
+  const { hasPermission } = usePermissions();
+  const canViewCode = () => hasPermission(Permission.viewCodeTab);
+
   const [router, setRouter] = createSignal<Component<BaseRouterProps> | null>(
     null,
   );
@@ -218,28 +226,27 @@ export default function ProjectView(props: { projectId: string }) {
 
   return (
     <div class="h-full w-full flex flex-col overflow-hidden">
-      {router() && (
-        <div class="h-8 flex items-center gap-1 px-2 bg-sidebar border-b border-border shrink-0">
-          <button
-            onClick={() => setActiveTab("chat")}
-            class={`h-6 px-3 rounded text-xs font-medium transition-colors ${
-              activeTab() === "chat"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-accent"
-            }`}
+      {router() && canViewCode() && (
+        <div class="h-9 flex items-center px-2 bg-sidebar border-b border-border shrink-0">
+          <Tabs
+            value={activeTab()}
+            onChange={(v) => {
+              setActiveTab(v as "chat" | "code");
+              if (v === "code") setCodeTabOpened(true);
+            }}
+            class="w-auto"
           >
-            Chat
-          </button>
-          <button
-            onClick={() => { setActiveTab("code"); setCodeTabOpened(true); }}
-            class={`h-6 px-3 rounded text-xs font-medium transition-colors ${
-              activeTab() === "code"
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-accent"
-            }`}
-          >
-            Code
-          </button>
+            <TabsList class="w-auto h-7">
+              <TabsTrigger value="chat" class="gap-1.5 px-3">
+                <MessageSquare class="w-3.5 h-3.5" />
+                Chat
+              </TabsTrigger>
+              <TabsTrigger value="code" class="gap-1.5 px-3">
+                <CodeIcon class="w-3.5 h-3.5" />
+                Code
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
       )}
 
@@ -286,7 +293,7 @@ export default function ProjectView(props: { projectId: string }) {
           {router() && <FileUpload projectId={props.projectId} />}
         </div>
 
-        {router() && codeTabOpened() && (
+        {router() && codeTabOpened() && canViewCode() && (
           <div
             class="flex-1 min-w-0 flex flex-col"
             style={{ display: activeTab() === "code" ? "flex" : "none" }}

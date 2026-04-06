@@ -7,14 +7,14 @@ import { projects } from "../../db/schema"
 @Injectable()
 export class ProxyService {
   private readonly agentPort: number
-  private readonly webappPort: number
+  private readonly appPort: number
   private readonly vscodePort: number
   private readonly k8sApiProxyUrl: string
   private readonly k8sNamespace: string
 
   constructor(private readonly configService: ConfigService) {
     this.agentPort = this.configService.getOrThrow<number>("agentPort")
-    this.webappPort = this.configService.getOrThrow<number>("webappPort")
+    this.appPort = this.configService.getOrThrow<number>("appPort")
     this.vscodePort = this.configService.getOrThrow<number>("vscodePort")
     this.k8sApiProxyUrl = this.configService.getOrThrow<string>("k8sApiProxyUrl")
     this.k8sNamespace = this.configService.getOrThrow<string>("k8sNamespace")
@@ -24,8 +24,8 @@ export class ProxyService {
     return this.resolveUpstreamForPort(projectId, tenantId, this.agentPort)
   }
 
-  async resolveWebappUpstream(projectId: string, tenantId: string): Promise<string> {
-    return this.resolveUpstreamForPort(projectId, tenantId, this.webappPort)
+  async resolveAppUpstream(projectId: string, tenantId: string): Promise<string> {
+    return this.resolveUpstreamForPort(projectId, tenantId, this.appPort)
   }
 
   async resolveVscodeUpstream(projectId: string, tenantId: string): Promise<string> {
@@ -54,7 +54,7 @@ export class ProxyService {
     return project.podName
   }
 
-  async resolveWebappUpstreamByProjectId(projectId: string): Promise<string> {
+  async resolveAppUpstreamByProjectId(projectId: string): Promise<string> {
     const [project] = await db
       .select()
       .from(projects)
@@ -62,10 +62,10 @@ export class ProxyService {
 
     if (!project) throw new NotFoundException(`Project ${projectId} not found`)
 
-    return this.upstreamFromProject(project, this.webappPort)
+    return this.upstreamFromProject(project, this.appPort)
   }
 
-  async resolveWebappUpstreamByShortId(shortId: string): Promise<string> {
+  async resolveAppUpstreamByShortId(shortId: string): Promise<string> {
     const [project] = await db
       .select()
       .from(projects)
@@ -73,7 +73,7 @@ export class ProxyService {
 
     if (!project) throw new NotFoundException(`Project matching ${shortId} not found`)
 
-    return this.upstreamFromProject(project, this.webappPort)
+    return this.upstreamFromProject(project, this.appPort)
   }
 
   private upstreamFromProject(project: { podName: string | null; podIp: string | null; id: string }, port: number): string {

@@ -12,10 +12,10 @@ spec:
       protocol: TCP
       port: {{ .Values.backend.containerPort }}
       targetPort: {{ .Values.backend.containerPort }}
-    - name: webapp-proxy
+    - name: app-proxy
       protocol: TCP
-      port: {{ .Values.backend.webappProxyPort | default 3002 }}
-      targetPort: {{ .Values.backend.webappProxyPort | default 3002 }}
+      port: {{ .Values.backend.appProxyPort | default 3002 }}
+      targetPort: {{ .Values.backend.appProxyPort | default 3002 }}
     - name: vscode-proxy
       protocol: TCP
       port: {{ .Values.backend.vscodeProxyPort | default 3003 }}
