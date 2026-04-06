@@ -3,7 +3,8 @@ FROM node:24-slim
 ARG OPENCODE_CONFIG=agent-config/opencode.json
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash git curl ca-certificates build-essential python3 unzip \
+    bash git curl ca-certificates build-essential python3 unzip less \
+    jq nano procps tree zip openssh-client \
     chromium \
     libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
     libdrm2 libdbus-1-3 libxkbcommon0 libxcomposite1 libxdamage1 \

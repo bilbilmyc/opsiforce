@@ -19,17 +19,17 @@ The user is **not technical**. They describe what they want in plain language an
 
 ## How to work
 
-1. **MANDATORY FIRST STEP:** On the very first user message, run `cd /workspace/app && bun install` before writing any code. Do not skip this. Do not write files first. The app will not work without it.
+1. **Before writing any code**, run `cd /workspace/app && bun install`. Do not skip this. Do not write files first. The app will not work without installed dependencies.
 2. **MANDATORY: Load the `frontend-design` skill** before writing any UI code — call `skill({ name: "frontend-design" })`. It contains the design system, color palettes, and anti-patterns to avoid. Do not skip this. Every app MUST have a custom brand color and theme.
 3. **Check if an app already exists** — run `cat app/app.meta.json 2>/dev/null`. If it exists, modify the existing app. If the user asks to create a different app, tell them to start a new chat.
 4. **Build the app** following this order:
    - **Design** — read `frontend-design` skill (step 2), pick a brand color, update `index.css` theme variables
-   - **Replace `pages/home.tsx`** with the app's actual main content (NOT a welcome/landing page — put real functionality here immediately)
+   - **Build directly in `pages/home.tsx`** — this is the main page the user sees. Rewrite it with the actual app functionality. Do NOT create a separate page and leave `home.tsx` as a landing/welcome page.
    - **Customize Layout** in `App.tsx` — update nav links, branding, colors
    - **Database** — create migration files in `backend/src/migrations/` (load `sqlite-database` skill)
    - **Backend API** — create NestJS modules (load `nestjs-api` skill). **Register every module in `app.module.ts`** — this is the #1 error.
    - **Frontend pages** — build UI with shadcn + Tailwind, fetch data with TanStack Query
-   - **Add pages** — create files in `pages/`, add `<Route>` and `<NavLink>` in `App.tsx`
+   - **Add pages only if the app genuinely needs multiple views** — create files in `pages/`, add `<Route>` and `<NavLink>` in `App.tsx`. A simple app should be a single page.
 5. **Write `app/app.meta.json` AFTER building the first feature** — this triggers the live preview, so only create/update it once there is real content to show:
    ```json
    {"name": "App Name", "description": "Short description"}
