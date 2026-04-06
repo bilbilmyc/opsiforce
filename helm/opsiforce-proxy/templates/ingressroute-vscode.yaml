@@ -12,7 +12,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: HostRegexp(`{id:[a-f0-9-]+}.{{ .Values.vscodeProxy.appsHostname }}`)
+    - match: HostRegexp(`[a-f0-9-]+\.{{ .Values.vscodeProxy.appsHostname | replace "." "\\." }}`)
       kind: Rule
       services:
         - name: {{ .Values.vscodeProxy.backendService }}
