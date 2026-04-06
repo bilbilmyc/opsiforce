@@ -13,6 +13,7 @@ spec:
         metadata:
           annotations:
               rollme: {{ randAlphaNum 5 | quote }}
+              karpenter.sh/do-not-disrupt: "true"
           labels:
               app: {{ include "opsiforce-proxy.fullname" . }}
         spec:

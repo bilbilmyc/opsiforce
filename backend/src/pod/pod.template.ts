@@ -40,6 +40,9 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
     metadata: {
       name: options.podName,
       namespace: options.namespace,
+      annotations: {
+        "karpenter.sh/do-not-disrupt": "true",
+      },
       labels: {
         app: "opsiforce-agent",
         "opsiforce.io/pool": isAssigned ? "assigned" : "warm",
