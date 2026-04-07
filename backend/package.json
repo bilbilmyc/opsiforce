@@ -22,8 +22,8 @@
     "opsiforce-install-infra": "helm upgrade --install --wait --namespace opsiforce --create-namespace opsiforce-infra ../helm/opsiforce --set fullnameOverride=opsiforce --set storage.type=hostPath --set storage.hostPath=/data/opsiforce --set valkey.enabled=false --set agent.affinity=null",
     "kubectl-proxy": "sh -c 'lsof -ti :8001 | xargs kill 2>/dev/null; while true; do kubectl proxy --port=8001; sleep 1; done'",
     "create-bifrost-db": "kubectl run -n local psql-client-bf --restart=Never -i --tty --rm --env PGPASSWORD=dbpass1 --image=postgres:16 -- psql -h local-pg-postgresql -d postgres -U admin -c \"CREATE DATABASE bifrost;\" || :",
-    "install-bifrost": "helm upgrade --install --wait --namespace opsiforce --create-namespace opsiforce-bifrost ../helm/opsiforce-bifrost --set config.databaseUrl=$BIFROST_DATABASE_URL --set config.openaiApiKey=$OPENAI_API_KEY --set config.masterKey=$BIFROST_MASTER_KEY --set affinity=null",
-    "port-forward-bifrost": "sh -c 'while true; do kubectl port-forward svc/opsiforce-bifrost-opsiforce-bifrost 3050:8080 -n opsiforce; sleep 1; done'",
+    "install-bifrost": "sh ../scripts/install-bifrost.sh",
+    "port-forward-bifrost": "sh -c 'while true; do kubectl port-forward svc/opsiforce-bifrost 3050:8080 -n opsiforce; sleep 1; done'",
     "minikube-dev": "env-cmd -f ./local-envs.sh --use-shell 'yarn run setup-minikube-storage && yarn run build-agent-image && yarn run opsiforce-install-infra && yarn run create-opsiforce-db && yarn run create-bifrost-db && yarn run db:migrate && yarn run install-bifrost && concurrently \"yarn run opsiforce-install-proxy\" \"yarn run port-forward-proxy\" \"yarn run port-forward-bifrost\" \"yarn run kubectl-proxy\" \"yarn run dev\" \"yarn run db:studio\"'"
   },
   "dependencies": {

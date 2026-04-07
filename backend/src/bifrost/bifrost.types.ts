@@ -2,8 +2,9 @@ export type KeyType = "chat" | "backend"
 
 export interface BifrostProviderConfig {
   provider: string
-  weight?: number
+  weight?: number | null
   allowed_models?: string[]
+  key_ids?: string[]
 }
 
 export interface BifrostBudget {

@@ -4,9 +4,21 @@
   "provider": {
     "openai": {
       "models": {
-        "gpt-5.3-codex": {},
-        "o4-mini": {},
-        "gpt-5.4-mini": {},
+        "gpt-5.3-codex": {
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
+        "o4-mini": {
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
+        "gpt-5.4-mini": {
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
         "gpt-4.1": {}
       }
     }

@@ -19,16 +19,18 @@ export class BifrostService {
   private readonly logger = new Logger(BifrostService.name)
   private readonly proxyUrl: string
   private readonly podProxyUrl: string
-  private readonly masterKey: string
+  private readonly adminUsername: string
+  private readonly adminPassword: string
 
   constructor(private readonly configService: ConfigService) {
     this.proxyUrl = this.configService.get<string>("bifrostProxyUrl", "")
     this.podProxyUrl = this.configService.get<string>("bifrostPodProxyUrl", "") || this.proxyUrl
-    this.masterKey = this.configService.get<string>("bifrostMasterKey", "")
+    this.adminUsername = this.configService.get<string>("bifrostAdminUsername", "")
+    this.adminPassword = this.configService.get<string>("bifrostAdminPassword", "")
   }
 
   isEnabled(): boolean {
-    return !!this.proxyUrl && !!this.masterKey
+    return !!this.proxyUrl && !!this.adminUsername && !!this.adminPassword
   }
 
   getPodProxyUrl(): string {
@@ -41,11 +43,12 @@ export class BifrostService {
 
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const url = `${this.baseUrl()}${path}`
+    const credentials = Buffer.from(`${this.adminUsername}:${this.adminPassword}`).toString("base64")
     const response = await fetch(url, {
       method,
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${this.masterKey}`,
+        Authorization: `Basic ${credentials}`,
       },
       ...(body ? { body: JSON.stringify(body) } : {}),
     })
@@ -87,12 +90,10 @@ export class BifrostService {
     const payload: CreateVirtualKeyRequest = {
       name: `project-${projectId.slice(0, 8)}-${keyType}`,
       description: `Virtual key (${keyType}) for project ${projectId} (tenant: ${tenantId})`,
-      provider_configs: [
-        {
-          provider: "openai",
-          allowed_models: BifrostService.MODEL_ALLOWLISTS[keyType],
-        },
-      ],
+      provider_configs: [{
+        provider: "openai",
+        allowed_models: BifrostService.MODEL_ALLOWLISTS[keyType],
+      }],
       budget,
     }
 

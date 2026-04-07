@@ -96,7 +96,8 @@ Local dev uses `kubectl proxy` (port 8001) because the backend runs outside mini
 | OPENAI_API_KEY | "" | OpenAI API key — injected into agent pods as env var (never baked into image) |
 | BIFROST_PROXY_URL | "" | Bifrost Admin API URL (backend → Bifrost). Set to enable LLM gateway. |
 | BIFROST_POD_PROXY_URL | (= BIFROST_PROXY_URL) | Bifrost URL for agent pods (pod → Bifrost). Only needed in local dev. |
-| BIFROST_MASTER_KEY | "" | Bifrost Admin API authentication key |
+| BIFROST_ADMIN_USERNAME | "" | Bifrost Admin API basic-auth username |
+| BIFROST_ADMIN_PASSWORD | "" | Bifrost Admin API basic-auth password |
 
 Default `AGENT_RESOURCES`:
 ```json

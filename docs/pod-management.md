@@ -70,7 +70,7 @@ Backend polls for readiness every 2s with a 60s timeout (`PodService.waitForRead
 
 ## LLM Gateway Integration (Bifrost)
 
-When Bifrost is configured (`BIFROST_PROXY_URL` + `BIFROST_MASTER_KEY` set), pods get per-project virtual keys instead of the shared OpenAI API key.
+When Bifrost is configured (`BIFROST_PROXY_URL` + `BIFROST_ADMIN_USERNAME` + `BIFROST_ADMIN_PASSWORD` set), pods get per-project virtual keys instead of the shared OpenAI API key.
 
 ### What changes in the pod spec
 
@@ -103,7 +103,6 @@ agent-config/
 │   ├── config.json              ← agent metadata (name, description, ports)
 │   └── template/                ← app template + skills
 ├── opencode.json                ← shared config (providers, model, permissions)
-├── opencode.local.json          ← local dev override
 └── scripts/                     ← entrypoint + guard
 ```
 
@@ -121,7 +120,7 @@ The volume mounts at `/workspace`, which shadows all files baked into that path.
 
 ### Config selection
 
-The Dockerfile accepts a build arg `OPENCODE_CONFIG` (defaults to `agent-config/opencode.json`). Local dev passes `--build-arg OPENCODE_CONFIG=agent-config/opencode.local.json`.
+The Dockerfile defaults to `agent-config/opencode.json`. Local and production builds now use the same provider/model config so Bifrost behavior matches across environments.
 
 ### Agent selection
 

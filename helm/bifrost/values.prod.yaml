@@ -1,0 +1,86 @@
+service:
+  type: ClusterIP
+
+fullnameOverride: opsiforce-bifrost
+
+image:
+  tag: "v1.4.20"
+
+replicaCount: 1
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 2Gi
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+storage:
+  mode: postgres
+  configStore:
+    enabled: true
+  logsStore:
+    enabled: true
+
+vectorStore:
+  enabled: false
+  type: none
+
+postgresql:
+  enabled: false
+  external:
+    enabled: true
+    host: postgres-cluster-pooler-pooler-rw.postgres.svc.cluster.local
+    port: 5432
+    user: postgres
+    database: bifrost
+    sslMode: disable
+    existingSecret: opsiforce-bifrost-postgres
+    passwordKey: password
+
+bifrost:
+  encryptionKeySecret:
+    name: opsiforce-bifrost-encryption
+    key: key
+  authConfig:
+    isEnabled: true
+    disableAuthOnInference: true
+    existingSecret: opsiforce-bifrost-admin-auth
+    usernameKey: username
+    passwordKey: password
+  client:
+    dropExcessRequests: true
+    enableLogging: true
+    allowDirectKeys: false
+  providers:
+    openai:
+      keys:
+        - name: openai-primary
+          value: env.OPENAI_API_KEY
+          models:
+            - "*"
+          weight: 1
+      network_config:
+        default_request_timeout_in_seconds: 300
+        max_retries: 2
+        retry_backoff_initial: 500
+        retry_backoff_max: 5000
+        stream_idle_timeout_in_seconds: 600
+  providerSecrets:
+    openai:
+      existingSecret: opsiforce-bifrost-provider-keys
+      key: openai-api-key
+      envVar: OPENAI_API_KEY
+  plugins:
+    governance:
+      enabled: true
+    logging:
+      enabled: true

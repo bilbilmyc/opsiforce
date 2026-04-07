@@ -1,6 +1,0 @@
-apiVersion: v2
-name: opsiforce-bifrost
-description: Bifrost AI Gateway for Opsiforce — LLM proxy with per-project virtual keys and usage tracking
-type: application
-version: 0.1.0
-appVersion: "1.4.19"

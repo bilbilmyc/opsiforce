@@ -81,6 +81,7 @@ curl http://localhost:3001/api/health                 # Health check
 ## Local Environment
 
 - `local-envs.sh` in `backend/` has all env vars for local dev
+- Export `OPENAI_API_KEY` in your shell before running the local Bifrost flow (`local-envs.sh` reads it from the shell environment)
 - Vite configs must include `allowedHosts: ["host.minikube.internal"]` (proxy routes through minikube)
 - Local dev uses `AGENT_IMAGE_PULL_POLICY=Never` (image built into minikube), prod uses `Always`
 - Local dev follows makara pattern: apps local, proxy in minikube, access via :4110

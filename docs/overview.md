@@ -98,7 +98,6 @@ packages/opsiforce/
 │   │       ├── config.json      Agent metadata (name, description, ports)
 │   │       └── template/        Files copied to workspace (app/, .opencode/skills/)
 │   ├── opencode.json            Shared config (providers, permissions, default_agent)
-│   ├── opencode.local.json      Local dev config override
 │   └── scripts/                 Entrypoint + guard scripts
 │
 ├── docker/

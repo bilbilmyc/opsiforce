@@ -38,7 +38,8 @@ config:
   openaiApiKey: ""
   bifrostProxyUrl: ""
   bifrostPodProxyUrl: ""
-  bifrostMasterKey: ""
+  bifrostAdminUsername: ""
+  bifrostAdminPassword: ""
   agentAffinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:

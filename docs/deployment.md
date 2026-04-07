@@ -189,14 +189,15 @@ Runs only on push (not PRs). Waits for all 3 builds to succeed.
 2. Authenticate to CloudFleet cluster via `cloudfleet clusters kubeconfig {cluster-id}`
 3. Create GHCR image pull secret in target namespace
 4. Create opsiforce and bifrost databases on CNPG (CloudNativePG) if they don't exist
-5. Determine environment from branch:
+5. Sync Bifrost secrets into the target namespace
+6. Determine environment from branch:
 
 | Branch | Namespace | ENV_SUFFIX | Hostname |
 |--------|-----------|------------|----------|
 | `main` | `opsiforce-development` | `development` | `opsiforce.dev.opsima.com` |
 | `production-opsiforce` | `opsiforce-production` | `production` | `opsiforce.opsima.com` |
 
-6. Deploy 5 Helm charts sequentially (each with `--wait`):
+7. Deploy 4 repo charts plus the upstream Bifrost chart sequentially (each with `--wait`):
 
 ```bash
 # 1. Infra (RBAC, PVC)
@@ -204,11 +205,14 @@ helm upgrade --install opsiforce-infra-{env} ./helm/opsiforce \
   --set agent.image.repository=ghcr.io/simadevelopment/opsiforce \
   --set agent.image.tag=agent-{env}-{sha7}
 
-# 2. Bifrost AI Gateway (LLM proxy with virtual keys)
-helm upgrade --install opsiforce-bifrost-{env} ./helm/opsiforce-bifrost \
-  --set config.databaseUrl="{BIFROST_DATABASE_URL}" \
-  --set config.openaiApiKey="{OPENAI_API_KEY}" \
-  --set config.masterKey="{BIFROST_MASTER_KEY}"
+# 2. Bifrost AI Gateway (upstream chart + repo values)
+helm repo add bifrost https://maximhq.github.io/bifrost/helm-charts
+helm repo update bifrost
+helm upgrade --install opsiforce-bifrost-{env} bifrost/bifrost \
+  --namespace {namespace} \
+  --version 2.0.15 \
+  -f ./helm/bifrost/values.prod.yaml
+kubectl apply -n {namespace} -f ./helm/bifrost/networkpolicy.yaml
 
 # 3. Backend (NestJS deployment + service + config)
 helm upgrade --install opsiforce-backend-{env} ./helm/opsiforce-backend \
@@ -219,14 +223,17 @@ helm upgrade --install opsiforce-backend-{env} ./helm/opsiforce-backend \
   --set config.k8sNamespace={namespace} \
   --set config.agentImage=ghcr.io/simadevelopment/opsiforce:agent-{env}-{sha7} \
   --set config.cephfsPvcName=opsiforce-opsiforce-infra-{env}-cephfs \
-  --set config.platformVersion={sha7}
+  --set config.platformVersion={sha7} \
+  --set config.bifrostProxyUrl=http://opsiforce-bifrost:8080/v1 \
+  --set config.bifrostAdminUsername=opsiforce-admin \
+  --set config.bifrostAdminPassword={BIFROST_ADMIN_PASSWORD}
 
-# 3. Frontend (nginx serving static Solid.js build)
+# 4. Frontend (nginx serving static Solid.js build)
 helm upgrade --install opsiforce-frontend-{env} ./helm/opsiforce-frontend \
   --set frontend.image.repository=ghcr.io/simadevelopment/opsiforce \
   --set frontend.image.tag=frontend-{env}-{sha7}
 
-# 4. Proxy (nginx + OAuth2 Proxy + Traefik IngressRoute)
+# 5. Proxy (nginx + OAuth2 Proxy + Traefik IngressRoute)
 helm upgrade --install opsiforce-proxy-{env} ./helm/opsiforce-proxy \
   --set proxy.backendService=http://opsiforce-backend-opsiforce-backend-{env}:3001 \
   --set proxy.frontendService=http://opsiforce-frontend-opsiforce-frontend-{env}:80 \
@@ -237,11 +244,11 @@ helm upgrade --install opsiforce-proxy-{env} ./helm/opsiforce-proxy \
 
 Deploy order matters: infra creates the ServiceAccount and PVC; Bifrost must be up before backend (backend calls Bifrost Admin API); backend must be up before proxy routes to it.
 
-**Required GitHub Secret:** `BIFROST_MASTER_KEY` — generate with `openssl rand -hex 32`.
+**Required GitHub Secrets:** `OPENAI_API_KEY`, `BIFROST_ADMIN_PASSWORD`, `BIFROST_ENCRYPTION_KEY`
 
 ### Helm Charts
 
-5 charts in `helm/`:
+Repo-owned deploy inputs:
 
 #### 1. `opsiforce` (infra)
 
@@ -252,17 +259,17 @@ Shared infrastructure that other charts depend on.
 | `rbac.yaml` | ServiceAccount + Role + RoleBinding — grants backend permission to CRUD pods, read logs, exec into pods |
 | `pvc-cephfs.yaml` | CephFS PVC (`ReadWriteMany`) — only created when `storage.type == "pvc"` (production) |
 
-#### 2. `opsiforce-bifrost`
+#### 2. `helm/bifrost/`
 
 Bifrost AI Gateway — LLM proxy with per-project virtual keys, usage tracking, and budget enforcement. See [LLM Gateway](llm-gateway.md).
 
-| Template | What it creates |
+| File | What it controls |
 |----------|----------------|
-| `deployment.yaml` | Bifrost container (port 8080). Config mounted from ConfigMap. Health: `/health`. |
-| `service.yaml` | ClusterIP:8080 |
-| `configmap.yaml` | Bifrost config.json — OpenAI provider, PostgreSQL config/log store, governance+logging plugins |
-| `secret.yaml` | OPENAI_API_KEY, MASTER_KEY, DATABASE_URL |
-| `networkpolicy.yaml` | Ingress from same namespace only |
+| `helm/bifrost/values.prod.yaml` | Upstream Bifrost image pin (`v1.4.20`) and cluster values: external CNPG, auth, OpenAI provider, fixed single-replica deployment, service name |
+| `helm/bifrost/values.local.yaml` | Upstream Bifrost image pin (`v1.4.20`) and local minikube values: external local PG, auth, OpenAI provider, stable service name |
+| `helm/bifrost/networkpolicy.yaml` | Namespace-local ingress restriction for the upstream Bifrost pods |
+
+The current runtime is pinned to `v1.4.20`, so the backend sends the v1.4-compatible virtual-key payload shape. When you move to the `v1.5.x` line later, back up the `bifrost` database first and then reintroduce the v1.5-specific virtual-key changes from the migration guide.
 
 #### 3. `opsiforce-backend`
 
