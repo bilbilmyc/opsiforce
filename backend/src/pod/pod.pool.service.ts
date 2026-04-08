@@ -1,10 +1,12 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { eq } from "drizzle-orm"
-import { db } from "../../db"
+import { db, pgClient } from "../../db"
 import { pods, projects } from "../../db/schema"
 import { PodService } from "./pod.service"
 import crypto from "crypto"
+
+type ClaimedWarmPod = typeof pods.$inferSelect
 
 @Injectable()
 export class PodPoolService implements OnModuleInit {
@@ -49,23 +51,37 @@ export class PodPoolService implements OnModuleInit {
   }
 
   async claimWarmPod(): Promise<typeof pods.$inferSelect | null> {
-    const warmPodRows = await db
-      .select()
-      .from(pods)
-      .where(eq(pods.status, "warm"))
-      .limit(1)
+    const claimed = await pgClient.begin(async (tx) => {
+      const rows = await tx.unsafe<ClaimedWarmPod[]>(`
+        delete from pods
+        where id = (
+          select id
+          from pods
+          where status = 'warm'
+          order by created_at
+          for update skip locked
+          limit 1
+        )
+        returning
+          id,
+          pod_name as "podName",
+          status,
+          project_id as "projectId",
+          pod_ip as "podIp",
+          created_at as "createdAt",
+          updated_at as "updatedAt"
+      `)
 
-    if (warmPodRows.length === 0) return null
+      return rows[0] ?? null
+    })
 
-    const pod = warmPodRows[0]
-    await db
-      .update(pods)
-      .set({ status: "assigned", updatedAt: new Date() })
-      .where(eq(pods.id, pod.id))
+    if (!claimed) return null
 
-    this.replenish()
+    void this.replenish().catch((err) => {
+      this.logger.warn(`Failed to replenish warm pool after claim: ${err.message}`)
+    })
 
-    return { ...pod, status: "assigned" }
+    return claimed
   }
 
   private async createWarmPod(): Promise<void> {

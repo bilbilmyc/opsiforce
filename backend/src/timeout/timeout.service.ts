@@ -3,16 +3,13 @@ import { ConfigService } from "@nestjs/config"
 import Redis from "ioredis"
 import { eq } from "drizzle-orm"
 import { db } from "../../db"
-import { projects } from "../../db/schema"
+import { projectSettings } from "../../db/schema"
 
 const AGENT_KEY_PREFIX = "opsiforce:timeout:"
 const APP_KEY_PREFIX = "opsiforce:app-timeout:"
 
 @Injectable()
 export class TimeoutService implements OnModuleDestroy {
-  private static readonly DEFAULT_AGENT_TIMEOUT_MINUTES = 30
-  private static readonly DEFAULT_APP_TIMEOUT_MINUTES = 10080
-
   private readonly redis: Redis
   readonly redisUrl: string
   readonly dbNumber: number
@@ -29,13 +26,20 @@ export class TimeoutService implements OnModuleDestroy {
 
   private async getProjectTtl(projectId: string): Promise<{ agentTtl: number; appTtl: number }> {
     const [project] = await db
-      .select({ timeoutIdleMinutes: projects.timeoutIdleMinutes, appTimeoutIdleMinutes: projects.appTimeoutIdleMinutes })
-      .from(projects)
-      .where(eq(projects.id, projectId))
+      .select({
+        timeoutIdle: projectSettings.timeoutIdle,
+        appTimeoutIdle: projectSettings.appTimeoutIdle,
+      })
+      .from(projectSettings)
+      .where(eq(projectSettings.projectId, projectId))
+
+    if (!project) {
+      throw new Error(`Project ${projectId} not found`)
+    }
 
     return {
-      agentTtl: (project?.timeoutIdleMinutes ?? TimeoutService.DEFAULT_AGENT_TIMEOUT_MINUTES) * 60,
-      appTtl: (project?.appTimeoutIdleMinutes ?? TimeoutService.DEFAULT_APP_TIMEOUT_MINUTES) * 60,
+      agentTtl: Math.ceil(project.timeoutIdle / 1000),
+      appTtl: Math.ceil(project.appTimeoutIdle / 1000),
     }
   }
 

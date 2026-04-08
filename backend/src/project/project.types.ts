@@ -1,7 +1,7 @@
-import { projects } from "../../db/schema"
+import { projectSettings, projects } from "../../db/schema"
 
 export const ProjectStatus = {
-  Pending: "pending",
+  Starting: "starting",
   Active: "active",
   Suspended: "suspended",
 } as const
@@ -16,8 +16,14 @@ export interface CreateProjectDto {
 export interface UpdateProjectDto {
   title?: string
   description?: string
-  timeoutIdleMinutes?: number | null
-  appTimeoutIdleMinutes?: number | null
+  timeoutIdle?: number
+  appTimeoutIdle?: number
 }
 
-export type ProjectResponse = typeof projects.$inferSelect
+type ProjectRow = typeof projects.$inferSelect
+type ProjectSettingsRow = typeof projectSettings.$inferSelect
+
+export interface ProjectResponse extends ProjectRow {
+  timeoutIdle: ProjectSettingsRow["timeoutIdle"]
+  appTimeoutIdle: ProjectSettingsRow["appTimeoutIdle"]
+}

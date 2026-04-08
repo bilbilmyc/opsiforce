@@ -91,5 +91,8 @@ spec:
                 - --skip-jwt-bearer-tokens=true
                 - --cookie-csrf-per-request=true
                 - --redirect-url={{ .Values.oauth2Proxy.redirectUrl }}
+                - --skip-auth-route=GET=^/assets/.*$
+                - --skip-auth-route=GET=^/favicon/.*$
+                - --skip-auth-route=GET=^/manifest.webmanifest$
                 - --cookie-refresh=4m
           {{- end }}

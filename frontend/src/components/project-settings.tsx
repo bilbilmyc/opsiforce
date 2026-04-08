@@ -49,21 +49,24 @@ const KEY_TYPE_LABELS: Record<string, string> = {
 }
 
 const TIME_UNITS = [
-  { value: "minutes", label: "Minutes", multiplier: 1 },
-  { value: "hours", label: "Hours", multiplier: 60 },
-  { value: "days", label: "Days", multiplier: 1440 },
+  { value: "minutes", label: "Minutes", multiplier: 60 * 1000 },
+  { value: "hours", label: "Hours", multiplier: 60 * 60 * 1000 },
+  { value: "days", label: "Days", multiplier: 24 * 60 * 60 * 1000 },
 ]
 
-function minutesToUnitValue(minutes: number | null): { value: string; unit: string } {
-  if (minutes == null) return { value: "", unit: "minutes" }
-  if (minutes >= 1440 && minutes % 1440 === 0) return { value: String(minutes / 1440), unit: "days" }
-  if (minutes >= 60 && minutes % 60 === 0) return { value: String(minutes / 60), unit: "hours" }
-  return { value: String(minutes), unit: "minutes" }
+function durationToUnitValue(duration: number): { value: string; unit: string } {
+  const day = 24 * 60 * 60 * 1000
+  const hour = 60 * 60 * 1000
+  const minute = 60 * 1000
+
+  if (duration >= day && duration % day === 0) return { value: String(duration / day), unit: "days" }
+  if (duration >= hour && duration % hour === 0) return { value: String(duration / hour), unit: "hours" }
+  return { value: String(duration / minute), unit: "minutes" }
 }
 
-function unitValueToMinutes(value: string, unit: string): number | null {
+function unitValueToDuration(value: string, unit: string, fallback: number): number {
   const num = parseFloat(value)
-  if (!num || num <= 0) return null
+  if (!num || num <= 0) return fallback
   const u = TIME_UNITS.find((t) => t.value === unit)
   return Math.round(num * (u?.multiplier ?? 1))
 }
@@ -124,10 +127,10 @@ export default function ProjectSettings(props: {
 
   createEffect(() => {
     if (project.data) {
-      const agent = minutesToUnitValue(project.data.timeoutIdleMinutes)
+      const agent = durationToUnitValue(project.data.timeoutIdle)
       setAgentValue(agent.value)
       setAgentUnit(agent.unit)
-      const app = minutesToUnitValue(project.data.appTimeoutIdleMinutes)
+      const app = durationToUnitValue(project.data.appTimeoutIdle)
       setAppValue(app.value)
       setAppUnit(app.unit)
       setTimeoutsDirty(false)
@@ -156,9 +159,20 @@ export default function ProjectSettings(props: {
         await qc.invalidateQueries({ queryKey: ["projects", props.projectId, "budgets"] })
         toast.success("Budgets updated")
       } else {
+        const projectData = project.data
+        if (!projectData) throw new Error("Project not loaded")
+
         await api.patch(`/projects/${props.projectId}`, {
-          timeoutIdleMinutes: unitValueToMinutes(agentValue(), agentUnit()),
-          appTimeoutIdleMinutes: unitValueToMinutes(appValue(), appUnit()),
+          timeoutIdle: unitValueToDuration(
+            agentValue(),
+            agentUnit(),
+            projectData.timeoutIdle,
+          ),
+          appTimeoutIdle: unitValueToDuration(
+            appValue(),
+            appUnit(),
+            projectData.appTimeoutIdle,
+          ),
         })
         await qc.invalidateQueries({ queryKey: ["projects", props.projectId] })
         toast.success("Timeouts updated")

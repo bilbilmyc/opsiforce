@@ -1,156 +1,213 @@
 # Request Flows
 
-How requests flow through the Opsiforce system for key user actions.
+How requests move through Opsiforce for project startup, recovery, and timeout.
 
 ---
 
 ## Starting a new project
 
 ```
-1. User clicks "New Project" in sidebar
-2. Frontend POST /api/projects → proxy → backend
+1. User clicks "New Project" in the frontend
+2. Frontend POST /api/projects
 3. Backend ProjectService:
-   a. Creates project record in PostgreSQL (status: pending)
-   b. If Bifrost configured: creates virtual key via Bifrost Admin API, stores in project_api_keys
-   c. Claims warm pod from pool (PodPoolService)
-   d. Deletes warm pod, creates new pod with subPath = "projects/{project-id}"
-      - If Bifrost: injects OPENAI_API_KEY=<chat key> + APP_LLM_API_KEY=<backend key> + base URLs
-      - If no Bifrost: injects OPENAI_API_KEY=<direct key>
-   e. Waits for readiness probe (/global/health on :4096)
-   f. Records pod IP in DB, sets project status to active
-   g. Returns project ID to frontend
-4. Frontend updates sidebar, navigates to ProjectView
-5. ProjectView fetches /api/proxy/{projectId}/path for working directory
-6. ProjectView fetches /api/proxy/{projectId}/session for existing sessions
-7. Creates MemoryRouter with initial path /{base64(directory)}/session/{sessionId}
-8. Mounts OpenCode's AppInterface connected to the agent pod via server URL
+   a. Creates a PostgreSQL project row with status = starting
+   b. Creates a PostgreSQL project_settings row
+   c. Sets directory = projects/{tenantId}/{projectId}
+   d. Sets deterministic podName = opsiforce-agent-{projectId[:8]}
+   e. Sets timeoutIdle = 1800000 and appTimeoutIdle = 604800000
+   f. Queues async startup
+4. Startup worker acquires a PostgreSQL advisory lock for the project
+5. Backend claims one warm pod row with FOR UPDATE SKIP LOCKED, deletes that warm pod, and replenishes the pool in the background
+6. Backend creates a new assigned pod with subPath = projects/{tenantId}/{projectId}
+7. Backend waits for the pod Ready condition and pod IP
+8. Backend writes/repairs the assigned pods row, sets project status = active, stores podIp
+9. Frontend polls GET /api/projects/:id until status becomes active
+10. ProjectView fetches /api/proxy/{projectId}/path and /api/proxy/{projectId}/session
+11. Frontend restores the latest updated root session, or opens a new session if none exist
 ```
+
+---
+
+## Shared ensure flow
+
+All three runtime entrypoints use the same project-pod lifecycle gate before proxying:
+
+- `ALL /api/proxy/:projectId/*`
+- `{projectId}.{WEBAPP_DOMAIN}`
+- `{projectId}.{VSCODE_DOMAIN}`
+
+```
+1. Load the project
+2. Touch the correct Redis TTL key:
+   - agent traffic -> opsiforce:timeout:{projectId}
+   - app preview / VS Code -> opsiforce:app-timeout:{projectId}
+3. If status = starting:
+   - return 503 {"error":"Pod is restarting, please retry"}
+4. If status = active and the pod still exists:
+   - repair podIp / assigned pod row if needed
+   - continue proxying
+5. If status = suspended or active-with-missing-pod:
+   - atomically move the project to starting
+   - queue startup once
+   - return the same temporary 503 response
+```
+
+The in-process startup map dedupes retries inside one backend instance. A PostgreSQL advisory lock dedupes startup across multiple backend instances.
 
 ---
 
 ## Sending a chat message
 
 ```
-1. User types in OpenCode UI (embedded in frontend)
-2. OpenCode SDK → POST /api/proxy/{projectId}/session/{sid}/message
-3. proxy → backend (NestJS)
-4. ProxyController touches timeout (Redis SETEX opsiforce:timeout:{id} TTL 1800)
-5. ProxyController resolves project → pod IP from DB
-6. Backend proxies request to http://{podIp}:4096/session/{sid}/message
-7. opencode serve processes message, streams SSE response back
-8. Response streams through backend → proxy → frontend
+1. User sends a message in the embedded OpenCode UI
+2. Frontend calls /api/proxy/{projectId}/session/{sessionId}/message
+3. ProxyController runs the shared ensure flow with activity = agent
+4. If the project is active, backend proxies to the OpenCode agent on port 4096
+5. OpenCode streams the response back through backend -> proxy -> frontend
+6. If the upstream returns a Kubernetes pod failure, or a follow-up ensure check sees the pod disappear:
+   - backend requests project restart
+   - backend returns 503 {"error":"Pod is restarting, please retry"}
+7. If the upstream process fails while the pod is still present:
+   - backend returns 502 from the proxy
+   - backend does not recycle the pod
 ```
 
 ---
 
-## Pod timeout (Redis keyspace notifications)
+## App preview and VS Code
 
-Idle timeout is **event-driven, not polling-based**. Redis notifies the backend the instant a timeout key expires — zero polling, zero delay.
-
-### The Redis key lifecycle
-
-Every proxy request resets a 30-minute countdown:
+App preview and VS Code keep their current ingress/auth topology in this phase. They now share the same lifecycle behavior as chat.
 
 ```
-SETEX opsiforce:timeout:{projectId} 1800 "{timestamp}"
-       ↑ key name                    ↑ TTL (30 min)
+1. Browser requests {projectId}.{WEBAPP_DOMAIN} or {projectId}.{VSCODE_DOMAIN}
+2. The proxy server extracts projectId from the subdomain
+3. ProjectService runs the shared ensure flow with activity = app
+4. If the project is active, the request is proxied to:
+   - app preview -> port 3000
+   - VS Code -> port 8080
+5. If the pod is missing or the proxy hits a Kubernetes pod failure:
+   - backend requests restart
+   - backend returns the same temporary 503 restart response
+6. If app preview or code-server fails inside a healthy pod:
+   - backend returns 502 from the proxy
+   - backend does not restart the project pod
 ```
 
-If the user keeps sending requests, the TTL keeps resetting to 1800. The key only expires when there's been **no activity for a full 30 minutes**.
+App preview and VS Code traffic extend the app TTL, not the agent TTL.
 
-### How expiration detection works
+---
 
-Redis has a built-in feature: **keyspace notifications**. When enabled (`notify-keyspace-events Ex`), Redis publishes a message on a pub/sub channel every time a key expires:
-
-```
-Channel:  __keyevent@{db}__:expired        (db = Redis database number from REDIS_URL)
-Message:  opsiforce:timeout:{projectId}    (the key that just expired)
-```
-
-`TimeoutListener` subscribes to this channel using a **dedicated Redis connection** (Redis requires a separate connection for pub/sub — a subscribed client can't run normal commands like SETEX/DEL).
-
-### What TimeoutListener does
+## Upload files
 
 ```
-On startup:
-  1. CONFIG SET notify-keyspace-events Ex    (enable notifications, idempotent)
-  2. Create dedicated subscriber Redis connection
-  3. SUBSCRIBE __keyevent@{db}__:expired
-  4. Sweep: check all active projects' Redis TTLs, suspend any already expired
-     (catches events missed while backend was down)
-
-At runtime (event-driven):
-  5. Redis key expires → message arrives on subscriber
-  6. Parse key → extract projectId
-  7. Load project from DB, verify status is "active"
-  8. Kill K8s pod, clean up pods table
-  9. Set project status to "suspended", clear podName/podIp
-  10. Replenish warm pool
-
-On Redis reconnection:
-  - ioredis auto-resubscribes to the channel
-  - Sweep again (catch events missed during the connection gap)
+1. Frontend uploads files to POST /api/projects/{projectId}/upload
+2. Backend resolves the project and writes files into the persistent project directory
+3. Backend touches the agent TTL
+4. If the project currently has a pod, backend best-effort syncs the uploaded file into the running pod
+5. If no pod is running, the file still persists on storage and is visible after the next startup
 ```
 
-### Why a dedicated Redis connection?
+Upload is not the main wake path. It is a persistence-first path.
 
-Redis protocol rule: once a connection calls `SUBSCRIBE`, it enters **subscriber mode** and can only receive pub/sub messages. It can no longer run `SETEX`, `TTL`, `DEL`, etc. So:
+---
 
-- `TimeoutService.redis` — normal connection for SETEX/TTL/DEL (used by touchActivity, isExpired, clear)
-- `TimeoutListener.subscriber` — pub/sub connection, only receives expiration events
+## Pod timeout
 
-### Why the startup sweep?
-
-Redis pub/sub is fire-and-forget. If nobody is subscribed when an event fires, it's lost. Two scenarios:
-
-1. **Backend restarts** — key expires at 14:05, backend starts at 14:06 → event lost
-2. **Redis connection drops briefly** — ioredis reconnects, but events during the gap are lost
-
-The sweep queries all active projects, checks their Redis TTLs, and suspends any that already expired. Runs once on startup and again on every reconnection.
-
-### Timeline example
+Timeout is event-driven through Redis keyspace notifications. Opsiforce uses two independent TTL keys per project:
 
 ```
-14:00:00  User sends a message → SETEX timeout:abc 1800   (expires at 14:30)
-14:10:00  User sends a message → SETEX timeout:abc 1800   (expires at 14:40)
-14:15:00  User sends a message → SETEX timeout:abc 1800   (expires at 14:45)
-14:15:01  User closes laptop...
-
-14:45:00  Redis expires key "timeout:abc"
-14:45:00  Redis publishes → __keyevent@2__:expired → "opsiforce:timeout:abc"
-14:45:00  TimeoutListener receives event → kills pod, suspends project (instant)
-
-15:30:00  User opens laptop, clicks project
-15:30:00  Frontend → GET /api/proxy/abc/session
-15:30:00  ProxyController: project suspended, no podIp → auto-reassign
-15:30:00  → Returns 503 "Pod is restarting"
-15:30:10  Pod ready, project active → UI loads with full chat history
+opsiforce:timeout:{projectId}      -> agent activity TTL
+opsiforce:app-timeout:{projectId}  -> app preview / VS Code TTL
 ```
+
+The project is suspended only when both keys are expired.
+
+### Runtime flow
+
+```
+1. Redis expires one timeout key
+2. TimeoutListener receives the keyspace notification
+3. Backend checks whether both agent and app TTLs are expired
+4. If either key is still alive:
+   - do nothing
+5. If both are expired:
+   - mark the assigned pod row as terminating
+   - delete the K8s pod
+   - delete pod rows for that pod
+   - set project status = suspended
+   - clear podName / podIp
+   - replenish the warm pool
+```
+
+### Startup sweep
+
+Redis pub/sub can miss events while the backend is down. On subscriber startup, `TimeoutListener` sweeps all active projects and suspends any whose two keys are already expired.
 
 ### Redis configuration
 
-`notify-keyspace-events Ex` must be enabled on the Redis instance the backend connects to. Each environment configures this independently:
-
-- **Local** (minikube): Shared Bitnami Redis — enabled via `--set 'commonConfiguration=notify-keyspace-events Ex'` in the `install-session-redis` script (`package.json`). The shared values file (`infra/k8s/session-stroage/values.yml`) stays clean of opsiforce-specific config.
-- **Production** (CloudFleet): Valkey subchart in `opsiforce-proxy` — configured via `valkeyConfig` in `helm/opsiforce-proxy/values.yaml`. The backend's `REDIS_URL` is set in CI/CD to point at this Valkey instance (`redis://opsiforce-proxy-{env}-valkey:6379`).
-
-The Valkey subchart serves both the OAuth2 Proxy (session cookies) and the opsiforce backend (timeout tracking).
+`notify-keyspace-events Ex` must be enabled in the Redis or Valkey deployment itself. Opsiforce no longer mutates this setting at runtime.
 
 ---
 
-## Auto-reassignment (pod died or project suspended)
+## Backend restart reconciliation
+
+`ProjectService` reconciles project state on backend boot.
 
 ```
-When a proxy request detects a dead/missing pod:
-1. ProxyController fetch to pod fails (K8s 404 or connection refused)
-2. Calls ProjectService.reassignPod(projectId):
-   a. Cleans up old pod from DB
-   b. Sets project status to "pending"
-   c. Async: claims warm pod → creates assigned pod → status becomes "active"
-3. Returns 503 {"error": "Pod is restarting, please retry"}
-4. Frontend retries, pod is ready in ~10s
-
-Also handles suspended projects:
-  - ProxyService.resolveUpstream() finds no podName/podIp
-  - Throws ServiceUnavailableException → same reassignment flow
+1. Load projects in starting or active
+2. starting:
+   - if pod exists and is Ready -> repair DB and mark active
+   - if pod exists but is not Ready -> keep starting
+   - if pod does not exist -> queue startup
+3. active:
+   - if pod exists -> repair podIp / assigned row
+   - if pod does not exist -> move to starting and queue startup
 ```
+
+This makes backend restarts deterministic whether the pod survived or not.
+
+---
+
+## Startup failure
+
+```
+1. Project enters starting
+2. Assigned pod creation or readiness fails
+3. Backend deletes the failed pod if it exists
+4. Backend deletes stale pod rows
+5. Backend marks the project suspended
+6. The next access request retries startup through the normal ensure flow
+```
+
+Projects do not remain stuck in `starting` after a failed startup attempt.
+
+---
+
+## External pod deletion
+
+```
+1. A project pod is deleted outside Opsiforce
+2. The next chat, app preview, or VS Code request runs the shared ensure flow
+3. Backend sees that the active pod is gone
+4. Backend moves the project to starting and queues restart
+5. Backend returns the temporary 503 restart response
+6. Once the replacement pod is Ready, the project becomes active again
+```
+
+The project filesystem persists because the replacement pod mounts the same `subPath`.
+
+---
+
+## Delete project
+
+```
+1. Frontend DELETE /api/projects/{projectId}
+2. Backend deletes the assigned pod
+3. Backend deletes pod rows
+4. Backend clears timeout keys
+5. Backend revokes Bifrost keys if enabled
+6. Backend deletes the project row
+7. Backend replenishes the warm pool
+```
+
+Deleting a project removes it from the lifecycle entirely.

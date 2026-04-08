@@ -21,6 +21,9 @@ try {
   ).version
 } catch {}
 
+const DEFAULT_TIMEOUT_IDLE = 30 * 60 * 1000
+const DEFAULT_APP_TIMEOUT_IDLE = 7 * 24 * 60 * 60 * 1000
+
 export default () => {
   return {
   databaseUrl: process.env.DATABASE_URL || "postgresql://localhost:5432/opsiforce",
@@ -48,6 +51,8 @@ export default () => {
   defaultAgentName: process.env.AGENT_NAME || "app-builder",
   appProxyPort: parseInt(process.env.APP_PROXY_PORT || "3002", 10),
   vscodeProxyPort: parseInt(process.env.VSCODE_PROXY_PORT || "3003", 10),
+  defaultTimeoutIdle: DEFAULT_TIMEOUT_IDLE,
+  defaultAppTimeoutIdle: DEFAULT_APP_TIMEOUT_IDLE,
   openaiApiKey: process.env.OPENAI_API_KEY || "",
   storageMountPath: process.env.STORAGE_MOUNT_PATH || "/tmp/opsiforce-data",
   bifrostProxyUrl: process.env.BIFROST_PROXY_URL || "",

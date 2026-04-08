@@ -124,3 +124,13 @@ packages/opsiforce/
 | #1449 | Projects history | `backend/src/project/`, `frontend/src/App.tsx` |
 | #1477 | Platform version per project | `backend/db/schema.ts` (platformVersion) |
 | #1461 | AGENTS.md injection | `agent-config/AGENTS.md`, `docker/Dockerfile.agent` |
+
+---
+
+## Key Docs
+
+- [Request Flows](./request-flows.md)
+- [Project Lifecycle](./project-lifecycle.md)
+- [Pod Management](./pod-management.md)
+- [Persistence & Storage](./persistence.md)
+- [API Reference](./api-reference.md)

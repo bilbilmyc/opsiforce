@@ -96,7 +96,7 @@ export default function ProjectView(props: { projectId: string }) {
     refetchInterval: (query: { state: { data: Project | undefined } }) => {
       const data = query.state.data;
       if (!data) return 3000;
-      return data.status === "pending" || data.status === "suspended"
+      return data.status === "starting" || data.status === "suspended"
         ? 3000
         : false;
     },

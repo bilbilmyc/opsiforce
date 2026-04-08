@@ -1,11 +1,9 @@
-import { pgTable, text, timestamp, pgEnum, real, integer } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, pgEnum, real, integer, bigint } from "drizzle-orm/pg-core"
 
 export const projectStatusEnum = pgEnum("project_status", [
-  "pending",
   "starting",
   "active",
   "suspended",
-  "stopped",
 ])
 
 export const podStatusEnum = pgEnum("pod_status", [
@@ -33,16 +31,22 @@ export const projects = pgTable("projects", {
   title: text("title"),
   description: text("description"),
   directory: text("directory").notNull(),
-  status: projectStatusEnum("status").notNull().default("pending"),
+  status: projectStatusEnum("status").notNull().default("starting"),
   podName: text("pod_name"),
   podIp: text("pod_ip"),
   sessionId: text("session_id"),
   platformVersion: text("platform_version").notNull(),
-  timeoutIdleMinutes: integer("timeout_idle_minutes"),
-  appTimeoutIdleMinutes: integer("app_timeout_idle_minutes"),
   lastActiveAt: timestamp("last_active_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
+
+export const projectSettings = pgTable("project_settings", {
+  projectId: text("project_id")
+    .primaryKey()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  timeoutIdle: bigint("timeout_idle", { mode: "number" }).notNull(),
+  appTimeoutIdle: bigint("app_timeout_idle", { mode: "number" }).notNull(),
 })
 
 export const projectApiKeys = pgTable("project_api_keys", {

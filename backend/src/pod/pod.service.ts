@@ -41,6 +41,10 @@ export class PodService {
     }
   }
 
+  assignedPodName(projectId: string): string {
+    return `opsiforce-agent-${projectId.slice(0, 8)}`
+  }
+
   async createWarmPod(podName: string): Promise<k8s.V1Pod> {
     const options = this.baseOptions(podName)
 
@@ -53,7 +57,7 @@ export class PodService {
   }
 
   async createAssignedPod(projectId: string, directory: string, tenantOptions?: TenantPodOptions): Promise<{ podName: string }> {
-    const podName = `opsiforce-agent-${projectId.slice(0, 8)}`
+    const podName = this.assignedPodName(projectId)
 
     await this.waitForPodDeletion(podName)
 
@@ -84,11 +88,8 @@ export class PodService {
         return
       }
     }
-  }
 
-  async assignPodToProject(warmPodName: string, projectId: string, directory: string, tenantOptions?: TenantPodOptions): Promise<{ podName: string }> {
-    await this.deletePod(warmPodName).catch(() => {})
-    return this.createAssignedPod(projectId, directory, tenantOptions)
+    throw new Error(`Pod ${podName} was not deleted after ${timeoutMs}ms`)
   }
 
   async deletePod(podName: string): Promise<void> {
@@ -133,5 +134,11 @@ export class PodService {
   async getPodIp(podName: string): Promise<string | undefined> {
     const pod = await this.getPod(podName)
     return pod.status?.podIP
+  }
+
+  isPodReady(pod: k8s.V1Pod): boolean {
+    return !!pod.status?.conditions?.find(
+      (condition) => condition.type === "Ready" && condition.status === "True",
+    )
   }
 }

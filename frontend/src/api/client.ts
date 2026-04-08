@@ -50,9 +50,9 @@ export interface Project {
   tenantId: string
   title: string | null
   description: string | null
-  status: "pending" | "active" | "suspended"
-  timeoutIdleMinutes: number | null
-  appTimeoutIdleMinutes: number | null
+  status: "starting" | "active" | "suspended"
+  timeoutIdle: number
+  appTimeoutIdle: number
   lastActiveAt: string | null
   createdAt: string
 }

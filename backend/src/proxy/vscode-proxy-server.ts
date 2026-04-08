@@ -1,8 +1,24 @@
+import { NotFoundException } from "@nestjs/common"
 import http from "http"
 import net from "net"
 import { spawn, ChildProcess } from "child_process"
 import { Readable, pipeline } from "stream"
+import { ProjectService } from "../project/project.service"
 import { ProxyService } from "./proxy.service"
+import {
+  BAD_GATEWAY_RESPONSE_BODY,
+  extractProjectId,
+  isK8sPodError,
+  NOT_FOUND_RESPONSE_BODY,
+  RESTARTING_RESPONSE_BODY,
+  sendBadGatewayResponse,
+  sendNotFoundResponse,
+  sendRestartingResponse,
+  setCorsHeaders,
+  writeBadGatewayUpgradeResponse,
+  writeNotFoundUpgradeResponse,
+  writeRestartingUpgradeResponse,
+} from "./proxy.shared"
 
 interface PortForward {
   port: number
@@ -61,7 +77,11 @@ class PortForwardManager {
   }
 }
 
-export function createVscodeProxyServer(proxyService: ProxyService, opts?: { namespace?: string }) {
+export function createVscodeProxyServer(
+  proxyService: ProxyService,
+  projectService: ProjectService,
+  opts?: { namespace?: string },
+) {
   const portForwardMgr = opts?.namespace ? new PortForwardManager(opts.namespace) : null
 
   process.on("exit", () => portForwardMgr?.cleanup())
@@ -100,42 +120,101 @@ export function createVscodeProxyServer(proxyService: ProxyService, opts?: { nam
     }
 
     try {
-      await proxyHttp(resolveUpstream, projectId, req, res)
-    } catch {
-      if (!res.headersSent) {
-        res.writeHead(503, { "content-type": "application/json" })
+      const ensured = await projectService.ensureProjectById(projectId, "app")
+      if (ensured.state === "starting") {
+        sendRestartingResponse(res)
+        return
       }
-      res.end(JSON.stringify({ error: "VS Code not available" }))
+
+      const result = await proxyHttp(resolveUpstream, projectId, req, res)
+      if (result === "restart") {
+        if (await shouldRestartProject(projectService, projectId)) {
+          sendRestartingResponse(res)
+          return
+        }
+
+        sendBadGatewayResponse(res)
+      }
+    } catch (err) {
+      if (err instanceof NotFoundException) {
+        sendNotFoundResponse(res)
+        return
+      }
+
+      if (!res.headersSent) {
+        if (await shouldRestartProject(projectService, projectId)) {
+          sendRestartingResponse(res)
+          return
+        }
+
+        sendBadGatewayResponse(res)
+        return
+      }
+
+      res.end()
     }
   })
 
   server.on("upgrade", async (req, socket) => {
     const projectId = extractProjectId(req.headers.host || "")
-    if (!projectId) { socket.destroy(); return }
+    if (!projectId) {
+      socket.destroy()
+      return
+    }
 
     try {
-      await proxyWs(resolveUpstream, projectId, req, socket)
-    } catch {
-      socket.destroy()
+      const ensured = await projectService.ensureProjectById(projectId, "app")
+      if (ensured.state === "starting") {
+        writeRestartingUpgradeResponse(socket)
+        return
+      }
+
+      const result = await proxyWs(resolveUpstream, projectId, req, socket)
+      if (result === "restart") {
+        if (await shouldRestartProject(projectService, projectId)) {
+          writeRestartingUpgradeResponse(socket)
+          return
+        }
+
+        writeBadGatewayUpgradeResponse(socket)
+      }
+    } catch (err) {
+      if (err instanceof NotFoundException) {
+        writeNotFoundUpgradeResponse(socket)
+        return
+      }
+
+      if (await shouldRestartProject(projectService, projectId)) {
+        writeRestartingUpgradeResponse(socket)
+        return
+      }
+
+      writeBadGatewayUpgradeResponse(socket)
     }
   })
 
   return server
 }
 
-function extractProjectId(host: string): string | null {
-  const sub = host.split(".")[0]
-  return sub && /^[a-f0-9-]+$/.test(sub) ? sub : null
+async function shouldRestartProject(
+  projectService: ProjectService,
+  projectId: string,
+): Promise<boolean> {
+  try {
+    const ensured = await projectService.ensureProjectById(projectId, "app")
+    return ensured.state === "starting"
+  } catch (err) {
+    if (err instanceof NotFoundException) throw err
+    return false
+  }
 }
 
-function setCorsHeaders(res: http.ServerResponse, req: http.IncomingMessage) {
-  res.setHeader("access-control-allow-origin", req.headers.origin || "*")
-  res.setHeader("access-control-allow-methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
-  res.setHeader("access-control-allow-headers", "content-type, authorization")
-  res.setHeader("access-control-allow-credentials", "true")
-}
-
-async function proxyHttp(resolveUpstream: (id: string) => Promise<string>, projectId: string, req: http.IncomingMessage, res: http.ServerResponse) {
+async function proxyHttp(
+  resolveUpstream: (id: string) => Promise<string>,
+  projectId: string,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): Promise<"ok" | "restart"> {
   const upstream = await resolveUpstream(projectId)
   const targetUrl = `${upstream}${req.url}`
 
@@ -154,6 +233,20 @@ async function proxyHttp(resolveUpstream: (id: string) => Promise<string>, proje
     duplex: hasBody ? "half" : undefined,
   })
 
+  if (response.status >= 400) {
+    const text = await response.text()
+    if (isK8sPodError(text)) return "restart"
+
+    const resHeaders: Record<string, string> = {}
+    for (const [key, value] of response.headers.entries()) {
+      if (key === "transfer-encoding" || key === "content-length" || key === "content-encoding" || key === "x-frame-options" || key === "content-security-policy") continue
+      resHeaders[key] = value
+    }
+    res.writeHead(response.status, resHeaders)
+    res.end(text)
+    return "ok"
+  }
+
   const resHeaders: Record<string, string> = {}
   for (const [key, value] of response.headers.entries()) {
     if (key === "transfer-encoding" || key === "content-length" || key === "content-encoding" || key === "x-frame-options" || key === "content-security-policy") continue
@@ -163,45 +256,70 @@ async function proxyHttp(resolveUpstream: (id: string) => Promise<string>, proje
 
   if (!response.body) {
     res.end()
-    return
+    return "ok"
   }
 
   pipeline(Readable.fromWeb(response.body as import("stream/web").ReadableStream), res, () => {})
+  return "ok"
 }
 
-async function proxyWs(resolveUpstream: (id: string) => Promise<string>, projectId: string, req: http.IncomingMessage, socket: import("stream").Duplex) {
+async function proxyWs(
+  resolveUpstream: (id: string) => Promise<string>,
+  projectId: string,
+  req: http.IncomingMessage,
+  socket: import("stream").Duplex,
+): Promise<"ok" | "restart"> {
   const upstream = await resolveUpstream(projectId)
   const upstreamUrl = new URL(upstream)
 
-  const headers = { ...req.headers, host: `${upstreamUrl.hostname}:${upstreamUrl.port}` }
-  delete headers.origin
+  return new Promise((resolve, reject) => {
+    const headers = { ...req.headers, host: `${upstreamUrl.hostname}:${upstreamUrl.port}` }
+    delete headers.origin
 
-  const proxyReq = http.request({
-    hostname: upstreamUrl.hostname,
-    port: upstreamUrl.port,
-    path: req.url,
-    method: "GET",
-    headers,
+    const proxyReq = http.request({
+      hostname: upstreamUrl.hostname,
+      port: upstreamUrl.port,
+      path: req.url,
+      method: "GET",
+      headers,
+    })
+
+    proxyReq.on("upgrade", (proxyRes, proxySocket, proxyHead) => {
+      let response = `HTTP/${proxyRes.httpVersion} ${proxyRes.statusCode} ${proxyRes.statusMessage}\r\n`
+      for (let i = 0; i < proxyRes.rawHeaders.length; i += 2) {
+        response += `${proxyRes.rawHeaders[i]}: ${proxyRes.rawHeaders[i + 1]}\r\n`
+      }
+      response += "\r\n"
+      socket.write(response)
+      if (proxyHead.length > 0) socket.write(proxyHead)
+
+      proxySocket.pipe(socket)
+      socket.pipe(proxySocket)
+
+      proxySocket.on("error", () => socket.destroy())
+      socket.on("error", () => proxySocket.destroy())
+      proxySocket.on("close", () => socket.destroy())
+      socket.on("close", () => proxySocket.destroy())
+      resolve("ok")
+    })
+
+    proxyReq.on("response", (proxyRes) => {
+      let body = ""
+      proxyRes.setEncoding("utf8")
+      proxyRes.on("data", (chunk) => {
+        body += chunk
+      })
+      proxyRes.on("end", () => {
+        if ((proxyRes.statusCode ?? 0) >= 400 && isK8sPodError(body)) {
+          resolve("restart")
+          return
+        }
+
+        reject(new Error(`Unexpected websocket response: ${proxyRes.statusCode ?? 502}`))
+      })
+    })
+
+    proxyReq.on("error", reject)
+    proxyReq.end()
   })
-
-  proxyReq.on("upgrade", (proxyRes, proxySocket, proxyHead) => {
-    let response = `HTTP/${proxyRes.httpVersion} ${proxyRes.statusCode} ${proxyRes.statusMessage}\r\n`
-    for (let i = 0; i < proxyRes.rawHeaders.length; i += 2) {
-      response += `${proxyRes.rawHeaders[i]}: ${proxyRes.rawHeaders[i + 1]}\r\n`
-    }
-    response += "\r\n"
-    socket.write(response)
-    if (proxyHead.length > 0) socket.write(proxyHead)
-
-    proxySocket.pipe(socket)
-    socket.pipe(proxySocket)
-
-    proxySocket.on("error", () => socket.destroy())
-    socket.on("error", () => proxySocket.destroy())
-    proxySocket.on("close", () => socket.destroy())
-    socket.on("close", () => proxySocket.destroy())
-  })
-
-  proxyReq.on("error", () => socket.destroy())
-  proxyReq.end()
 }

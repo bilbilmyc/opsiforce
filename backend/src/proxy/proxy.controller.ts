@@ -4,6 +4,7 @@ import { Readable } from "stream"
 import { ProxyService } from "./proxy.service"
 import { ProjectService } from "../project/project.service"
 import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
+import { BAD_GATEWAY_RESPONSE_BODY, isK8sPodError, RESTARTING_RESPONSE_BODY } from "./proxy.shared"
 
 @Controller("proxy")
 export class ProxyController {
@@ -19,7 +20,16 @@ export class ProxyController {
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply,
   ) {
-    this.projectService.touchActivity(projectId).catch(() => {})
+    const ensured = await this.projectService.ensureProjectForTenant(
+      projectId,
+      tenant.tenantId,
+      "agent",
+    )
+
+    if (ensured.state === "starting") {
+      this.sendRestartingResponse(reply)
+      return
+    }
 
     try {
       const upstream = await this.proxyService.resolveUpstream(projectId, tenant.tenantId)
@@ -45,10 +55,13 @@ export class ProxyController {
 
       if (response.status >= 400) {
         const text = await response.text()
-        if (this.isK8sPodError(text)) {
-          await this.projectService.reassignPod(projectId, tenant.tenantId).catch(() => {})
-          reply.status(503).header("content-type", "application/json")
-            .send(JSON.stringify({ error: "Pod is restarting, please retry" }))
+        if (isK8sPodError(text)) {
+          if (await this.shouldRestartProject(projectId, tenant.tenantId)) {
+            this.sendRestartingResponse(reply)
+            return
+          }
+
+          this.sendBadGatewayResponse(reply)
           return
         }
         reply.status(response.status)
@@ -75,17 +88,29 @@ export class ProxyController {
     } catch (err) {
       if (err instanceof NotFoundException) throw err
 
-      await this.projectService.reassignPod(projectId, tenant.tenantId).catch(() => {})
-      reply.status(503).header("content-type", "application/json")
-        .send(JSON.stringify({ error: "Pod is restarting, please retry" }))
+      if (await this.shouldRestartProject(projectId, tenant.tenantId)) {
+        this.sendRestartingResponse(reply)
+        return
+      }
+
+      this.sendBadGatewayResponse(reply)
     }
   }
 
-  private isK8sPodError(body: string): boolean {
+  private sendRestartingResponse(reply: FastifyReply) {
+    reply.status(503).header("content-type", "application/json").send(RESTARTING_RESPONSE_BODY)
+  }
+
+  private sendBadGatewayResponse(reply: FastifyReply) {
+    reply.status(502).header("content-type", "application/json").send(BAD_GATEWAY_RESPONSE_BODY)
+  }
+
+  private async shouldRestartProject(projectId: string, tenantId: string): Promise<boolean> {
     try {
-      const parsed = JSON.parse(body)
-      return parsed.kind === "Status" && parsed.status === "Failure"
-    } catch {
+      const ensured = await this.projectService.ensureProjectForTenant(projectId, tenantId, "agent")
+      return ensured.state === "starting"
+    } catch (err) {
+      if (err instanceof NotFoundException) throw err
       return false
     }
   }

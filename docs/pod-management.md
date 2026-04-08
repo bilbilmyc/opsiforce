@@ -1,47 +1,73 @@
 # Pod Management
 
-Warm pod pool, pod implementation details, and agent config injection.
+Warm pool behavior, assigned pod lifecycle, and pod-level runtime details.
 
 ---
 
-## Warm Pod Pool (#1454)
+## Pod lifecycle
 
-The backend maintains X warm pods always running (configurable via `WARM_POOL_SIZE`).
+The backend keeps `WARM_POOL_SIZE` warm pods available. Warm pods do not mount a project `subPath`.
 
 ```
-Pod lifecycle:
-  WARM → (assign to project) → delete warm pod → create assigned pod → ACTIVE
-  ACTIVE → (30min idle) → Redis key expires → TimeoutListener suspends → replenish warm pool
-  ACTIVE → (externally killed) → next proxy request detects → auto-reassign → ACTIVE
-  ACTIVE → (user deletes project) → delete pod → delete project from DB
+WARM -> claimed -> warm row deleted atomically -> warm pod deleted
+     -> assigned pod created with project subPath -> ACTIVE
+
+ACTIVE -> both TTL keys expire -> pod deleted -> SUSPENDED
+ACTIVE -> pod deleted externally -> next access triggers recreate -> ACTIVE
+ACTIVE -> project deleted -> pod deleted -> project removed
 ```
 
-Warm pods have no subPath mount (empty working directory). When assigned:
-1. The warm pod is deleted
-2. A new pod is created with the correct `subPath: "projects/{project-id}"`
-3. K8s volumes are immutable after pod creation — this is why we delete+create, not patch
+If no warm pod is available, the backend creates the assigned pod directly.
 
-If the warm pool is exhausted, pod creation falls back to creating directly (no warm pod needed). Pod template overrides (resources, nodeSelector, tolerations, affinity) are configurable via env vars / Helm values.
-
-On startup, `PodPoolService.cleanupOrphanedPods()` deletes any K8s pods that have no matching DB record (e.g., from a previous backend session or DB reset).
+Assigned pod creation is serialized per project with a PostgreSQL advisory lock. Warm-pod claiming is serialized with `FOR UPDATE SKIP LOCKED`.
 
 ---
 
-## Pod Implementation Details
+## Naming
 
-### Naming
+- Warm pods: `opsiforce-agent-{uuid[:8]}`
+- Assigned pods: `opsiforce-agent-{projectId[:8]}`
 
-Pod names follow the pattern `opsiforce-agent-{uuid[:8]}` — first 8 chars of the project UUID (or a fresh UUID for warm pods).
+Assigned names are deterministic so a restarted backend can reconcile an already-running project pod.
 
-### Labels
+---
+
+## Why warm pods are recreated
+
+Warm pods do not know the target `subPath` ahead of time. Kubernetes volume mounts are immutable after pod creation, so assignment works like this:
+
+1. Claim a warm pod row
+2. Delete the warm pod
+3. Create a fresh assigned pod with the correct `subPath`
+
+Opsiforce never patches a live pod to switch `subPath`.
+
+---
+
+## Warm pool replenishment
+
+The pool is replenished when:
+
+- backend starts
+- a warm pod is claimed
+- a project pod is suspended and deleted
+- a project is deleted
+
+`PodPoolService.cleanupOrphanedPods()` removes K8s pods that are not linked to any `pods` row or `projects.pod_name`.
+
+---
+
+## Labels
 
 | Label | Value | Purpose |
 |-------|-------|---------|
 | `app` | `opsiforce-agent` | Identifies all agent pods |
 | `opsiforce.io/pool` | `warm` or `assigned` | Pool membership |
-| `opsiforce.io/project-id` | `{project-id}` | Links pod to project (assigned only) |
+| `opsiforce.io/project-id` | `{projectId}` | Linked project for assigned pods |
 
-### Readiness probe
+---
+
+## Readiness
 
 ```yaml
 readinessProbe:
@@ -52,82 +78,71 @@ readinessProbe:
   periodSeconds: 5
 ```
 
-Backend polls for readiness every 2s with a 60s timeout (`PodService.waitForReady`). The pod is considered ready when its `Ready` condition is `True` and it has a `podIP`.
+The backend waits for:
 
-### Restart policy
+- pod `Ready` condition = `True`
+- `podIP` present
 
-`restartPolicy: Always` — if opencode crashes inside the pod, K8s restarts the container automatically. The CephFS volume mount is preserved (pod is not recreated, only the container restarts).
-
-### Ports
-
-| Port | Service | Notes |
-|------|---------|-------|
-| 4096 | OpenCode agent | AI coding assistant (readiness probe target) |
-| 8080 | code-server | VS Code web IDE |
-| 3000 | App dev server | User app (single port) |
+`PodService.waitForReady()` polls every 2 seconds with a 60-second timeout.
 
 ---
 
-## LLM Gateway Integration (Bifrost)
+## Restart policy
 
-When Bifrost is configured (`BIFROST_PROXY_URL` + `BIFROST_ADMIN_USERNAME` + `BIFROST_ADMIN_PASSWORD` set), pods get per-project virtual keys instead of the shared OpenAI API key.
+`restartPolicy: Always`
 
-### What changes in the pod spec
+If the agent container crashes inside an existing pod, Kubernetes restarts the container in place. If the pod itself disappears, Opsiforce recreates it on the next access.
+
+---
+
+## Ports
+
+| Port | Service |
+|------|---------|
+| 4096 | OpenCode agent |
+| 8080 | code-server |
+| 3000 | App preview |
+
+---
+
+## Pod template configuration
+
+These remain deployment-time settings, not runtime overrides:
+
+- image
+- image pull policy
+- resources
+- nodeSelector
+- tolerations
+- affinity
+- imagePullSecrets
+- storage backend
+
+Local development uses minikube with `hostPath`. Cluster deployments use CephFS.
+
+---
+
+## Bifrost integration
+
+When Bifrost is enabled, assigned pods receive per-project virtual keys instead of the shared OpenAI key.
 
 | Env var | Without Bifrost | With Bifrost |
 |---------|----------------|--------------|
-| `OPENAI_API_KEY` | Direct OpenAI key (`sk-...`) | Bifrost virtual key (`sk-bf-...`) |
-| `OPENAI_BASE_URL` | Not set (default: api.openai.com) | Bifrost in-cluster URL |
+| `OPENAI_API_KEY` | Shared OpenAI key | Project chat virtual key |
+| `OPENAI_BASE_URL` | Default OpenAI base URL | Bifrost pod URL |
 
-The OpenAI SDK in OpenCode reads both env vars automatically — the agent doesn't know it's talking to Bifrost.
-
-### LLM API skill
-
-The `llm-api` skill is included in the app-builder template at `.opencode/skills/llm-api/SKILL.md`. It teaches the agent that apps it builds can use the LLM API via `APP_LLM_API_KEY` / `APP_LLM_BASE_URL`.
-
-See [LLM Gateway](llm-gateway.md) for the full architecture.
+The app-builder template also receives backend-facing Bifrost credentials through the pod environment.
 
 ---
 
-## Agent Config Injection
+## Agent config injection
 
-`agent-config/` contains agent profiles and shared config baked into the Docker image and copied to the workspace by an init container.
+The agent image bakes config into `/opt/...`, and an init container copies it onto the mounted workspace at startup.
 
-### Directory structure
+| Source in image | Destination on volume |
+|---|---|
+| `/opt/opencode/opencode.json` | `/workspace/.xdg/config/opencode/opencode.json` |
+| `/opt/agents/{AGENT_NAME}/agent.md` | `/workspace/.opencode/agents/{AGENT_NAME}.md` |
+| `/opt/agents/{AGENT_NAME}/template/` | `/workspace/` |
 
-```
-agent-config/
-├── agent-image-version.json     ← agent Docker image version (local dev tagging)
-├── agents/app-builder/          ← default agent profile
-│   ├── agent.md                 ← OpenCode agent definition + system prompt
-│   ├── config.json              ← agent metadata (name, description, ports)
-│   └── template/                ← app template + skills
-├── opencode.json                ← shared config (providers, model, permissions)
-└── scripts/                     ← entrypoint + guard
-```
-
-### Init container copies per pod
-
-| Source in image | Destination on volume | Purpose |
-|---|---|---|
-| `/opt/opencode/opencode.json` | `/workspace/.xdg/config/opencode/opencode.json` | OpenCode config (providers, permissions) |
-| `/opt/agents/{AGENT_NAME}/agent.md` | `/workspace/.opencode/agents/{AGENT_NAME}.md` | Agent persona + instructions |
-| `/opt/agents/{AGENT_NAME}/template/` | `/workspace/` (app/, .opencode/skills/) | App template + skills (first run only) |
-
-### Why init container instead of COPY
-
-The volume mounts at `/workspace`, which shadows all files baked into that path. Files are staged to `/opt/opencode/` and `/opt/agents/` (outside the mount point) and the init container copies them with `cp -n` (no-clobber).
-
-### Config selection
-
-The Dockerfile defaults to `agent-config/opencode.json`. Local and production builds now use the same provider/model config so Bifrost behavior matches across environments.
-
-### Agent selection
-
-`AGENT_NAME` env var (default: `app-builder`) selects which agent profile to load. See [Agents docs](agents.md) for details.
-
-### Notes
-
-- OpenCode discovers agents from `.opencode/agents/*.md` in the workspace
-- OpenCode discovers skills from `.opencode/skills/*/SKILL.md` in the workspace
-- `OPENAI_API_KEY` is injected as a pod env var at runtime (never baked into the image)
+This keeps the mounted project workspace persistent while still letting the image supply the initial agent profile and template files.
