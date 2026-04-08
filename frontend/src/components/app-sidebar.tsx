@@ -56,13 +56,7 @@ export default function AppSidebar() {
         </div>
       </SidebarHeader>
 
-      <SidebarSeparator />
-
-      <div class="px-2 py-1 group-data-[collapsible=icon]/sidebar:px-1">
-        <TenantSelector />
-      </div>
-
-      <SidebarSeparator />
+      <TenantSelector />
 
       <SidebarContent>
         <SidebarGroup>

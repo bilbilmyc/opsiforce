@@ -15,6 +15,7 @@ guard vscode code-server \
   --user-data-dir /workspace/.xdg/code-server/user-data \
   --extensions-dir /workspace/.xdg/code-server/extensions \
   --disable-telemetry \
+  --disable-workspace-trust \
   /workspace &
 
 wait -n

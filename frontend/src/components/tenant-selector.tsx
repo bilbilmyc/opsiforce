@@ -8,6 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "~/components/ui/dropdown-menu"
+import { SidebarSeparator } from "~/components/ui/sidebar"
 import { Building2, ChevronDown } from "~/components/icons"
 
 export default function TenantSelector() {
@@ -40,6 +41,8 @@ export default function TenantSelector() {
         initTenant()
         return (
           <Show when={tenants().length >= 2}>
+            <SidebarSeparator />
+            <div class="px-2 py-1 group-data-[collapsible=icon]/sidebar:px-1">
             <DropdownMenu>
               <DropdownMenuTrigger
                 as={(props: Record<string, unknown>) => (
@@ -68,6 +71,8 @@ export default function TenantSelector() {
                 </For>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
+            <SidebarSeparator />
           </Show>
         )
       }}
