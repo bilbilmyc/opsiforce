@@ -4,6 +4,7 @@ import { Outlet, createRootRoute, useRouter, useLocation } from "@tanstack/solid
 import { TanStackDevtools } from "@tanstack/solid-devtools"
 import { SolidQueryDevtoolsPanel } from "@tanstack/solid-query-devtools"
 import { TanStackRouterDevtoolsPanel } from "@tanstack/solid-router-devtools"
+import { ApiError } from "~/api/client"
 import AppSidebar from "~/components/app-sidebar"
 import { SidebarProvider, useSidebar } from "~/components/ui/sidebar"
 import { Button } from "~/components/ui/button"
@@ -11,7 +12,16 @@ import { Menu } from "~/components/icons"
 import { HotjarScript } from "~/scripts/hotjar"
 import { Toaster } from "solid-sonner"
 
-const queryClient = new QueryClient()
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, error) => {
+        if (error instanceof ApiError && error.status === 404) return false
+        return failureCount < 3
+      },
+    },
+  },
+})
 
 function MobileHeader() {
   const { isMobile, toggleSidebar } = useSidebar()

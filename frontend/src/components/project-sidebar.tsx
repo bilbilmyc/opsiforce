@@ -64,7 +64,7 @@ export default function ProjectSidebar() {
                   <ProjectCard
                     project={project}
                     isActive={project.id === activeProjectId()}
-                    onSelect={() => navigate({ to: "/projects/$projectId", params: { projectId: project.id } })}
+                    onSelect={() => navigate({ to: "/projects/$projectId", params: { projectId: project.id }, search: { prompt: undefined } })}
                     onRename={(id, title) => renameProject.mutate({ id, title })}
                     onDelete={(id) => deleteProject.mutate(id)}
                     onSettings={(id) => setSettingsProjectId(id)}

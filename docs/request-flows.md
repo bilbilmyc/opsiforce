@@ -43,16 +43,28 @@ All three runtime entrypoints use the same project-pod lifecycle gate before pro
    - app preview / VS Code -> opsiforce:app-timeout:{projectId}
 3. If status = starting:
    - return 503 {"error":"Pod is restarting, please retry"}
-4. If status = active and the pod still exists:
-   - repair podIp / assigned pod row if needed
-   - continue proxying
-5. If status = suspended or active-with-missing-pod:
+4. If status = active and podIp is already stored in DB:
+   - return ready immediately (skip K8s pod check)
+5. If status = active but podIp is not stored:
+   - check the K8s pod
+   - if pod is Ready: store podIp, repair assigned pod row, return ready
+   - if pod is not Ready or missing: move to starting, queue startup, return 503
+6. If status = suspended:
    - atomically move the project to starting
    - queue startup once
    - return the same temporary 503 response
 ```
 
 The in-process startup map dedupes retries inside one backend instance. A PostgreSQL advisory lock dedupes startup across multiple backend instances.
+
+When a live proxy request fails (upstream error or K8s pod failure), the proxy server calls `handleProxyFailure` rather than running the full ensure flow again. `handleProxyFailure` checks K8s pod status directly:
+
+```
+- pod missing or not Ready -> request restart, return 503
+- pod Ready -> do not restart, return 502
+```
+
+This keeps 502 (process failed inside a healthy pod) and 503 (pod gone, restart in progress) semantically distinct.
 
 ---
 
@@ -64,10 +76,10 @@ The in-process startup map dedupes retries inside one backend instance. A Postgr
 3. ProxyController runs the shared ensure flow with activity = agent
 4. If the project is active, backend proxies to the OpenCode agent on port 4096
 5. OpenCode streams the response back through backend -> proxy -> frontend
-6. If the upstream returns a Kubernetes pod failure, or a follow-up ensure check sees the pod disappear:
+6. If the upstream returns a Kubernetes pod failure, or handleProxyFailure confirms the pod is gone:
    - backend requests project restart
    - backend returns 503 {"error":"Pod is restarting, please retry"}
-7. If the upstream process fails while the pod is still present:
+7. If the upstream process fails while handleProxyFailure confirms the pod is still Ready:
    - backend returns 502 from the proxy
    - backend does not recycle the pod
 ```
@@ -85,10 +97,10 @@ App preview and VS Code keep their current ingress/auth topology in this phase. 
 4. If the project is active, the request is proxied to:
    - app preview -> port 3000
    - VS Code -> port 8080
-5. If the pod is missing or the proxy hits a Kubernetes pod failure:
+5. If the pod is missing or the proxy hits a Kubernetes pod failure and handleProxyFailure confirms the pod is gone:
    - backend requests restart
    - backend returns the same temporary 503 restart response
-6. If app preview or code-server fails inside a healthy pod:
+6. If app preview or code-server fails but handleProxyFailure confirms the pod is still Ready:
    - backend returns 502 from the proxy
    - backend does not restart the project pod
 ```
@@ -154,13 +166,15 @@ Redis pub/sub can miss events while the backend is down. On subscriber startup, 
 `ProjectService` reconciles project state on backend boot.
 
 ```
-1. Load projects in starting or active
+1. Load projects in starting or active (runs in parallel across all projects)
 2. starting:
-   - if pod exists and is Ready -> repair DB and mark active
-   - if pod exists but is not Ready -> keep starting
+   - if pod exists and is Ready -> repair DB and mark active immediately
+   - if pod exists but is not Ready -> repair assigned pod row, leave in starting;
+     first user access will queue startup which deletes the pod and recreates it
    - if pod does not exist -> queue startup
 3. active:
-   - if pod exists -> repair podIp / assigned row
+   - if pod exists and is Ready -> repair podIp / assigned row
+   - if pod exists but is not Ready -> move to starting, delete pod, queue startup
    - if pod does not exist -> move to starting and queue startup
 ```
 

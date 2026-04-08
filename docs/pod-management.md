@@ -9,15 +9,16 @@ Warm pool behavior, assigned pod lifecycle, and pod-level runtime details.
 The backend keeps `WARM_POOL_SIZE` warm pods available. Warm pods do not mount a project `subPath`.
 
 ```
-WARM -> claimed -> warm row deleted atomically -> warm pod deleted
-     -> assigned pod created with project subPath -> ACTIVE
+WARM -> claimed -> warm row deleted atomically -> warm pod deleted (in parallel with assigned pod deletion below)
+     -> any existing assigned pod deleted
+     -> new assigned pod created with project subPath -> ACTIVE
 
 ACTIVE -> both TTL keys expire -> pod deleted -> SUSPENDED
 ACTIVE -> pod deleted externally -> next access triggers recreate -> ACTIVE
 ACTIVE -> project deleted -> pod deleted -> project removed
 ```
 
-If no warm pod is available, the backend creates the assigned pod directly.
+If no warm pod is available, the backend skips the warm pod step and creates the assigned pod directly (after deleting any existing one).
 
 Assigned pod creation is serialized per project with a PostgreSQL advisory lock. Warm-pod claiming is serialized with `FOR UPDATE SKIP LOCKED`.
 

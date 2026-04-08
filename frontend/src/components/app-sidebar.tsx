@@ -30,7 +30,7 @@ export default function AppSidebar() {
     mutationFn: () => api.post<Project>("/projects"),
     onSuccess: (project: Project) => {
       qc.invalidateQueries({ queryKey: ["projects"] })
-      navigate({ to: "/projects/$projectId", params: { projectId: project.id } })
+      navigate({ to: "/projects/$projectId", params: { projectId: project.id }, search: { prompt: undefined } })
     },
   }))
 
@@ -38,12 +38,17 @@ export default function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div class="flex items-center gap-2 px-1 py-0.5 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0">
-          <img
-            alt="Opsiforce"
-            src="/assets/icons/brands/opsima.svg"
-            class="w-7 h-7 shrink-0 cursor-pointer"
+          <div
+            class="w-7 h-7 shrink-0 rounded-lg bg-foreground/5 border border-foreground/10 flex items-center justify-center cursor-pointer hover:bg-foreground/10 transition-colors"
             onClick={() => navigate({ to: "/" })}
-          />
+            title="Home"
+          >
+            <img
+              alt="Opsiforce"
+              src="/assets/icons/brands/opsima.svg"
+              class="w-4 h-4"
+            />
+          </div>
           <span class="font-semibold text-sm text-sidebar-foreground truncate group-data-[collapsible=icon]/sidebar:hidden">
             Opsiforce
           </span>

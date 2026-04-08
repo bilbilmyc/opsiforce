@@ -69,7 +69,7 @@ In production, both URLs point to the same in-cluster address. In local dev, the
 
 ## Virtual Key Lifecycle
 
-1. **Created** — `ProjectService.assignPod()` calls `BifrostService.createProjectKey()` twice (chat + backend) via `Promise.all`
+1. **Created** — `ProjectService.buildTenantPodOptions()` (called from `startProject()`) calls `BifrostService.createProjectKey()` twice (chat + backend) via `Promise.all`
 2. **Stored** — `project_api_keys` table stores two rows per project, each with `key_type`, `bifrost_key_id`, and `bifrost_key_token`
 3. **Injected** — pod gets `OPENAI_API_KEY`/`OPENAI_BASE_URL` (chat) + `APP_LLM_API_KEY`/`APP_LLM_BASE_URL` (backend)
 4. **Used** — agent and app call Bifrost transparently; every request logged with token counts + cost, attributed to the correct key type

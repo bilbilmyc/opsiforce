@@ -1,5 +1,11 @@
 const API_BASE = "/api"
 
+export class ApiError extends Error {
+  constructor(public readonly status: number) {
+    super(`API error: ${status}`)
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { ...(options?.headers as Record<string, string>) }
   if (options?.body) {
@@ -22,7 +28,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       window.location.href = "/permission-denied"
       throw new Error("Forbidden")
     }
-    throw new Error(`API error: ${res.status}`)
+    throw new ApiError(res.status)
   }
   const text = await res.text()
   return text ? JSON.parse(text) : (undefined as T)

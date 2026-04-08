@@ -77,23 +77,23 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
 
   return (
     <>
-      <div class="shrink-0 border-t border-border bg-sidebar px-2 py-1.5">
+      <div class="shrink-0 border-t border-border bg-background px-3 py-2">
         <Show
           when={!uploading()}
           fallback={
-            <div class="flex h-7 items-center gap-2 px-1">
-              <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+            <div class="flex h-7 items-center gap-3">
+              <div class="h-1 flex-1 overflow-hidden rounded-full bg-muted">
                 <div
-                  class="h-full bg-primary transition-all"
+                  class="h-full bg-foreground/60 rounded-full transition-all duration-300"
                   style={{ width: `${progress()}%` }}
                 />
               </div>
-              <span class="text-[11px] text-muted-foreground tabular-nums">
+              <span class="text-xs text-muted-foreground tabular-nums w-7 text-right">
                 {progress()}%
               </span>
               <button
                 onClick={cancelUpload}
-                class="h-6 rounded px-2 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                class="h-6 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
               >
                 Cancel
               </button>
@@ -102,7 +102,7 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
         >
           <div class="flex h-7 items-center">
             <DropdownMenu>
-              <DropdownMenuTrigger class="flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+              <DropdownMenuTrigger class="flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground/60 transition-all hover:text-foreground hover:bg-accent">
                 <svg
                   class="h-3.5 w-3.5"
                   fill="none"
@@ -118,10 +118,10 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
                 </svg>
                 Upload
                 <svg
-                  class="h-3 w-3 opacity-50"
+                  class="h-2.5 w-2.5 opacity-40"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2"
+                  stroke-width="2.5"
                   viewBox="0 0 24 24"
                 >
                   <path

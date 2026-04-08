@@ -252,24 +252,22 @@ export class ProjectService implements OnApplicationBootstrap {
     }
 
     if (project.status === ProjectStatus.Active && project.podName) {
+      if (project.podIp) {
+        return { state: "ready", project }
+      }
+
       const pod = await this.podService.getPod(project.podName).catch(() => null)
       if (pod && this.podService.isPodReady(pod)) {
-        const podIp = pod.status?.podIP ?? project.podIp ?? null
-        await this.ensureAssignedPodRow(project.id, project.podName, podIp)
-
-        if (podIp && podIp !== project.podIp) {
-          await db
-            .update(projects)
-            .set({ podIp, updatedAt: new Date() })
-            .where(eq(projects.id, project.id))
-        }
-
-        return {
-          state: "ready",
-          project: {
-            ...project,
-            podIp: podIp ?? project.podIp,
-          },
+        const podIp = pod.status?.podIP ?? null
+        if (podIp) {
+          await Promise.all([
+            this.ensureAssignedPodRow(project.id, project.podName, podIp),
+            db
+              .update(projects)
+              .set({ podIp, updatedAt: new Date() })
+              .where(eq(projects.id, project.id)),
+          ])
+          return { state: "ready", project: { ...project, podIp } }
         }
       }
 
@@ -281,6 +279,34 @@ export class ProjectService implements OnApplicationBootstrap {
 
     const startingProject = await this.requestProjectStartup(project, { deleteExistingPod: false })
     return { state: "starting", project: startingProject }
+  }
+
+  async handleProxyFailure(projectId: string, tenantId: string): Promise<boolean> {
+    return this.handleProxyFailureForProject(await this.findOne(projectId, tenantId))
+  }
+
+  async handleProxyFailureById(projectId: string): Promise<boolean> {
+    return this.handleProxyFailureForProject(await this.findOneById(projectId))
+  }
+
+  private async handleProxyFailureForProject(project: ProjectResponse): Promise<boolean> {
+    if (project.status === ProjectStatus.Starting) {
+      this.queueProjectStartup(project.id)
+      return true
+    }
+
+    if (project.status !== ProjectStatus.Active || !project.podName) {
+      await this.requestProjectStartup(project, { deleteExistingPod: false })
+      return true
+    }
+
+    const pod = await this.podService.getPod(project.podName).catch(() => null)
+    if (!pod || !this.podService.isPodReady(pod)) {
+      await this.requestProjectStartup(project, { deleteExistingPod: !!pod })
+      return true
+    }
+
+    return false
   }
 
   private async buildTenantPodOptions(projectId: string, tenantId: string): Promise<TenantPodOptions | undefined> {
@@ -375,9 +401,10 @@ export class ProjectService implements OnApplicationBootstrap {
       const podName = current.podName ?? this.podService.assignedPodName(projectId)
 
       try {
-        if (claimedPod) {
-          await this.podService.deletePod(claimedPod.podName).catch(() => {})
-        }
+        await Promise.all([
+          this.podService.deletePod(podName).catch(() => {}),
+          claimedPod ? this.podService.deletePod(claimedPod.podName).catch(() => {}) : Promise.resolve(),
+        ])
 
         if (current.podName !== podName || current.podIp !== null) {
           await db
@@ -538,9 +565,7 @@ export class ProjectService implements OnApplicationBootstrap {
         ProjectStatus.Active,
       ]))
 
-    for (const project of candidateProjects) {
-      await this.reconcileProject(project)
-    }
+    await Promise.allSettled(candidateProjects.map((project) => this.reconcileProject(project)))
   }
 
   private async reconcileProject(project: ProjectResponse): Promise<void> {

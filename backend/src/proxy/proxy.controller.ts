@@ -107,8 +107,7 @@ export class ProxyController {
 
   private async shouldRestartProject(projectId: string, tenantId: string): Promise<boolean> {
     try {
-      const ensured = await this.projectService.ensureProjectForTenant(projectId, tenantId, "agent")
-      return ensured.state === "starting"
+      return await this.projectService.handleProxyFailure(projectId, tenantId)
     } catch (err) {
       if (err instanceof NotFoundException) throw err
       return false

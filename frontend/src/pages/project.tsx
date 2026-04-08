@@ -2,12 +2,14 @@ import {
   Show,
   createSignal,
   createEffect,
+  untrack,
   onMount,
   onCleanup,
   type Component,
   type ParentProps,
 } from "solid-js";
 import { createQuery, useQueryClient } from "@tanstack/solid-query";
+import { useNavigate } from "@tanstack/solid-router";
 import { usePermissions } from "~/api/permissions";
 import { Permission } from "~/constants/permissions";
 import { MessageSquare, Code as CodeIcon } from "~/components/icons";
@@ -26,7 +28,12 @@ import {
   type BaseRouterProps,
 } from "@solidjs/router";
 import { base64Encode } from "@opencode-ai/util/encode";
-import { api, type OpenCodeSession, type Project } from "~/api/client";
+import {
+  api,
+  ApiError,
+  type OpenCodeSession,
+  type Project,
+} from "~/api/client";
 import FileUpload from "~/components/file-upload";
 
 const platform: Platform = {
@@ -74,7 +81,11 @@ function createDirectoryRouter(
   };
 }
 
-export default function ProjectView(props: { projectId: string }) {
+export default function ProjectView(props: {
+  projectId: string;
+  initialPrompt?: string;
+}) {
+  const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canViewCode = () => hasPermission(Permission.viewCodeTab);
 
@@ -93,14 +104,23 @@ export default function ProjectView(props: { projectId: string }) {
   const project = createQuery(() => ({
     queryKey: ["projects", props.projectId],
     queryFn: () => api.get<Project>(`/projects/${props.projectId}`),
-    refetchInterval: (query: { state: { data: Project | undefined } }) => {
-      const data = query.state.data;
+    refetchInterval: (query: {
+      state: { data: Project | undefined; error: unknown };
+    }) => {
+      const { data, error } = query.state;
+      if (error) return false;
       if (!data) return 3000;
       return data.status === "starting" || data.status === "suspended"
         ? 3000
         : false;
     },
   }));
+
+  createEffect(() => {
+    if (project.error instanceof ApiError && project.error.status === 404) {
+      untrack(() => navigate({ to: "/" }));
+    }
+  });
 
   const tunnelUrl = () =>
     `${window.location.origin}/api/proxy/${props.projectId}`;
@@ -160,6 +180,25 @@ export default function ProjectView(props: { projectId: string }) {
       /* no sessions yet */
     }
 
+    if (!latestSessionId && props.initialPrompt) {
+      try {
+        const newSession = await api.post<OpenCodeSession>(
+          `/proxy/${props.projectId}/session`,
+        );
+        if (newSession?.id) {
+          await api.post(
+            `/proxy/${props.projectId}/session/${newSession.id}/prompt_async`,
+            {
+              parts: [{ type: "text", text: props.initialPrompt }],
+            },
+          );
+          latestSessionId = newSession.id;
+        }
+      } catch {
+        /* auto-send failed, proceed to empty session */
+      }
+    }
+
     setRouter(() => createDirectoryRouter(directory!, latestSessionId));
   }
 
@@ -176,7 +215,8 @@ export default function ProjectView(props: { projectId: string }) {
 
   const webappDomain = import.meta.env.VITE_WEBAPP_DOMAIN || "localhost:3002";
   const webappProtocol = webappDomain.includes("localhost") ? "http" : "https";
-  const webappUrl = () => `${webappProtocol}://${props.projectId}.${webappDomain}/`;
+  const webappUrl = () =>
+    `${webappProtocol}://${props.projectId}.${webappDomain}/`;
 
   let statusInterval: ReturnType<typeof setInterval> | undefined;
 
@@ -188,9 +228,15 @@ export default function ProjectView(props: { projectId: string }) {
 
     async function checkStatus() {
       try {
-        const res = await fetch(`${webappProtocol}://${props.projectId}.${webappDomain}/api/app-meta`);
+        const res = await fetch(
+          `${webappProtocol}://${props.projectId}.${webappDomain}/api/app-meta`,
+        );
         if (res.ok) {
-          const data = await res.json() as { exists?: boolean; name?: string; description?: string };
+          const data = (await res.json()) as {
+            exists?: boolean;
+            name?: string;
+            description?: string;
+          };
           if (data.exists) {
             setWebappReady(true);
             if (data.name) setAppName(data.name);
@@ -198,7 +244,9 @@ export default function ProjectView(props: { projectId: string }) {
             if (statusInterval) clearInterval(statusInterval);
           }
         }
-      } catch { /* webapp not ready yet */ }
+      } catch {
+        /* webapp not ready yet */
+      }
     }
 
     checkStatus();
@@ -210,7 +258,9 @@ export default function ProjectView(props: { projectId: string }) {
   });
 
   function reloadPreview() {
-    const iframe = document.getElementById("webapp-preview") as HTMLIFrameElement;
+    const iframe = document.getElementById(
+      "webapp-preview",
+    ) as HTMLIFrameElement;
     if (iframe) iframe.src = iframe.src;
   }
 
@@ -222,28 +272,35 @@ export default function ProjectView(props: { projectId: string }) {
 
   const vscodeDomain = import.meta.env.VITE_VSCODE_DOMAIN || "localhost:3003";
   const vscodeProtocol = vscodeDomain.includes("localhost") ? "http" : "https";
-  const vscodeUrl = () => `${vscodeProtocol}://${props.projectId}.${vscodeDomain}/?folder=/workspace`;
+  const vscodeUrl = () =>
+    `${vscodeProtocol}://${props.projectId}.${vscodeDomain}/?folder=/workspace`;
 
   return (
     <div class="h-full w-full flex flex-col overflow-hidden">
       {router() && canViewCode() && (
-        <div class="h-9 flex items-center px-2 bg-sidebar border-b border-border shrink-0">
+        <div class="h-9 flex items-center px-1 bg-background border-b border-border shrink-0">
           <Tabs
             value={activeTab()}
             onChange={(v) => {
               setActiveTab(v as "chat" | "code");
               if (v === "code") setCodeTabOpened(true);
             }}
-            class="w-auto"
+            class="w-auto h-full"
           >
-            <TabsList class="w-auto h-7">
-              <TabsTrigger value="chat" class="gap-1.5 px-3">
+            <TabsList class="bg-transparent rounded-none p-0 h-full w-auto gap-0">
+              <TabsTrigger
+                value="chat"
+                class="gap-1.5 px-3 h-full rounded-none border-b-2 border-transparent data-[selected]:border-foreground data-[selected]:bg-transparent data-[selected]:shadow-none text-muted-foreground data-[selected]:text-foreground hover:text-foreground/70 transition-colors"
+              >
                 <MessageSquare class="w-3.5 h-3.5" />
-                Chat
+                <span class="text-xs font-medium">Chat</span>
               </TabsTrigger>
-              <TabsTrigger value="code" class="gap-1.5 px-3">
+              <TabsTrigger
+                value="code"
+                class="gap-1.5 px-3 h-full rounded-none border-b-2 border-transparent data-[selected]:border-foreground data-[selected]:bg-transparent data-[selected]:shadow-none text-muted-foreground data-[selected]:text-foreground hover:text-foreground/70 transition-colors"
+              >
                 <CodeIcon class="w-3.5 h-3.5" />
-                Code
+                <span class="text-xs font-medium">Code</span>
               </TabsTrigger>
             </TabsList>
           </Tabs>
@@ -308,47 +365,79 @@ export default function ProjectView(props: { projectId: string }) {
 
         {!previewOpen() && webappReady() && (
           <button
-            onClick={() => { setPreviewOpen(true); setUserDismissed(false); }}
+            onClick={() => {
+              setPreviewOpen(true);
+              setUserDismissed(false);
+            }}
             class="shrink-0 w-8 bg-sidebar border-l border-border flex items-center justify-center hover:bg-accent transition-colors"
             title="Open preview"
           >
-            <svg class="w-4 h-4 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+            <svg
+              class="w-4 h-4 text-muted-foreground"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M15 19l-7-7 7-7"
+              />
             </svg>
           </button>
         )}
 
         {previewOpen() && (
-          <div class="w-[45%] shrink-0 border-l border-border flex flex-col bg-background">
+          <div class="w-2/5 shrink-0 border-l border-border flex flex-col bg-background">
             <div class="h-8 flex items-center justify-between px-2 bg-sidebar border-b border-border shrink-0">
               <div class="flex items-center gap-1.5">
                 <button
-                  onClick={() => { setPreviewOpen(false); setUserDismissed(true); }}
+                  onClick={() => {
+                    setPreviewOpen(false);
+                    setUserDismissed(true);
+                  }}
                   class="w-6 h-6 flex items-center justify-center rounded hover:bg-accent transition-colors"
                   title="Close preview"
                 >
-                  <svg class="w-3.5 h-3.5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                  <svg
+                    class="w-3.5 h-3.5 text-muted-foreground"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 5l7 7-7 7"
+                    />
                   </svg>
                 </button>
-                <span class="text-[11px] font-medium text-muted-foreground">
+                <span class="text-xs font-medium text-muted-foreground">
                   {appName() || "Preview"}
                 </span>
               </div>
               <div class="flex items-center gap-1">
                 <button
                   onClick={copyPreviewUrl}
-                  class="h-6 px-2 flex items-center gap-1 rounded hover:bg-accent transition-colors text-[11px] text-muted-foreground"
+                  class="h-6 px-2 flex items-center gap-1 rounded hover:bg-accent transition-colors text-xs text-muted-foreground"
                   title="Copy preview URL"
                 >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg
+                    class="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"
                       stroke-width="2"
-                      d={copied()
-                        ? "M5 13l4 4L19 7"
-                        : "M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10"
+                      d={
+                        copied()
+                          ? "M5 13l4 4L19 7"
+                          : "M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10"
                       }
                     />
                   </svg>
@@ -356,10 +445,15 @@ export default function ProjectView(props: { projectId: string }) {
                 </button>
                 <button
                   onClick={reloadPreview}
-                  class="h-6 px-2 flex items-center gap-1 rounded hover:bg-accent transition-colors text-[11px] text-muted-foreground"
+                  class="h-6 px-2 flex items-center gap-1 rounded hover:bg-accent transition-colors text-xs text-muted-foreground"
                   title="Reload preview"
                 >
-                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg
+                    class="w-3 h-3"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
                     <path
                       stroke-linecap="round"
                       stroke-linejoin="round"

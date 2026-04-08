@@ -95,7 +95,7 @@ export default function ProjectCard(props: {
               />
             }
           >
-            <span class="block text-xs font-medium text-sidebar-foreground truncate">{title()}</span>
+            <span class="block text-xs font-medium text-sidebar-foreground truncate leading-tight">{title()}</span>
           </Show>
           <Show when={props.project.createdAt && !editing()}>
             <span class="block text-xs text-sidebar-muted-foreground mt-0.5">

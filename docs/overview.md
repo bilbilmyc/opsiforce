@@ -109,7 +109,8 @@ packages/opsiforce/
     ├── opsiforce/               Infra: PVC, RBAC
     ├── opsiforce-proxy/         nginx + OAuth2 Proxy + Traefik IngressRoute (routes between services)
     ├── opsiforce-frontend/      Solid.js deployment + service
-    └── opsiforce-backend/       NestJS deployment + service + configmap + HPA
+    ├── opsiforce-backend/       NestJS deployment + service + configmap + HPA
+    └── bifrost/                 Values + NetworkPolicy for the upstream Bifrost Helm chart
 ```
 
 ---
@@ -130,7 +131,6 @@ packages/opsiforce/
 ## Key Docs
 
 - [Request Flows](./request-flows.md)
-- [Project Lifecycle](./project-lifecycle.md)
 - [Pod Management](./pod-management.md)
 - [Persistence & Storage](./persistence.md)
 - [API Reference](./api-reference.md)

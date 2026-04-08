@@ -6,11 +6,8 @@ import { Readable, pipeline } from "stream"
 import { ProjectService } from "../project/project.service"
 import { ProxyService } from "./proxy.service"
 import {
-  BAD_GATEWAY_RESPONSE_BODY,
   extractProjectId,
   isK8sPodError,
-  NOT_FOUND_RESPONSE_BODY,
-  RESTARTING_RESPONSE_BODY,
   sendBadGatewayResponse,
   sendNotFoundResponse,
   sendRestartingResponse,
@@ -201,8 +198,7 @@ async function shouldRestartProject(
   projectId: string,
 ): Promise<boolean> {
   try {
-    const ensured = await projectService.ensureProjectById(projectId, "app")
-    return ensured.state === "starting"
+    return await projectService.handleProxyFailureById(projectId)
   } catch (err) {
     if (err instanceof NotFoundException) throw err
     return false
