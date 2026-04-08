@@ -1,6 +1,6 @@
 ---
 name: llm-api
-description: Use the OpenAI-compatible LLM API (APP_LLM_API_KEY) to add AI features — chat completions, structured output, streaming. Trigger when building AI-powered features, calling GPT models, or generating text.
+description: Use the OpenAI-compatible LLM API (APP_LLM_API_KEY) to add AI features — chat completions, structured output, streaming, vision (image analysis), audio transcription. Trigger when building AI-powered features, calling GPT models, generating text, analyzing images, or transcribing audio.
 ---
 
 # AI API Integration
@@ -33,8 +33,9 @@ const llm = new OpenAI({
 
 | Model | Best for | Speed | Cost |
 |-------|----------|-------|------|
-| `gpt-4.1` | Fast tasks, classification, extraction | Fast | Low |
+| `gpt-4.1` | Fast tasks, classification, extraction, vision | Fast | Low |
 | `gpt-5.4-mini` | Complex generation, reasoning | Medium | Medium |
+| `whisper-1` | Audio transcription (speech-to-text) | Fast | Low |
 
 ## Common Patterns
 
@@ -147,6 +148,95 @@ async function chat(userMessage: string): Promise<string> {
   return reply
 }
 ```
+
+### Vision (Image Analysis)
+
+Analyze images by passing `image_url` content parts to `gpt-4.1`:
+
+```typescript
+const response = await llm.chat.completions.create({
+  model: "gpt-4.1",
+  messages: [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "What's in this image?" },
+        {
+          type: "image_url",
+          image_url: { url: "https://example.com/photo.jpg" },
+        },
+      ],
+    },
+  ],
+  max_tokens: 1000,
+})
+const description = response.choices[0].message.content
+```
+
+From an uploaded file buffer (e.g., via multer or formidable):
+
+```typescript
+const base64 = buffer.toString("base64")
+const dataUrl = `data:${mimetype};base64,${base64}`
+
+const response = await llm.chat.completions.create({
+  model: "gpt-4.1",
+  messages: [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: prompt },
+        {
+          type: "image_url",
+          image_url: { url: dataUrl, detail: "auto" },
+        },
+      ],
+    },
+  ],
+  max_tokens: 1000,
+})
+```
+
+The `detail` parameter controls token usage: `"low"` (fixed 85 tokens, fast), `"high"` (detailed analysis, more tokens), `"auto"` (model decides). Multiple images can be sent as additional `image_url` entries in the content array.
+
+### Audio Transcription
+
+Convert audio to text using the Whisper API:
+
+```typescript
+import { createReadStream } from "fs"
+
+const transcription = await llm.audio.transcriptions.create({
+  file: createReadStream("audio.mp3"),
+  model: "whisper-1",
+})
+const text = transcription.text
+```
+
+From an uploaded file buffer:
+
+```typescript
+import { toFile } from "openai"
+
+const transcription = await llm.audio.transcriptions.create({
+  file: await toFile(buffer, "audio.webm"),
+  model: "whisper-1",
+})
+```
+
+With options:
+
+```typescript
+const transcription = await llm.audio.transcriptions.create({
+  file: await toFile(buffer, "audio.mp3"),
+  model: "whisper-1",
+  language: "en",
+  response_format: "verbose_json",
+  prompt: "Technical meeting about Kubernetes deployments",
+})
+```
+
+Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm (max 25 MB). Use `response_format` for different outputs: `"text"` (plain string), `"json"` (with text field), `"verbose_json"` (with word-level timestamps), `"srt"` or `"vtt"` (subtitle formats).
 
 ## Guidelines
 

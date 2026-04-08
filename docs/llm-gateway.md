@@ -25,13 +25,13 @@ Each project gets two Bifrost virtual keys for separate usage tracking:
 | Key Type | Purpose | Env Vars | Allowed Models |
 |----------|---------|----------|----------------|
 | `chat` | OpenCode agent (coding) | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | OpenAI: gpt-5.3-codex, o4-mini, gpt-5.4-mini, gpt-4.1 |
-| `backend` | App AI features | `APP_LLM_API_KEY`, `APP_LLM_BASE_URL` | OpenAI: gpt-4.1, gpt-5.4-mini |
+| `backend` | App AI features | `APP_LLM_API_KEY`, `APP_LLM_BASE_URL` | OpenAI: gpt-4.1, gpt-5.4-mini, whisper-1 |
 
 Both keys route through the same Bifrost instance with different virtual key tokens. The `key_type` column in `project_api_keys` distinguishes them.
 
 **Why separate keys?**
 - **Usage attribution** — "How much did the coding agent cost?" vs "How much do the app's AI features cost?"
-- **Model restrictions** — Backend keys limited to cheaper/faster models
+- **Model restrictions** — Backend keys include whisper-1 for audio transcription
 - **Budget enforcement** — Independent budget limits per key type
 
 ### Budget Enforcement
@@ -99,7 +99,7 @@ Returns zeros when Bifrost is not configured (no `BIFROST_PROXY_URL`).
 
 ## Dynamic Skills
 
-The `llm-api` skill is included in the app-builder template at `.opencode/skills/llm-api/SKILL.md`. It teaches the agent that `APP_LLM_API_KEY` and `APP_LLM_BASE_URL` are set, with examples for text generation, structured output (JSON mode + JSON schema), streaming, and multi-turn conversation.
+The `llm-api` skill is included in the app-builder template at `.opencode/skills/llm-api/SKILL.md`. It teaches the agent that `APP_LLM_API_KEY` and `APP_LLM_BASE_URL` are set, with examples for text generation, structured output (JSON mode + JSON schema), streaming, multi-turn conversation, vision (image analysis), and audio transcription.
 
 ## Configuration
 

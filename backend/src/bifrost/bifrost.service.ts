@@ -63,7 +63,7 @@ export class BifrostService {
 
   private static readonly MODEL_ALLOWLISTS: Record<KeyType, string[]> = {
     chat: ["gpt-5.3-codex", "o4-mini", "gpt-5.4-mini", "gpt-4.1"],
-    backend: ["gpt-4.1", "gpt-5.4-mini"],
+    backend: ["gpt-4.1", "gpt-5.4-mini", "whisper-1"],
   }
 
   private static readonly DEFAULT_BUDGETS: Record<KeyType, BifrostBudget> = {
