@@ -33,8 +33,8 @@ const llm = new OpenAI({
 
 | Model | Best for | Speed | Cost |
 |-------|----------|-------|------|
-| `gpt-4.1` | Fast tasks, classification, extraction, vision | Fast | Low |
-| `gpt-5.4-mini` | Complex generation, reasoning | Medium | Medium |
+| `gpt-5.4-nano` | Fast tasks, classification, extraction, ranking, vision | Very fast | Very low |
+| `gpt-5.4-mini` | Complex reasoning, nuanced generation, vision | Medium | Medium |
 | `whisper-1` | Audio transcription (speech-to-text) | Fast | Low |
 
 ## Common Patterns
@@ -43,7 +43,7 @@ const llm = new OpenAI({
 
 ```typescript
 const response = await llm.chat.completions.create({
-  model: "gpt-4.1",
+  model: "gpt-5.4-nano",
   messages: [{ role: "user", content: prompt }],
   max_tokens: 1000,
 })
@@ -56,7 +56,7 @@ Return typed JSON using `response_format`:
 
 ```typescript
 const response = await llm.chat.completions.create({
-  model: "gpt-4.1",
+  model: "gpt-5.4-nano",
   messages: [
     {
       role: "system",
@@ -76,7 +76,7 @@ For stricter control, use a JSON schema:
 
 ```typescript
 const response = await llm.chat.completions.create({
-  model: "gpt-4.1",
+  model: "gpt-5.4-nano",
   messages: [{ role: "user", content: "Analyze this product review: ..." }],
   response_format: {
     type: "json_schema",
@@ -108,7 +108,7 @@ Stream responses to the frontend using Server-Sent Events:
 ```typescript
 // API route handler
 const stream = await llm.chat.completions.create({
-  model: "gpt-4.1",
+  model: "gpt-5.4-nano",
   messages: [{ role: "user", content: prompt }],
   stream: true,
 })
@@ -138,7 +138,7 @@ async function chat(userMessage: string): Promise<string> {
   messages.push({ role: "user", content: userMessage })
 
   const response = await llm.chat.completions.create({
-    model: "gpt-4.1",
+    model: "gpt-5.4-nano",
     messages,
     max_tokens: 1000,
   })
@@ -151,11 +151,11 @@ async function chat(userMessage: string): Promise<string> {
 
 ### Vision (Image Analysis)
 
-Analyze images by passing `image_url` content parts to `gpt-4.1`:
+Analyze images by passing `image_url` content parts to `gpt-5.4-nano`:
 
 ```typescript
 const response = await llm.chat.completions.create({
-  model: "gpt-4.1",
+  model: "gpt-5.4-nano",
   messages: [
     {
       role: "user",
@@ -180,7 +180,7 @@ const base64 = buffer.toString("base64")
 const dataUrl = `data:${mimetype};base64,${base64}`
 
 const response = await llm.chat.completions.create({
-  model: "gpt-4.1",
+  model: "gpt-5.4-nano",
   messages: [
     {
       role: "user",
@@ -241,7 +241,7 @@ Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm (max 25 MB). Use `respon
 ## Guidelines
 
 - **Backend only** — never expose `APP_LLM_API_KEY` to the frontend or client-side code
-- Use `gpt-4.1` for fast tasks; `gpt-5.4-mini` for complex generation
+- Use `gpt-5.4-nano` for fast tasks; `gpt-5.4-mini` for complex generation
 - Set reasonable `max_tokens` limits to control cost
 - Always wrap AI calls in try/catch with user-friendly error messages
 - For streaming responses to the frontend, use Server-Sent Events (SSE)

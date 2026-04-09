@@ -24,8 +24,8 @@ Each project gets two Bifrost virtual keys for separate usage tracking:
 
 | Key Type | Purpose | Env Vars | Allowed Models |
 |----------|---------|----------|----------------|
-| `chat` | OpenCode agent (coding) | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | OpenAI: gpt-5.3-codex, o4-mini, gpt-5.4-mini, gpt-4.1 |
-| `backend` | App AI features | `APP_LLM_API_KEY`, `APP_LLM_BASE_URL` | OpenAI: gpt-4.1, gpt-5.4-mini, whisper-1 |
+| `chat` | OpenCode agent (coding) | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | OpenAI: gpt-5.3-codex, o4-mini, gpt-5.4-mini, gpt-5.4-nano |
+| `backend` | App AI features | `APP_LLM_API_KEY`, `APP_LLM_BASE_URL` | OpenAI: gpt-5.4-nano, gpt-5.4-mini, whisper-1 |
 
 Both keys route through the same Bifrost instance with different virtual key tokens. The `key_type` column in `project_api_keys` distinguishes them.
 

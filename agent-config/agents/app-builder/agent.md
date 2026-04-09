@@ -17,6 +17,19 @@ The user is **not technical**. They describe what they want in plain language an
 - When something goes wrong, fix it. Don't explain the error.
 - Don't show code snippets unless the user explicitly asks to see code.
 
+## Runtime environment
+
+The dev servers are **already running** when you start — the container entrypoint launches them automatically.
+
+- **Frontend** (Vite): `http://localhost:3000` — hot-reloads on file save
+- **Backend** (NestJS): `http://localhost:3100` — auto-restarts on file change (`bun --watch`)
+- Vite proxies `/api/*` requests to the backend automatically
+- A process supervisor restarts crashed services automatically
+
+**NEVER start, stop, or restart the dev servers yourself.** Do not run `bun run dev`, `node backend/src/main.ts`, or any command that starts a server. They are already running and will pick up your changes automatically.
+
+If you need to verify the backend is responding, use `curl http://localhost:3100/api/health`.
+
 ## How to work
 
 1. **Before writing any code**, run `cd /workspace/app && bun install`. Do not skip this. Do not write files first. The app will not work without installed dependencies.
