@@ -9,10 +9,12 @@ import {
   extractProjectId,
   isK8sPodError,
   sendBadGatewayResponse,
+  sendDisabledResponse,
   sendNotFoundResponse,
   sendRestartingResponse,
   setCorsHeaders,
   writeBadGatewayUpgradeResponse,
+  writeDisabledUpgradeResponse,
   writeNotFoundUpgradeResponse,
   writeRestartingUpgradeResponse,
 } from "./proxy.shared"
@@ -118,6 +120,10 @@ export function createVscodeProxyServer(
 
     try {
       const ensured = await projectService.ensureProjectById(projectId, "app")
+      if (ensured.state === "disabled") {
+        sendDisabledResponse(res)
+        return
+      }
       if (ensured.state === "starting") {
         sendRestartingResponse(res)
         return
@@ -161,6 +167,10 @@ export function createVscodeProxyServer(
 
     try {
       const ensured = await projectService.ensureProjectById(projectId, "app")
+      if (ensured.state === "disabled") {
+        writeDisabledUpgradeResponse(socket)
+        return
+      }
       if (ensured.state === "starting") {
         writeRestartingUpgradeResponse(socket)
         return

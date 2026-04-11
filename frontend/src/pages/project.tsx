@@ -8,11 +8,11 @@ import {
   type Component,
   type ParentProps,
 } from "solid-js";
-import { createQuery, useQueryClient } from "@tanstack/solid-query";
+import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-query";
 import { useNavigate } from "@tanstack/solid-router";
 import { usePermissions } from "~/api/permissions";
 import { Permission } from "~/constants/permissions";
-import { MessageSquare, Code as CodeIcon } from "~/components/icons";
+import { MessageSquare, Code as CodeIcon, Ban } from "~/components/icons";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { AppBaseProviders, AppInterface } from "@opencode-ai/app/app";
 import {
@@ -88,6 +88,7 @@ export default function ProjectView(props: {
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canViewCode = () => hasPermission(Permission.viewCodeTab);
+  const canDisable = () => hasPermission(Permission.disableProject);
 
   const [router, setRouter] = createSignal<Component<BaseRouterProps> | null>(
     null,
@@ -101,6 +102,11 @@ export default function ProjectView(props: {
   const [copied, setCopied] = createSignal(false);
   const qc = useQueryClient();
 
+  const enableProject = createMutation(() => ({
+    mutationFn: () => api.post<Project>(`/projects/${props.projectId}/enable`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+  }));
+
   const project = createQuery(() => ({
     queryKey: ["projects", props.projectId],
     queryFn: () => api.get<Project>(`/projects/${props.projectId}`),
@@ -110,6 +116,7 @@ export default function ProjectView(props: {
       const { data, error } = query.state;
       if (error) return false;
       if (!data) return 3000;
+      if (data.status === "disabled") return false;
       return data.status === "starting" || data.status === "suspended"
         ? 3000
         : false;
@@ -204,6 +211,7 @@ export default function ProjectView(props: {
 
   createEffect(() => {
     const status = project.data?.status;
+    if (status === "disabled") return;
     if (status === "suspended") {
       fetch(`/api/proxy/${props.projectId}/ping`).catch(() => {});
     }
@@ -312,7 +320,21 @@ export default function ProjectView(props: {
           class="flex-1 min-w-0 flex flex-col oc-chat-only"
           style={{ display: activeTab() === "chat" ? "flex" : "none" }}
         >
-          {router() ? (
+          {project.data?.status === "disabled" ? (
+            <div class="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
+              <Ban class="w-8 h-8" />
+              <p class="text-sm font-medium">This project is disabled</p>
+              <Show when={canDisable()}>
+                <button
+                  class="mt-1 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                  disabled={enableProject.isPending}
+                  onClick={() => enableProject.mutate(undefined as never)}
+                >
+                  {enableProject.isPending ? "Enabling..." : "Enable Project"}
+                </button>
+              </Show>
+            </div>
+          ) : router() ? (
             <PlatformProvider value={platform}>
               <AppBaseProviders>
                 <ForceLight>
@@ -469,6 +491,7 @@ export default function ProjectView(props: {
               id="webapp-preview"
               src={webappUrl()}
               class="flex-1 w-full border-0"
+              allow="microphone; camera; clipboard-read; clipboard-write; geolocation; fullscreen; autoplay; display-capture; web-share"
             />
           </div>
         )}

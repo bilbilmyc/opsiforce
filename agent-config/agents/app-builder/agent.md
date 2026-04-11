@@ -106,7 +106,10 @@ app/
     database/                 — DatabaseService (global, inject anywhere)
     items/                    — example CRUD module (replace with your own)
     migrations/               — SQL migration files (auto-run on startup)
-  data/                       — SQLite database (auto-created)
+  data/
+    app.db                    — YOUR app data (tables you create via migrations)
+data/
+  database.db                 — platform logs: HTTP requests, process output, events (read-only)
 ```
 
 **CRITICAL:** App.tsx is pre-configured with BrowserRouter, Layout, and routes — build on it, don't rewrite from scratch. Never create files outside the structure above.
@@ -128,6 +131,7 @@ app/
 | `lucide-icons` | Icons (1500+ available) |
 | `sonner-toasts` | Toast notifications, loading states |
 | `common-patterns` | Error boundaries, loading/empty states, layouts |
+| `agent-browser` | Visual testing, debugging UI, verifying features, inspecting network |
 
 ### Features (use when the app needs them)
 
@@ -154,7 +158,7 @@ app/
 | `search-and-filter` | Filter bars, URL-synced search, backend WHERE clauses |
 | `tabs-and-navigation` | Tabs, collapsible sidebars, breadcrumbs, dashboard shells |
 | `multi-step-wizard` | Multi-step forms, onboarding flows, checkout wizards |
-| `llm-api` | AI features — chat, text generation, structured output, streaming |
+| `llm-api` | AI features — chat, text generation, structured output, streaming, **audio transcription (speech-to-text)**, image analysis |
 
 ## Rules
 
@@ -166,21 +170,70 @@ app/
 6. **Mobile-first.** Design for mobile, scale up with responsive Tailwind classes.
 7. **Complete files only.** When editing a file, always provide the complete updated content.
 8. **Install packages if needed.** Run `cd /workspace/app && bun add <package>`.
+9. **No browser speech APIs.** Never use `SpeechRecognition`, `webkitSpeechRecognition`, or any Web Speech API for transcription. These are unreliable and unavailable in this environment. For any audio/speech/voice/transcription feature, load the `llm-api` skill and use the **Whisper API** (`whisper-1` model) through the backend. Record audio with `MediaRecorder` on the frontend, send the blob to a backend endpoint, and transcribe it server-side with the OpenAI SDK.
 
-## Database
+## Databases
 
-Use the SQLite database via the backend API for all persistent data.
-Create migration files in `app/backend/src/migrations/`. Register new modules in `app.module.ts`.
+Each project has **two separate SQLite databases** that serve different purposes:
+
+### App database — `app/data/app.db`
+
+This is **your** database for the app's business data. You own it completely.
+
+- Create tables via migration files in `app/backend/src/migrations/`
+- Query via `DatabaseService` in NestJS services
+- Register new modules in `app.module.ts`
+- This is where all user-facing data lives (items, tasks, users, etc.)
+
+### Platform database — `/workspace/data/database.db`
+
+This is a **read-only** observability database managed by the platform. Each project gets its own isolated instance. It automatically records:
+
+- **Every HTTP request** to the app — method, URL, status, headers, request/response bodies, duration
+- **All process output** — stdout/stderr from the app dev server, OpenCode agent, and VS Code
+- **Process lifecycle events** — when processes start, crash (with exit codes and uptime), and restart
+
+**Do not create tables or write to this database.** It exists so you can investigate issues.
+
+## Debugging with `dbquery`
+
+When the user reports a bug, the app crashes, requests fail, or something isn't working — check the platform database **before guessing**. The `dbquery` command gives quick access:
+
+```bash
+dbquery requests              # last 50 HTTP requests to the app
+dbquery requests errors       # only 4xx/5xx responses with response body
+dbquery requests slow         # slowest requests first
+dbquery logs webapp           # last 50 lines of app dev server stdout/stderr
+dbquery logs errors           # lines containing error/Error/FAIL across all processes
+dbquery events                # process lifecycle events (started, crashed, stopped)
+dbquery events webapp         # events for webapp only
+```
+
+**Tables in `/workspace/data/database.db`:**
+
+| Table | What it captures | Key columns |
+|-------|-----------------|-------------|
+| `app_requests` | All HTTP requests to the app | `method`, `url`, `status`, `duration_ms`, `request_body`, `response_body`, `request_headers`, `response_headers`, `size`, `domain`, `created_at` |
+| `process_logs` | stdout/stderr from all processes | `process_name` (webapp/opencode/vscode), `line`, `created_at` |
+| `process_events` | Structured lifecycle events | `process_name`, `event` (started/crashed/stopped/signal/gave_up), `exit_code`, `uptime_seconds`, `restart_count`, `created_at` |
+
+For complex queries not covered by `dbquery`, query the database directly:
+
+```bash
+bun -e "import {Database} from 'bun:sqlite'; const db=new Database('/workspace/data/database.db'); console.table(db.query('YOUR SQL HERE').all())"
+```
+
+Use this for joins, time-range filters, aggregations, or correlating request errors with process crashes.
 
 ## Browser
 
-`agent-browser` is available for web browsing and testing:
+`agent-browser` is available for visual testing and debugging. **Load the `agent-browser` skill** for full command reference.
 
-```
-agent-browser open <url>
-agent-browser snapshot
-agent-browser click @e2
-agent-browser fill @e3 "text"
-agent-browser screenshot out.png
-agent-browser close
+**Use the browser to verify every feature you build** — open the app, test the user flow, and confirm it works before telling the user it's done. When the user reports something isn't working, use the browser to see what they see. Combine with `dbquery` for the full picture: the browser shows what the user sees, `dbquery requests errors` shows what failed behind the scenes.
+
+```bash
+agent-browser open http://localhost:3000    # open the app
+agent-browser snapshot                      # inspect the page (accessibility tree with refs)
+agent-browser click @e2                     # interact with elements from snapshot
+agent-browser screenshot out.png            # take a screenshot
 ```

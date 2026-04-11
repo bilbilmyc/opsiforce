@@ -9,11 +9,13 @@ Opsiforce Backend ──── Admin API (basic auth) ──→ Bifrost (Cluster
        │                                              │ holds real provider API keys
        │ pod gets:                                    │ validates virtual keys
        │   OPENAI_API_KEY=<chat virtual key>          │ logs tokens/cost/latency
-       │   OPENAI_BASE_URL=http://bifrost:8080/v1     │ enforces model allowlists
+       │   OPENAI_BASE_URL=http://bifrost:8080/v1     │ enforces model governance
+       │   ANTHROPIC_API_KEY=<same chat virtual key>  │ routes by model name
+       │   ANTHROPIC_BASE_URL=http://bifrost:8080/…   │
        │   APP_LLM_API_KEY=<backend virtual key>      │
        │   APP_LLM_BASE_URL=http://bifrost:8080/v1    │
        ▼                                              ▼
-  Agent Pod ──── LLM calls ──────────────────────→ Bifrost ──→ OpenAI
+  Agent Pod ──── LLM calls ──────────────────────→ Bifrost ──→ OpenAI / Anthropic
 ```
 
 Bifrost runs as internal-only K8s service (ClusterIP + NetworkPolicy). Real provider keys live only in Bifrost's Secret. Agent pods get per-project virtual keys.
@@ -22,31 +24,61 @@ Bifrost runs as internal-only K8s service (ClusterIP + NetworkPolicy). Real prov
 
 Each project gets two Bifrost virtual keys for separate usage tracking:
 
-| Key Type | Purpose | Env Vars | Allowed Models |
-|----------|---------|----------|----------------|
-| `chat` | OpenCode agent (coding) | `OPENAI_API_KEY`, `OPENAI_BASE_URL` | OpenAI: gpt-5.3-codex, o4-mini, gpt-5.4-mini, gpt-5.4-nano |
-| `backend` | App AI features | `APP_LLM_API_KEY`, `APP_LLM_BASE_URL` | OpenAI: gpt-5.4-nano, gpt-5.4-mini, whisper-1 |
+| Key Type | Purpose | Env Vars | Providers |
+|----------|---------|----------|-----------|
+| `chat` | OpenCode agent (coding) | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL` | OpenAI + Anthropic (all models, wildcard) |
+| `backend` | App AI features | `APP_LLM_API_KEY`, `APP_LLM_BASE_URL` | OpenAI + Anthropic (all models via `anthropic/` prefix) |
 
-Both keys route through the same Bifrost instance with different virtual key tokens. The `key_type` column in `project_api_keys` distinguishes them.
+Both keys route through the same Bifrost instance with different virtual key tokens. The `key_type` column in `project_virtual_keys` distinguishes them.
 
 **Why separate keys?**
 - **Usage attribution** — "How much did the coding agent cost?" vs "How much do the app's AI features cost?"
 - **Model restrictions** — Backend keys include whisper-1 for audio transcription
 - **Budget enforcement** — Independent budget limits per key type
 
-### Budget Enforcement
+### Budget Hierarchy
 
-Each virtual key can have a per-project spending cap enforced by Bifrost's governance plugin. When the budget is exceeded, Bifrost rejects further requests. Budgets are managed via the API:
+Bifrost enforces budgets at three levels. All must have remaining budget for a request to proceed:
 
+```
+Bifrost Customer (tenant)  →  tenant_budget_config table
+  └── Bifrost Team (project) →  project_budget_config table
+        ├── VK chat          →  project_virtual_keys
+        └── VK backend       →  project_virtual_keys
+```
+
+| Level | Bifrost entity | DB table | Key columns | Default |
+|---|---|---|---|---|
+| Tenant | Customer | `tenant_budget_config` | `bifrost_tenant_id`, `tenant_budget`, `budget_duration` | $100/month |
+| Project | Team | `project_budget_config` | `bifrost_project_id`, `max_budget`, `budget_duration` | $10/month |
+| Key type | Virtual Key | `project_virtual_keys` | `bifrost_key_id`, `max_budget`, `budget_duration` | $5/month |
+
+All budget columns are `NOT NULL` with DB defaults. Budget duration is set at tenant level and inherited by projects and keys.
+
+### Budget API
+
+Per key type (existing):
 ```
 GET  /api/usage/projects/:id/budgets              → current budget config per key type
 PUT  /api/usage/projects/:id/budgets              → update budget for a key type
      body: { keyType: "chat"|"backend", maxBudget: 50, budgetDuration: "1M" }
 ```
 
-Duration values: `1m` (minute), `1h` (hour), `1d` (day), `1w` (week), `1M` (month), `1Y` (year).
+Per project (team-level):
+```
+GET  /api/usage/projects/:id/budget               → project-level budget
+PUT  /api/usage/projects/:id/budget               → update project budget
+     body: { maxBudget: 40 }
+```
 
-Keys are created without budgets by default. Set `maxBudget: 0` to remove a limit. Budget is stored in both Bifrost (for enforcement) and the `project_api_keys` table (for reference).
+Per tenant (customer-level):
+```
+GET  /api/usage/tenant/budget                     → tenant budget + duration
+PUT  /api/usage/tenant/budget                     → update tenant budget
+     body: { tenantBudget: 100, budgetDuration: "1M" }
+```
+
+Duration values: `1m` (minute), `1h` (hour), `1d` (day), `1w` (week), `1M` (month), `1Y` (year).
 
 ## Infrastructure
 
@@ -56,7 +88,7 @@ Bifrost reuses the existing PostgreSQL cluster with a **separate `bifrost` datab
 - **Production** — CNPG cluster (`postgres-cluster-rw`), database `bifrost`, created automatically by CI/CD
 - **Local dev** — same PG at `localhost:5435`, database `bifrost`, created by `create-bifrost-db` script
 
-The `bifrost` database stores virtual keys, governance config, and per-request logs. The `opsiforce` database stores the `project_api_keys` table that maps projects to virtual keys.
+The `bifrost` database stores virtual keys, governance config, and per-request logs. The `opsiforce` database stores `tenant_budget_config`, `project_budget_config`, and `project_virtual_keys` tables.
 
 ### Network
 
@@ -69,11 +101,13 @@ In production, both URLs point to the same in-cluster address. In local dev, the
 
 ## Virtual Key Lifecycle
 
-1. **Created** — `ProjectService.buildTenantPodOptions()` (called from `startProject()`) calls `BifrostService.createProjectKey()` twice (chat + backend) via `Promise.all`
-2. **Stored** — `project_api_keys` table stores two rows per project, each with `key_type`, `bifrost_key_id`, and `bifrost_key_token`
-3. **Injected** — pod gets `OPENAI_API_KEY`/`OPENAI_BASE_URL` (chat) + `APP_LLM_API_KEY`/`APP_LLM_BASE_URL` (backend)
-4. **Used** — agent and app call Bifrost transparently; every request logged with token counts + cost, attributed to the correct key type
-5. **Revoked** — `ProjectService.remove()` calls `BifrostService.revokeProjectKeys()` which revokes all active keys for the project
+1. **Tenant customer created** — `TenantService.getOrCreateTenant()` creates a Bifrost Customer (lazy backfill for existing tenants), stores `bifrost_tenant_id` in `tenant_budget_config`
+2. **Project team created** — `ProjectService.buildTenantPodOptions()` creates a Bifrost Team under the tenant's Customer, stores `bifrost_project_id` in `project_budget_config`
+3. **Keys created** — `BifrostService.createProjectKey()` called twice (chat + backend) with `team_id`, linking VKs to the project team
+4. **Stored** — `project_virtual_keys` table stores two rows per project, each with `key_type`, `bifrost_key_id`, and `bifrost_key_token`
+5. **Injected** — pod gets `OPENAI_API_KEY`/`OPENAI_BASE_URL` (chat) + `APP_LLM_API_KEY`/`APP_LLM_BASE_URL` (backend)
+6. **Used** — agent and app call Bifrost transparently; budget checked: tenant customer → project team → virtual key
+7. **Revoked** — `BifrostService.revokeProjectKeys()` revokes all active keys, deletes the Bifrost team, and removes the `project_budget_config` row
 
 ## Usage API
 
@@ -106,6 +140,7 @@ The `llm-api` skill is included in the app-builder template at `.opencode/skills
 | Env Variable | Purpose | Production | Local |
 |---|---|---|---|
 | `OPENAI_API_KEY` | Upstream OpenAI provider key for Bifrost | GitHub Secret | shell env |
+| `ANTHROPIC_API_KEY` | Upstream Anthropic provider key for Bifrost | GitHub Secret | shell env |
 | `BIFROST_PROXY_URL` | Backend → Bifrost (Admin API) | In-cluster svc URL | `http://localhost:3050/v1` |
 | `BIFROST_POD_PROXY_URL` | Pod → Bifrost (LLM calls) | Same as above (omit) | In-cluster svc URL |
 | `BIFROST_ADMIN_USERNAME` | Bifrost Admin API username | `opsiforce-admin` | `opsiforce-admin` |
@@ -121,10 +156,13 @@ No feature flag — Bifrost is active when `BIFROST_PROXY_URL` + admin credentia
 
 | File | Role | Reads From | Produces / Affects |
 |---|---|---|---|
-| `backend/src/bifrost/bifrost.service.ts` | Backend admin client for virtual key CRUD and usage calls | `BIFROST_PROXY_URL`, `BIFROST_ADMIN_USERNAME`, `BIFROST_ADMIN_PASSWORD` | Calls Bifrost Admin API |
+| `backend/src/bifrost/bifrost.service.ts` | Bifrost admin client: customer/team/VK CRUD, budget mgmt, usage | Bifrost Admin API, `tenant_budget_config`, `project_budget_config`, `project_virtual_keys` | Calls Bifrost Admin API, writes config tables |
+| `backend/src/bifrost/usage.controller.ts` | REST endpoints for usage tracking and budget management | `BifrostService`, config tables | JSON responses for billing UI |
+| `backend/src/tenant/tenant.service.ts` | Creates Bifrost Customer on tenant creation (lazy backfill) | `BifrostService`, `tenant_budget_config` | `bifrost_tenant_id` in config table |
 | `backend/src/config/configuration.ts` | Maps Bifrost env vars into Nest config | process env | `ConfigService` values used by backend modules |
-| `backend/src/project/project.service.ts` | Creates and revokes per-project virtual keys | `BifrostService` | Pod options with Bifrost chat/backend keys |
+| `backend/src/project/project.service.ts` | Creates Bifrost Team + virtual keys per project | `BifrostService`, `project_budget_config` | Pod options with Bifrost chat/backend keys |
 | `backend/src/pod/pod.template.ts` | Injects Bifrost virtual keys into agent pods | pod options from `ProjectService` | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `APP_LLM_*` envs |
+| `frontend/src/pages/billing.tsx` | Billing page: tenant budget, per-project spend + settings | `/usage/*` endpoints | Tenant/project budget management UI |
 | `helm/opsiforce-backend/values.yaml` | Declares backend chart Bifrost env inputs | CI or local helm `--set` values | Backend deployment env surface |
 | `helm/opsiforce-backend/templates/secret.yaml` | Stores backend-side Bifrost admin credentials | chart values | `BIFROST_ADMIN_USERNAME`, `BIFROST_ADMIN_PASSWORD` in backend pod |
 | `helm/opsiforce-backend/templates/configmap.yaml` | Stores backend-side Bifrost URLs | chart values | `BIFROST_PROXY_URL`, `BIFROST_POD_PROXY_URL` in backend pod |
@@ -163,7 +201,7 @@ The GitHub Actions workflow (`opsiforce.yml`) handles:
 4. Applies the standalone `NetworkPolicy`
 5. Passes Bifrost config to backend deployment (`bifrostProxyUrl`, `bifrostAdminUsername`, `bifrostAdminPassword`)
 
-**Required GitHub Secrets:** `OPENAI_API_KEY`, `BIFROST_ADMIN_PASSWORD`, `BIFROST_ENCRYPTION_KEY`
+**Required GitHub Secrets:** `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `BIFROST_ADMIN_PASSWORD`, `BIFROST_ENCRYPTION_KEY`
 
 Deploy order: infra → **Bifrost** → backend → frontend → proxy
 
@@ -199,7 +237,7 @@ Add per-project Keycloak clients when:
 Follow the existing pattern in `keycloak-ms-backend/src/modules/clients/`:
 1. Create Keycloak client via Admin REST API (raw `fetch`, no SDK)
 2. Set `serviceAccountsEnabled: true`, add `oidc-hardcoded-claim-mapper` for `project_id` and `tenant_id`
-3. Store client credentials in `project_api_keys` table (add columns) or a new table
+3. Store client credentials in `project_virtual_keys` table (add columns) or a new table
 4. Inject `KEYCLOAK_CLIENT_ID` + `KEYCLOAK_CLIENT_SECRET` into pods alongside Bifrost virtual key
 5. Non-LLM service proxies validate JWT, extract project/tenant claims, forward with real service key
 

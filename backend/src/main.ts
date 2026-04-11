@@ -9,6 +9,8 @@ import { ProxyService } from "./proxy/proxy.service";
 import { createAppProxyServer } from "./proxy/app-proxy-server";
 import { createVscodeProxyServer } from "./proxy/vscode-proxy-server";
 import { ProjectService } from "./project/project.service";
+import { AppRequestLogger } from "./app-request/app-request-logger";
+import { requirePermissionHook } from "./permission/permission.hook";
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -22,6 +24,8 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix("api");
+
+  fastify.addHook("onRequest", requirePermissionHook("/api/admin/queues", "can_view_queue_dashboard"))
 
   app.enableCors({
     origin: true,
@@ -38,7 +42,9 @@ async function bootstrap() {
   const k8sApiProxyUrl = configService.get<string>("k8sApiProxyUrl", "");
   const k8sNamespace = configService.get<string>("k8sNamespace", "opsiforce");
 
-  createAppProxyServer(proxyService, projectService).listen(appProxyPort, "0.0.0.0");
+  const storageMountPath = configService.get<string>("storageMountPath", "");
+  const appRequestLogger = new AppRequestLogger(storageMountPath);
+  createAppProxyServer(proxyService, projectService, appRequestLogger).listen(appProxyPort, "0.0.0.0");
   createVscodeProxyServer(
     proxyService,
     projectService,

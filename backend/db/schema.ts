@@ -1,9 +1,10 @@
-import { pgTable, text, timestamp, pgEnum, real, integer, bigint } from "drizzle-orm/pg-core"
+import { pgTable, text, timestamp, pgEnum, bigint } from "drizzle-orm/pg-core"
 
 export const projectStatusEnum = pgEnum("project_status", [
   "starting",
   "active",
   "suspended",
+  "disabled",
 ])
 
 export const podStatusEnum = pgEnum("pod_status", [
@@ -18,6 +19,7 @@ export const tenants = pgTable("tenants", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
   displayName: text("display_name").notNull(),
+  bifrostTenantId: text("bifrost_tenant_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 
@@ -36,6 +38,7 @@ export const projects = pgTable("projects", {
   podIp: text("pod_ip"),
   sessionId: text("session_id"),
   platformVersion: text("platform_version").notNull(),
+  bifrostProjectId: text("bifrost_project_id"),
   lastActiveAt: timestamp("last_active_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -49,22 +52,27 @@ export const projectSettings = pgTable("project_settings", {
   appTimeoutIdle: bigint("app_timeout_idle", { mode: "number" }).notNull(),
 })
 
-export const projectApiKeys = pgTable("project_api_keys", {
+export const projectVirtualKeys = pgTable("project_virtual_keys", {
   id: text("id").primaryKey(),
   projectId: text("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
   tenantId: text("tenant_id")
-    .references(() => tenants.id)
+    .references(() => tenants.id) 
     .notNull(),
   keyType: keyTypeEnum("key_type").notNull().default("chat"),
   bifrostKeyId: text("bifrost_key_id").notNull(),
   bifrostKeyToken: text("bifrost_key_token").notNull(),
-  maxBudget: real("max_budget"),
-  budgetDuration: text("budget_duration"),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+})
+
+export const deletedProjects = pgTable("deleted_projects", {
+  id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull(),
+  directory: text("directory").notNull(),
+  deletedAt: timestamp("deleted_at").defaultNow().notNull(),
 })
 
 export const pods = pgTable("pods", {

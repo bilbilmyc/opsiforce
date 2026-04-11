@@ -57,6 +57,27 @@
       "when": 1775636818411,
       "tag": "0007_narrow_mole_man",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775806340340,
+      "tag": "0008_add-bifrost-budget-hierarchy",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1775809244019,
+      "tag": "0009_add-disabled-project-status",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1775830866355,
+      "tag": "0010_add-deleted-projects",
+      "breakpoints": true
     }
   ]
 }

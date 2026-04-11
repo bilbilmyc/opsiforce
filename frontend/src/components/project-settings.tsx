@@ -21,27 +21,10 @@ interface BudgetEntry {
   keyType: "chat" | "backend"
   maxBudget: number | null
   budgetDuration: string | null
+  currentUsage: number
 }
 
-interface KeyTypeUsage {
-  keyType: "chat" | "backend"
-  totalRequests: number
-  totalTokens: number
-  totalCost: number
-}
-
-interface ProjectUsage {
-  projectId: string
-  totalCost: number
-  byKeyType?: KeyTypeUsage[]
-}
-
-const DURATION_OPTIONS = [
-  { value: "1d", label: "Daily" },
-  { value: "1w", label: "Weekly" },
-  { value: "1M", label: "Monthly" },
-  { value: "1Y", label: "Yearly" },
-]
+import { DURATION_OPTIONS, type BudgetConfig } from "~/constants/budget"
 
 const KEY_TYPE_LABELS: Record<string, string> = {
   chat: "Agent (Chat)",
@@ -85,6 +68,8 @@ export default function ProjectSettings(props: {
   const defaultTab = createMemo(() => canBudgets() ? "budgets" : "timeouts")
   const [activeTab, setActiveTab] = createSignal(defaultTab())
   const [budgetDrafts, setBudgetDrafts] = createSignal<Record<string, BudgetDraft>>({})
+  const [projectBudgetDraft, setProjectBudgetDraft] = createSignal("")
+  const [projectDurationDraft, setProjectDurationDraft] = createSignal("1M")
   const [agentValue, setAgentValue] = createSignal("")
   const [agentUnit, setAgentUnit] = createSignal("minutes")
   const [appValue, setAppValue] = createSignal("")
@@ -105,9 +90,9 @@ export default function ProjectSettings(props: {
     enabled: props.open,
   }))
 
-  const usage = createQuery(() => ({
-    queryKey: ["projects", props.projectId, "usage"],
-    queryFn: () => api.get<ProjectUsage>(`/usage/projects/${props.projectId}`),
+  const projectBudget = createQuery(() => ({
+    queryKey: ["projects", props.projectId, "budget"],
+    queryFn: () => api.get<BudgetConfig>(`/usage/projects/${props.projectId}/budget`),
     enabled: props.open,
   }))
 
@@ -122,6 +107,13 @@ export default function ProjectSettings(props: {
       }
       setBudgetDrafts(drafts)
       setBudgetsDirty(false)
+    }
+  })
+
+  createEffect(() => {
+    if (projectBudget.data) {
+      setProjectBudgetDraft(projectBudget.data.maxBudget != null ? String(projectBudget.data.maxBudget) : "")
+      setProjectDurationDraft(projectBudget.data.budgetDuration ?? "1M")
     }
   })
 
@@ -148,15 +140,23 @@ export default function ProjectSettings(props: {
     setSaving(true)
     try {
       if (activeTab() === "budgets") {
-        const entries = Object.entries(budgetDrafts())
-        for (const [keyType, draft] of entries) {
-          await api.put(`/usage/projects/${props.projectId}/budgets`, {
+        const updates: Promise<unknown>[] = []
+        const projectBudgetValue = parseFloat(projectBudgetDraft())
+        if (!isNaN(projectBudgetValue)) {
+          updates.push(api.put(`/usage/projects/${props.projectId}/budget`, { maxBudget: projectBudgetValue, budgetDuration: projectDurationDraft() }))
+        }
+        for (const [keyType, draft] of Object.entries(budgetDrafts())) {
+          updates.push(api.put(`/usage/projects/${props.projectId}/budgets`, {
             keyType,
             maxBudget: parseFloat(draft.budget) || 0,
             budgetDuration: draft.duration,
-          })
+          }))
         }
-        await qc.invalidateQueries({ queryKey: ["projects", props.projectId, "budgets"] })
+        await Promise.all(updates)
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ["projects", props.projectId, "budgets"] }),
+          qc.invalidateQueries({ queryKey: ["projects", props.projectId, "budget"] }),
+        ])
         toast.success("Budgets updated")
       } else {
         const projectData = project.data
@@ -213,6 +213,16 @@ export default function ProjectSettings(props: {
           <Show when={canBudgets()}>
             <TabsContent value="budgets">
               <div class="space-y-3">
+                <BudgetRow
+                  label="Project Budget"
+                  currentBudget={projectBudget.data?.maxBudget ?? null}
+                  currentDuration={projectBudget.data?.budgetDuration ?? null}
+                  currentSpend={projectBudget.data?.currentUsage ?? 0}
+                  draftBudget={projectBudgetDraft()}
+                  draftDuration={projectDurationDraft()}
+                  onBudgetChange={(v) => { setProjectBudgetDraft(v); setBudgetsDirty(true) }}
+                  onDurationChange={(v) => { setProjectDurationDraft(v); setBudgetsDirty(true) }}
+                />
                 <Show
                   when={budgets.data && budgets.data.length > 0}
                   fallback={
@@ -222,21 +232,18 @@ export default function ProjectSettings(props: {
                   }
                 >
                   <For each={budgets.data}>
-                    {(entry) => {
-                      const spend = () => usage.data?.byKeyType?.find((u) => u.keyType === entry.keyType)?.totalCost ?? 0
-                      return (
+                    {(entry) => (
                         <BudgetRow
                           label={KEY_TYPE_LABELS[entry.keyType] ?? entry.keyType}
                           currentBudget={entry.maxBudget}
                           currentDuration={entry.budgetDuration}
-                          currentSpend={spend()}
+                          currentSpend={entry.currentUsage}
                           draftBudget={budgetDrafts()[entry.keyType]?.budget ?? ""}
                           draftDuration={budgetDrafts()[entry.keyType]?.duration ?? "1M"}
                           onBudgetChange={(v) => updateBudgetDraft(entry.keyType, "budget", v)}
                           onDurationChange={(v) => updateBudgetDraft(entry.keyType, "duration", v)}
                         />
-                      )
-                    }}
+                    )}
                   </For>
                 </Show>
               </div>
@@ -294,7 +301,7 @@ function BudgetRow(props: {
   draftBudget: string
   draftDuration: string
   onBudgetChange: (value: string) => void
-  onDurationChange: (value: string) => void
+  onDurationChange?: (value: string) => void
 }) {
   const durationOption = () => DURATION_OPTIONS.find((d) => d.value === props.draftDuration) ?? null
   const hasBudget = () => props.currentBudget != null && props.currentBudget > 0
@@ -335,26 +342,28 @@ function BudgetRow(props: {
             <NumberFieldDecrementTrigger />
           </NumberFieldGroup>
         </NumberField>
-        <div class="w-28">
-          <label class="text-xs text-muted-foreground mb-1 block">Period</label>
-          <Select
-            options={DURATION_OPTIONS}
-            optionValue="value"
-            optionTextValue="label"
-            value={durationOption()}
-            onChange={(opt) => { if (opt) props.onDurationChange(opt.value) }}
-            itemComponent={(itemProps) => (
-              <SelectItem item={itemProps.item}>{itemProps.item.rawValue.label}</SelectItem>
-            )}
-          >
-            <SelectTrigger>
-              <SelectValue<typeof DURATION_OPTIONS[0]>>
-                {(state) => <span>{state.selectedOption()?.label ?? "Select"}</span>}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent />
-          </Select>
-        </div>
+        <Show when={props.onDurationChange}>
+          <div class="w-28">
+            <label class="text-xs text-muted-foreground mb-1 block">Period</label>
+            <Select
+              options={DURATION_OPTIONS}
+              optionValue="value"
+              optionTextValue="label"
+              value={durationOption()}
+              onChange={(opt) => { if (opt) props.onDurationChange?.(opt.value) }}
+              itemComponent={(itemProps) => (
+                <SelectItem item={itemProps.item}>{itemProps.item.rawValue.label}</SelectItem>
+              )}
+            >
+              <SelectTrigger>
+                <SelectValue<typeof DURATION_OPTIONS[0]>>
+                  {(state) => <span>{state.selectedOption()?.label ?? "Select"}</span>}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent />
+            </Select>
+          </div>
+        </Show>
       </div>
     </div>
   )

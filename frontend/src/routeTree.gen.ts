@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as PermissionDeniedRouteImport } from './routes/permission-denied'
+import { Route as BillingRouteImport } from './routes/billing'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
 
 const PermissionDeniedRoute = PermissionDeniedRouteImport.update({
   id: '/permission-denied',
   path: '/permission-denied',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BillingRoute = BillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -31,30 +37,39 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/billing': typeof BillingRoute
   '/permission-denied': typeof PermissionDeniedRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/billing': typeof BillingRoute
   '/permission-denied': typeof PermissionDeniedRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/billing': typeof BillingRoute
   '/permission-denied': typeof PermissionDeniedRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/permission-denied' | '/projects/$projectId'
+  fullPaths: '/' | '/billing' | '/permission-denied' | '/projects/$projectId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/permission-denied' | '/projects/$projectId'
-  id: '__root__' | '/' | '/permission-denied' | '/projects/$projectId'
+  to: '/' | '/billing' | '/permission-denied' | '/projects/$projectId'
+  id:
+    | '__root__'
+    | '/'
+    | '/billing'
+    | '/permission-denied'
+    | '/projects/$projectId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BillingRoute: typeof BillingRoute
   PermissionDeniedRoute: typeof PermissionDeniedRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
 }
@@ -66,6 +81,13 @@ declare module '@tanstack/solid-router' {
       path: '/permission-denied'
       fullPath: '/permission-denied'
       preLoaderRoute: typeof PermissionDeniedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/billing': {
+      id: '/billing'
+      path: '/billing'
+      fullPath: '/billing'
+      preLoaderRoute: typeof BillingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -87,6 +109,7 @@ declare module '@tanstack/solid-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BillingRoute: BillingRoute,
   PermissionDeniedRoute: PermissionDeniedRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
 }

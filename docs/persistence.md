@@ -44,9 +44,28 @@ Database state, persistent storage, and how projects survive pod replacement.
 | `created_at` | timestamp | Creation time |
 | `updated_at` | timestamp | Last update |
 
-### `project_api_keys`
+### `deleted_projects`
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | text PK | Original project UUID |
+| `tenant_id` | text | Tenant that owned the project |
+| `directory` | text | Workspace subPath at time of deletion |
+| `deleted_at` | timestamp | When the project was deleted |
+
+Tombstone table for workspace cleanup. When a project is deleted, a row is inserted here. A daily BullMQ job removes the workspace directory after 7 days and deletes the tombstone row.
+
+### `project_virtual_keys`
 
 Stores Bifrost virtual keys per project when Bifrost is enabled.
+
+### `tenant_budget_config`
+
+Stores Bifrost customer ID and budget config per tenant (1:1 with `tenants`).
+
+### `project_budget_config`
+
+Stores Bifrost team ID and budget config per project (1:1 with `projects`).
 
 ---
 
@@ -140,3 +159,18 @@ Resume is frontend-owned in the current implementation.
 ```
 
 Opsiforce does not currently use `projects.session_id` as the resume source of truth.
+
+---
+
+## Workspace cleanup
+
+When a project is deleted, its workspace directory is not removed immediately. Instead, a tombstone row is inserted into `deleted_projects` with the current timestamp.
+
+A daily BullMQ job (`workspace-cleanup` queue, 3 AM cron) handles cleanup in two phases:
+
+1. **Expired workspaces** — tombstones older than 7 days: remove the workspace directory from storage, then delete the tombstone row. Empty tenant directories are removed afterward.
+2. **Orphaned workspaces** — directories on disk that have no matching row in `projects` or `deleted_projects`: removed immediately.
+
+The 7-day retention allows recovery of workspace data in case of accidental deletion.
+
+The queue dashboard is available at `/api/admin/queues` (requires `can_view_queue_dashboard` permission).

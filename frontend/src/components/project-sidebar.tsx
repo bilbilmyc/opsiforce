@@ -4,6 +4,7 @@ import { useNavigate, useMatch } from "@tanstack/solid-router"
 import { api, type Project } from "~/api/client"
 import ProjectCard from "./project-card"
 import ProjectSettings from "./project-settings"
+import ConfirmDialog from "./ui/confirm-dialog"
 
 export default function ProjectSidebar() {
   const qc = useQueryClient()
@@ -12,6 +13,7 @@ export default function ProjectSidebar() {
   const activeProjectId = () => projectMatch()?.params.projectId
 
   const [settingsProjectId, setSettingsProjectId] = createSignal<string | null>(null)
+  const [confirmAction, setConfirmAction] = createSignal<{ id: string; action: "delete" | "duplicate" } | null>(null)
 
   const projects = createQuery(() => ({
     queryKey: ["projects", "list"],
@@ -29,6 +31,24 @@ export default function ProjectSidebar() {
     onSuccess: (_: void, id: string) => {
       qc.invalidateQueries({ queryKey: ["projects"] })
       if (activeProjectId() === id) navigate({ to: "/" })
+    },
+  }))
+
+  const disableProject = createMutation(() => ({
+    mutationFn: (id: string) => api.post<Project>(`/projects/${id}/disable`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+  }))
+
+  const enableProject = createMutation(() => ({
+    mutationFn: (id: string) => api.post<Project>(`/projects/${id}/enable`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+  }))
+
+  const duplicateProject = createMutation(() => ({
+    mutationFn: (id: string) => api.post<Project>(`/projects/${id}/duplicate`),
+    onSuccess: (project: Project) => {
+      qc.invalidateQueries({ queryKey: ["projects"] })
+      navigate({ to: "/projects/$projectId", params: { projectId: project.id }, search: { prompt: undefined } })
     },
   }))
 
@@ -66,8 +86,11 @@ export default function ProjectSidebar() {
                     isActive={project.id === activeProjectId()}
                     onSelect={() => navigate({ to: "/projects/$projectId", params: { projectId: project.id }, search: { prompt: undefined } })}
                     onRename={(id, title) => renameProject.mutate({ id, title })}
-                    onDelete={(id) => deleteProject.mutate(id)}
+                    onDelete={(id) => setConfirmAction({ id, action: "delete" })}
                     onSettings={(id) => setSettingsProjectId(id)}
+                    onDisable={(id) => disableProject.mutate(id)}
+                    onEnable={(id) => enableProject.mutate(id)}
+                    onDuplicate={(id) => setConfirmAction({ id, action: "duplicate" })}
                   />
                 )}
               </For>
@@ -85,6 +108,31 @@ export default function ProjectSidebar() {
           />
         )}
       </Show>
+
+      <ConfirmDialog
+        open={confirmAction()?.action === "delete"}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null) }}
+        title="Delete project"
+        description="This will permanently delete the project and all its data. This action cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={() => {
+          const id = confirmAction()?.id
+          if (id) deleteProject.mutate(id)
+        }}
+      />
+
+      <ConfirmDialog
+        open={confirmAction()?.action === "duplicate"}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null) }}
+        title="Duplicate project"
+        description="This will create a copy of the project with the same workspace files."
+        confirmLabel="Duplicate"
+        onConfirm={() => {
+          const id = confirmAction()?.id
+          if (id) duplicateProject.mutate(id)
+        }}
+      />
     </>
   )
 }

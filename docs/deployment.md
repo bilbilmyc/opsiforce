@@ -295,6 +295,7 @@ The current runtime is pinned to `v1.4.20`, so the backend sends the v1.4-compat
 | `service.yaml` | ClusterIP:80 |
 | `configmap.yaml` | nginx.conf — routes: `/api` (HTTP to backend, buffering off for SSE), `/` (to frontend) |
 | `ingressroute.yaml` | Traefik IngressRoute — TLS via Let's Encrypt, external-dns annotation for automatic DNS |
+| `ingressroute-bifrost.yaml` | Traefik IngressRoute for Bifrost dashboard — routes `bifrost.{dev.}opsima.com` directly to `opsiforce-bifrost:8080` |
 
 OAuth2 Proxy sidecar (when `oauth2Proxy.enabled`):
 - Provider: `keycloak-oidc`

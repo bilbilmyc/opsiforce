@@ -6,4 +6,6 @@ while [ ! -d "node_modules" ]; do
   sleep 2
 done
 
-bun run dev
+guard app-backend npm run dev:backend &
+guard app-frontend npm run dev:frontend &
+wait -n

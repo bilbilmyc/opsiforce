@@ -4,6 +4,7 @@ export const ProjectStatus = {
   Starting: "starting",
   Active: "active",
   Suspended: "suspended",
+  Disabled: "disabled",
 } as const
 
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus]
@@ -18,6 +19,10 @@ export interface UpdateProjectDto {
   description?: string
   timeoutIdle?: number
   appTimeoutIdle?: number
+}
+
+export interface DuplicateProjectDto {
+  title?: string
 }
 
 type ProjectRow = typeof projects.$inferSelect

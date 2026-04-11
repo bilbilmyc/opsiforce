@@ -8,7 +8,7 @@ import {
   Param,
 } from "@nestjs/common"
 import { ProjectService } from "./project.service"
-import { CreateProjectDto, UpdateProjectDto } from "./project.types"
+import { CreateProjectDto, UpdateProjectDto, DuplicateProjectDto } from "./project.types"
 import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
 
 @Controller("projects")
@@ -38,5 +38,20 @@ export class ProjectController {
   @Delete(":id")
   remove(@Param("id") id: string, @CurrentTenant() tenant: TenantContext) {
     return this.projectService.remove(id, tenant.tenantId)
+  }
+
+  @Post(":id/duplicate")
+  duplicate(@Param("id") id: string, @Body() dto: DuplicateProjectDto | undefined, @CurrentTenant() tenant: TenantContext) {
+    return this.projectService.duplicate(id, tenant.tenantId, dto)
+  }
+
+  @Post(":id/disable")
+  disable(@Param("id") id: string, @CurrentTenant() tenant: TenantContext) {
+    return this.projectService.disable(id, tenant.tenantId)
+  }
+
+  @Post(":id/enable")
+  enable(@Param("id") id: string, @CurrentTenant() tenant: TenantContext) {
+    return this.projectService.enable(id, tenant.tenantId)
   }
 }

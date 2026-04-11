@@ -1,15 +1,19 @@
 import { Injectable, Logger } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
-import { eq, and } from "drizzle-orm"
+import { eq, and, isNull } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
-import { projectApiKeys } from "../../db/schema"
+import { projectVirtualKeys, tenants, projects } from "../../db/schema"
 import type {
   KeyType,
   BifrostBudget,
   CreateVirtualKeyRequest,
   CreateVirtualKeyResponse,
   DeleteVirtualKeyResponse,
+  CreateCustomerRequest,
+  CreateCustomerResponse,
+  CreateTeamRequest,
+  CreateTeamResponse,
   BifrostLogStats,
   BifrostCostHistogram,
 } from "./bifrost.types"
@@ -37,6 +41,19 @@ export class BifrostService {
     return this.podProxyUrl
   }
 
+  private defaultBudget(level: "tenant" | "project" | "key"): BifrostBudget {
+    const configKey = level === "tenant"
+      ? "bifrostDefaultTenantBudget"
+      : level === "project"
+        ? "bifrostDefaultProjectBudget"
+        : "bifrostDefaultKeyBudget"
+
+    return {
+      max_limit: this.configService.get<number>(configKey, 5),
+      reset_duration: this.configService.get<string>("bifrostDefaultBudgetDuration", "1M"),
+    }
+  }
+
   private baseUrl(): string {
     return this.proxyUrl.replace(/\/v1\/?$/, "")
   }
@@ -61,40 +78,123 @@ export class BifrostService {
     return response.json() as Promise<T>
   }
 
-  private static readonly MODEL_ALLOWLISTS: Record<KeyType, string[]> = {
-    chat: ["gpt-5.3-codex", "o4-mini", "gpt-5.4-mini", "gpt-5.4-nano"],
-    backend: ["gpt-5.4-nano", "gpt-5.4-mini", "whisper-1"],
+  private static readonly PROVIDERS: Record<KeyType, string[]> = {
+    chat: ["openai", "anthropic"],
+    backend: ["openai", "anthropic"],
   }
 
-  private static readonly DEFAULT_BUDGETS: Record<KeyType, BifrostBudget> = {
-    chat: { max_limit: 5, reset_duration: "1M" },
-    backend: { max_limit: 5, reset_duration: "1M" },
+  async createTenantCustomer(tenantId: string, tenantName: string): Promise<string> {
+    const [fresh] = await db.select().from(tenants).where(eq(tenants.id, tenantId))
+    if (fresh?.bifrostTenantId) return fresh.bifrostTenantId
+
+    const payload: CreateCustomerRequest = {
+      name: `tenant-${tenantName}`,
+      budget: this.defaultBudget("tenant"),
+    }
+
+    const result = await this.request<CreateCustomerResponse>(
+      "POST",
+      "/api/governance/customers",
+      payload,
+    )
+
+    const customerId = result.customer.id
+    await db
+      .update(tenants)
+      .set({ bifrostTenantId: customerId })
+      .where(and(eq(tenants.id, tenantId), isNull(tenants.bifrostTenantId)))
+
+    this.logger.log(`Created Bifrost customer for tenant ${tenantName}`)
+    return customerId
   }
 
-  async createProjectKey(projectId: string, tenantId: string, keyType: KeyType = "chat"): Promise<{ keyId: string; keyToken: string }> {
+  async updateCustomerBudget(customerId: string, budget?: BifrostBudget): Promise<void> {
+    await this.request("PUT", `/api/governance/customers/${customerId}`, {
+      ...(budget ? { budget } : {}),
+    })
+  }
+
+  async deleteCustomer(customerId: string): Promise<void> {
+    await this.request("DELETE", `/api/governance/customers/${customerId}`)
+  }
+
+  async getCustomerBudget(customerId: string): Promise<BifrostBudget | null> {
+    const data = await this.request<{ customer: { budget?: BifrostBudget } }>(
+      "GET",
+      `/api/governance/customers/${customerId}`,
+    )
+    return data.customer.budget ?? null
+  }
+
+  async createProjectTeam(projectId: string, customerId: string): Promise<string> {
+    const payload: CreateTeamRequest = {
+      name: `project-${projectId.slice(0, 8)}`,
+      customer_id: customerId,
+      budget: this.defaultBudget("project"),
+    }
+
+    const result = await this.request<CreateTeamResponse>(
+      "POST",
+      "/api/governance/teams",
+      payload,
+    )
+
+    const teamId = result.team.id
+    await db
+      .update(projects)
+      .set({ bifrostProjectId: teamId })
+      .where(eq(projects.id, projectId))
+
+    this.logger.log(`Created Bifrost team for project ${projectId}`)
+    return teamId
+  }
+
+  async updateTeamBudget(teamId: string, budget?: BifrostBudget): Promise<void> {
+    await this.request("PUT", `/api/governance/teams/${teamId}`, {
+      ...(budget ? { budget } : {}),
+    })
+  }
+
+  async deleteTeam(teamId: string): Promise<void> {
+    await this.request("DELETE", `/api/governance/teams/${teamId}`)
+  }
+
+  async getTeamBudget(teamId: string): Promise<BifrostBudget | null> {
+    const data = await this.request<{ team: { budget?: BifrostBudget } }>(
+      "GET",
+      `/api/governance/teams/${teamId}`,
+    )
+    return data.team.budget ?? null
+  }
+
+  async createProjectKey(
+    projectId: string,
+    tenantId: string,
+    keyType: KeyType = "chat",
+    teamId?: string,
+  ): Promise<{ keyId: string; keyToken: string }> {
     const [existing] = await db
       .select()
-      .from(projectApiKeys)
+      .from(projectVirtualKeys)
       .where(and(
-        eq(projectApiKeys.projectId, projectId),
-        eq(projectApiKeys.keyType, keyType),
-        eq(projectApiKeys.status, "active"),
+        eq(projectVirtualKeys.projectId, projectId),
+        eq(projectVirtualKeys.keyType, keyType),
+        eq(projectVirtualKeys.status, "active"),
       ))
 
     if (existing) {
       return { keyId: existing.bifrostKeyId, keyToken: existing.bifrostKeyToken }
     }
 
-    const budget = BifrostService.DEFAULT_BUDGETS[keyType]
-
     const payload: CreateVirtualKeyRequest = {
       name: `project-${projectId.slice(0, 8)}-${keyType}`,
       description: `Virtual key (${keyType}) for project ${projectId} (tenant: ${tenantId})`,
-      provider_configs: [{
-        provider: "openai",
-        allowed_models: BifrostService.MODEL_ALLOWLISTS[keyType],
-      }],
-      budget,
+      provider_configs: BifrostService.PROVIDERS[keyType].map(provider => ({
+        provider,
+        weight: 1,
+      })),
+      budget: this.defaultBudget("key"),
+      ...(teamId ? { team_id: teamId } : {}),
     }
 
     const result = await this.request<CreateVirtualKeyResponse>(
@@ -106,15 +206,13 @@ export class BifrostService {
     const keyId = result.virtual_key.id
     const keyToken = result.virtual_key.value
 
-    await db.insert(projectApiKeys).values({
+    await db.insert(projectVirtualKeys).values({
       id: crypto.randomUUID(),
       projectId,
       tenantId,
       keyType,
       bifrostKeyId: keyId,
       bifrostKeyToken: keyToken,
-      maxBudget: budget.max_limit,
-      budgetDuration: budget.reset_duration,
       status: "active",
     })
 
@@ -122,27 +220,31 @@ export class BifrostService {
     return { keyId, keyToken }
   }
 
-  async getProjectBudgets(projectId: string): Promise<Array<{ keyType: KeyType; maxBudget: number | null; budgetDuration: string | null }>> {
+  async getProjectKeyBudgets(projectId: string): Promise<Array<{ keyType: KeyType; budget: BifrostBudget | null }>> {
     const keys = await db
       .select()
-      .from(projectApiKeys)
-      .where(and(eq(projectApiKeys.projectId, projectId), eq(projectApiKeys.status, "active")))
+      .from(projectVirtualKeys)
+      .where(and(eq(projectVirtualKeys.projectId, projectId), eq(projectVirtualKeys.status, "active")))
 
-    return keys.map((k) => ({
-      keyType: k.keyType as KeyType,
-      maxBudget: k.maxBudget,
-      budgetDuration: k.budgetDuration,
-    }))
+    return Promise.all(
+      keys.map(async (k) => {
+        const data = await this.request<{ virtual_key: { budget?: BifrostBudget } }>(
+          "GET",
+          `/api/governance/virtual-keys/${k.bifrostKeyId}`,
+        )
+        return { keyType: k.keyType as KeyType, budget: data.virtual_key.budget ?? null }
+      }),
+    )
   }
 
   async updateKeyBudget(projectId: string, keyType: KeyType, maxBudget: number, budgetDuration: string): Promise<void> {
     const [key] = await db
       .select()
-      .from(projectApiKeys)
+      .from(projectVirtualKeys)
       .where(and(
-        eq(projectApiKeys.projectId, projectId),
-        eq(projectApiKeys.keyType, keyType),
-        eq(projectApiKeys.status, "active"),
+        eq(projectVirtualKeys.projectId, projectId),
+        eq(projectVirtualKeys.keyType, keyType),
+        eq(projectVirtualKeys.status, "active"),
       ))
 
     if (!key) throw new Error(`No active ${keyType} key for project ${projectId}`)
@@ -155,25 +257,16 @@ export class BifrostService {
       ...(budget ? { budget } : {}),
     })
 
-    await db
-      .update(projectApiKeys)
-      .set({
-        maxBudget: budget?.max_limit ?? null,
-        budgetDuration: budget?.reset_duration ?? null,
-        updatedAt: new Date(),
-      })
-      .where(eq(projectApiKeys.id, key.id))
-
     this.logger.log(`Updated budget for ${keyType} key of project ${projectId}: $${maxBudget}/${budgetDuration}`)
   }
 
   async revokeProjectKeys(projectId: string): Promise<void> {
     const activeKeys = await db
       .select()
-      .from(projectApiKeys)
-      .where(and(eq(projectApiKeys.projectId, projectId), eq(projectApiKeys.status, "active")))
+      .from(projectVirtualKeys)
+      .where(and(eq(projectVirtualKeys.projectId, projectId), eq(projectVirtualKeys.status, "active")))
 
-    for (const key of activeKeys) {
+    await Promise.allSettled(activeKeys.map(async (key) => {
       try {
         await this.request<DeleteVirtualKeyResponse>(
           "DELETE",
@@ -182,15 +275,24 @@ export class BifrostService {
       } catch (err) {
         this.logger.warn(`Failed to delete Bifrost key ${key.bifrostKeyId}: ${(err as Error).message}`)
       }
-
       await db
-        .update(projectApiKeys)
+        .update(projectVirtualKeys)
         .set({ status: "revoked", updatedAt: new Date() })
-        .where(eq(projectApiKeys.id, key.id))
-    }
+        .where(eq(projectVirtualKeys.id, key.id))
+    }))
 
     if (activeKeys.length > 0) {
       this.logger.log(`Revoked ${activeKeys.length} Bifrost virtual key(s) for project ${projectId}`)
+    }
+
+    const [project] = await db.select().from(projects).where(eq(projects.id, projectId))
+    if (project?.bifrostProjectId) {
+      try {
+        await this.deleteTeam(project.bifrostProjectId)
+        await db.update(projects).set({ bifrostProjectId: null }).where(eq(projects.id, projectId))
+      } catch (err) {
+        this.logger.warn(`Failed to delete Bifrost team for project ${projectId}: ${(err as Error).message}`)
+      }
     }
   }
 
@@ -200,8 +302,8 @@ export class BifrostService {
   }> {
     const keys = await db
       .select()
-      .from(projectApiKeys)
-      .where(and(eq(projectApiKeys.projectId, projectId), eq(projectApiKeys.status, "active")))
+      .from(projectVirtualKeys)
+      .where(and(eq(projectVirtualKeys.projectId, projectId), eq(projectVirtualKeys.status, "active")))
 
     if (keys.length === 0) return { aggregate: null, byKeyType: [] }
 
@@ -216,15 +318,16 @@ export class BifrostService {
       ;(keysByType[k.keyType] ??= []).push(k)
     }
 
-    const byKeyType: Array<{ keyType: KeyType } & BifrostLogStats> = []
-    for (const [keyType, typeKeys] of Object.entries(keysByType)) {
-      const typeKeyIds = typeKeys.map((k) => k.bifrostKeyId).join(",")
-      const stats = await this.request<BifrostLogStats>(
-        "GET",
-        `/api/logs/stats?virtual_key_ids=${typeKeyIds}`,
-      )
-      byKeyType.push({ keyType: keyType as KeyType, ...stats })
-    }
+    const byKeyType = await Promise.all(
+      Object.entries(keysByType).map(async ([keyType, typeKeys]) => {
+        const typeKeyIds = typeKeys.map((k) => k.bifrostKeyId).join(",")
+        const stats = await this.request<BifrostLogStats>(
+          "GET",
+          `/api/logs/stats?virtual_key_ids=${typeKeyIds}`,
+        )
+        return { keyType: keyType as KeyType, ...stats }
+      }),
+    )
 
     return { aggregate, byKeyType }
   }
@@ -232,8 +335,8 @@ export class BifrostService {
   async getTenantUsage(tenantId: string): Promise<BifrostLogStats> {
     const keys = await db
       .select()
-      .from(projectApiKeys)
-      .where(and(eq(projectApiKeys.tenantId, tenantId), eq(projectApiKeys.status, "active")))
+      .from(projectVirtualKeys)
+      .where(and(eq(projectVirtualKeys.tenantId, tenantId), eq(projectVirtualKeys.status, "active")))
 
     if (keys.length === 0) {
       return { total_requests: 0, total_tokens: 0, total_cost: 0, average_latency: 0, success_rate: 0 }
@@ -253,14 +356,14 @@ export class BifrostService {
     keyType?: KeyType,
   ): Promise<BifrostCostHistogram | null> {
     const conditions = [
-      eq(projectApiKeys.projectId, projectId),
-      eq(projectApiKeys.status, "active"),
-      ...(keyType ? [eq(projectApiKeys.keyType, keyType)] : []),
+      eq(projectVirtualKeys.projectId, projectId),
+      eq(projectVirtualKeys.status, "active"),
+      ...(keyType ? [eq(projectVirtualKeys.keyType, keyType)] : []),
     ]
 
     const keys = await db
       .select()
-      .from(projectApiKeys)
+      .from(projectVirtualKeys)
       .where(and(...conditions))
 
     if (keys.length === 0) return null

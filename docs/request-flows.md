@@ -221,7 +221,8 @@ The project filesystem persists because the replacement pod mounts the same `sub
 4. Backend clears timeout keys
 5. Backend revokes Bifrost keys if enabled
 6. Backend deletes the project row
-7. Backend replenishes the warm pool
+7. Backend inserts tombstone into deleted_projects
+8. Backend replenishes the warm pool
 ```
 
-Deleting a project removes it from the lifecycle entirely.
+Deleting a project removes it from the lifecycle entirely. The workspace directory on storage is retained for 7 days via the `deleted_projects` tombstone table, then cleaned up by a daily BullMQ job (see [Persistence — Workspace cleanup](persistence.md#workspace-cleanup)).

@@ -56,20 +56,33 @@ bifrost:
       keys:
         - name: openai-primary
           value: env.OPENAI_API_KEY
-          models:
-            - "*"
           weight: 1
       network_config:
         default_request_timeout_in_seconds: 300
         max_retries: 2
-        retry_backoff_initial: 500
-        retry_backoff_max: 5000
+        retry_backoff_initial_ms: 500
+        retry_backoff_max_ms: 5000
+        stream_idle_timeout_in_seconds: 600
+    anthropic:
+      keys:
+        - name: anthropic-primary
+          value: env.ANTHROPIC_API_KEY
+          weight: 1
+      network_config:
+        default_request_timeout_in_seconds: 300
+        max_retries: 2
+        retry_backoff_initial_ms: 500
+        retry_backoff_max_ms: 5000
         stream_idle_timeout_in_seconds: 600
   providerSecrets:
     openai:
       existingSecret: opsiforce-bifrost-provider-keys
       key: openai-api-key
       envVar: OPENAI_API_KEY
+    anthropic:
+      existingSecret: opsiforce-bifrost-provider-keys
+      key: anthropic-api-key
+      envVar: ANTHROPIC_API_KEY
   plugins:
     governance:
       enabled: true

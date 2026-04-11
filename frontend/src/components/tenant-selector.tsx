@@ -8,8 +8,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "~/components/ui/dropdown-menu"
-import { SidebarSeparator } from "~/components/ui/sidebar"
-import { Building2, ChevronDown } from "~/components/icons"
+import { SidebarMenu, SidebarMenuItem } from "~/components/ui/sidebar"
+import { Building2, ChevronsUpDown } from "~/components/icons"
 
 export default function TenantSelector() {
   const [currentTenant, setTenant] = createTenantState()
@@ -41,38 +41,40 @@ export default function TenantSelector() {
         initTenant()
         return (
           <Show when={tenants().length >= 2}>
-            <SidebarSeparator />
-            <div class="px-2 py-1 group-data-[collapsible=icon]/sidebar:px-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                as={(props: Record<string, unknown>) => (
-                  <button
-                    {...props}
-                    class="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground outline-none transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-2 group-data-[collapsible=icon]/sidebar:py-2"
-                  >
-                    <Building2 class="w-4 h-4 shrink-0" />
-                    <span class="truncate flex-1 text-left group-data-[collapsible=icon]/sidebar:hidden">
-                      {currentDisplayName()}
-                    </span>
-                    <ChevronDown class="w-3 h-3 shrink-0 text-sidebar-muted-foreground group-data-[collapsible=icon]/sidebar:hidden" />
-                  </button>
-                )}
-              />
-              <DropdownMenuContent>
-                <For each={tenants()}>
-                  {(tenant) => (
-                    <DropdownMenuItem
-                      class={tenant.name === currentTenant() ? "bg-accent" : ""}
-                      onSelect={() => setTenant(tenant.name)}
-                    >
-                      {tenant.displayName}
-                    </DropdownMenuItem>
-                  )}
-                </For>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            </div>
-            <SidebarSeparator />
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    as={(props: Record<string, unknown>) => (
+                      <button
+                        {...props}
+                        class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm text-sidebar-foreground outline-none transition-colors hover:bg-sidebar-accent group-data-[collapsible=icon]/sidebar:justify-center"
+                      >
+                        <div class="w-7 h-7 shrink-0 rounded-lg bg-sidebar-accent flex items-center justify-center">
+                          <Building2 class="w-4 h-4" />
+                        </div>
+                        <span class="truncate flex-1 text-left text-sm font-medium group-data-[collapsible=icon]/sidebar:hidden">
+                          {currentDisplayName()}
+                        </span>
+                        <ChevronsUpDown class="w-4 h-4 shrink-0 text-sidebar-muted-foreground group-data-[collapsible=icon]/sidebar:hidden" />
+                      </button>
+                    )}
+                  />
+                  <DropdownMenuContent class="min-w-56">
+                    <For each={tenants()}>
+                      {(tenant) => (
+                        <DropdownMenuItem
+                          class={tenant.name === currentTenant() ? "bg-accent" : ""}
+                          onSelect={() => setTenant(tenant.name)}
+                        >
+                          {tenant.displayName}
+                        </DropdownMenuItem>
+                      )}
+                    </For>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </SidebarMenuItem>
+            </SidebarMenu>
           </Show>
         )
       }}

@@ -21,6 +21,7 @@ export interface PodTemplateOptions {
   bifrostProxyUrl?: string
   bifrostApiKey?: string
   bifrostBackendApiKey?: string
+  sourceDir?: string
 }
 
 export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
@@ -69,17 +70,22 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
           imagePullPolicy: options.imagePullPolicy,
           command: [
             "sh", "-c",
+            (options.sourceDir
+              ? `if [ -d /storage/${options.sourceDir} ]; then cp -a /storage/${options.sourceDir}/. /workspace/; fi; `
+              : "") +
             `AGENT="\${AGENT_NAME:-app-builder}"; ` +
             "mkdir -p /workspace/.xdg/config/opencode /workspace/.xdg/code-server /workspace/.opencode/agents; " +
-            "cp -n /opt/opencode/opencode.json /workspace/.xdg/config/opencode/opencode.json; " +
-            "cp -n /opt/agents/$AGENT/agent.md /workspace/.opencode/agents/$AGENT.md; " +
+            "cp /opt/opencode/opencode.json /workspace/.xdg/config/opencode/opencode.json; " +
+            "cp /opt/agents/$AGENT/agent.md /workspace/.opencode/agents/$AGENT.md; " +
             "if [ ! -d /workspace/app ]; then " +
             "cp -r /opt/agents/$AGENT/template/. /workspace/; " +
             "cd /workspace && printf '.config/\\n.cache/\\n.bun/\\n.opencode/\\n.xdg/\\nnode_modules/\\ndata/\\n' > .gitignore && " +
             "git init && git config user.email 'agent@opsiforce.com' && git config user.name 'OpsiForce' && git add -A && git commit -m 'Initial template'; " +
             "fi",
           ],
-          volumeMounts,
+          volumeMounts: options.sourceDir
+            ? [...volumeMounts, { name: "workspace", mountPath: "/storage" }]
+            : volumeMounts,
         },
       ],
       containers: [
@@ -103,6 +109,8 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
               ? [
                   { name: "OPENAI_API_KEY", value: options.bifrostApiKey },
                   { name: "OPENAI_BASE_URL", value: options.bifrostProxyUrl },
+                  { name: "ANTHROPIC_API_KEY", value: options.bifrostApiKey },
+                  { name: "ANTHROPIC_BASE_URL", value: options.bifrostProxyUrl.replace(/\/v1\/?$/, "/anthropic/v1") },
                   ...(options.bifrostBackendApiKey
                     ? [
                         { name: "APP_LLM_API_KEY", value: options.bifrostBackendApiKey },

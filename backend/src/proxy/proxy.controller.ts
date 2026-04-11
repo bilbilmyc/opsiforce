@@ -4,7 +4,7 @@ import { Readable } from "stream"
 import { ProxyService } from "./proxy.service"
 import { ProjectService } from "../project/project.service"
 import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
-import { BAD_GATEWAY_RESPONSE_BODY, isK8sPodError, RESTARTING_RESPONSE_BODY } from "./proxy.shared"
+import { BAD_GATEWAY_RESPONSE_BODY, DISABLED_RESPONSE_BODY, isK8sPodError, RESTARTING_RESPONSE_BODY } from "./proxy.shared"
 
 @Controller("proxy")
 export class ProxyController {
@@ -25,6 +25,11 @@ export class ProxyController {
       tenant.tenantId,
       "agent",
     )
+
+    if (ensured.state === "disabled") {
+      this.sendDisabledResponse(reply)
+      return
+    }
 
     if (ensured.state === "starting") {
       this.sendRestartingResponse(reply)
@@ -99,6 +104,10 @@ export class ProxyController {
 
   private sendRestartingResponse(reply: FastifyReply) {
     reply.status(503).header("content-type", "application/json").send(RESTARTING_RESPONSE_BODY)
+  }
+
+  private sendDisabledResponse(reply: FastifyReply) {
+    reply.status(423).header("content-type", "application/json").send(DISABLED_RESPONSE_BODY)
   }
 
   private sendBadGatewayResponse(reply: FastifyReply) {

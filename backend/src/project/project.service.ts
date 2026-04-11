@@ -11,7 +11,7 @@ import { ConfigService } from "@nestjs/config"
 import { eq, and, desc, inArray, or, ne } from "drizzle-orm"
 import crypto from "crypto"
 import { db, pgClient } from "../../db"
-import { projectSettings, projects, pods } from "../../db/schema"
+import { projectSettings, projects, pods, tenants, deletedProjects } from "../../db/schema"
 import { PodService, TenantPodOptions } from "../pod/pod.service"
 import { PodPoolService } from "../pod/pod.pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
@@ -19,6 +19,7 @@ import { BifrostService } from "../bifrost/bifrost.service"
 import {
   CreateProjectDto,
   UpdateProjectDto,
+  DuplicateProjectDto,
   ProjectResponse,
   ProjectStatus,
 } from "./project.types"
@@ -26,7 +27,7 @@ import {
 type ProjectActivityKind = "agent" | "app"
 
 export interface EnsureProjectResult {
-  state: "ready" | "starting"
+  state: "ready" | "starting" | "disabled"
   project: ProjectResponse
 }
 
@@ -41,6 +42,7 @@ const projectSelectFields = {
   podIp: projects.podIp,
   sessionId: projects.sessionId,
   platformVersion: projects.platformVersion,
+  bifrostProjectId: projects.bifrostProjectId,
   timeoutIdle: projectSettings.timeoutIdle,
   appTimeoutIdle: projectSettings.appTimeoutIdle,
   lastActiveAt: projects.lastActiveAt,
@@ -52,6 +54,7 @@ const projectSelectFields = {
 export class ProjectService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ProjectService.name)
   private readonly startupTasks = new Map<string, Promise<void>>()
+  private readonly pendingSourceDirs = new Map<string, string>()
 
   constructor(
     private readonly podService: PodService,
@@ -100,6 +103,45 @@ export class ProjectService implements OnApplicationBootstrap {
         })
     })
 
+    this.queueProjectStartup(id)
+
+    return this.findOne(id, tenantId)
+  }
+
+  async duplicate(sourceId: string, tenantId: string, dto?: DuplicateProjectDto): Promise<ProjectResponse> {
+    const source = await this.findOne(sourceId, tenantId)
+
+    const id = crypto.randomUUID()
+    const directory = `projects/${tenantId}/${id}`
+    const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
+    const podName = this.podService.assignedPodName(id)
+    const title = dto?.title ?? (source.title ? `${source.title} (copy)` : null)
+
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(projects)
+        .values({
+          id,
+          tenantId,
+          title,
+          description: source.description,
+          directory,
+          status: ProjectStatus.Starting,
+          podName,
+          podIp: null,
+          platformVersion,
+        })
+
+      await tx
+        .insert(projectSettings)
+        .values({
+          projectId: id,
+          timeoutIdle: source.timeoutIdle,
+          appTimeoutIdle: source.appTimeoutIdle,
+        })
+    })
+
+    this.pendingSourceDirs.set(id, source.directory)
     this.queueProjectStartup(id)
 
     return this.findOne(id, tenantId)
@@ -212,6 +254,63 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.podPoolService.replenish().catch((err) => {
       this.logger.warn(`Failed to replenish warm pool after deleting project ${id}: ${err.message}`)
     })
+    await db.insert(deletedProjects).values({
+      id: project.id,
+      tenantId: project.tenantId,
+      directory: project.directory,
+    }).onConflictDoNothing()
+  }
+
+  async disable(id: string, tenantId: string): Promise<ProjectResponse> {
+    const project = await this.findOne(id, tenantId)
+    if (project.status === ProjectStatus.Disabled) {
+      throw new BadRequestException("Project is already disabled")
+    }
+
+    if (project.podName) {
+      await this.podService.deletePod(project.podName).catch(() => {})
+      await this.deleteProjectPods(id, project.podName)
+    }
+
+    await this.timeoutService.clear(id)
+    this.startupTasks.delete(id)
+
+    await db
+      .update(projects)
+      .set({
+        status: ProjectStatus.Disabled,
+        podName: null,
+        podIp: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(projects.id, id))
+
+    await this.podPoolService.replenish().catch((err) => {
+      this.logger.warn(`Failed to replenish warm pool after disabling project ${id}: ${err.message}`)
+    })
+
+    return this.findOne(id, tenantId)
+  }
+
+  async enable(id: string, tenantId: string): Promise<ProjectResponse> {
+    const project = await this.findOne(id, tenantId)
+    if (project.status !== ProjectStatus.Disabled) {
+      throw new BadRequestException("Project is not disabled")
+    }
+
+    const podName = this.podService.assignedPodName(id)
+    await db
+      .update(projects)
+      .set({
+        status: ProjectStatus.Starting,
+        podName,
+        podIp: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(projects.id, id))
+
+    this.queueProjectStartup(id)
+    return this.findOne(id, tenantId)
   }
 
   async reassignPod(id: string, tenantId: string): Promise<void> {
@@ -244,6 +343,10 @@ export class ProjectService implements OnApplicationBootstrap {
     project: ProjectResponse,
     activity: ProjectActivityKind,
   ): Promise<EnsureProjectResult> {
+    if (project.status === ProjectStatus.Disabled) {
+      return { state: "disabled", project }
+    }
+
     this.recordActivity(project.id, activity)
 
     if (project.status === ProjectStatus.Starting) {
@@ -290,6 +393,8 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   private async handleProxyFailureForProject(project: ProjectResponse): Promise<boolean> {
+    if (project.status === ProjectStatus.Disabled) return false
+
     if (project.status === ProjectStatus.Starting) {
       this.queueProjectStartup(project.id)
       return true
@@ -313,9 +418,20 @@ export class ProjectService implements OnApplicationBootstrap {
     if (!this.bifrostService.isEnabled()) return undefined
 
     try {
+      const [[tenant], [project]] = await Promise.all([
+        db.select().from(tenants).where(eq(tenants.id, tenantId)),
+        db.select().from(projects).where(eq(projects.id, projectId)),
+      ])
+      const customerId = tenant?.bifrostTenantId
+
+      let teamId = project?.bifrostProjectId ?? undefined
+      if (!teamId && customerId) {
+        teamId = await this.bifrostService.createProjectTeam(projectId, customerId)
+      }
+
       const [chatKey, backendKey] = await Promise.all([
-        this.bifrostService.createProjectKey(projectId, tenantId, "chat"),
-        this.bifrostService.createProjectKey(projectId, tenantId, "backend"),
+        this.bifrostService.createProjectKey(projectId, tenantId, "chat", teamId),
+        this.bifrostService.createProjectKey(projectId, tenantId, "backend", teamId),
       ])
 
       return {
@@ -414,7 +530,9 @@ export class ProjectService implements OnApplicationBootstrap {
         }
 
         await this.deleteProjectPods(projectId, podName)
-        await this.podService.createAssignedPod(projectId, current.directory, tenantOptions)
+        const sourceDir = this.pendingSourceDirs.get(projectId)
+        this.pendingSourceDirs.delete(projectId)
+        await this.podService.createAssignedPod(projectId, current.directory, tenantOptions, sourceDir)
         await this.ensureAssignedPodRow(projectId, podName, null)
 
         const podIp = await this.podService.waitForReady(podName)

@@ -1,6 +1,6 @@
 ---
 name: llm-api
-description: Use the OpenAI-compatible LLM API (APP_LLM_API_KEY) to add AI features — chat completions, structured output, streaming, vision (image analysis), audio transcription. Trigger when building AI-powered features, calling GPT models, generating text, analyzing images, or transcribing audio.
+description: Use the LLM API (APP_LLM_API_KEY) to add AI features — chat completions, structured output, streaming, vision (image analysis), audio transcription. Supports OpenAI (GPT) and Anthropic (Claude) models via Bifrost gateway. Trigger when building AI-powered features, calling GPT/Claude models, generating text, analyzing images, or transcribing audio.
 ---
 
 # AI API Integration
@@ -31,11 +31,31 @@ const llm = new OpenAI({
 
 ## Available Models
 
+### OpenAI
+
 | Model | Best for | Speed | Cost |
 |-------|----------|-------|------|
-| `gpt-5.4-nano` | Fast tasks, classification, extraction, ranking, vision | Very fast | Very low |
-| `gpt-5.4-mini` | Complex reasoning, nuanced generation, vision | Medium | Medium |
+| `gpt-5.4-nano` | Fast tasks, classification, extraction, ranking, structured output (JSON schema), vision | Very fast | Very low |
+| `gpt-5.4-mini` | Complex reasoning, nuanced generation, structured output (JSON schema), vision | Medium | Medium |
 | `whisper-1` | Audio transcription (speech-to-text) | Fast | Low |
+
+### Anthropic (via Bifrost)
+
+Use the `anthropic/` prefix with the same OpenAI SDK — Bifrost routes and translates automatically.
+
+| Model | Best for | Speed | Cost |
+|-------|----------|-------|------|
+| `anthropic/claude-haiku-4-5` | Fast tasks, classification, summarization, vision | Very fast | Low |
+| `anthropic/claude-sonnet-4-6` | Complex reasoning, analysis, long-form generation, coding, vision | Fast | Medium |
+
+### Choosing a model
+
+- **Structured output (JSON schema)** — prefer OpenAI models (`response_format: { type: "json_schema" }` is native to OpenAI)
+- **Text analysis and writing** — Claude models tend to excel at nuanced analysis and long-form generation
+- **Fast/cheap tasks** — `gpt-5.4-nano` or `anthropic/claude-haiku-4-5`
+- **Complex reasoning** — `gpt-5.4-mini` or `anthropic/claude-sonnet-4-6`
+- **Audio transcription** — `whisper-1` only (no Anthropic equivalent)
+- **Vision** — both OpenAI and Anthropic models support image analysis
 
 ## Common Patterns
 
@@ -240,8 +260,9 @@ Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm (max 25 MB). Use `respon
 
 ## Guidelines
 
+- **No browser speech APIs** — never use `SpeechRecognition`, `webkitSpeechRecognition`, or any Web Speech API. For all audio/speech/transcription, use the Whisper API (`whisper-1`) on the backend as shown above. Record audio on the frontend with `MediaRecorder`, send the blob to a backend endpoint, and transcribe server-side.
 - **Backend only** — never expose `APP_LLM_API_KEY` to the frontend or client-side code
-- Use `gpt-5.4-nano` for fast tasks; `gpt-5.4-mini` for complex generation
+- Use `gpt-5.4-nano` or `anthropic/claude-haiku-4-5` for fast tasks; `gpt-5.4-mini` or `anthropic/claude-sonnet-4-6` for complex generation
 - Set reasonable `max_tokens` limits to control cost
 - Always wrap AI calls in try/catch with user-friendly error messages
 - For streaming responses to the frontend, use Server-Sent Events (SSE)

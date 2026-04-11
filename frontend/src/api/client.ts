@@ -56,7 +56,8 @@ export interface Project {
   tenantId: string
   title: string | null
   description: string | null
-  status: "starting" | "active" | "suspended"
+  status: "starting" | "active" | "suspended" | "disabled"
+  bifrostProjectId: string | null
   timeoutIdle: number
   appTimeoutIdle: number
   lastActiveAt: string | null

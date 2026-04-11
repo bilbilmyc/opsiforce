@@ -1,30 +1,40 @@
+import { Show } from "solid-js"
 import { createMutation, useQueryClient } from "@tanstack/solid-query"
 import { useNavigate } from "@tanstack/solid-router"
 import { api, type Project } from "~/api/client"
+import { usePermissions } from "~/api/permissions"
+import { useUserInfo } from "~/api/user"
+import { Permission } from "~/constants/permissions"
 import {
   Sidebar,
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarGroupAction,
-  SidebarGroupContent,
-  SidebarSeparator,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarSeparator,
   SidebarTrigger,
   useSidebar,
 } from "~/components/ui/sidebar"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "~/components/ui/dropdown-menu"
+import { Button } from "~/components/ui/button"
 import TenantSelector from "~/components/tenant-selector"
 import ProjectSidebar from "~/components/project-sidebar"
-import { LogOut, Plus, FolderKanban } from "~/components/icons"
+import { LogOut, Plus, FolderKanban, Wallet, ChevronsUpDown } from "~/components/icons"
 
 export default function AppSidebar() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { toggleSidebar } = useSidebar()
+  const { hasPermission } = usePermissions()
+  const userInfo = useUserInfo()
 
   const createProject = createMutation(() => ({
     mutationFn: () => api.post<Project>("/projects"),
@@ -34,9 +44,15 @@ export default function AppSidebar() {
     },
   }))
 
+  const userName = () => userInfo.data?.preferredUsername ?? ""
+  const userInitial = () => {
+    const name = userName()
+    return name ? name.charAt(0).toUpperCase() : "U"
+  }
+
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
+      <SidebarHeader class="gap-3 pb-0">
         <div class="flex items-center gap-2 px-1 py-0.5 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0">
           <div
             class="w-7 h-7 shrink-0 rounded-lg bg-foreground/5 border border-foreground/10 flex items-center justify-center cursor-pointer hover:bg-foreground/10 transition-colors"
@@ -59,46 +75,89 @@ export default function AppSidebar() {
         <div class="hidden group-data-[collapsible=icon]/sidebar:flex justify-center">
           <SidebarTrigger />
         </div>
+
+        <div class="group-data-[collapsible=icon]/sidebar:hidden pb-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            class="w-full gap-2"
+            onClick={() => createProject.mutate(undefined as never)}
+            disabled={createProject.isPending}
+          >
+            <Plus class="w-4 h-4" />
+            New Project
+          </Button>
+        </div>
+        <div class="hidden group-data-[collapsible=icon]/sidebar:flex justify-center pb-2">
+          <button
+            class="w-7 h-7 rounded-md flex items-center justify-center text-sidebar-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+            onClick={() => createProject.mutate(undefined as never)}
+            disabled={createProject.isPending}
+            title="New Project"
+          >
+            <Plus class="w-4 h-4" />
+          </button>
+        </div>
       </SidebarHeader>
 
-      <TenantSelector />
+      <SidebarSeparator />
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>
-            <span>Projects</span>
-            <SidebarGroupAction
-              onClick={() => createProject.mutate(undefined as never)}
-              disabled={createProject.isPending}
-              title="New project"
-            >
-              <Plus class="w-3.5 h-3.5" />
-            </SidebarGroupAction>
-          </SidebarGroupLabel>
-          <div class="hidden group-data-[collapsible=icon]/sidebar:block">
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => toggleSidebar()}>
-                  <FolderKanban class="w-4 h-4 shrink-0" />
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </div>
-          <SidebarGroupContent class="group-data-[collapsible=icon]/sidebar:hidden">
-            <ProjectSidebar />
-          </SidebarGroupContent>
-        </SidebarGroup>
+        <div class="hidden group-data-[collapsible=icon]/sidebar:block px-2 py-2">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => toggleSidebar()}>
+                <FolderKanban class="w-4 h-4 shrink-0" />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
+        <div class="group-data-[collapsible=icon]/sidebar:hidden px-2 py-1">
+          <ProjectSidebar />
+        </div>
       </SidebarContent>
 
       <SidebarSeparator />
 
       <SidebarFooter>
+        <TenantSelector />
+
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={() => { window.location.href = "/oauth2/sign_out" }}>
-              <LogOut class="w-4 h-4 shrink-0" />
-              <span class="group-data-[collapsible=icon]/sidebar:hidden">Log out</span>
-            </SidebarMenuButton>
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                as={(triggerProps: Record<string, unknown>) => (
+                  <button
+                    {...triggerProps}
+                    class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm outline-none transition-colors hover:bg-sidebar-accent group-data-[collapsible=icon]/sidebar:justify-center"
+                  >
+                    <div class="w-7 h-7 shrink-0 rounded-lg bg-sidebar-accent flex items-center justify-center text-sidebar-foreground">
+                      <span class="text-xs font-semibold">{userInitial()}</span>
+                    </div>
+                    <div class="flex-1 min-w-0 text-left group-data-[collapsible=icon]/sidebar:hidden">
+                      <span class="block text-sm font-medium truncate text-sidebar-foreground">{userName()}</span>
+                    </div>
+                    <ChevronsUpDown class="w-4 h-4 shrink-0 text-sidebar-muted-foreground group-data-[collapsible=icon]/sidebar:hidden" />
+                  </button>
+                )}
+              />
+              <DropdownMenuContent class="min-w-56">
+                <div class="px-2 py-1.5">
+                  <p class="text-sm font-medium truncate">{userName()}</p>
+                </div>
+                <DropdownMenuSeparator />
+                <Show when={hasPermission(Permission.manageTenantBudget)}>
+                  <DropdownMenuItem onSelect={() => navigate({ to: "/billing" })}>
+                    <Wallet class="w-4 h-4 text-muted-foreground" />
+                    Billing
+                  </DropdownMenuItem>
+                </Show>
+                <DropdownMenuItem onSelect={() => { window.location.href = "/oauth2/sign_out" }}>
+                  <LogOut class="w-4 h-4 text-muted-foreground" />
+                  Log out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>

@@ -13,6 +13,10 @@ export const NOT_FOUND_RESPONSE_BODY = JSON.stringify({
   error: "Project not found",
 })
 
+export const DISABLED_RESPONSE_BODY = JSON.stringify({
+  error: "Project is disabled",
+})
+
 export function isK8sPodError(body: string): boolean {
   try {
     const parsed = JSON.parse(body)
@@ -51,6 +55,10 @@ export function sendNotFoundResponse(res: http.ServerResponse) {
   writeJsonResponse(res, 404, NOT_FOUND_RESPONSE_BODY)
 }
 
+export function sendDisabledResponse(res: http.ServerResponse) {
+  writeJsonResponse(res, 423, DISABLED_RESPONSE_BODY)
+}
+
 function writeJsonUpgradeResponse(socket: Duplex, statusLine: string, body: string) {
   socket.write(
     `HTTP/1.1 ${statusLine}\r\n` +
@@ -72,4 +80,8 @@ export function writeBadGatewayUpgradeResponse(socket: Duplex) {
 
 export function writeNotFoundUpgradeResponse(socket: Duplex) {
   writeJsonUpgradeResponse(socket, "404 Not Found", NOT_FOUND_RESPONSE_BODY)
+}
+
+export function writeDisabledUpgradeResponse(socket: Duplex) {
+  writeJsonUpgradeResponse(socket, "423 Locked", DISABLED_RESPONSE_BODY)
 }

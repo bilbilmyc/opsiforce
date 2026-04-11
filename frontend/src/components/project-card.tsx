@@ -3,7 +3,7 @@ import type { Project } from "~/api/client"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
 import { cn } from "~/lib/cn"
-import { Settings, Pencil, Trash2, EllipsisVertical } from "~/components/icons"
+import { Settings, Pencil, Trash2, EllipsisVertical, Ban, CirclePlay, Copy } from "~/components/icons"
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -32,11 +32,17 @@ export default function ProjectCard(props: {
   onRename: (id: string, title: string) => void
   onDelete: (id: string) => void
   onSettings: (id: string) => void
+  onDisable: (id: string) => void
+  onEnable: (id: string) => void
+  onDuplicate: (id: string) => void
 }) {
   const { hasPermission } = usePermissions()
   const canSeeSettings = () =>
     hasPermission(Permission.manageProjectBudgetSettings) ||
     hasPermission(Permission.manageProjectTimeoutSettings)
+  const canDisable = () => hasPermission(Permission.disableProject)
+  const canDuplicate = () => hasPermission(Permission.duplicateProject)
+  const isDisabled = () => props.project.status === "disabled"
 
   const [editing, setEditing] = createSignal(false)
   const [editValue, setEditValue] = createSignal("")
@@ -72,7 +78,7 @@ export default function ProjectCard(props: {
       class={cn(
         "w-full text-left rounded-lg px-2.5 py-2 transition-all duration-150 group relative cursor-pointer",
         props.isActive
-          ? "bg-sidebar-accent"
+          ? "bg-background shadow-sm ring-1 ring-black/[0.04]"
           : "hover:bg-sidebar-accent/60",
       )}
     >
@@ -95,11 +101,11 @@ export default function ProjectCard(props: {
               />
             }
           >
-            <span class="block text-xs font-medium text-sidebar-foreground truncate leading-tight">{title()}</span>
+            <span class={cn("block text-xs font-medium truncate leading-tight", isDisabled() ? "text-sidebar-muted-foreground" : "text-sidebar-foreground")}>{title()}</span>
           </Show>
           <Show when={props.project.createdAt && !editing()}>
             <span class="block text-xs text-sidebar-muted-foreground mt-0.5">
-              {formatRelativeTime(props.project.createdAt)}
+              {isDisabled() ? "Disabled" : formatRelativeTime(props.project.createdAt)}
             </span>
           </Show>
         </div>
@@ -127,6 +133,28 @@ export default function ProjectCard(props: {
                   <Settings class="w-3.5 h-3.5 text-muted-foreground" />
                   Settings
                 </DropdownMenuItem>
+              </Show>
+              <Show when={canDuplicate()}>
+                <DropdownMenuItem onSelect={() => props.onDuplicate(props.project.id)}>
+                  <Copy class="w-3.5 h-3.5 text-muted-foreground" />
+                  Duplicate
+                </DropdownMenuItem>
+              </Show>
+              <Show when={canDisable()}>
+                <Show
+                  when={isDisabled()}
+                  fallback={
+                    <DropdownMenuItem onSelect={() => props.onDisable(props.project.id)}>
+                      <Ban class="w-3.5 h-3.5 text-muted-foreground" />
+                      Disable
+                    </DropdownMenuItem>
+                  }
+                >
+                  <DropdownMenuItem onSelect={() => props.onEnable(props.project.id)}>
+                    <CirclePlay class="w-3.5 h-3.5 text-muted-foreground" />
+                    Enable
+                  </DropdownMenuItem>
+                </Show>
               </Show>
               <DropdownMenuSeparator />
               <DropdownMenuItem class="text-destructive data-[highlighted]:text-destructive" onSelect={() => props.onDelete(props.project.id)}>

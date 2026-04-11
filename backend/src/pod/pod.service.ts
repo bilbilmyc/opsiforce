@@ -56,7 +56,7 @@ export class PodService {
     return response
   }
 
-  async createAssignedPod(projectId: string, directory: string, tenantOptions?: TenantPodOptions): Promise<{ podName: string }> {
+  async createAssignedPod(projectId: string, directory: string, tenantOptions?: TenantPodOptions, sourceDir?: string): Promise<{ podName: string }> {
     const podName = this.assignedPodName(projectId)
 
     await this.waitForPodDeletion(podName)
@@ -66,6 +66,7 @@ export class PodService {
       subPath: directory,
       projectId,
       ...tenantOptions,
+      ...(sourceDir ? { sourceDir } : {}),
     }
 
     const spec = buildPodSpec(options)

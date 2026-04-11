@@ -29,7 +29,9 @@ COPY agent-config/agents/ /opt/agents/
 
 COPY agent-config/scripts/guard.sh /usr/local/bin/guard
 COPY agent-config/scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod +x /usr/local/bin/guard /usr/local/bin/entrypoint.sh
+COPY agent-config/scripts/log-writer.ts /usr/local/bin/log-writer
+COPY agent-config/scripts/dbquery.ts /usr/local/bin/dbquery
+RUN chmod +x /usr/local/bin/guard /usr/local/bin/entrypoint.sh /usr/local/bin/log-writer /usr/local/bin/dbquery
 
 ENV OPENCODE_ENABLE_EXA=true
 

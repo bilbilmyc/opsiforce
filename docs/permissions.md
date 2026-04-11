@@ -30,6 +30,9 @@ Frontend (usePermissions hook)
 | `opsiforce_can_manage_project_budget_settings` | `Permission.manageProjectBudgetSettings` | Budgets tab in project settings |
 | `opsiforce_can_manage_project_timeout_settings` | `Permission.manageProjectTimeoutSettings` | Timeouts tab in project settings |
 | `opsiforce_can_view_code_tab` | `Permission.viewCodeTab` | VS Code IDE tab in project view |
+| `opsiforce_can_disable_project` | `Permission.disableProject` | Disable/enable projects |
+| `opsiforce_can_duplicate_project` | `Permission.duplicateProject` | Duplicate projects |
+| `opsiforce_can_view_queue_dashboard` | — (backend-only) | BullMQ queue dashboard at `/api/admin/queues` |
 
 ---
 
@@ -43,6 +46,9 @@ Groups bundle permissions for easy user assignment. Managed via Pulumi in `packa
 | `opsiforce_manage_project_budget_settings` | `can_manage_project_budget_settings` | Budget settings only |
 | `opsiforce_manage_project_timeout_settings` | `can_manage_project_timeout_settings` | Timeout settings only |
 | `opsiforce_view_code_tab` | `can_view_code_tab` | Code tab only |
+| `opsiforce_disable_project` | `can_disable_project` | Disable/enable projects |
+| `opsiforce_duplicate_project` | `can_duplicate_project` | Duplicate projects |
+| `opsiforce_view_queue_dashboard` | `can_view_queue_dashboard` | Queue dashboard access |
 
 ---
 

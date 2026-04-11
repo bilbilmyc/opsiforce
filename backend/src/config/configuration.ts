@@ -59,4 +59,9 @@ export default () => {
   bifrostPodProxyUrl: process.env.BIFROST_POD_PROXY_URL || process.env.BIFROST_PROXY_URL || "",
   bifrostAdminUsername: process.env.BIFROST_ADMIN_USERNAME || "",
   bifrostAdminPassword: process.env.BIFROST_ADMIN_PASSWORD || "",
+  workspaceCleanupRetentionDays: 7,
+  bifrostDefaultTenantBudget: 100,
+  bifrostDefaultProjectBudget: 10,
+  bifrostDefaultKeyBudget: 5,
+  bifrostDefaultBudgetDuration: "1M",
 }}

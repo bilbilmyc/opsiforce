@@ -1,0 +1,22 @@
+{{- if and .Values.ingressRoute.enabled .Values.bifrostDashboard.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: {{ include "opsiforce-proxy.fullname" . }}-bifrost
+  labels:
+    {{- include "opsiforce-proxy.labels" . | nindent 4 }}
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.bifrostDashboard.hostname }}
+    external-dns.alpha.kubernetes.io/target: {{ .Values.ingressRoute.traefikTarget }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`{{ .Values.bifrostDashboard.hostname }}`)
+      kind: Rule
+      services:
+        - name: {{ .Values.bifrostDashboard.serviceName }}
+          port: 8080
+  tls:
+    certResolver: letsencrypt
+{{- end }}
