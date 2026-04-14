@@ -1,11 +1,11 @@
 ---
-name: bun-sqlite
-description: Advanced SQLite operations via bun:sqlite — transactions, full-text search, JSON, window functions, upserts, performance optimization. Use for complex database operations beyond basic CRUD.
+name: better-sqlite3
+description: Advanced SQLite operations via better-sqlite3 — transactions, full-text search, JSON, window functions, upserts, performance optimization. Use for complex database operations beyond basic CRUD.
 ---
 
-# Advanced SQLite (bun:sqlite)
+# Advanced SQLite (better-sqlite3)
 
-The app uses `bun:sqlite` — Bun's built-in SQLite driver. Zero dependencies, same API as better-sqlite3.
+The app uses `better-sqlite3` — the fastest SQLite driver for Node.js. Synchronous API, zero-copy data access.
 
 ## Transactions (batch operations — 10-100x faster)
 
