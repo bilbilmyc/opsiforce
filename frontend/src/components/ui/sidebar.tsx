@@ -11,6 +11,8 @@ import {
   type Accessor,
 } from "solid-js"
 import { cn } from "~/lib/cn"
+import { createResizablePanel, type ResizablePanel } from "~/lib/create-resizable-panel"
+import { ResizeHandle } from "./resize-handle"
 import { Button } from "./button"
 import { PanelLeft } from "~/components/icons"
 
@@ -24,6 +26,7 @@ interface SidebarContextValue {
   setOpenMobile: (open: boolean) => void
   isMobile: Accessor<boolean>
   toggleSidebar: () => void
+  sidebarResize: ResizablePanel
 }
 
 const SidebarCtx = createContext<SidebarContextValue>()
@@ -71,6 +74,14 @@ export function SidebarProvider(props: ParentProps<{
     else _setOpen(!_open())
   }
 
+  const sidebarResize = createResizablePanel({
+    storageKey: "opsiforce:sidebar-width",
+    minWidth: 200,
+    defaultWidth: 256,
+    maxWidth: () => Math.round(window.innerWidth * 0.5),
+    direction: "right",
+  })
+
   createEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "b" && (e.metaKey || e.ctrlKey)) {
@@ -83,10 +94,10 @@ export function SidebarProvider(props: ParentProps<{
   })
 
   return (
-    <SidebarCtx.Provider value={{ state, open: _open, setOpen: _setOpen, openMobile, setOpenMobile, isMobile, toggleSidebar }}>
+    <SidebarCtx.Provider value={{ state, open: _open, setOpen: _setOpen, openMobile, setOpenMobile, isMobile, toggleSidebar, sidebarResize }}>
       <div
         class={cn("group/sidebar-wrapper flex h-full w-full", local.class)}
-        style={{ "--sidebar-width": "16rem", "--sidebar-width-icon": "3rem", ...local.style } as JSX.CSSProperties}
+        style={{ "--sidebar-width": `${sidebarResize.width()}px`, "--sidebar-width-icon": "3rem", ...local.style } as JSX.CSSProperties}
       >
         {local.children}
       </div>
@@ -99,13 +110,15 @@ export function Sidebar(props: ParentProps<{
   class?: string
 }>) {
   const [local] = splitProps(props, ["collapsible", "class", "children"])
-  const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
+  const { isMobile, state, openMobile, setOpenMobile, sidebarResize } = useSidebar()
   const collapsible = () => local.collapsible ?? "icon"
 
   const sidebarWidth = () =>
     !isMobile() && state() === "collapsed" && collapsible() === "icon"
       ? "var(--sidebar-width-icon)"
       : "var(--sidebar-width)"
+
+  const showResizeHandle = () => !isMobile() && state() === "expanded"
 
   return (
     <>
@@ -121,13 +134,15 @@ export function Sidebar(props: ParentProps<{
 
       <aside
         class={cn(
-          "group/sidebar flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border overflow-hidden",
+          "group/sidebar relative flex flex-col bg-sidebar text-sidebar-foreground border-r border-sidebar-border overflow-hidden",
           isMobile()
             ? cn(
                 "fixed inset-y-0 left-0 z-50 shadow-xl transition-transform duration-200 ease-in-out",
                 openMobile() ? "translate-x-0" : "-translate-x-full",
               )
-            : "shrink-0 transition-[width] duration-200 ease-linear",
+            : sidebarResize.resizing()
+              ? "shrink-0"
+              : "shrink-0 transition-[width] duration-200 ease-linear",
           local.class,
         )}
         style={{ width: isMobile() ? "var(--sidebar-width)" : sidebarWidth() }}
@@ -135,6 +150,13 @@ export function Sidebar(props: ParentProps<{
         data-collapsible={!isMobile() && state() === "collapsed" ? collapsible() : ""}
       >
         {local.children}
+        <Show when={showResizeHandle()}>
+          <ResizeHandle
+            onPointerDown={sidebarResize.startResize}
+            resizing={sidebarResize.resizing()}
+            position="right"
+          />
+        </Show>
       </aside>
     </>
   )

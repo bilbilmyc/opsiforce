@@ -23,6 +23,10 @@ async function bootstrap() {
   await fastify.register(import("@fastify/multipart"), {
     limits: { fileSize: 100 * 1024 * 1024, files: 100 },
   });
+  await fastify.register(import("@fastify/compress"), {
+    encodings: ["br", "gzip", "deflate"],
+    threshold: 1024,
+  });
 
   app.setGlobalPrefix("api");
 

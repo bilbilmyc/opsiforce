@@ -1,5 +1,6 @@
 import { NotFoundException } from "@nestjs/common"
 import http from "http"
+import compression from "compression"
 import { Readable, pipeline } from "stream"
 import { ProjectService } from "../project/project.service"
 import { ProxyService } from "./proxy.service"
@@ -20,6 +21,13 @@ import {
 
 const MAX_BUFFER_SIZE = 1 * 1024 * 1024
 
+const compressMiddleware = compression({
+  filter: (req, res) => {
+    if (req.headers["x-no-compression"]) return false
+    return compression.filter(req, res)
+  },
+})
+
 interface ProxyResult {
   result: "ok" | "restart"
   statusCode: number
@@ -33,82 +41,11 @@ export function createAppProxyServer(
   projectService: ProjectService,
   logger: AppRequestLogger,
 ) {
-  const server = http.createServer(async (req, res) => {
+  const server = http.createServer((req, res) => {
     setCorsHeaders(res, req)
-
-    if (req.method === "OPTIONS") {
-      res.writeHead(204)
-      res.end()
-      return
-    }
-
-    const projectId = extractProjectId(req.headers.host || "")
-    if (!projectId) {
-      res.writeHead(400, { "content-type": "application/json" })
-      res.end(JSON.stringify({ error: "Invalid subdomain" }))
-      return
-    }
-
-    const start = Date.now()
-
-    try {
-      const ensured = await projectService.ensureProjectById(projectId, "app")
-      if (ensured.state === "disabled") {
-        sendDisabledResponse(res)
-        return
-      }
-      if (ensured.state === "starting") {
-        sendRestartingResponse(res)
-        return
-      }
-
-      const hasBody = req.method !== "GET" && req.method !== "HEAD"
-      const requestBody = hasBody && shouldBufferRequest(req.headers)
-        ? await collectBody(req)
-        : null
-
-      const proxyResult = await proxyHttp(proxyService, projectId, req, res, requestBody)
-
-      if (proxyResult.result === "restart") {
-        if (await shouldRestartProject(projectService, projectId)) {
-          sendRestartingResponse(res)
-          return
-        }
-        sendBadGatewayResponse(res)
-        return
-      }
-
-      logger.log(ensured.project.directory, {
-        method: req.method || "GET",
-        url: req.url || "/",
-        domain: req.headers.host || null,
-        sourceIp: getSourceIp(req),
-        status: proxyResult.statusCode,
-        size: proxyResult.responseSize,
-        durationMs: Date.now() - start,
-        requestHeaders: JSON.stringify(req.headers),
-        responseHeaders: proxyResult.responseHeaders,
-        requestBody: requestBody ? requestBody.toString("utf-8") : null,
-        responseBody: proxyResult.responseBody,
-      })
-    } catch (err) {
-      if (err instanceof NotFoundException) {
-        sendNotFoundResponse(res)
-        return
-      }
-
-      if (!res.headersSent) {
-        if (await shouldRestartProject(projectService, projectId)) {
-          sendRestartingResponse(res)
-          return
-        }
-
-        sendBadGatewayResponse(res)
-        return
-      }
-
-      res.end()
-    }
+    compressMiddleware(req, res, () => {
+      void handleRequest(proxyService, projectService, logger, req, res)
+    })
   })
 
   server.on("upgrade", async (req, socket) => {
@@ -154,6 +91,88 @@ export function createAppProxyServer(
   })
 
   return server
+}
+
+async function handleRequest(
+  proxyService: ProxyService,
+  projectService: ProjectService,
+  logger: AppRequestLogger,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+) {
+  if (req.method === "OPTIONS") {
+    res.writeHead(204)
+    res.end()
+    return
+  }
+
+  const projectId = extractProjectId(req.headers.host || "")
+  if (!projectId) {
+    res.writeHead(400, { "content-type": "application/json" })
+    res.end(JSON.stringify({ error: "Invalid subdomain" }))
+    return
+  }
+
+  const start = Date.now()
+
+  try {
+    const ensured = await projectService.ensureProjectById(projectId, "app")
+    if (ensured.state === "disabled") {
+      sendDisabledResponse(res)
+      return
+    }
+    if (ensured.state === "starting") {
+      sendRestartingResponse(res)
+      return
+    }
+
+    const hasBody = req.method !== "GET" && req.method !== "HEAD"
+    const requestBody = hasBody && shouldBufferRequest(req.headers)
+      ? await collectBody(req)
+      : null
+
+    const proxyResult = await proxyHttp(proxyService, projectId, req, res, requestBody)
+
+    if (proxyResult.result === "restart") {
+      if (await shouldRestartProject(projectService, projectId)) {
+        sendRestartingResponse(res)
+        return
+      }
+      sendBadGatewayResponse(res)
+      return
+    }
+
+    logger.log(ensured.project.directory, {
+      method: req.method || "GET",
+      url: req.url || "/",
+      domain: req.headers.host || null,
+      sourceIp: getSourceIp(req),
+      status: proxyResult.statusCode,
+      size: proxyResult.responseSize,
+      durationMs: Date.now() - start,
+      requestHeaders: JSON.stringify(req.headers),
+      responseHeaders: proxyResult.responseHeaders,
+      requestBody: requestBody ? requestBody.toString("utf-8") : null,
+      responseBody: proxyResult.responseBody,
+    })
+  } catch (err) {
+    if (err instanceof NotFoundException) {
+      sendNotFoundResponse(res)
+      return
+    }
+
+    if (!res.headersSent) {
+      if (await shouldRestartProject(projectService, projectId)) {
+        sendRestartingResponse(res)
+        return
+      }
+
+      sendBadGatewayResponse(res)
+      return
+    }
+
+    res.end()
+  }
 }
 
 async function shouldRestartProject(

@@ -22,7 +22,6 @@ export function createTenantState(): [
     if (name === tenant()) return;
 
     queryClient.cancelQueries();
-    queryClient.removeQueries();
 
     localStorage.setItem("tenant", name);
     setTenantSignal(name);
@@ -30,7 +29,7 @@ export function createTenantState(): [
       new StorageEvent("storage", { key: "tenant", newValue: name }),
     );
 
-    queryClient.invalidateQueries();
+    queryClient.resetQueries();
   };
 
   return [tenant, setTenant];
