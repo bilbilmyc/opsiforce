@@ -2,7 +2,7 @@
 set -e
 cd "$(dirname "$0")"
 
-while [ ! -d "node_modules" ]; do
+while [ ! -f "bun.lock" ]; do
   sleep 2
 done
 

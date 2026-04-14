@@ -3,19 +3,6 @@ import type { Project } from "~/api/client"
 import { cn } from "~/lib/cn"
 import ProjectActionsMenu from "./project-actions-menu"
 
-function formatRelativeTime(dateStr: string): string {
-  const now = Date.now()
-  const then = new Date(dateStr).getTime()
-  const diff = now - then
-  const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "just now"
-  if (mins < 60) return `${mins}m ago`
-  const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
 export default function ProjectCard(props: {
   project: Project
   isActive: boolean
@@ -85,10 +72,8 @@ export default function ProjectCard(props: {
           >
             <span class={cn("block text-xs font-medium truncate leading-tight", isDisabled() ? "text-sidebar-muted-foreground" : "text-sidebar-foreground")}>{title()}</span>
           </Show>
-          <Show when={props.project.createdAt && !editing()}>
-            <span class="block text-xs text-sidebar-muted-foreground mt-0.5">
-              {isDisabled() ? "Disabled" : formatRelativeTime(props.project.createdAt)}
-            </span>
+          <Show when={isDisabled() && !editing()}>
+            <span class="block text-xs text-sidebar-muted-foreground mt-0.5">Disabled</span>
           </Show>
         </div>
 

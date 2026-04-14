@@ -41,7 +41,7 @@ Before doing anything, classify what the user is asking for:
 The dev servers are **already running** when you start — the container entrypoint launches them automatically.
 
 - **Frontend** (Vite): `http://localhost:3000` — hot-reloads on file save
-- **Backend** (NestJS): `http://localhost:3100` — auto-restarts on file change (`bun --watch`)
+- **Backend** (NestJS): `http://localhost:3100` — auto-restarts on file change (`tsx watch`)
 - Vite proxies `/api/*` requests to the backend automatically
 - A process supervisor restarts crashed services automatically
 
@@ -66,10 +66,9 @@ If you need to verify the backend is responding, use `curl http://localhost:3100
    ```json
    {"name": "App Name", "description": "Short description"}
    ```
-6. **After modifying code, run two independent checks — they catch different bugs, you need both:**
-   - `cd /workspace/app && bun run check` — pure TypeScript `tsc --noEmit`. Catches type errors that Bun/Vite would silently *run* with (wrong prop types, bad response shapes). These never appear in logs.
-   - The two queries in §Verifying the app runs — catch runtime boot failures (module resolution, SQL migration errors, unregistered NestJS modules, port conflicts). These never appear in `bun run check`.
-   Do both before opening `agent-browser` and again before telling the user the feature is done. Fix anything they surface first.
+6. **After modifying code, always run `cd /workspace/app && bun run check` first** — pure TypeScript `tsc --noEmit`. Catches type errors that tsx/Vite would silently *run* with (wrong prop types, bad response shapes). These never appear in logs. Fix all type errors before proceeding.
+   Then run the checks in §Verifying the app runs — these catch runtime boot failures (module resolution, SQL migration errors, unregistered NestJS modules, port conflicts) that never appear in `bun run check`.
+   Do both before opening `agent-browser` and again before telling the user the feature is done.
 7. Install additional packages with `cd /workspace/app && bun add <package>`.
 
 ## Frontend ↔ Backend communication
@@ -302,7 +301,7 @@ sqlite3 -header -column /workspace/app/data/app.db "SELECT * FROM items LIMIT 20
 
 ## Verifying the app runs
 
-After any round of edits — and again before telling the user the feature is done — **verify both the backend and frontend are actually running**. `bun run check` catches type errors, not runtime failures: a broken SQL migration, an unregistered NestJS module, a bad import, or a missing env var will only surface in dev-server logs. An agent that skips this step often opens `agent-browser` against a crashed app, sees a blank page or stale shell, and misdiagnoses the problem.
+After any round of edits — and again before telling the user the feature is done — **run `bun run check` first**, then verify both the backend and frontend are actually running. `bun run check` catches type errors; the queries below catch runtime boot failures (SQL migration errors, unregistered NestJS modules, missing env vars). An agent that skips this step often opens `agent-browser` against a crashed app, sees a blank page or stale shell, and misdiagnoses the problem.
 
 Run these two queries. Both should come back empty (or show only healthy `started` events) before you proceed:
 
@@ -338,7 +337,7 @@ Fix any error found here before responding to the user, before opening `agent-br
 
 **Before opening the browser, run the checks in §Verifying the app runs.** A blank-page or white-screen result in agent-browser is almost always a crashed dev server — catch it in the logs first, don't guess at the UI.
 
-**Use the browser to verify every feature you build** — open the app, test the user flow, and confirm it works before telling the user it's done. When the user reports something isn't working, use the browser to see what they see. Combine with `sqlite3` on the platform DB for the full picture: the browser shows what the user sees, a quick `SELECT ... FROM app_requests WHERE status >= 400 ...` shows what failed behind the scenes.
+**Use the browser to verify every feature you build** — open the app, test the user flow, and confirm it works before telling the user it's done. When the user reports something isn't working, use the browser to see what they see. **Only check `app_requests` when you changed frontend↔backend communication** (new endpoints, modified request/response shapes, API wiring) — a quick `SELECT ... FROM app_requests WHERE status >= 400 ...` shows what failed behind the scenes. Skip request log checks for purely frontend or purely backend changes that don't touch the API boundary.
 
 ```bash
 agent-browser open http://localhost:3000    # open the app
