@@ -1,6 +1,7 @@
-import Database from "better-sqlite3"
+import { open, type Database } from "sqlite"
+import sqlite3 from "sqlite3"
 import * as path from "path"
-import * as fs from "fs"
+import { mkdir } from "fs/promises"
 import type { AppRequestEntry } from "./app-request.types"
 
 const MAX_BODY_SIZE = 10 * 1024
@@ -9,28 +10,28 @@ const PRUNE_TO = 40_000
 const PRUNE_INTERVAL = 500
 
 interface CachedDb {
-  db: Database.Database
+  db: Database
   lastUsed: number
   insertCount: number
 }
 
 export class AppRequestLogger {
   private readonly cache = new Map<string, CachedDb>()
+  private readonly pending = new Map<string, Promise<CachedDb>>()
   private readonly cleanupInterval: ReturnType<typeof setInterval>
 
   constructor(private readonly storageMountPath: string) {
     this.cleanupInterval = setInterval(() => this.closeIdle(), 60_000)
   }
 
-  log(directory: string, entry: AppRequestEntry): void {
+  async log(directory: string, entry: AppRequestEntry): Promise<void> {
     if (!this.storageMountPath) return
 
     try {
-      const cached = this.getOrOpen(directory)
-      cached.db.prepare(
+      const cached = await this.getOrOpen(directory)
+      await cached.db.run(
         `INSERT INTO app_requests (method, url, domain, source_ip, status, size, duration_ms, request_headers, response_headers, request_body, response_body)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).run(
         entry.method,
         entry.url,
         entry.domain,
@@ -45,34 +46,47 @@ export class AppRequestLogger {
       )
       cached.insertCount++
       if (cached.insertCount % PRUNE_INTERVAL === 0) {
-        this.pruneIfNeeded(cached.db)
+        await this.pruneIfNeeded(cached.db)
       }
     } catch {}
   }
 
-  close(): void {
+  async close(): Promise<void> {
     clearInterval(this.cleanupInterval)
-    for (const [, { db }] of this.cache) {
-      try { db.close() } catch {}
-    }
+    await Promise.all(
+      [...this.cache.values()].map(({ db }) => db.close().catch(() => {})),
+    )
     this.cache.clear()
   }
 
-  private getOrOpen(directory: string): CachedDb {
+  private async getOrOpen(directory: string): Promise<CachedDb> {
     const existing = this.cache.get(directory)
     if (existing) {
       existing.lastUsed = Date.now()
       return existing
     }
 
-    const dbPath = path.join(this.storageMountPath, directory, "data", "database.db")
-    fs.mkdirSync(path.dirname(dbPath), { recursive: true })
+    const pendingInit = this.pending.get(directory)
+    if (pendingInit) return pendingInit
 
-    const db = new Database(dbPath)
-    db.pragma("busy_timeout = 5000")
-    db.pragma("journal_mode = TRUNCATE")
-    db.pragma("synchronous = FULL")
-    db.exec(`CREATE TABLE IF NOT EXISTS app_requests (
+    const initPromise = this.initDb(directory)
+    this.pending.set(directory, initPromise)
+    try {
+      return await initPromise
+    } finally {
+      this.pending.delete(directory)
+    }
+  }
+
+  private async initDb(directory: string): Promise<CachedDb> {
+    const dbPath = path.join(this.storageMountPath, directory, "data", "database.db")
+    await mkdir(path.dirname(dbPath), { recursive: true })
+
+    const db = await open({ filename: dbPath, driver: sqlite3.Database })
+    await db.exec("PRAGMA busy_timeout = 5000")
+    await db.exec("PRAGMA journal_mode = TRUNCATE")
+    await db.exec("PRAGMA synchronous = FULL")
+    await db.exec(`CREATE TABLE IF NOT EXISTS app_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       method TEXT NOT NULL,
       url TEXT NOT NULL,
@@ -87,26 +101,26 @@ export class AppRequestLogger {
       response_body TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`)
-    const hasSourceIp = (db
-      .prepare("SELECT COUNT(*) as c FROM pragma_table_info('app_requests') WHERE name = 'source_ip'")
-      .get() as { c: number }).c > 0
-    if (!hasSourceIp) {
-      db.exec("ALTER TABLE app_requests ADD COLUMN source_ip TEXT")
+    const row = await db.get<{ c: number }>(
+      "SELECT COUNT(*) as c FROM pragma_table_info('app_requests') WHERE name = 'source_ip'",
+    )
+    if (row && row.c === 0) {
+      await db.exec("ALTER TABLE app_requests ADD COLUMN source_ip TEXT")
     }
-    db.exec("CREATE INDEX IF NOT EXISTS idx_app_requests_created_at ON app_requests(created_at)")
-    db.exec("CREATE INDEX IF NOT EXISTS idx_app_requests_status ON app_requests(status)")
-    db.exec("CREATE INDEX IF NOT EXISTS idx_app_requests_source_ip ON app_requests(source_ip)")
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_app_requests_created_at ON app_requests(created_at)")
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_app_requests_status ON app_requests(status)")
+    await db.exec("CREATE INDEX IF NOT EXISTS idx_app_requests_source_ip ON app_requests(source_ip)")
 
     const cached = { db, lastUsed: Date.now(), insertCount: 0 }
     this.cache.set(directory, cached)
     return cached
   }
 
-  private pruneIfNeeded(db: Database.Database): void {
+  private async pruneIfNeeded(db: Database): Promise<void> {
     try {
-      const row = db.prepare("SELECT COUNT(*) as count FROM app_requests").get() as { count: number }
-      if (row.count > MAX_ROWS) {
-        db.exec(`DELETE FROM app_requests WHERE id IN (
+      const row = await db.get<{ count: number }>("SELECT COUNT(*) as count FROM app_requests")
+      if (row && row.count > MAX_ROWS) {
+        await db.exec(`DELETE FROM app_requests WHERE id IN (
           SELECT id FROM app_requests ORDER BY id ASC LIMIT ${row.count - PRUNE_TO}
         )`)
       }
@@ -117,7 +131,7 @@ export class AppRequestLogger {
     const cutoff = Date.now() - 5 * 60_000
     for (const [key, { db, lastUsed }] of this.cache) {
       if (lastUsed < cutoff) {
-        try { db.close() } catch {}
+        db.close().catch(() => {})
         this.cache.delete(key)
       }
     }
