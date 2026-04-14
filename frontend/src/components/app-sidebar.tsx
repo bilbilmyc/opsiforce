@@ -1,4 +1,4 @@
-import { Show } from "solid-js"
+import { Show, createSignal } from "solid-js"
 import { createMutation, useQueryClient } from "@tanstack/solid-query"
 import { useNavigate } from "@tanstack/solid-router"
 import { api, type Project } from "~/api/client"
@@ -27,7 +27,7 @@ import {
 import { Button } from "~/components/ui/button"
 import TenantSelector from "~/components/tenant-selector"
 import ProjectSidebar from "~/components/project-sidebar"
-import { LogOut, Plus, FolderKanban, Wallet, ChevronsUpDown } from "~/components/icons"
+import { LogOut, Plus, FolderKanban, Wallet, ChevronsUpDown, Search, X } from "~/components/icons"
 
 export default function AppSidebar() {
   const navigate = useNavigate()
@@ -35,6 +35,9 @@ export default function AppSidebar() {
   const { toggleSidebar } = useSidebar()
   const { hasPermission } = usePermissions()
   const userInfo = useUserInfo()
+
+  const [search, setSearch] = createSignal("")
+  let searchRef: HTMLInputElement | undefined
 
   const createProject = createMutation(() => ({
     mutationFn: () => api.post<Project>("/projects"),
@@ -76,16 +79,50 @@ export default function AppSidebar() {
           <SidebarTrigger />
         </div>
 
-        <div class="group-data-[collapsible=icon]/sidebar:hidden pb-2">
+        <div class="group-data-[collapsible=icon]/sidebar:hidden flex items-center gap-1.5 pb-2">
+          <div class="relative flex-1 min-w-0">
+            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+            <input
+              ref={(el) => (searchRef = el)}
+              type="text"
+              placeholder="Search..."
+              onInput={(e) => setSearch(e.currentTarget.value)}
+              onBlur={(e) => {
+                if (!e.relatedTarget) {
+                  requestAnimationFrame(() => {
+                    if (document.activeElement === document.body) {
+                      searchRef?.focus();
+                    }
+                  });
+                }
+              }}
+              class="flex h-8 w-full rounded-md border border-input bg-background py-1 pl-7 pr-7 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <Show when={search()}>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setSearch("")
+                  if (searchRef) {
+                    searchRef.value = ""
+                    searchRef.focus()
+                  }
+                }}
+                class="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X class="w-3 h-3" />
+              </button>
+            </Show>
+          </div>
           <Button
-            variant="secondary"
-            size="sm"
-            class="w-full gap-2"
+            variant="outline"
+            size="icon"
+            class="h-8 w-8 shrink-0"
             onClick={() => createProject.mutate(undefined as never)}
             disabled={createProject.isPending}
+            title="New Project"
           >
             <Plus class="w-4 h-4" />
-            New Project
           </Button>
         </div>
         <div class="hidden group-data-[collapsible=icon]/sidebar:flex justify-center pb-2">
@@ -113,7 +150,7 @@ export default function AppSidebar() {
           </SidebarMenu>
         </div>
         <div class="group-data-[collapsible=icon]/sidebar:hidden px-2 py-1">
-          <ProjectSidebar />
+          <ProjectSidebar search={search()} />
         </div>
       </SidebarContent>
 

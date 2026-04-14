@@ -9,6 +9,7 @@ export class ProxyService {
   private readonly agentPort: number
   private readonly appPort: number
   private readonly vscodePort: number
+  private readonly dbViewerPort: number
   private readonly k8sApiProxyUrl: string
   private readonly k8sNamespace: string
 
@@ -16,6 +17,7 @@ export class ProxyService {
     this.agentPort = this.configService.getOrThrow<number>("agentPort")
     this.appPort = this.configService.getOrThrow<number>("appPort")
     this.vscodePort = this.configService.getOrThrow<number>("vscodePort")
+    this.dbViewerPort = this.configService.getOrThrow<number>("dbViewerPort")
     this.k8sApiProxyUrl = this.configService.getOrThrow<string>("k8sApiProxyUrl")
     this.k8sNamespace = this.configService.getOrThrow<string>("k8sNamespace")
   }
@@ -41,6 +43,21 @@ export class ProxyService {
     if (!project) throw new NotFoundException(`Project ${projectId} not found`)
 
     return this.upstreamFromProject(project, this.vscodePort)
+  }
+
+  async resolveDbUpstream(projectId: string, tenantId: string): Promise<string> {
+    return this.resolveUpstreamForPort(projectId, tenantId, this.dbViewerPort)
+  }
+
+  async resolveDbUpstreamByProjectId(projectId: string): Promise<string> {
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, projectId))
+
+    if (!project) throw new NotFoundException(`Project ${projectId} not found`)
+
+    return this.upstreamFromProject(project, this.dbViewerPort)
   }
 
   async getPodNameByProjectId(projectId: string): Promise<string> {

@@ -60,6 +60,11 @@ vscodeProxy:
   backendService: ""
   appsHostname: code.dev.opsima.com
 
+dbProxy:
+  enabled: true
+  backendService: ""
+  appsHostname: db.dev.opsima.com
+
 bifrostDashboard:
   enabled: true
   serviceName: ""

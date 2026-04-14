@@ -1,16 +1,7 @@
 import { Show, createSignal } from "solid-js"
 import type { Project } from "~/api/client"
-import { usePermissions } from "~/api/permissions"
-import { Permission } from "~/constants/permissions"
 import { cn } from "~/lib/cn"
-import { Settings, Pencil, Trash2, EllipsisVertical, Ban, CirclePlay, Copy } from "~/components/icons"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "~/components/ui/dropdown-menu"
+import ProjectActionsMenu from "./project-actions-menu"
 
 function formatRelativeTime(dateStr: string): string {
   const now = Date.now()
@@ -30,18 +21,9 @@ export default function ProjectCard(props: {
   isActive: boolean
   onSelect: () => void
   onRename: (id: string, title: string) => void
-  onDelete: (id: string) => void
-  onSettings: (id: string) => void
-  onDisable: (id: string) => void
-  onEnable: (id: string) => void
-  onDuplicate: (id: string) => void
+  onDeleted?: () => void
+  onDuplicated?: (project: Project) => void
 }) {
-  const { hasPermission } = usePermissions()
-  const canSeeSettings = () =>
-    hasPermission(Permission.manageProjectBudgetSettings) ||
-    hasPermission(Permission.manageProjectTimeoutSettings)
-  const canDisable = () => hasPermission(Permission.disableProject)
-  const canDuplicate = () => hasPermission(Permission.duplicateProject)
   const isDisabled = () => props.project.status === "disabled"
 
   const [editing, setEditing] = createSignal(false)
@@ -111,58 +93,21 @@ export default function ProjectCard(props: {
         </div>
 
         <Show when={!editing()}>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              class={cn(
-                "inline-flex items-center justify-center rounded-md w-6 h-6 shrink-0 text-sidebar-muted-foreground transition-colors",
-                "opacity-0 group-hover:opacity-100",
-                "hover:text-sidebar-foreground hover:bg-sidebar-accent",
-                props.isActive && "opacity-100",
-              )}
-              onClick={(e: MouseEvent) => e.stopPropagation()}
-            >
-              <EllipsisVertical class="w-4 h-4" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              <DropdownMenuItem onSelect={startRename}>
-                <Pencil class="w-3.5 h-3.5 text-muted-foreground" />
-                Rename
-              </DropdownMenuItem>
-              <Show when={canSeeSettings()}>
-                <DropdownMenuItem onSelect={() => props.onSettings(props.project.id)}>
-                  <Settings class="w-3.5 h-3.5 text-muted-foreground" />
-                  Settings
-                </DropdownMenuItem>
-              </Show>
-              <Show when={canDuplicate()}>
-                <DropdownMenuItem onSelect={() => props.onDuplicate(props.project.id)}>
-                  <Copy class="w-3.5 h-3.5 text-muted-foreground" />
-                  Duplicate
-                </DropdownMenuItem>
-              </Show>
-              <Show when={canDisable()}>
-                <Show
-                  when={isDisabled()}
-                  fallback={
-                    <DropdownMenuItem onSelect={() => props.onDisable(props.project.id)}>
-                      <Ban class="w-3.5 h-3.5 text-muted-foreground" />
-                      Disable
-                    </DropdownMenuItem>
-                  }
-                >
-                  <DropdownMenuItem onSelect={() => props.onEnable(props.project.id)}>
-                    <CirclePlay class="w-3.5 h-3.5 text-muted-foreground" />
-                    Enable
-                  </DropdownMenuItem>
-                </Show>
-              </Show>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem class="text-destructive data-[highlighted]:text-destructive" onSelect={() => props.onDelete(props.project.id)}>
-                <Trash2 class="w-3.5 h-3.5" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <ProjectActionsMenu
+            projectId={props.project.id}
+            status={props.project.status}
+            showRename
+            onRename={startRename}
+            onDeleted={props.onDeleted}
+            onDuplicated={props.onDuplicated}
+            triggerClass={cn(
+              "inline-flex items-center justify-center rounded-md w-6 h-6 shrink-0 text-sidebar-muted-foreground transition-colors",
+              "opacity-0 group-hover:opacity-100",
+              "hover:text-sidebar-foreground hover:bg-sidebar-accent",
+              props.isActive && "opacity-100",
+            )}
+            onTriggerClick={(e) => e.stopPropagation()}
+          />
         </Show>
       </div>
     </div>

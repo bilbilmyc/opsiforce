@@ -11,7 +11,9 @@ export class DatabaseService implements OnModuleInit {
     const dbPath = path.resolve(process.cwd(), "data", "app.db")
     fs.mkdirSync(path.dirname(dbPath), { recursive: true })
     this.db = new Database(dbPath)
-    this.db.exec("PRAGMA journal_mode = WAL")
+    this.db.exec("PRAGMA busy_timeout = 5000")
+    this.db.exec("PRAGMA journal_mode = TRUNCATE")
+    this.db.exec("PRAGMA synchronous = FULL")
     this.runMigrations()
   }
 

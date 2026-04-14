@@ -35,8 +35,9 @@ function initDb(): boolean {
   try {
     mkdirSync("/workspace/data", { recursive: true })
     db = new Database(DB_PATH)
-    db.exec("PRAGMA journal_mode = WAL")
     db.exec("PRAGMA busy_timeout = 5000")
+    db.exec("PRAGMA journal_mode = TRUNCATE")
+    db.exec("PRAGMA synchronous = FULL")
     db.exec(`CREATE TABLE IF NOT EXISTS process_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       process_name TEXT NOT NULL,

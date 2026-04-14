@@ -3,8 +3,8 @@ import http from "http"
 import { Readable, pipeline } from "stream"
 import { ProjectService } from "../project/project.service"
 import { ProxyService } from "./proxy.service"
-import { AppRequestLogger } from "../app-request/app-request-logger"
 import {
+  PortForwardManager,
   extractProjectId,
   isK8sPodError,
   sendBadGatewayResponse,
@@ -18,21 +18,33 @@ import {
   writeRestartingUpgradeResponse,
 } from "./proxy.shared"
 
-const MAX_BUFFER_SIZE = 1 * 1024 * 1024
-
-interface ProxyResult {
-  result: "ok" | "restart"
-  statusCode: number
-  responseSize: number
-  responseHeaders: string
-  responseBody: string | null
-}
-
-export function createAppProxyServer(
+export function createDbProxyServer(
   proxyService: ProxyService,
   projectService: ProjectService,
-  logger: AppRequestLogger,
+  opts?: { namespace?: string; dbViewerPort?: number },
 ) {
+  const dbViewerPort = opts?.dbViewerPort ?? 8081
+  const portForwardMgr = opts?.namespace ? new PortForwardManager(opts.namespace, dbViewerPort) : null
+
+  process.on("exit", () => portForwardMgr?.cleanup())
+
+  async function resolveUpstream(projectId: string): Promise<string> {
+    if (!portForwardMgr) {
+      return proxyService.resolveDbUpstreamByProjectId(projectId)
+    }
+
+    const upstream = await proxyService.resolveDbUpstreamByProjectId(projectId)
+    const upstreamUrl = new URL(upstream)
+
+    if (upstreamUrl.hostname === "localhost" || upstreamUrl.hostname === "127.0.0.1") {
+      const podName = await proxyService.getPodNameByProjectId(projectId)
+      const localPort = await portForwardMgr.getLocalPort(projectId, podName)
+      return `http://localhost:${localPort}`
+    }
+
+    return upstream
+  }
+
   const server = http.createServer(async (req, res) => {
     setCorsHeaders(res, req)
 
@@ -49,8 +61,6 @@ export function createAppProxyServer(
       return
     }
 
-    const start = Date.now()
-
     try {
       const ensured = await projectService.ensureProjectById(projectId, "app")
       if (ensured.state === "disabled") {
@@ -62,35 +72,15 @@ export function createAppProxyServer(
         return
       }
 
-      const hasBody = req.method !== "GET" && req.method !== "HEAD"
-      const requestBody = hasBody && shouldBufferRequest(req.headers)
-        ? await collectBody(req)
-        : null
-
-      const proxyResult = await proxyHttp(proxyService, projectId, req, res, requestBody)
-
-      if (proxyResult.result === "restart") {
+      const result = await proxyHttp(resolveUpstream, projectId, req, res)
+      if (result === "restart") {
         if (await shouldRestartProject(projectService, projectId)) {
           sendRestartingResponse(res)
           return
         }
-        sendBadGatewayResponse(res)
-        return
-      }
 
-      logger.log(ensured.project.directory, {
-        method: req.method || "GET",
-        url: req.url || "/",
-        domain: req.headers.host || null,
-        sourceIp: getSourceIp(req),
-        status: proxyResult.statusCode,
-        size: proxyResult.responseSize,
-        durationMs: Date.now() - start,
-        requestHeaders: JSON.stringify(req.headers),
-        responseHeaders: proxyResult.responseHeaders,
-        requestBody: requestBody ? requestBody.toString("utf-8") : null,
-        responseBody: proxyResult.responseBody,
-      })
+        sendBadGatewayResponse(res)
+      }
     } catch (err) {
       if (err instanceof NotFoundException) {
         sendNotFoundResponse(res)
@@ -129,7 +119,7 @@ export function createAppProxyServer(
         return
       }
 
-      const result = await proxyWs(proxyService, projectId, req, socket)
+      const result = await proxyWs(resolveUpstream, projectId, req, socket)
       if (result === "restart") {
         if (await shouldRestartProject(projectService, projectId)) {
           writeRestartingUpgradeResponse(socket)
@@ -169,48 +159,37 @@ async function shouldRestartProject(
 }
 
 async function proxyHttp(
-  proxyService: ProxyService,
+  resolveUpstream: (id: string) => Promise<string>,
   projectId: string,
   req: http.IncomingMessage,
   res: http.ServerResponse,
-  requestBody: Buffer | null,
-): Promise<ProxyResult> {
-  const upstream = await proxyService.resolveAppUpstreamByProjectId(projectId)
-  const upstreamPath = new URL(upstream).pathname
+): Promise<"ok" | "restart"> {
+  const upstream = await resolveUpstream(projectId)
   const targetUrl = `${upstream}${req.url}`
 
   const headers: Record<string, string> = {}
   for (const [key, val] of Object.entries(req.headers)) {
-    if (key === "host" || key === "connection") continue
+    if (key === "host" || key === "connection" || key === "accept-encoding") continue
     if (typeof val === "string") headers[key] = val
   }
 
   const hasBody = req.method !== "GET" && req.method !== "HEAD"
-  const fetchOptions: RequestInit = { method: req.method, headers }
-
-  if (hasBody) {
-    if (requestBody) {
-      fetchOptions.body = new Uint8Array(requestBody)
-    } else {
-      fetchOptions.body = Readable.toWeb(req) as ReadableStream
-      // @ts-expect-error duplex required for streaming body
-      fetchOptions.duplex = "half"
-    }
-  }
-
-  const response = await fetch(targetUrl, fetchOptions)
-  const responseHeaders = JSON.stringify(Object.fromEntries(response.headers.entries()))
+  const response = await fetch(targetUrl, {
+    method: req.method,
+    headers,
+    body: hasBody ? Readable.toWeb(req) as ReadableStream : undefined,
+    // @ts-expect-error duplex required for streaming body
+    duplex: hasBody ? "half" : undefined,
+  })
 
   if (response.status >= 400) {
     const text = await response.text()
-    if (isK8sPodError(text)) {
-      return { result: "restart", statusCode: response.status, responseSize: 0, responseHeaders, responseBody: null }
-    }
+    if (isK8sPodError(text)) return "restart"
 
     const resHeaders = filterResponseHeaders(response.headers)
     res.writeHead(response.status, resHeaders)
     res.end(text)
-    return { result: "ok", statusCode: response.status, responseSize: Buffer.byteLength(text), responseHeaders, responseBody: text }
+    return "ok"
   }
 
   const resHeaders = filterResponseHeaders(response.headers)
@@ -218,49 +197,32 @@ async function proxyHttp(
 
   if (!response.body) {
     res.end()
-    return { result: "ok", statusCode: response.status, responseSize: 0, responseHeaders, responseBody: null }
-  }
-
-  const contentType = response.headers.get("content-type") || ""
-
-  if (upstreamPath !== "/" && contentType.includes("text/html")) {
-    const html = await response.text()
-    const rewritten = html.replaceAll(upstreamPath, "")
-    res.end(rewritten)
-    return { result: "ok", statusCode: response.status, responseSize: Buffer.byteLength(rewritten), responseHeaders, responseBody: html }
-  }
-
-  const knownSize = parseInt(response.headers.get("content-length") || "0", 10)
-
-  if (isTextContent(contentType) && (knownSize === 0 || knownSize < MAX_BUFFER_SIZE)) {
-    const text = await response.text()
-    res.end(text)
-    return { result: "ok", statusCode: response.status, responseSize: Buffer.byteLength(text), responseHeaders, responseBody: text }
+    return "ok"
   }
 
   pipeline(Readable.fromWeb(response.body as import("stream/web").ReadableStream), res, () => {})
-  return { result: "ok", statusCode: response.status, responseSize: knownSize, responseHeaders, responseBody: null }
+  return "ok"
 }
 
 async function proxyWs(
-  proxyService: ProxyService,
+  resolveUpstream: (id: string) => Promise<string>,
   projectId: string,
   req: http.IncomingMessage,
   socket: import("stream").Duplex,
 ): Promise<"ok" | "restart"> {
-  const upstream = await proxyService.resolveAppUpstreamByProjectId(projectId)
+  const upstream = await resolveUpstream(projectId)
   const upstreamUrl = new URL(upstream)
 
   return new Promise((resolve, reject) => {
+    const headers = { ...req.headers, host: `${upstreamUrl.hostname}:${upstreamUrl.port}` }
+    delete headers.origin
+
     const proxyReq = http.request({
       hostname: upstreamUrl.hostname,
       port: upstreamUrl.port,
       path: req.url,
       method: "GET",
-      headers: {
-        ...req.headers,
-        host: `${upstreamUrl.hostname}:${upstreamUrl.port}`,
-      },
+      headers,
     })
 
     proxyReq.on("upgrade", (proxyRes, proxySocket, proxyHead) => {
@@ -306,45 +268,14 @@ async function proxyWs(
 function filterResponseHeaders(headers: Headers): Record<string, string> {
   const filtered: Record<string, string> = {}
   for (const [key, value] of headers.entries()) {
-    if (key === "transfer-encoding" || key === "content-length") continue
+    if (
+      key === "transfer-encoding" ||
+      key === "content-length" ||
+      key === "content-encoding" ||
+      key === "x-frame-options" ||
+      key === "content-security-policy"
+    ) continue
     filtered[key] = value
   }
   return filtered
-}
-
-function isTextContent(contentType: string): boolean {
-  return contentType.includes("application/json")
-    || contentType.includes("text/")
-    || contentType.includes("application/xml")
-    || contentType.includes("application/javascript")
-}
-
-function getSourceIp(req: http.IncomingMessage): string | null {
-  const realIp = req.headers["x-real-ip"]
-  if (typeof realIp === "string" && realIp.length > 0) return realIp
-  const xff = req.headers["x-forwarded-for"]
-  if (typeof xff === "string" && xff.length > 0) {
-    const first = xff.split(",")[0]
-    if (first) {
-      const trimmed = first.trim()
-      if (trimmed.length > 0) return trimmed
-    }
-  }
-  return req.socket.remoteAddress ?? null
-}
-
-function shouldBufferRequest(headers: http.IncomingHttpHeaders): boolean {
-  const contentType = headers["content-type"] || ""
-  if (contentType.includes("multipart")) return false
-  const contentLength = parseInt(headers["content-length"] || "0", 10)
-  if (contentLength > MAX_BUFFER_SIZE) return false
-  return true
-}
-
-async function collectBody(req: http.IncomingMessage): Promise<Buffer> {
-  const chunks: Buffer[] = []
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-  }
-  return Buffer.concat(chunks)
 }

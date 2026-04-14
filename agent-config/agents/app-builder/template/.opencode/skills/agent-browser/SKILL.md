@@ -76,8 +76,11 @@ agent-browser eval "document.title"         # run JS in page context
 
 ## Debugging workflow
 
-When investigating issues, combine the browser with `dbquery`:
+**Before opening the browser**, verify the dev servers are running — see §Verifying the app runs in the agent instructions. A blank page is almost always a crashed process, not a UI bug.
+
+When investigating UI issues, pair browser output with platform-DB queries (see §Debugging with sqlite3 in the agent instructions for the SQL):
+
 1. `agent-browser open http://localhost:3000` — see what the user sees
-2. `agent-browser snapshot` — inspect the DOM structure
-3. `dbquery requests errors` — check what API calls failed
-4. `dbquery logs webapp` — check for backend errors or crashes
+2. `agent-browser snapshot` — inspect the DOM
+3. Query `app_requests` for failed API calls (4xx/5xx + response body)
+4. Query `process_logs` / `process_events` for dev-server errors or crashes
