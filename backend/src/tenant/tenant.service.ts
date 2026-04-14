@@ -1,5 +1,5 @@
 import { Injectable, Logger } from "@nestjs/common"
-import { eq, inArray } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
 import { tenants } from "../../db/schema"
@@ -10,6 +10,7 @@ const TENANT_GROUP_PREFIX = "role:opsiforce_tenant_name_"
 @Injectable()
 export class TenantService {
   private readonly logger = new Logger(TenantService.name)
+  private readonly pendingTenants = new Map<string, Promise<typeof tenants.$inferSelect>>()
   constructor(private readonly bifrostService: BifrostService) {}
 
   parseTenantGroups(groupsHeader: string): string[] {
@@ -33,6 +34,16 @@ export class TenantService {
   }
 
   async getOrCreateTenant(name: string) {
+    const pending = this.pendingTenants.get(name)
+    if (pending) return pending
+
+    const promise = this.doGetOrCreateTenant(name)
+      .finally(() => this.pendingTenants.delete(name))
+    this.pendingTenants.set(name, promise)
+    return promise
+  }
+
+  private async doGetOrCreateTenant(name: string) {
     const [existing] = await db
       .select()
       .from(tenants)
@@ -54,27 +65,6 @@ export class TenantService {
   }
 
   async getOrCreateTenants(names: string[]) {
-    if (names.length === 0) return []
-
-    const existing = await db
-      .select()
-      .from(tenants)
-      .where(inArray(tenants.name, names))
-
-    const existingNames = new Set(existing.map((t) => t.name))
-    const missing = names.filter((n) => !existingNames.has(n))
-
-    if (missing.length > 0) {
-      await db
-        .insert(tenants)
-        .values(missing.map((name) => ({ id: crypto.randomUUID(), name, displayName: name })))
-        .onConflictDoNothing()
-    }
-
-    const all = missing.length === 0
-      ? existing
-      : await db.select().from(tenants).where(inArray(tenants.name, names))
-
-    return Promise.all(all.map((t) => this.ensureBifrostCustomer(t)))
+    return Promise.all(names.map((name) => this.getOrCreateTenant(name)))
   }
 }
