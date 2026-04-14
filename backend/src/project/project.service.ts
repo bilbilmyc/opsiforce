@@ -11,8 +11,8 @@ import { ConfigService } from "@nestjs/config"
 import { eq, and, desc, asc, inArray, or, ne, sql } from "drizzle-orm"
 import crypto from "crypto"
 import { db, pgClient } from "../../db"
-import { projectSettings, projects, pods, tenants, deletedProjects } from "../../db/schema"
-import { PodService, TenantPodOptions } from "../pod/pod.service"
+import { projectSettings, projects, pods, deletedProjects } from "../../db/schema"
+import { PodService } from "../pod/pod.service"
 import { PodPoolService } from "../pod/pod.pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
 import { BifrostService } from "../bifrost/bifrost.service"
@@ -103,6 +103,7 @@ export class ProjectService implements OnApplicationBootstrap {
         })
     })
 
+    await this.createBifrostResources(id, tenantId)
     this.queueProjectStartup(id)
 
     return this.findOne(id, tenantId)
@@ -141,6 +142,7 @@ export class ProjectService implements OnApplicationBootstrap {
         })
     })
 
+    await this.createBifrostResources(id, tenantId)
     this.pendingSourceDirs.set(id, source.directory)
     this.queueProjectStartup(id)
 
@@ -418,34 +420,13 @@ export class ProjectService implements OnApplicationBootstrap {
     return false
   }
 
-  private async buildTenantPodOptions(projectId: string, tenantId: string): Promise<TenantPodOptions | undefined> {
-    if (!this.bifrostService.isEnabled()) return undefined
+  private async createBifrostResources(projectId: string, tenantId: string): Promise<void> {
+    if (!this.bifrostService.isEnabled()) return
 
     try {
-      const [[tenant], [project]] = await Promise.all([
-        db.select().from(tenants).where(eq(tenants.id, tenantId)),
-        db.select().from(projects).where(eq(projects.id, projectId)),
-      ])
-      const customerId = tenant?.bifrostTenantId
-
-      let teamId = project?.bifrostProjectId ?? undefined
-      if (!teamId && customerId) {
-        teamId = await this.bifrostService.createProjectTeam(projectId, customerId)
-      }
-
-      const [chatKey, backendKey] = await Promise.all([
-        this.bifrostService.createProjectKey(projectId, tenantId, "chat", teamId),
-        this.bifrostService.createProjectKey(projectId, tenantId, "backend", teamId),
-      ])
-
-      return {
-        bifrostApiKey: chatKey.keyToken,
-        bifrostBackendApiKey: backendKey.keyToken,
-        bifrostProxyUrl: this.bifrostService.getPodProxyUrl(),
-      }
+      await this.bifrostService.createProjectResources(projectId, tenantId)
     } catch (err) {
-      this.logger.warn(`Failed to create Bifrost keys for project ${projectId}: ${(err as Error).message}`)
-      return undefined
+      this.logger.warn(`Failed to create Bifrost resources for project ${projectId}: ${(err as Error).message}`)
     }
   }
 
@@ -516,7 +497,7 @@ export class ProjectService implements OnApplicationBootstrap {
       const current = await this.findOneById(projectId).catch(() => null)
       if (!current || current.status !== ProjectStatus.Starting) return
 
-      const tenantOptions = await this.buildTenantPodOptions(projectId, current.tenantId)
+      const tenantOptions = await this.bifrostService.getProjectPodOptions(projectId)
       const claimedPod = await this.podPoolService.claimWarmPod()
       const podName = current.podName ?? this.podService.assignedPodName(projectId)
 

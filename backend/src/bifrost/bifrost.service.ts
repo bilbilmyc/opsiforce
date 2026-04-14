@@ -4,6 +4,7 @@ import { eq, and, isNull } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
 import { projectVirtualKeys, tenants, projects } from "../../db/schema"
+import type { TenantPodOptions } from "../pod/pod.service"
 import type {
   KeyType,
   BifrostBudget,
@@ -218,6 +219,38 @@ export class BifrostService {
 
     this.logger.log(`Created Bifrost virtual key (${keyType}) for project ${projectId}`)
     return { keyId, keyToken }
+  }
+
+  async createProjectResources(projectId: string, tenantId: string): Promise<void> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId))
+
+    const customerId = tenant?.bifrostTenantId
+      ?? (tenant ? await this.createTenantCustomer(tenantId, tenant.name) : undefined)
+    if (!customerId) return
+
+    const teamId = await this.createProjectTeam(projectId, customerId)
+
+    await Promise.all([
+      this.createProjectKey(projectId, tenantId, "chat", teamId),
+      this.createProjectKey(projectId, tenantId, "backend", teamId),
+    ])
+  }
+
+  async getProjectPodOptions(projectId: string): Promise<TenantPodOptions | undefined> {
+    const keys = await db
+      .select()
+      .from(projectVirtualKeys)
+      .where(and(eq(projectVirtualKeys.projectId, projectId), eq(projectVirtualKeys.status, "active")))
+
+    const chatKey = keys.find((k) => k.keyType === "chat")
+    const backendKey = keys.find((k) => k.keyType === "backend")
+    if (!chatKey || !backendKey) return undefined
+
+    return {
+      bifrostApiKey: chatKey.bifrostKeyToken,
+      bifrostBackendApiKey: backendKey.bifrostKeyToken,
+      bifrostProxyUrl: this.podProxyUrl,
+    }
   }
 
   async getProjectKeyBudgets(projectId: string): Promise<Array<{ keyType: KeyType; budget: BifrostBudget | null }>> {
