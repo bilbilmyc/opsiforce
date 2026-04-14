@@ -1,5 +1,6 @@
 import { Show, For } from "solid-js"
 import { createQuery } from "@tanstack/solid-query"
+import { useNavigate } from "@tanstack/solid-router"
 import { api, type Tenant } from "~/api/client"
 import { createTenantState } from "~/lib/tenant-state"
 import {
@@ -13,6 +14,7 @@ import { Building2, ChevronsUpDown } from "~/components/icons"
 
 export default function TenantSelector() {
   const [currentTenant, setTenant] = createTenantState()
+  const navigate = useNavigate()
 
   const tenantsQuery = createQuery(() => ({
     queryKey: ["tenants"],
@@ -65,7 +67,10 @@ export default function TenantSelector() {
                       {(tenant) => (
                         <DropdownMenuItem
                           class={tenant.name === currentTenant() ? "bg-accent" : ""}
-                          onSelect={() => setTenant(tenant.name)}
+                          onSelect={() => {
+                          setTenant(tenant.name)
+                          navigate({ to: "/" })
+                        }}
                         >
                           {tenant.displayName}
                         </DropdownMenuItem>

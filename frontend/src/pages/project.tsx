@@ -12,7 +12,17 @@ import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-que
 import { useNavigate } from "@tanstack/solid-router";
 import { usePermissions } from "~/api/permissions";
 import { Permission } from "~/constants/permissions";
-import { MessageSquare, Code as CodeIcon, Database, Ban } from "~/components/icons";
+import {
+  MessageSquare,
+  Code as CodeIcon,
+  Database,
+  Ban,
+  PanelRightOpen,
+  PanelRightClose,
+  Copy,
+  Check,
+  RefreshCw,
+} from "~/components/icons";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import ProjectActionsMenu from "~/components/project-actions-menu";
 import { AppBaseProviders, AppInterface } from "@opencode-ai/app/app";
@@ -38,6 +48,8 @@ import {
 } from "~/api/client";
 import FileUpload from "~/components/file-upload";
 import Spinner from "~/components/ui/spinner";
+import { createResizablePanel } from "~/lib/create-resizable-panel";
+import { ResizeHandle } from "~/components/ui/resize-handle";
 
 const platform: Platform = {
   platform: "web",
@@ -124,56 +136,13 @@ export default function ProjectView(props: {
   const [copied, setCopied] = createSignal(false);
   const qc = useQueryClient();
 
-  const PREVIEW_WIDTH_KEY = "opsiforce:preview-width";
-  const PREVIEW_MIN_WIDTH = 320;
-  const PREVIEW_MIN_LEFT = 320;
-
-  function clampPreviewWidth(width: number) {
-    const maxWidth = Math.max(
-      PREVIEW_MIN_WIDTH,
-      window.innerWidth - PREVIEW_MIN_LEFT,
-    );
-    return Math.min(Math.max(width, PREVIEW_MIN_WIDTH), maxWidth);
-  }
-
-  function readInitialPreviewWidth() {
-    if (typeof window === "undefined") return 480;
-    const stored = window.localStorage.getItem(PREVIEW_WIDTH_KEY);
-    const parsed = stored ? Number(stored) : NaN;
-    const fallback = Math.round(window.innerWidth * 0.4);
-    return clampPreviewWidth(Number.isFinite(parsed) ? parsed : fallback);
-  }
-
-  const [previewWidth, setPreviewWidth] = createSignal(
-    readInitialPreviewWidth(),
-  );
-  const [resizing, setResizing] = createSignal(false);
-
-  function startPreviewResize(event: PointerEvent) {
-    event.preventDefault();
-    setResizing(true);
-    const startX = event.clientX;
-    const startWidth = previewWidth();
-
-    const onMove = (e: PointerEvent) => {
-      const next = clampPreviewWidth(startWidth + (startX - e.clientX));
-      setPreviewWidth(next);
-    };
-    const onUp = () => {
-      setResizing(false);
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-      window.localStorage.setItem(PREVIEW_WIDTH_KEY, String(previewWidth()));
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  }
-
-  const handleWindowResize = () => {
-    setPreviewWidth((w) => clampPreviewWidth(w));
-  };
-  onMount(() => window.addEventListener("resize", handleWindowResize));
-  onCleanup(() => window.removeEventListener("resize", handleWindowResize));
+  const preview = createResizablePanel({
+    storageKey: "opsiforce:preview-width",
+    minWidth: 320,
+    defaultWidth: () => Math.round(window.innerWidth * 0.4),
+    maxWidth: () => window.innerWidth - 320,
+    direction: "left",
+  });
 
   const enableProject = createMutation(() => ({
     mutationFn: () => api.post<Project>(`/projects/${props.projectId}/enable`),
@@ -500,38 +469,22 @@ export default function ProjectView(props: {
             class="shrink-0 w-8 bg-sidebar border-l border-border flex items-center justify-center hover:bg-accent transition-colors"
             title="Open preview"
           >
-            <svg
-              class="w-4 h-4 text-muted-foreground"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15 19l-7-7 7-7"
-              />
-            </svg>
+            <PanelRightOpen class="w-4 h-4 text-muted-foreground" />
           </button>
         )}
 
         {previewOpen() && (
           <div
             class="shrink-0 border-l border-border flex flex-col bg-background relative"
-            style={{ width: `${previewWidth()}px` }}
+            style={{ width: `${preview.width()}px` }}
           >
-            <div
-              onPointerDown={startPreviewResize}
-              class="absolute left-0 top-0 h-full w-1 -translate-x-1/2 cursor-col-resize z-10 hover:bg-primary/40 active:bg-primary/60 transition-colors"
-              classList={{ "bg-primary/60": resizing() }}
-              title="Drag to resize"
+            <ResizeHandle
+              onPointerDown={preview.startResize}
+              resizing={preview.resizing()}
+              position="left"
             />
-            {resizing() && (
-              <div class="fixed inset-0 z-50 cursor-col-resize" />
-            )}
-            <div class="h-8 flex items-center justify-between px-2 bg-sidebar border-b border-border shrink-0">
-              <div class="flex items-center gap-1.5">
+            <div class="h-8 flex items-center justify-between px-1.5 bg-sidebar border-b border-border shrink-0">
+              <div class="flex items-center gap-1">
                 <button
                   onClick={() => {
                     setPreviewOpen(false);
@@ -540,68 +493,29 @@ export default function ProjectView(props: {
                   class="w-6 h-6 flex items-center justify-center rounded hover:bg-accent transition-colors"
                   title="Close preview"
                 >
-                  <svg
-                    class="w-3.5 h-3.5 text-muted-foreground"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
+                  <PanelRightClose class="w-3.5 h-3.5 text-muted-foreground" />
                 </button>
-                <span class="text-xs font-medium text-muted-foreground">
+                <span class="text-xs font-medium text-muted-foreground truncate">
                   {appName() || "Preview"}
                 </span>
               </div>
-              <div class="flex items-center gap-1">
+              <div class="flex items-center">
                 <button
                   onClick={copyPreviewUrl}
-                  class="h-6 px-2 flex items-center gap-1 rounded hover:bg-accent transition-colors text-xs text-muted-foreground"
-                  title="Copy preview URL"
+                  class="w-6 h-6 flex items-center justify-center rounded hover:bg-accent transition-colors text-muted-foreground"
+                  title={copied() ? "Copied!" : "Copy URL"}
                 >
-                  <svg
-                    class="w-3 h-3"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d={
-                        copied()
-                          ? "M5 13l4 4L19 7"
-                          : "M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10"
-                      }
-                    />
-                  </svg>
-                  {copied() ? "Copied" : "URL"}
+                  {copied()
+                    ? <Check class="w-3.5 h-3.5 text-green-500" />
+                    : <Copy class="w-3.5 h-3.5" />
+                  }
                 </button>
                 <button
                   onClick={reloadPreview}
-                  class="h-6 px-2 flex items-center gap-1 rounded hover:bg-accent transition-colors text-xs text-muted-foreground"
+                  class="w-6 h-6 flex items-center justify-center rounded hover:bg-accent transition-colors text-muted-foreground"
                   title="Reload preview"
                 >
-                  <svg
-                    class="w-3 h-3"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                    />
-                  </svg>
-                  Reload
+                  <RefreshCw class="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>

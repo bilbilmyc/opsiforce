@@ -11,6 +11,7 @@ import { Button } from "~/components/ui/button"
 import { Menu } from "~/components/icons"
 import { HotjarScript } from "~/scripts/hotjar"
 import { Toaster } from "solid-sonner"
+import { createTenantState } from "~/lib/tenant-state"
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,23 +42,36 @@ export const Route = createRootRoute({
 })
 
 function RootLayout() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
+    </QueryClientProvider>
+  )
+}
+
+function AppContent() {
   const router = useRouter()
   const location = useLocation()
+  const [tenant] = createTenantState()
   const isPermissionDenied = () => location().pathname === "/permission-denied"
 
   return (
-    <QueryClientProvider client={queryClient}>
+    <>
       <Toaster position="bottom-right" richColors />
       <HotjarScript />
       <Show when={!isPermissionDenied()} fallback={<Outlet />}>
         <SidebarProvider>
           <AppSidebar />
-          <div class="flex flex-1 flex-col min-w-0 h-full overflow-hidden bg-background">
-            <MobileHeader />
-            <div class="flex-1 min-w-0 h-full overflow-hidden">
-              <Outlet />
-            </div>
-          </div>
+          <Show when={tenant()} keyed>
+            {(_t) => (
+              <div class="flex flex-1 flex-col min-w-0 h-full overflow-hidden bg-background">
+                <MobileHeader />
+                <div class="flex-1 min-w-0 h-full overflow-hidden">
+                  <Outlet />
+                </div>
+              </div>
+            )}
+          </Show>
         </SidebarProvider>
       </Show>
       <Show when={import.meta.env.DEV}>
@@ -74,6 +88,6 @@ function RootLayout() {
           ]}
         />
       </Show>
-    </QueryClientProvider>
+    </>
   )
 }
