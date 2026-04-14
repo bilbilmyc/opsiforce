@@ -8,7 +8,7 @@ import {
   OnApplicationBootstrap,
 } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
-import { eq, and, desc, inArray, or, ne } from "drizzle-orm"
+import { eq, and, desc, asc, inArray, or, ne, sql } from "drizzle-orm"
 import crypto from "crypto"
 import { db, pgClient } from "../../db"
 import { projectSettings, projects, pods, tenants, deletedProjects } from "../../db/schema"
@@ -170,7 +170,11 @@ export class ProjectService implements OnApplicationBootstrap {
       .from(projects)
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .where(eq(projects.tenantId, tenantId))
-      .orderBy(desc(projects.lastActiveAt), desc(projects.createdAt))
+      .orderBy(
+        asc(sql`CASE WHEN ${projects.status} = 'disabled' THEN 1 ELSE 0 END`),
+        desc(projects.lastActiveAt),
+        desc(projects.createdAt),
+      )
   }
 
   async findOne(id: string, tenantId: string): Promise<ProjectResponse> {

@@ -1,11 +1,10 @@
 import { NotFoundException } from "@nestjs/common"
 import http from "http"
-import net from "net"
-import { spawn, ChildProcess } from "child_process"
 import { Readable, pipeline } from "stream"
 import { ProjectService } from "../project/project.service"
 import { ProxyService } from "./proxy.service"
 import {
+  PortForwardManager,
   extractProjectId,
   isK8sPodError,
   sendBadGatewayResponse,
@@ -19,69 +18,13 @@ import {
   writeRestartingUpgradeResponse,
 } from "./proxy.shared"
 
-interface PortForward {
-  port: number
-  process: ChildProcess
-  podName: string
-}
-
-class PortForwardManager {
-  private forwards = new Map<string, PortForward>()
-  private namespace: string
-
-  constructor(namespace: string) {
-    this.namespace = namespace
-  }
-
-  async getLocalPort(projectId: string, podName: string): Promise<number> {
-    const existing = this.forwards.get(projectId)
-    if (existing && existing.podName === podName && !existing.process.killed) {
-      return existing.port
-    }
-
-    if (existing) {
-      existing.process.kill()
-      this.forwards.delete(projectId)
-    }
-
-    const port = await this.findFreePort()
-    const proc = spawn("kubectl", [
-      "port-forward", `-n`, this.namespace, podName, `${port}:8080`,
-    ], { stdio: "ignore" })
-
-    proc.on("exit", () => this.forwards.delete(projectId))
-
-    this.forwards.set(projectId, { port, process: proc, podName })
-
-    await new Promise((r) => setTimeout(r, 1000))
-    return port
-  }
-
-  private findFreePort(): Promise<number> {
-    return new Promise((resolve, reject) => {
-      const srv = net.createServer()
-      srv.listen(0, () => {
-        const port = (srv.address() as net.AddressInfo).port
-        srv.close(() => resolve(port))
-      })
-      srv.on("error", reject)
-    })
-  }
-
-  cleanup() {
-    for (const [, fwd] of this.forwards) {
-      fwd.process.kill()
-    }
-    this.forwards.clear()
-  }
-}
-
 export function createVscodeProxyServer(
   proxyService: ProxyService,
   projectService: ProjectService,
-  opts?: { namespace?: string },
+  opts?: { namespace?: string; vscodePort?: number },
 ) {
-  const portForwardMgr = opts?.namespace ? new PortForwardManager(opts.namespace) : null
+  const vscodePort = opts?.vscodePort ?? 8080
+  const portForwardMgr = opts?.namespace ? new PortForwardManager(opts.namespace, vscodePort) : null
 
   process.on("exit", () => portForwardMgr?.cleanup())
 

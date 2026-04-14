@@ -1,5 +1,66 @@
 import type http from "http"
 import type { Duplex } from "stream"
+import net from "net"
+import { spawn, ChildProcess } from "child_process"
+
+interface PortForward {
+  port: number
+  process: ChildProcess
+  podName: string
+}
+
+export class PortForwardManager {
+  private forwards = new Map<string, PortForward>()
+  private namespace: string
+  private targetPort: number
+
+  constructor(namespace: string, targetPort: number) {
+    this.namespace = namespace
+    this.targetPort = targetPort
+  }
+
+  async getLocalPort(projectId: string, podName: string): Promise<number> {
+    const existing = this.forwards.get(projectId)
+    if (existing && existing.podName === podName && !existing.process.killed) {
+      return existing.port
+    }
+
+    if (existing) {
+      existing.process.kill()
+      this.forwards.delete(projectId)
+    }
+
+    const port = await this.findFreePort()
+    const proc = spawn("kubectl", [
+      "port-forward", `-n`, this.namespace, podName, `${port}:${this.targetPort}`,
+    ], { stdio: "ignore" })
+
+    proc.on("exit", () => this.forwards.delete(projectId))
+
+    this.forwards.set(projectId, { port, process: proc, podName })
+
+    await new Promise((r) => setTimeout(r, 1000))
+    return port
+  }
+
+  private findFreePort(): Promise<number> {
+    return new Promise((resolve, reject) => {
+      const srv = net.createServer()
+      srv.listen(0, () => {
+        const port = (srv.address() as net.AddressInfo).port
+        srv.close(() => resolve(port))
+      })
+      srv.on("error", reject)
+    })
+  }
+
+  cleanup() {
+    for (const [, fwd] of this.forwards) {
+      fwd.process.kill()
+    }
+    this.forwards.clear()
+  }
+}
 
 export const RESTARTING_RESPONSE_BODY = JSON.stringify({
   error: "Pod is restarting, please retry",

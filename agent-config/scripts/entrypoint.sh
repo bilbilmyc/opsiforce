@@ -4,6 +4,9 @@ set -e
 export OPENAI_API_KEY="${OPENAI_API_KEY:-}"
 export APP_PORT="${APP_PORT:-3000}"
 export VSCODE_PORT="${VSCODE_PORT:-8080}"
+export DB_VIEWER_PORT="${DB_VIEWER_PORT:-8081}"
+
+mkdir -p /workspace/app/data /workspace/data
 
 guard webapp /workspace/app/startup.sh &
 
@@ -17,5 +20,12 @@ guard vscode code-server \
   --disable-telemetry \
   --disable-workspace-trust \
   /workspace &
+
+guard dbviewer datasette serve \
+  /workspace/app/data/app.db \
+  /workspace/data/database.db \
+  --host 0.0.0.0 --port "${DB_VIEWER_PORT}" \
+  --cors --create \
+  --metadata /opt/opencode/datasette-metadata.yml &
 
 wait -n

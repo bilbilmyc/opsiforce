@@ -6,6 +6,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "~/components/ui/dropdown-menu"
+import { Upload, File, Folder, ChevronDown } from "~/components/icons"
 
 const FileUpload: Component<{ projectId: string }> = (props) => {
   const [uploading, setUploading] = createSignal(false)
@@ -82,18 +83,18 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
           when={!uploading()}
           fallback={
             <div class="flex h-7 items-center gap-3">
-              <div class="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+              <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                 <div
-                  class="h-full bg-foreground/60 rounded-full transition-all duration-300"
+                  class="h-full bg-primary rounded-full transition-all duration-300"
                   style={{ width: `${progress()}%` }}
                 />
               </div>
-              <span class="text-xs text-muted-foreground tabular-nums w-7 text-right">
+              <span class="text-xs text-muted-foreground tabular-nums w-9 text-right">
                 {progress()}%
               </span>
               <button
                 onClick={cancelUpload}
-                class="h-6 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                class="inline-flex h-7 items-center rounded-md border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
               >
                 Cancel
               </button>
@@ -102,66 +103,18 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
         >
           <div class="flex h-7 items-center">
             <DropdownMenu>
-              <DropdownMenuTrigger class="flex h-7 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground/60 transition-all hover:text-foreground hover:bg-accent">
-                <svg
-                  class="h-3.5 w-3.5"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                  />
-                </svg>
+              <DropdownMenuTrigger class="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[expanded]:bg-accent data-[expanded]:text-foreground">
+                <Upload class="h-3.5 w-3.5" />
                 Upload
-                <svg
-                  class="h-2.5 w-2.5 opacity-40"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    d="M19 9l-7 7-7-7"
-                  />
-                </svg>
+                <ChevronDown class="h-3 w-3 opacity-60" />
               </DropdownMenuTrigger>
-              <DropdownMenuContent>
+              <DropdownMenuContent class="min-w-36">
                 <DropdownMenuItem onSelect={() => fileInputRef?.click()}>
-                  <svg
-                    class="h-3.5 w-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                    />
-                  </svg>
+                  <File class="h-3.5 w-3.5" />
                   Files
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => folderInputRef?.click()}>
-                  <svg
-                    class="h-3.5 w-3.5"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
-                    />
-                  </svg>
+                  <Folder class="h-3.5 w-3.5" />
                   Folder
                 </DropdownMenuItem>
               </DropdownMenuContent>

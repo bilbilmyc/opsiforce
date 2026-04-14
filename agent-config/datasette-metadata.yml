@@ -1,0 +1,20 @@
+databases:
+  app:
+    allow_sql:
+      id: "*"
+    permissions:
+      insert-row:
+        id: "*"
+      update-row:
+        id: "*"
+      delete-row:
+        id: "*"
+      alter-table:
+        id: "*"
+      create-table:
+        id: "*"
+      drop-table:
+        id: "*"
+  database:
+    allow_sql:
+      id: "*"

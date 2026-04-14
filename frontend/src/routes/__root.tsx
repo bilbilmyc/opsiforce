@@ -60,18 +60,20 @@ function RootLayout() {
           </div>
         </SidebarProvider>
       </Show>
-      <TanStackDevtools
-        plugins={[
-          {
-            name: "TanStack Query",
-            render: () => <SolidQueryDevtoolsPanel client={queryClient} />,
-          },
-          {
-            name: "TanStack Router",
-            render: () => <TanStackRouterDevtoolsPanel router={router} />,
-          },
-        ]}
-      />
+      <Show when={import.meta.env.DEV}>
+        <TanStackDevtools
+          plugins={[
+            {
+              name: "TanStack Query",
+              render: () => <SolidQueryDevtoolsPanel client={queryClient} />,
+            },
+            {
+              name: "TanStack Router",
+              render: () => <TanStackRouterDevtoolsPanel router={router} />,
+            },
+          ]}
+        />
+      </Show>
     </QueryClientProvider>
   )
 }

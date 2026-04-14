@@ -51,6 +51,8 @@ spec:
               containerPort: {{ .Values.backend.appProxyPort | default 3002 }}
             - name: vscode-proxy
               containerPort: {{ .Values.backend.vscodeProxyPort | default 3003 }}
+            - name: db-proxy
+              containerPort: {{ .Values.backend.dbProxyPort | default 3004 }}
           resources:
             requests:
               cpu: {{ .Values.backend.resources.requests.cpu }}

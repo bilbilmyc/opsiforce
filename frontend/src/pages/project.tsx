@@ -12,8 +12,9 @@ import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-que
 import { useNavigate } from "@tanstack/solid-router";
 import { usePermissions } from "~/api/permissions";
 import { Permission } from "~/constants/permissions";
-import { MessageSquare, Code as CodeIcon, Ban } from "~/components/icons";
+import { MessageSquare, Code as CodeIcon, Database, Ban } from "~/components/icons";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import ProjectActionsMenu from "~/components/project-actions-menu";
 import { AppBaseProviders, AppInterface } from "@opencode-ai/app/app";
 import {
   PlatformProvider,
@@ -22,6 +23,7 @@ import {
 import { ServerConnection } from "@opencode-ai/app/context/server";
 import { useTheme } from "@opencode-ai/ui/theme/context";
 import { useLayout } from "@opencode-ai/app/context/layout";
+import { useGlobalSDK } from "@opencode-ai/app/context/global-sdk";
 import {
   MemoryRouter,
   createMemoryHistory,
@@ -35,6 +37,7 @@ import {
   type Project,
 } from "~/api/client";
 import FileUpload from "~/components/file-upload";
+import Spinner from "~/components/ui/spinner";
 
 const platform: Platform = {
   platform: "web",
@@ -56,6 +59,21 @@ function HidePanels() {
   const layout = useLayout();
   onMount(() => {
     layout.sidebar.close();
+  });
+  return null;
+}
+
+function PreviewAutoReload(props: { onReload: () => void }) {
+  const globalSDK = useGlobalSDK();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const unsub = globalSDK.event.listen((e) => {
+    if (e.details.type !== "session.idle") return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => props.onReload(), 1500);
+  });
+  onCleanup(() => {
+    unsub();
+    if (timer) clearTimeout(timer);
   });
   return null;
 }
@@ -88,13 +106,17 @@ export default function ProjectView(props: {
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
   const canViewCode = () => hasPermission(Permission.viewCodeTab);
+  const canViewDb = () => hasPermission(Permission.viewDbTab);
   const canDisable = () => hasPermission(Permission.disableProject);
 
   const [router, setRouter] = createSignal<Component<BaseRouterProps> | null>(
     null,
   );
-  const [activeTab, setActiveTab] = createSignal<"chat" | "code">("chat");
+  const [activeTab, setActiveTab] = createSignal<"chat" | "code" | "db">("chat");
   const [codeTabOpened, setCodeTabOpened] = createSignal(false);
+  const [dbTabOpened, setDbTabOpened] = createSignal(false);
+  const [codeTabLoading, setCodeTabLoading] = createSignal(true);
+  const [dbTabLoading, setDbTabLoading] = createSignal(true);
   const [previewOpen, setPreviewOpen] = createSignal(false);
   const [webappReady, setWebappReady] = createSignal(false);
   const [appName, setAppName] = createSignal<string | undefined>();
@@ -102,10 +124,62 @@ export default function ProjectView(props: {
   const [copied, setCopied] = createSignal(false);
   const qc = useQueryClient();
 
+  const PREVIEW_WIDTH_KEY = "opsiforce:preview-width";
+  const PREVIEW_MIN_WIDTH = 320;
+  const PREVIEW_MIN_LEFT = 320;
+
+  function clampPreviewWidth(width: number) {
+    const maxWidth = Math.max(
+      PREVIEW_MIN_WIDTH,
+      window.innerWidth - PREVIEW_MIN_LEFT,
+    );
+    return Math.min(Math.max(width, PREVIEW_MIN_WIDTH), maxWidth);
+  }
+
+  function readInitialPreviewWidth() {
+    if (typeof window === "undefined") return 480;
+    const stored = window.localStorage.getItem(PREVIEW_WIDTH_KEY);
+    const parsed = stored ? Number(stored) : NaN;
+    const fallback = Math.round(window.innerWidth * 0.4);
+    return clampPreviewWidth(Number.isFinite(parsed) ? parsed : fallback);
+  }
+
+  const [previewWidth, setPreviewWidth] = createSignal(
+    readInitialPreviewWidth(),
+  );
+  const [resizing, setResizing] = createSignal(false);
+
+  function startPreviewResize(event: PointerEvent) {
+    event.preventDefault();
+    setResizing(true);
+    const startX = event.clientX;
+    const startWidth = previewWidth();
+
+    const onMove = (e: PointerEvent) => {
+      const next = clampPreviewWidth(startWidth + (startX - e.clientX));
+      setPreviewWidth(next);
+    };
+    const onUp = () => {
+      setResizing(false);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.localStorage.setItem(PREVIEW_WIDTH_KEY, String(previewWidth()));
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+
+  const handleWindowResize = () => {
+    setPreviewWidth((w) => clampPreviewWidth(w));
+  };
+  onMount(() => window.addEventListener("resize", handleWindowResize));
+  onCleanup(() => window.removeEventListener("resize", handleWindowResize));
+
   const enableProject = createMutation(() => ({
     mutationFn: () => api.post<Project>(`/projects/${props.projectId}/enable`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
   }));
+
 
   const project = createQuery(() => ({
     queryKey: ["projects", props.projectId],
@@ -283,37 +357,60 @@ export default function ProjectView(props: {
   const vscodeUrl = () =>
     `${vscodeProtocol}://${props.projectId}.${vscodeDomain}/?folder=/workspace`;
 
+  const dbDomain = import.meta.env.VITE_DB_DOMAIN || "localhost:3004";
+  const dbProtocol = dbDomain.includes("localhost") ? "http" : "https";
+  const dbUrl = () => `${dbProtocol}://${props.projectId}.${dbDomain}/`;
+
   return (
     <div class="h-full w-full flex flex-col overflow-hidden">
-      {router() && canViewCode() && (
-        <div class="h-9 flex items-center px-1 bg-background border-b border-border shrink-0">
-          <Tabs
-            value={activeTab()}
-            onChange={(v) => {
-              setActiveTab(v as "chat" | "code");
-              if (v === "code") setCodeTabOpened(true);
-            }}
-            class="w-auto h-full"
-          >
-            <TabsList class="bg-transparent rounded-none p-0 h-full w-auto gap-0">
-              <TabsTrigger
-                value="chat"
-                class="gap-1.5 px-3 h-full rounded-none border-b-2 border-transparent data-[selected]:border-foreground data-[selected]:bg-transparent data-[selected]:shadow-none text-muted-foreground data-[selected]:text-foreground hover:text-foreground/70 transition-colors"
+      <Show when={project.data}>
+        <div class="flex items-center justify-between px-3 py-2 bg-background border-b border-border shrink-0">
+          <div class="flex items-center">
+            <Show when={router() && (canViewCode() || canViewDb())}>
+              <Tabs
+                value={activeTab()}
+                onChange={(v) => {
+                  setActiveTab(v as "chat" | "code" | "db");
+                  if (v === "code") setCodeTabOpened(true);
+                  if (v === "db") setDbTabOpened(true);
+                }}
+                class="w-auto"
               >
-                <MessageSquare class="w-3.5 h-3.5" />
-                <span class="text-xs font-medium">Chat</span>
-              </TabsTrigger>
-              <TabsTrigger
-                value="code"
-                class="gap-1.5 px-3 h-full rounded-none border-b-2 border-transparent data-[selected]:border-foreground data-[selected]:bg-transparent data-[selected]:shadow-none text-muted-foreground data-[selected]:text-foreground hover:text-foreground/70 transition-colors"
-              >
-                <CodeIcon class="w-3.5 h-3.5" />
-                <span class="text-xs font-medium">Code</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+                <TabsList class="w-auto">
+                  <TabsTrigger value="chat" class="flex-none gap-1.5">
+                    <MessageSquare class="w-3.5 h-3.5" />
+                    Chat
+                  </TabsTrigger>
+                  <Show when={canViewCode()}>
+                    <TabsTrigger value="code" class="flex-none gap-1.5">
+                      <CodeIcon class="w-3.5 h-3.5" />
+                      Code
+                    </TabsTrigger>
+                  </Show>
+                  <Show when={canViewDb()}>
+                    <TabsTrigger value="db" class="flex-none gap-1.5">
+                      <Database class="w-3.5 h-3.5" />
+                      DB
+                    </TabsTrigger>
+                  </Show>
+                </TabsList>
+              </Tabs>
+            </Show>
+          </div>
+          <ProjectActionsMenu
+            projectId={props.projectId}
+            status={project.data!.status}
+            onDeleted={() => navigate({ to: "/" })}
+            onDuplicated={(p) =>
+              navigate({
+                to: "/projects/$projectId",
+                params: { projectId: p.id },
+                search: { prompt: undefined },
+              })
+            }
+          />
         </div>
-      )}
+      </Show>
 
       <div class="flex-1 min-h-0 flex">
         <div
@@ -345,42 +442,51 @@ export default function ProjectView(props: {
                     disableHealthCheck
                   >
                     <HidePanels />
+                    <PreviewAutoReload onReload={reloadPreview} />
                   </AppInterface>
                 </ForceLight>
               </AppBaseProviders>
             </PlatformProvider>
           ) : (
-            <div class="flex items-center justify-center h-full gap-2 text-muted-foreground">
-              <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle
-                  class="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  stroke-width="4"
-                />
-                <path
-                  class="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-                />
-              </svg>
-              <span class="text-sm">Connecting...</span>
-            </div>
+            <Spinner label="Connecting..." />
           )}
           {router() && <FileUpload projectId={props.projectId} />}
         </div>
 
         {router() && codeTabOpened() && canViewCode() && (
           <div
-            class="flex-1 min-w-0 flex flex-col"
+            class="flex-1 min-w-0 flex flex-col relative"
             style={{ display: activeTab() === "code" ? "flex" : "none" }}
           >
+            <Show when={codeTabLoading()}>
+              <div class="absolute inset-0 bg-background z-10">
+                <Spinner label="Loading editor..." />
+              </div>
+            </Show>
             <iframe
               src={vscodeUrl()}
               class="flex-1 w-full border-0"
               allow="clipboard-read; clipboard-write"
+              onLoad={() => setCodeTabLoading(false)}
+            />
+          </div>
+        )}
+
+        {router() && dbTabOpened() && canViewDb() && (
+          <div
+            class="flex-1 min-w-0 flex flex-col relative"
+            style={{ display: activeTab() === "db" ? "flex" : "none" }}
+          >
+            <Show when={dbTabLoading()}>
+              <div class="absolute inset-0 bg-background z-10">
+                <Spinner label="Loading database viewer..." />
+              </div>
+            </Show>
+            <iframe
+              src={dbUrl()}
+              class="flex-1 w-full border-0"
+              allow="clipboard-read; clipboard-write"
+              onLoad={() => setDbTabLoading(false)}
             />
           </div>
         )}
@@ -411,7 +517,19 @@ export default function ProjectView(props: {
         )}
 
         {previewOpen() && (
-          <div class="w-2/5 shrink-0 border-l border-border flex flex-col bg-background">
+          <div
+            class="shrink-0 border-l border-border flex flex-col bg-background relative"
+            style={{ width: `${previewWidth()}px` }}
+          >
+            <div
+              onPointerDown={startPreviewResize}
+              class="absolute left-0 top-0 h-full w-1 -translate-x-1/2 cursor-col-resize z-10 hover:bg-primary/40 active:bg-primary/60 transition-colors"
+              classList={{ "bg-primary/60": resizing() }}
+              title="Drag to resize"
+            />
+            {resizing() && (
+              <div class="fixed inset-0 z-50 cursor-col-resize" />
+            )}
             <div class="h-8 flex items-center justify-between px-2 bg-sidebar border-b border-border shrink-0">
               <div class="flex items-center gap-1.5">
                 <button
@@ -496,6 +614,7 @@ export default function ProjectView(props: {
           </div>
         )}
       </div>
+
     </div>
   );
 }

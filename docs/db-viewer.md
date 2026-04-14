@@ -1,0 +1,132 @@
+# DB Viewer
+
+Browser-based SQLite viewer embedded in agent pods. Users can inspect and query the two SQLite databases present in every agent pod: the generated app's data DB and the platform's observability/logs DB.
+
+---
+
+## How It Works
+
+Each agent pod runs a [Datasette](https://datasette.io/) process alongside the OpenCode agent, code-server, and app dev server. Datasette serves both databases on a single port with its own sidebar switcher.
+
+### Components
+
+| Component | Port | Purpose |
+|-----------|------|---------|
+| OpenCode agent | 4096 | AI coding assistant |
+| code-server | 8080 | VS Code web IDE |
+| Webapp dev server | 3000 | User app preview |
+| Datasette | 8081 | DB viewer for app.db + database.db |
+
+### Databases
+
+| Name in viewer | File | Purpose | Writes |
+|----------------|------|---------|--------|
+| `app` | `/workspace/app/data/app.db` | Generated app's SQLite database (user items, etc.) | Allowed via `datasette-write-ui` plugin |
+| `database` | `/workspace/data/database.db` | Platform observability DB: HTTP requests, process logs, process events | Read-only (writes rejected by metadata permissions) |
+
+### Process management
+
+Datasette runs as a `guard`-wrapped process in the same container as the agent, managed by `entrypoint.sh`. Startup seeds both DB files with `sqlite3 VACUUM` if missing (datasette refuses to start on absent files). Permissions are applied from `/opt/opencode/datasette-metadata.yml` (copied from `agent-config/datasette-metadata.yml` at image build).
+
+---
+
+## Proxy Routing
+
+DB viewer uses **subdomain-based routing** (same approach as VS Code and webapp proxy) because Datasette serves assets at absolute paths.
+
+| Service | Routing | Backend Port | Target |
+|---------|---------|-------------|--------|
+| OpenCode agent | Path-based (`/api/proxy/{id}/*`) | 3001 | pod:4096 |
+| VS Code IDE | Subdomain (`{id}.code.domain`) | 3003 | pod:8080 |
+| Webapp preview | Subdomain (`{id}.apps.domain`) | 3002 | pod:3000 |
+| DB viewer | Subdomain (`{id}.db.domain`) | 3004 | pod:8081 |
+
+### How it works
+
+```
+Browser → http://{projectId}.db.dev.opsima.com/
+  → Traefik IngressRoute (*.db.dev.opsima.com → backend:3004)
+  → db-proxy-server (extracts projectId from subdomain)
+  → resolves pod IP from DB
+  → proxies HTTP + WebSocket to pod:8081
+```
+
+The proxy strips `X-Frame-Options`, `Content-Security-Policy`, and `Content-Encoding` response headers for iframe compatibility (same pattern as vscode-proxy-server.ts).
+
+### Local dev
+
+In local dev, pod IPs aren't reachable from the host (minikube network isolation). The DB proxy server manages `kubectl port-forward` tunnels automatically via the shared `PortForwardManager` (lives in `proxy.shared.ts`, constructor takes the target pod port — 8081 for DB, 8080 for VS Code).
+
+---
+
+## Frontend Integration
+
+The project view has a tab bar (Chat / Code / DB) above the main content area:
+
+- **Chat tab**: OpenCode AI interface (source-level Solid.js integration)
+- **Code tab**: VS Code in an iframe (`{projectId}.{vscodeDomain}/?folder=/workspace`), gated by `canViewCode`
+- **DB tab**: Datasette in an iframe (`{projectId}.{dbDomain}/`), gated by `canViewDb`
+
+The DB tab is lazy-loaded — the iframe only mounts on first click. Once mounted, it stays in the DOM (toggled via CSS `display: none`) to avoid reloading when switching tabs.
+
+Frontend env vars:
+- `VITE_DB_DOMAIN` — DB proxy domain (default: `localhost:3004`, prod: `db.dev.opsima.com` / `db.opsima.com`)
+
+---
+
+## Authentication & Permissions
+
+- `canViewDb` (Keycloak role `opsiforce_can_view_db_tab`) gates the DB tab in the frontend
+- Backend permission enforcement is **not** applied on db-proxy-server, matching the pre-existing vscode-proxy pattern. Reason: the Traefik IngressRoute for the wildcard subdomain (`*.db.dev.opsima.com`) routes directly to the backend, bypassing the oauth2-proxy sidecar — so `x-forwarded-groups` headers don't reach the backend on subdomain requests.
+- Datasette runs with `--auth none` (default). Per-DB write permissions are enforced via `datasette-metadata.yml` (`database` DB denies insert/update/delete).
+
+### Security note
+
+A determined user with a valid oauth2-proxy session AND knowledge of the project UUID could hit `{projectId}.db.dev.opsima.com` directly without having the `canViewDb` role. This matches the existing posture for the VS Code subdomain. Closing this gap requires a Traefik `ForwardAuth` middleware consulting oauth2-proxy before the IngressRoute — an infra refactor that would also need to be applied to the VS Code IngressRoute.
+
+---
+
+## Persistence
+
+Datasette is stateless — no XDG persistence like code-server has. Each pod start re-opens the DB files fresh. `VACUUM` initialization in `entrypoint.sh` is idempotent (`[ -s file ]` guard only runs on empty/missing files).
+
+---
+
+## Configuration
+
+### Backend env vars
+
+| Env var | Default | Description |
+|---------|---------|-------------|
+| DB_VIEWER_PORT | 8081 | Port datasette listens on inside the pod |
+| DB_PROXY_PORT | 3004 | Port the DB proxy server listens on (backend side) |
+
+### Helm values
+
+| Chart | Key | Default | Description |
+|-------|-----|---------|-------------|
+| opsiforce-backend | `config.dbViewerPort` | "8081" | Agent pod datasette port |
+| opsiforce-backend | `backend.dbProxyPort` | 3004 | Backend DB proxy port |
+| opsiforce-proxy | `dbProxy.enabled` | true | Enable DB IngressRoute |
+| opsiforce-proxy | `dbProxy.appsHostname` | db.dev.opsima.com | Wildcard domain for DB viewer |
+| opsiforce-proxy | `dbProxy.backendService` | (set in CI) | Backend service name |
+
+### CI/CD
+
+- Frontend build arg: `VITE_DB_DOMAIN` set per environment in `.github/workflows/opsiforce.yml`
+- Helm deploy: `--set dbProxy.*` values set per environment
+- DNS: `*.db.dev.opsima.com` / `*.db.opsima.com` wildcard managed by external-dns via IngressRoute annotation
+
+### Metadata file
+
+`packages/opsiforce/agent-config/datasette-metadata.yml` controls per-DB write permissions. The `database` observability DB grants only `allow_sql` (SELECT), while `app` grants insert/update/delete/alter-table/create-table/drop-table. Edit this file to tighten or loosen access.
+
+---
+
+## Datasette plugins
+
+Installed in `Dockerfile.agent` via pip:
+
+- `datasette-write-ui` — enables row-level edit UI on writable DBs
+
+Additional plugins can be added to the same `pip3 install` line and will be picked up on next pod start.

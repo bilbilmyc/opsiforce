@@ -28,12 +28,13 @@ export class AppRequestLogger {
     try {
       const cached = this.getOrOpen(directory)
       cached.db.prepare(
-        `INSERT INTO app_requests (method, url, domain, status, size, duration_ms, request_headers, response_headers, request_body, response_body)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO app_requests (method, url, domain, source_ip, status, size, duration_ms, request_headers, response_headers, request_body, response_body)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         entry.method,
         entry.url,
         entry.domain,
+        entry.sourceIp,
         entry.status,
         entry.size,
         entry.durationMs,
@@ -68,13 +69,15 @@ export class AppRequestLogger {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true })
 
     const db = new Database(dbPath)
-    db.pragma("journal_mode = WAL")
     db.pragma("busy_timeout = 5000")
+    db.pragma("journal_mode = TRUNCATE")
+    db.pragma("synchronous = FULL")
     db.exec(`CREATE TABLE IF NOT EXISTS app_requests (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       method TEXT NOT NULL,
       url TEXT NOT NULL,
       domain TEXT,
+      source_ip TEXT,
       status INTEGER,
       size INTEGER,
       duration_ms INTEGER,
@@ -84,8 +87,15 @@ export class AppRequestLogger {
       response_body TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     )`)
+    const hasSourceIp = (db
+      .prepare("SELECT COUNT(*) as c FROM pragma_table_info('app_requests') WHERE name = 'source_ip'")
+      .get() as { c: number }).c > 0
+    if (!hasSourceIp) {
+      db.exec("ALTER TABLE app_requests ADD COLUMN source_ip TEXT")
+    }
     db.exec("CREATE INDEX IF NOT EXISTS idx_app_requests_created_at ON app_requests(created_at)")
     db.exec("CREATE INDEX IF NOT EXISTS idx_app_requests_status ON app_requests(status)")
+    db.exec("CREATE INDEX IF NOT EXISTS idx_app_requests_source_ip ON app_requests(source_ip)")
 
     const cached = { db, lastUsed: Date.now(), insertCount: 0 }
     this.cache.set(directory, cached)

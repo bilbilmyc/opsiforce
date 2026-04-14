@@ -57,7 +57,7 @@ The frontend integrates OpenCode at the source level — OpenCode's Solid.js com
 | **opsiforce-proxy** | `nginx:alpine` + oauth2-proxy sidecar | 80 | Routes traffic between services. OAuth2 Proxy for auth. |
 | **opsiforce-frontend** | `nginx:alpine` (static) | 80 | Solid.js app — projects sidebar + OpenCode UI embedded via source-level imports (Vite resolver plugin). Single SPA, no iframe. |
 | **opsiforce-backend** | `node:24-alpine` | 3001 | NestJS + Fastify. Manages K8s pods, proxies to agent pods, tracks timeouts. Pure API. |
-| **opsiforce-agent** | `node:24-slim` + bun | 4096, 3000, 8080 | OpenCode + code-server (VS Code IDE) + app dev server. One pod per project. CephFS subPath mount. Image tagged with commit SHA in CI/CD. Agent image version in `agent-config/agent-image-version.json` (local dev), platform version in `backend/platform-version.json`. 34 skills, 95 pre-installed packages. |
+| **opsiforce-agent** | `node:24-slim` + bun | 4096, 3000, 8080, 8081 | OpenCode + code-server (VS Code IDE) + app dev server + datasette DB viewer. One pod per project. CephFS subPath mount. Image tagged with commit SHA in CI/CD. Agent image version in `agent-config/agent-image-version.json` (local dev), platform version in `backend/platform-version.json`. 34 skills, 95 pre-installed packages. |
 
 ---
 
@@ -134,3 +134,5 @@ packages/opsiforce/
 - [Pod Management](./pod-management.md)
 - [Persistence & Storage](./persistence.md)
 - [API Reference](./api-reference.md)
+- [VS Code IDE](./vscode-ide.md)
+- [DB Viewer](./db-viewer.md)

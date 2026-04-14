@@ -7,12 +7,7 @@ description: Work with SQLite database — create tables via migrations, write q
 
 The app uses bun:sqlite with a migration system. Database file is at `data/app.db`. This is your app's database — create tables here via migrations.
 
-There is also a per-project platform-managed database at `/workspace/data/database.db` with:
-- `app_requests` — logs all HTTP requests to the app (method, url, status, headers, body, duration)
-- `process_logs` — captures stdout/stderr from all pod processes (webapp, opencode, vscode)
-- `process_events` — structured lifecycle events (started, crashed, stopped, exit codes, uptime)
-
-Do not create tables or write to it — use it read-only. Run `dbquery` for quick access (see agent instructions).
+There is also a per-project platform-managed observability database at `/workspace/data/database.db` (tables: `app_requests`, `process_logs`, `process_events`). Do not create tables or write to it — always open with `sqlite3 -readonly /workspace/data/database.db "..."`. See §Debugging with sqlite3 in the agent instructions for schema details and example queries.
 
 ## DatabaseService API
 

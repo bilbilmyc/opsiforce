@@ -2,6 +2,7 @@ export interface AppRequestEntry {
   method: string
   url: string
   domain: string | null
+  sourceIp: string | null
   status: number
   size: number
   durationMs: number
