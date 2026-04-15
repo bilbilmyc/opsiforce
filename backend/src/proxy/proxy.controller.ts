@@ -1,9 +1,9 @@
-import { Controller, All, Param, Req, Res, NotFoundException } from "@nestjs/common"
+import { Controller, All, Param, Req, Res, ForbiddenException, NotFoundException } from "@nestjs/common"
 import { FastifyReply, FastifyRequest } from "fastify"
 import { Readable } from "stream"
 import { ProxyService } from "./proxy.service"
 import { ProjectService } from "../project/project.service"
-import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
+import { TenantService } from "../tenant/tenant.service"
 import { BAD_GATEWAY_RESPONSE_BODY, DISABLED_RESPONSE_BODY, isK8sPodError, RESTARTING_RESPONSE_BODY } from "./proxy.shared"
 
 @Controller("proxy")
@@ -11,20 +11,18 @@ export class ProxyController {
   constructor(
     private readonly proxyService: ProxyService,
     private readonly projectService: ProjectService,
+    private readonly tenantService: TenantService,
   ) {}
 
   @All(":projectId/*")
   async proxyRequest(
     @Param("projectId") projectId: string,
-    @CurrentTenant() tenant: TenantContext,
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply,
   ) {
-    const ensured = await this.projectService.ensureProjectForTenant(
-      projectId,
-      tenant.tenantId,
-      "agent",
-    )
+    const project = await this.projectService.findOneById(projectId)
+    await this.assertProjectTenantAccess(project.tenantId, req)
+    const ensured = await this.projectService.ensureProjectAccess(project, "agent")
 
     if (ensured.state === "disabled") {
       this.sendDisabledResponse(reply)
@@ -37,7 +35,7 @@ export class ProxyController {
     }
 
     try {
-      const upstream = await this.proxyService.resolveUpstream(projectId, tenant.tenantId)
+      const upstream = await this.proxyService.resolveUpstream(projectId, project.tenantId)
       const targetPath = req.url.replace(`/api/proxy/${projectId}`, "") || "/"
       const targetUrl = `${upstream}${targetPath}`
 
@@ -61,7 +59,7 @@ export class ProxyController {
       if (response.status >= 400) {
         const text = await response.text()
         if (isK8sPodError(text)) {
-          if (await this.shouldRestartProject(projectId, tenant.tenantId)) {
+          if (await this.shouldRestartProject(projectId, project.tenantId)) {
             this.sendRestartingResponse(reply)
             return
           }
@@ -93,7 +91,7 @@ export class ProxyController {
     } catch (err) {
       if (err instanceof NotFoundException) throw err
 
-      if (await this.shouldRestartProject(projectId, tenant.tenantId)) {
+      if (await this.shouldRestartProject(projectId, project.tenantId)) {
         this.sendRestartingResponse(reply)
         return
       }
@@ -120,6 +118,19 @@ export class ProxyController {
     } catch (err) {
       if (err instanceof NotFoundException) throw err
       return false
+    }
+  }
+
+  private async assertProjectTenantAccess(tenantId: string, req: FastifyRequest): Promise<void> {
+    const groupsHeader = req.headers["x-forwarded-groups"] as string | undefined
+    if (!groupsHeader) throw new ForbiddenException("No tenant groups found")
+
+    const tenantNames = this.tenantService.parseTenantGroups(groupsHeader)
+    if (tenantNames.length === 0) throw new ForbiddenException("No opsiforce tenants assigned")
+
+    const tenant = await this.tenantService.getTenantById(tenantId)
+    if (!tenant || !tenantNames.includes(tenant.name)) {
+      throw new ForbiddenException("No access to this project")
     }
   }
 }
