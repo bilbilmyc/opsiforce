@@ -18,6 +18,7 @@ import type {
   BifrostLogStats,
   BifrostCostHistogram,
 } from "./bifrost.types"
+import { BIFROST_PROVIDER_CONFIGS } from "./bifrost.providers"
 
 @Injectable()
 export class BifrostService {
@@ -77,11 +78,6 @@ export class BifrostService {
     }
 
     return response.json() as Promise<T>
-  }
-
-  private static readonly PROVIDERS: Record<KeyType, string[]> = {
-    chat: ["openai", "anthropic"],
-    backend: ["openai", "anthropic"],
   }
 
   async createTenantCustomer(tenantId: string, tenantName: string): Promise<string> {
@@ -190,9 +186,9 @@ export class BifrostService {
     const payload: CreateVirtualKeyRequest = {
       name: `project-${projectId.slice(0, 8)}-${keyType}`,
       description: `Virtual key (${keyType}) for project ${projectId} (tenant: ${tenantId})`,
-      provider_configs: BifrostService.PROVIDERS[keyType].map(provider => ({
+      provider_configs: BIFROST_PROVIDER_CONFIGS[keyType].map(({ provider, weight }) => ({
         provider,
-        weight: 1,
+        weight,
       })),
       budget: this.defaultBudget("key"),
       ...(teamId ? { team_id: teamId } : {}),
