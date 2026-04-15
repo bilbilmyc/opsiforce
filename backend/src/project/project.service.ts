@@ -149,15 +149,6 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId)
   }
 
-  async ensureProjectForTenant(
-    projectId: string,
-    tenantId: string,
-    activity: ProjectActivityKind,
-  ): Promise<EnsureProjectResult> {
-    const project = await this.findOne(projectId, tenantId)
-    return this.ensureProjectAccess(project, activity)
-  }
-
   async ensureProjectById(
     projectId: string,
     activity: ProjectActivityKind,
@@ -345,7 +336,7 @@ export class ProjectService implements OnApplicationBootstrap {
       .where(eq(projects.id, projectId))
   }
 
-  private async ensureProjectAccess(
+  async ensureProjectAccess(
     project: ProjectResponse,
     activity: ProjectActivityKind,
   ): Promise<EnsureProjectResult> {

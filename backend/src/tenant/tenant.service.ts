@@ -67,4 +67,9 @@ export class TenantService {
   async getOrCreateTenants(names: string[]) {
     return Promise.all(names.map((name) => this.getOrCreateTenant(name)))
   }
+
+  async getTenantById(id: string) {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id))
+    return tenant ?? null
+  }
 }
