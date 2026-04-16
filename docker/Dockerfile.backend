@@ -1,4 +1,4 @@
-FROM node:24-alpine AS builder
+FROM node:24.14-alpine AS builder
 
 RUN apk add --no-cache python3 make g++
 
@@ -14,7 +14,7 @@ RUN yarn install
 RUN yarn run build
 RUN yarn run db:generate
 
-FROM node:24-alpine AS server
+FROM node:24.14-alpine AS server
 
 WORKDIR /app
 
