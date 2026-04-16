@@ -8,7 +8,11 @@ import {
   type Component,
   type ParentProps,
 } from "solid-js";
-import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-query";
+import {
+  createQuery,
+  createMutation,
+  useQueryClient,
+} from "@tanstack/solid-query";
 import { useNavigate } from "@tanstack/solid-router";
 import { usePermissions } from "~/api/permissions";
 import { Permission } from "~/constants/permissions";
@@ -124,7 +128,9 @@ export default function ProjectView(props: {
   const [router, setRouter] = createSignal<Component<BaseRouterProps> | null>(
     null,
   );
-  const [activeTab, setActiveTab] = createSignal<"chat" | "code" | "db">("chat");
+  const [activeTab, setActiveTab] = createSignal<"chat" | "code" | "db">(
+    "chat",
+  );
   const [codeTabOpened, setCodeTabOpened] = createSignal(false);
   const [dbTabOpened, setDbTabOpened] = createSignal(false);
   const [codeTabLoading, setCodeTabLoading] = createSignal(true);
@@ -148,7 +154,6 @@ export default function ProjectView(props: {
     mutationFn: () => api.post<Project>(`/projects/${props.projectId}/enable`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
   }));
-
 
   const project = createQuery(() => ({
     queryKey: ["projects", props.projectId],
@@ -269,46 +274,37 @@ export default function ProjectView(props: {
   const webappUrl = () =>
     `${webappProtocol}://${props.projectId}.${webappDomain}/`;
 
-  let statusInterval: ReturnType<typeof setInterval> | undefined;
+  async function checkWebappStatus() {
+    if (webappReady()) return;
+    try {
+      const res = await fetch(
+        `${webappProtocol}://${props.projectId}.${webappDomain}/api/app-meta`,
+      );
+      if (res.ok) {
+        const data = (await res.json()) as {
+          exists?: boolean;
+          name?: string;
+          description?: string;
+        };
+        if (data.exists) {
+          setWebappReady(true);
+          if (data.name) setAppName(data.name);
+          if (!userDismissed()) setPreviewOpen(true);
+        }
+      }
+    } catch {
+      /* webapp not ready yet */
+    }
+  }
 
   createEffect(() => {
-    if (project.data?.status !== "active" || webappReady()) {
-      if (statusInterval) clearInterval(statusInterval);
-      return;
+    if (project.data?.status === "active" && !webappReady()) {
+      checkWebappStatus();
     }
-
-    async function checkStatus() {
-      try {
-        const res = await fetch(
-          `${webappProtocol}://${props.projectId}.${webappDomain}/api/app-meta`,
-        );
-        if (res.ok) {
-          const data = (await res.json()) as {
-            exists?: boolean;
-            name?: string;
-            description?: string;
-          };
-          if (data.exists) {
-            setWebappReady(true);
-            if (data.name) setAppName(data.name);
-            if (!userDismissed()) setPreviewOpen(true);
-            if (statusInterval) clearInterval(statusInterval);
-          }
-        }
-      } catch {
-        /* webapp not ready yet */
-      }
-    }
-
-    checkStatus();
-    statusInterval = setInterval(checkStatus, 5000);
-  });
-
-  onCleanup(() => {
-    if (statusInterval) clearInterval(statusInterval);
   });
 
   function reloadPreview() {
+    checkWebappStatus();
     const iframe = document.getElementById(
       "webapp-preview",
     ) as HTMLIFrameElement;
@@ -505,10 +501,11 @@ export default function ProjectView(props: {
                   class="w-6 h-6 flex items-center justify-center rounded hover:bg-accent transition-colors text-muted-foreground"
                   title={copied() ? "Copied!" : "Copy URL"}
                 >
-                  {copied()
-                    ? <Check class="w-3.5 h-3.5 text-green-500" />
-                    : <Copy class="w-3.5 h-3.5" />
-                  }
+                  {copied() ? (
+                    <Check class="w-3.5 h-3.5 text-green-500" />
+                  ) : (
+                    <Copy class="w-3.5 h-3.5" />
+                  )}
                 </button>
                 <button
                   onClick={reloadPreview}
@@ -528,7 +525,6 @@ export default function ProjectView(props: {
           </div>
         )}
       </div>
-
     </div>
   );
 }

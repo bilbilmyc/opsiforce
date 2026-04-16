@@ -27,6 +27,7 @@ export default function ProjectActionsMenu(props: {
   status: Project["status"]
   showRename?: boolean
   onRename?: () => void
+  onSettings?: () => void
   onDeleted?: () => void
   onDuplicated?: (project: Project) => void
   triggerClass?: string
@@ -92,7 +93,12 @@ export default function ProjectActionsMenu(props: {
             </DropdownMenuItem>
           </Show>
           <Show when={canSeeSettings()}>
-            <DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
+            <DropdownMenuItem
+              onSelect={() => {
+                if (props.onSettings) props.onSettings()
+                else setSettingsOpen(true)
+              }}
+            >
               <Settings class="w-3.5 h-3.5 text-muted-foreground" />
               Settings
             </DropdownMenuItem>
@@ -130,11 +136,13 @@ export default function ProjectActionsMenu(props: {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <ProjectSettings
-        projectId={props.projectId}
-        open={settingsOpen()}
-        onOpenChange={setSettingsOpen}
-      />
+      <Show when={!props.onSettings}>
+        <ProjectSettings
+          projectId={props.projectId}
+          open={settingsOpen()}
+          onOpenChange={setSettingsOpen}
+        />
+      </Show>
 
       <ConfirmDialog
         open={confirmAction() === "delete"}

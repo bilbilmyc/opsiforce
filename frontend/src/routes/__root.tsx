@@ -1,59 +1,68 @@
-import { Show } from "solid-js"
-import { QueryClient, QueryClientProvider } from "@tanstack/solid-query"
-import { Outlet, createRootRoute, useRouter, useLocation } from "@tanstack/solid-router"
-import { TanStackDevtools } from "@tanstack/solid-devtools"
-import { SolidQueryDevtoolsPanel } from "@tanstack/solid-query-devtools"
-import { TanStackRouterDevtoolsPanel } from "@tanstack/solid-router-devtools"
-import { ApiError } from "~/api/client"
-import AppSidebar from "~/components/app-sidebar"
-import { SidebarProvider, useSidebar } from "~/components/ui/sidebar"
-import { Button } from "~/components/ui/button"
-import { Menu } from "~/components/icons"
-import { HotjarScript } from "~/scripts/hotjar"
-import { Toaster } from "solid-sonner"
-import { createTenantState } from "~/lib/tenant-state"
+import { Show } from "solid-js";
+import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
+import {
+  Outlet,
+  createRootRoute,
+  useRouter,
+  useLocation,
+} from "@tanstack/solid-router";
+import { TanStackDevtools } from "@tanstack/solid-devtools";
+import { SolidQueryDevtoolsPanel } from "@tanstack/solid-query-devtools";
+import { TanStackRouterDevtoolsPanel } from "@tanstack/solid-router-devtools";
+import { ApiError } from "~/api/client";
+import AppSidebar from "~/components/app-sidebar";
+import { SidebarProvider, useSidebar } from "~/components/ui/sidebar";
+import { Button } from "~/components/ui/button";
+import { Menu } from "~/components/icons";
+import { HotjarScript } from "~/scripts/hotjar";
+import { Toaster } from "solid-sonner";
+import { createTenantState } from "~/lib/tenant-state";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: (failureCount, error) => {
-        if (error instanceof ApiError && error.status === 404) return false
-        return failureCount < 3
+        if (error instanceof ApiError && error.status === 404) return false;
+        return failureCount < 3;
       },
     },
   },
-})
+});
 
 function MobileHeader() {
-  const { isMobile, toggleSidebar } = useSidebar()
+  const { isMobile, toggleSidebar } = useSidebar();
   return (
     <Show when={isMobile()}>
       <header class="flex items-center h-10 px-3 shrink-0 bg-background border-b border-border">
-        <Button variant="ghost" size="icon" class="h-8 w-8" onClick={toggleSidebar}>
+        <Button
+          variant="ghost"
+          size="icon"
+          class="h-8 w-8"
+          onClick={toggleSidebar}
+        >
           <Menu class="h-5 w-5" />
         </Button>
       </header>
     </Show>
-  )
+  );
 }
 
 export const Route = createRootRoute({
   component: RootLayout,
-})
+});
 
 function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AppContent />
     </QueryClientProvider>
-  )
+  );
 }
 
 function AppContent() {
-  const router = useRouter()
-  const location = useLocation()
-  const [tenant] = createTenantState()
-  const isPermissionDenied = () => location().pathname === "/permission-denied"
+  const router = useRouter();
+  const location = useLocation();
+  const isPermissionDenied = () => location().pathname === "/permission-denied";
 
   return (
     <>
@@ -62,16 +71,12 @@ function AppContent() {
       <Show when={!isPermissionDenied()} fallback={<Outlet />}>
         <SidebarProvider>
           <AppSidebar />
-          <Show when={tenant()} keyed>
-            {(_t) => (
-              <div class="flex flex-1 flex-col min-w-0 h-full overflow-hidden bg-background">
-                <MobileHeader />
-                <div class="flex-1 min-w-0 h-full overflow-hidden">
-                  <Outlet />
-                </div>
-              </div>
-            )}
-          </Show>
+          <div class="flex flex-1 flex-col min-w-0 h-full overflow-hidden bg-background">
+            <MobileHeader />
+            <div class="flex-1 min-w-0 h-full overflow-hidden">
+              <Outlet />
+            </div>
+          </div>
         </SidebarProvider>
       </Show>
       <Show when={import.meta.env.DEV}>
@@ -89,5 +94,5 @@ function AppContent() {
         />
       </Show>
     </>
-  )
+  );
 }

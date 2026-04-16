@@ -8,6 +8,7 @@ export default function ProjectCard(props: {
   isActive: boolean
   onSelect: () => void
   onRename: (id: string, title: string) => void
+  onSettings?: () => void
   onDeleted?: () => void
   onDuplicated?: (project: Project) => void
 }) {
@@ -83,6 +84,7 @@ export default function ProjectCard(props: {
             status={props.project.status}
             showRename
             onRename={startRename}
+            onSettings={props.onSettings}
             onDeleted={props.onDeleted}
             onDuplicated={props.onDuplicated}
             triggerClass={cn(
