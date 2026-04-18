@@ -100,7 +100,7 @@ export class PodService {
     })
   }
 
-  async waitForReady(podName: string, timeoutMs = 60000): Promise<string> {
+  async waitForReady(podName: string, timeoutMs = 180 * 1000): Promise<string> {
     const start = Date.now()
     while (Date.now() - start < timeoutMs) {
       try {
