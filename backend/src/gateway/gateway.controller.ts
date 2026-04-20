@@ -25,6 +25,12 @@ export class GatewayController {
       throw new BadRequestException("Missing 'service' field")
     }
 
+    if (body.service === "email") {
+      throw new BadRequestException(
+        "Email sending is not supported on this platform.",
+      )
+    }
+
     const context = req.gatewayContext!
 
     const result = await this.gatewayService.dispatch(body.service, body.payload, context)

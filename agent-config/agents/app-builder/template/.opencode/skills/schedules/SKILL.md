@@ -1,11 +1,22 @@
 ---
 name: schedules
-description: Use when the user asks for recurring tasks, cron jobs, scheduled emails/reports, periodic checks, or "run X every Y".
+description: Use when the user asks for recurring tasks, cron jobs, periodic checks, or "run X every Y" — any background work that needs to run on a schedule.
 ---
 
 # Scheduled Tasks
 
 Register cron-scheduled HTTP callbacks that fire against endpoints in the app you're building. The platform scheduler calls the endpoint internally (intra-cluster), so it does not need to be publicly reachable or handle auth.
+
+Typical use cases:
+
+- Periodic data refresh or cleanup (e.g. purge records older than 30 days every night)
+- Recurring reminders shown in the app UI (e.g. mark overdue tasks every hour)
+- Health checks and self-maintenance jobs
+- Aggregating or rolling up data on a schedule (e.g. compute daily/weekly summaries into a table)
+- Polling an external API on an interval and caching the result
+- Copying, moving, or syncing files on a cadence (e.g. archive yesterday's uploads into a dated folder every night, mirror a source directory into a backup location hourly, rotate log files weekly)
+
+The scheduler is general-purpose — use it for any background work that needs to run on a cadence. It is not tied to any specific output channel.
 
 ## Environment Variables
 
@@ -23,9 +34,9 @@ curl -s -X POST "$SERVICE_GATEWAY_URL/schedules" \
   -H "Authorization: Bearer $SERVICE_GATEWAY_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Daily task summary",
-    "cronPattern": "0 9 * * *",
-    "targetPath": "/api/cron/daily-report",
+    "name": "Daily cleanup",
+    "cronPattern": "0 3 * * *",
+    "targetPath": "/api/cron/cleanup",
     "method": "POST"
   }'
 ```
@@ -36,7 +47,7 @@ curl -s -X POST "$SERVICE_GATEWAY_URL/schedules" \
 |-------|----------|-------------|
 | `name` | Yes | **User-facing display name.** Unique per project, used as upsert key. |
 | `cronPattern` | Yes | 5-field cron: `minute hour day-of-month month day-of-week` |
-| `targetPath` | Yes | App endpoint path (e.g. `/api/cron/daily-report`) |
+| `targetPath` | Yes | App endpoint path (e.g. `/api/cron/cleanup`) |
 | `method` | No | HTTP method. Default: `POST` |
 | `body` | No | JSON body sent with the request |
 | `headers` | No | Additional headers as `{ "key": "value" }` |
@@ -45,8 +56,8 @@ curl -s -X POST "$SERVICE_GATEWAY_URL/schedules" \
 
 The `name` is **shown to the user in the UI**. It must be human-readable:
 
-- ✅ **Good**: `"Daily task summary"`, `"Weekly sales report"`, `"Hourly health check"`, `"Monthly invoice reminder"`
-- ❌ **Bad**: `"daily-task-summary"`, `"weekly_sales_report"`, `"cron1"`, `"schedule-1"`, `"report"`
+- ✅ **Good**: `"Daily cleanup"`, `"Hourly health check"`, `"Weekly rollup"`, `"Refresh exchange rates"`
+- ❌ **Bad**: `"daily-cleanup"`, `"weekly_rollup"`, `"cron1"`, `"schedule-1"`, `"job"`
 
 Use sentence case with spaces. Be descriptive but concise (3-6 words). The name should make sense to a non-technical user who opens the Schedules page.
 
@@ -76,46 +87,23 @@ First list schedules to find the id, then delete by id:
 ```bash
 ID=$(curl -s "$SERVICE_GATEWAY_URL/schedules" \
   -H "Authorization: Bearer $SERVICE_GATEWAY_API_KEY" \
-  | jq -r '.[] | select(.name == "Daily task summary") | .id')
+  | jq -r '.[] | select(.name == "Daily cleanup") | .id')
 
 curl -s -X DELETE "$SERVICE_GATEWAY_URL/schedules/$ID" \
   -H "Authorization: Bearer $SERVICE_GATEWAY_API_KEY"
 ```
 
-## Sending Emails from Scheduled Endpoints
+## What Scheduled Endpoints Can Do
 
-If the scheduled endpoint needs to send email (e.g. daily reports, notifications), use the **email** skill — NOT nodemailer or any email SDK. The cron endpoint calls the gateway to send:
+A scheduled endpoint is just a regular endpoint in your app. When it fires, it can do anything your app can do — query the database, call external HTTP APIs, update in-app state, write to files in the app's workspace, etc.
 
-```typescript
-// Inside your cron endpoint handler:
-const res = await fetch(process.env.SERVICE_GATEWAY_URL, {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${process.env.SERVICE_GATEWAY_API_KEY}`,
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    service: "email",
-    payload: { to: "user@example.com", subject: "Daily Report", html: "<p>...</p>" },
-  }),
-});
-```
+Pick the output that fits the use case. A few patterns:
 
-See the `send-email` skill for full details.
+- **Update in-app data** — write a summary row, mark stale records, refresh a materialized view. Users see the result next time they open the relevant page.
+- **Call an external HTTP API** — if the job needs to push to a third-party service, do it with `fetch` from inside the endpoint handler (credentials must come from the app's own env).
+- **Log and surface in the UI** — append to a `job_runs` table so the user can see in the app whether the scheduled job succeeded.
 
-### Email Subject and Body — Tone Rules
-
-Write subjects and body text that are **direct, factual, and professional**. No emojis, no casual greetings, no decorative punctuation.
-
-| | Bad ❌ | Good ✅ |
-|---|---|---|
-| Subject | `☀️ Morning — 2 pending tasks waiting` | `2 pending tasks – April 17` |
-| Subject | `Your weekly report is ready! 🎉` | `Weekly report – April 14–20` |
-| Body | `Good morning! You have 2 pending tasks today.` | `2 tasks are pending for today.` |
-| Body | `Hey! Here's your weekly summary 👋` | `Weekly summary for April 14–20.` |
-
-- Subject: state what it is and a relevant date/count. No greetings, no decoration.
-- Body: open with the key fact. No salutation. No sign-off.
+> **Email note:** sending emails is **not supported** on this platform. If the user asks for a scheduled email (daily digest, weekly report, reminder email), see the `send-email` skill and propose an in-app alternative (dashboard page, in-app inbox, export button) instead.
 
 ## Important Notes
 
@@ -123,4 +111,3 @@ Write subjects and body text that are **direct, factual, and professional**. No 
 - If the pod is suspended when a schedule fires, the platform wakes it automatically.
 - Build the endpoint first, then register. If you register a schedule for a non-existent endpoint, the scheduler will record HTTP errors.
 - Choose descriptive, stable `name` values. The same name upserts the schedule.
-- For sending emails from scheduled endpoints, use the `send-email` skill — never install nodemailer or email libraries directly.
