@@ -9,14 +9,27 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SchedulesRouteImport } from './routes/schedules'
 import { Route as PermissionDeniedRouteImport } from './routes/permission-denied'
+import { Route as DefaultsRouteImport } from './routes/defaults'
 import { Route as BillingRouteImport } from './routes/billing'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsWorkspacesRouteImport } from './routes/settings/workspaces'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
 
+const SchedulesRoute = SchedulesRouteImport.update({
+  id: '/schedules',
+  path: '/schedules',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PermissionDeniedRoute = PermissionDeniedRouteImport.update({
   id: '/permission-denied',
   path: '/permission-denied',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DefaultsRoute = DefaultsRouteImport.update({
+  id: '/defaults',
+  path: '/defaults',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BillingRoute = BillingRouteImport.update({
@@ -29,6 +42,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsWorkspacesRoute = SettingsWorkspacesRouteImport.update({
+  id: '/settings/workspaces',
+  path: '/settings/workspaces',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
@@ -38,49 +56,92 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/billing': typeof BillingRoute
+  '/defaults': typeof DefaultsRoute
   '/permission-denied': typeof PermissionDeniedRoute
+  '/schedules': typeof SchedulesRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/settings/workspaces': typeof SettingsWorkspacesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/billing': typeof BillingRoute
+  '/defaults': typeof DefaultsRoute
   '/permission-denied': typeof PermissionDeniedRoute
+  '/schedules': typeof SchedulesRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/settings/workspaces': typeof SettingsWorkspacesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/billing': typeof BillingRoute
+  '/defaults': typeof DefaultsRoute
   '/permission-denied': typeof PermissionDeniedRoute
+  '/schedules': typeof SchedulesRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/settings/workspaces': typeof SettingsWorkspacesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/billing' | '/permission-denied' | '/projects/$projectId'
+  fullPaths:
+    | '/'
+    | '/billing'
+    | '/defaults'
+    | '/permission-denied'
+    | '/schedules'
+    | '/projects/$projectId'
+    | '/settings/workspaces'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/billing' | '/permission-denied' | '/projects/$projectId'
+  to:
+    | '/'
+    | '/billing'
+    | '/defaults'
+    | '/permission-denied'
+    | '/schedules'
+    | '/projects/$projectId'
+    | '/settings/workspaces'
   id:
     | '__root__'
     | '/'
     | '/billing'
+    | '/defaults'
     | '/permission-denied'
+    | '/schedules'
     | '/projects/$projectId'
+    | '/settings/workspaces'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   BillingRoute: typeof BillingRoute
+  DefaultsRoute: typeof DefaultsRoute
   PermissionDeniedRoute: typeof PermissionDeniedRoute
+  SchedulesRoute: typeof SchedulesRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
+  SettingsWorkspacesRoute: typeof SettingsWorkspacesRoute
 }
 
 declare module '@tanstack/solid-router' {
   interface FileRoutesByPath {
+    '/schedules': {
+      id: '/schedules'
+      path: '/schedules'
+      fullPath: '/schedules'
+      preLoaderRoute: typeof SchedulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/permission-denied': {
       id: '/permission-denied'
       path: '/permission-denied'
       fullPath: '/permission-denied'
       preLoaderRoute: typeof PermissionDeniedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/defaults': {
+      id: '/defaults'
+      path: '/defaults'
+      fullPath: '/defaults'
+      preLoaderRoute: typeof DefaultsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/billing': {
@@ -97,6 +158,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/workspaces': {
+      id: '/settings/workspaces'
+      path: '/settings/workspaces'
+      fullPath: '/settings/workspaces'
+      preLoaderRoute: typeof SettingsWorkspacesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/projects/$projectId': {
       id: '/projects/$projectId'
       path: '/projects/$projectId'
@@ -110,8 +178,11 @@ declare module '@tanstack/solid-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   BillingRoute: BillingRoute,
+  DefaultsRoute: DefaultsRoute,
   PermissionDeniedRoute: PermissionDeniedRoute,
+  SchedulesRoute: SchedulesRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
+  SettingsWorkspacesRoute: SettingsWorkspacesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

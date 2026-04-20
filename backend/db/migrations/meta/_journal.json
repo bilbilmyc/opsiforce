@@ -78,6 +78,41 @@
       "when": 1775830866355,
       "tag": "0010_add-deleted-projects",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1776341006767,
+      "tag": "0011_bent_kylun",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1776344395470,
+      "tag": "0012_add-project-schedules",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1776424498812,
+      "tag": "0013_add-users-and-project-timezone",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1776659673541,
+      "tag": "0014_add-defaults-tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1776662619259,
+      "tag": "0015_add-workspaces-and-preferences",
+      "breakpoints": true
     }
   ]
 }

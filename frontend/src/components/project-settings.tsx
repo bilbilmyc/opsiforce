@@ -7,15 +7,11 @@ import { Permission } from "~/constants/permissions"
 import { CircleDollarSign, Clock } from "~/components/icons"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "~/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "~/components/ui/select"
 import { Button } from "~/components/ui/button"
-import {
-  NumberField,
-  NumberFieldGroup,
-  NumberFieldInput,
-  NumberFieldIncrementTrigger,
-  NumberFieldDecrementTrigger,
-} from "~/components/ui/number-field"
+import { BudgetRow } from "~/components/ui/budget-row"
+import { TimeoutRow } from "~/components/ui/timeout-row"
+import { msToUnit, unitToMs } from "~/lib/duration-units"
+import { type BudgetConfig } from "~/constants/budget"
 
 interface BudgetEntry {
   keyType: "chat" | "backend"
@@ -24,34 +20,9 @@ interface BudgetEntry {
   currentUsage: number
 }
 
-import { DURATION_OPTIONS, type BudgetConfig } from "~/constants/budget"
-
 const KEY_TYPE_LABELS: Record<string, string> = {
   chat: "Agent (Chat)",
   backend: "App Backend",
-}
-
-const TIME_UNITS = [
-  { value: "minutes", label: "Minutes", multiplier: 60 * 1000 },
-  { value: "hours", label: "Hours", multiplier: 60 * 60 * 1000 },
-  { value: "days", label: "Days", multiplier: 24 * 60 * 60 * 1000 },
-]
-
-function durationToUnitValue(duration: number): { value: string; unit: string } {
-  const day = 24 * 60 * 60 * 1000
-  const hour = 60 * 60 * 1000
-  const minute = 60 * 1000
-
-  if (duration >= day && duration % day === 0) return { value: String(duration / day), unit: "days" }
-  if (duration >= hour && duration % hour === 0) return { value: String(duration / hour), unit: "hours" }
-  return { value: String(duration / minute), unit: "minutes" }
-}
-
-function unitValueToDuration(value: string, unit: string, fallback: number): number {
-  const num = parseFloat(value)
-  if (!num || num <= 0) return fallback
-  const u = TIME_UNITS.find((t) => t.value === unit)
-  return Math.round(num * (u?.multiplier ?? 1))
 }
 
 interface BudgetDraft { budget: string; duration: string }
@@ -119,10 +90,10 @@ export default function ProjectSettings(props: {
 
   createEffect(() => {
     if (project.data) {
-      const agent = durationToUnitValue(project.data.timeoutIdle)
+      const agent = msToUnit(project.data.timeoutIdle)
       setAgentValue(agent.value)
       setAgentUnit(agent.unit)
-      const app = durationToUnitValue(project.data.appTimeoutIdle)
+      const app = msToUnit(project.data.appTimeoutIdle)
       setAppValue(app.value)
       setAppUnit(app.unit)
       setTimeoutsDirty(false)
@@ -163,12 +134,12 @@ export default function ProjectSettings(props: {
         if (!projectData) throw new Error("Project not loaded")
 
         await api.patch(`/projects/${props.projectId}`, {
-          timeoutIdle: unitValueToDuration(
+          timeoutIdle: unitToMs(
             agentValue(),
             agentUnit(),
             projectData.timeoutIdle,
           ),
-          appTimeoutIdle: unitValueToDuration(
+          appTimeoutIdle: unitToMs(
             appValue(),
             appUnit(),
             projectData.appTimeoutIdle,
@@ -216,7 +187,6 @@ export default function ProjectSettings(props: {
                 <BudgetRow
                   label="Project Budget"
                   currentBudget={projectBudget.data?.maxBudget ?? null}
-                  currentDuration={projectBudget.data?.budgetDuration ?? null}
                   currentSpend={projectBudget.data?.currentUsage ?? 0}
                   draftBudget={projectBudgetDraft()}
                   draftDuration={projectDurationDraft()}
@@ -236,7 +206,6 @@ export default function ProjectSettings(props: {
                         <BudgetRow
                           label={KEY_TYPE_LABELS[entry.keyType] ?? entry.keyType}
                           currentBudget={entry.maxBudget}
-                          currentDuration={entry.budgetDuration}
                           currentSpend={entry.currentUsage}
                           draftBudget={budgetDrafts()[entry.keyType]?.budget ?? ""}
                           draftDuration={budgetDrafts()[entry.keyType]?.duration ?? "1M"}
@@ -293,131 +262,4 @@ export default function ProjectSettings(props: {
   )
 }
 
-function BudgetRow(props: {
-  label: string
-  currentBudget: number | null
-  currentDuration: string | null
-  currentSpend: number
-  draftBudget: string
-  draftDuration: string
-  onBudgetChange: (value: string) => void
-  onDurationChange?: (value: string) => void
-}) {
-  const durationOption = () => DURATION_OPTIONS.find((d) => d.value === props.draftDuration) ?? null
-  const hasBudget = () => props.currentBudget != null && props.currentBudget > 0
-  const pct = () => hasBudget() ? Math.min((props.currentSpend / props.currentBudget!) * 100, 100) : 0
 
-  return (
-    <div class="rounded-lg border border-border p-3 space-y-2.5">
-      <div class="flex items-center justify-between">
-        <span class="text-xs font-medium text-foreground">{props.label}</span>
-        <Show when={hasBudget()}>
-          <span class="text-xs tabular-nums text-muted-foreground">
-            ${props.currentSpend.toFixed(2)} / ${props.currentBudget}
-          </span>
-        </Show>
-      </div>
-
-      <Show when={hasBudget()}>
-        <div class="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-          <div
-            class="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${pct()}%` }}
-          />
-        </div>
-      </Show>
-
-      <div class="flex items-end gap-2">
-        <NumberField
-          class="flex-1"
-          minValue={0}
-          step={1}
-          value={props.draftBudget}
-          onChange={(v) => props.onBudgetChange(v)}
-        >
-          <label class="text-xs text-muted-foreground mb-1 block">Max budget (USD)</label>
-          <NumberFieldGroup>
-            <NumberFieldInput placeholder="0 = unlimited" />
-            <NumberFieldIncrementTrigger />
-            <NumberFieldDecrementTrigger />
-          </NumberFieldGroup>
-        </NumberField>
-        <Show when={props.onDurationChange}>
-          <div class="w-28">
-            <label class="text-xs text-muted-foreground mb-1 block">Period</label>
-            <Select
-              options={DURATION_OPTIONS}
-              optionValue="value"
-              optionTextValue="label"
-              value={durationOption()}
-              onChange={(opt) => { if (opt) props.onDurationChange?.(opt.value) }}
-              itemComponent={(itemProps) => (
-                <SelectItem item={itemProps.item}>{itemProps.item.rawValue.label}</SelectItem>
-              )}
-            >
-              <SelectTrigger>
-                <SelectValue<typeof DURATION_OPTIONS[0]>>
-                  {(state) => <span>{state.selectedOption()?.label ?? "Select"}</span>}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent />
-            </Select>
-          </div>
-        </Show>
-      </div>
-    </div>
-  )
-}
-
-function TimeoutRow(props: {
-  label: string
-  description: string
-  placeholder: string
-  value: string
-  unit: string
-  onValueChange: (value: string) => void
-  onUnitChange: (unit: string) => void
-}) {
-  const unitOption = () => TIME_UNITS.find((u) => u.value === props.unit) ?? null
-
-  return (
-    <div class="rounded-lg border border-border p-3 space-y-2.5">
-      <span class="text-xs font-medium text-foreground block">{props.label}</span>
-      <p class="text-xs text-muted-foreground/70">{props.description}</p>
-      <div class="flex items-end gap-2">
-        <NumberField
-          class="flex-1"
-          minValue={1}
-          step={1}
-          value={props.value}
-          onChange={(v) => props.onValueChange(v)}
-        >
-          <NumberFieldGroup>
-            <NumberFieldInput placeholder={props.placeholder} />
-            <NumberFieldIncrementTrigger />
-            <NumberFieldDecrementTrigger />
-          </NumberFieldGroup>
-        </NumberField>
-        <div class="w-28">
-          <Select
-            options={TIME_UNITS}
-            optionValue="value"
-            optionTextValue="label"
-            value={unitOption()}
-            onChange={(opt) => { if (opt) props.onUnitChange(opt.value) }}
-            itemComponent={(itemProps) => (
-              <SelectItem item={itemProps.item}>{itemProps.item.rawValue.label}</SelectItem>
-            )}
-          >
-            <SelectTrigger>
-              <SelectValue<typeof TIME_UNITS[0]>>
-                {(state) => <span>{state.selectedOption()?.label ?? "Minutes"}</span>}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent />
-          </Select>
-        </div>
-      </div>
-    </div>
-  )
-}

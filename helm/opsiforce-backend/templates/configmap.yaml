@@ -46,3 +46,12 @@ data:
   {{- if .Values.config.bifrostPodProxyUrl }}
   BIFROST_POD_PROXY_URL: {{ .Values.config.bifrostPodProxyUrl | quote }}
   {{- end }}
+  {{- if .Values.config.gatewayUrl }}
+  SERVICE_GATEWAY_URL: {{ .Values.config.gatewayUrl | quote }}
+  {{- end }}
+  {{- if .Values.config.mailgunDomain }}
+  MAILGUN_DOMAIN: {{ .Values.config.mailgunDomain | quote }}
+  {{- end }}
+  {{- if .Values.config.mailgunSender }}
+  MAILGUN_SENDER: {{ .Values.config.mailgunSender | quote }}
+  {{- end }}

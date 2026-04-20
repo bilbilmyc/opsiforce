@@ -1,7 +1,8 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router"
-import { createMutation, useQueryClient } from "@tanstack/solid-query"
 import { createSignal, For } from "solid-js"
-import { api, type Project } from "~/api/client"
+import { toast } from "solid-sonner"
+import { type Project } from "~/api/client"
+import { useCreateUnassignedProject } from "~/api/projects"
 import { EXAMPLES, type Example } from "~/data/examples"
 import { ArrowUp, LoaderCircle } from "~/components/icons"
 import { cn } from "~/lib/cn"
@@ -38,26 +39,30 @@ function ExampleCard(props: { example: Example; onClick: () => void }) {
 
 function HomePage() {
   const navigate = useNavigate()
-  const qc = useQueryClient()
+  const createUnassigned = useCreateUnassignedProject()
   const [prompt, setPrompt] = createSignal("")
   const [focused, setFocused] = createSignal(false)
 
-  const createProject = createMutation(() => ({
-    mutationFn: () => api.post<Project>("/projects"),
-    onSuccess: (project: Project) => {
-      qc.invalidateQueries({ queryKey: ["projects"] })
-      const text = prompt().trim()
-      navigate({
-        to: "/projects/$projectId",
-        params: { projectId: project.id },
-        search: { prompt: text || undefined },
-      })
-    },
-  }))
+  const goToProject = (project: Project) => {
+    const text = prompt().trim()
+    navigate({
+      to: "/projects/$projectId",
+      params: { projectId: project.id },
+      search: { prompt: text || undefined },
+    })
+  }
+
+  const isSubmitting = () => createUnassigned.isPending
 
   const handleSubmit = () => {
-    if (createProject.isPending) return
-    createProject.mutate(undefined as never)
+    if (isSubmitting()) return
+    createUnassigned.mutate(undefined, {
+      onSuccess: (project) => {
+        toast.success("Project created")
+        goToProject(project)
+      },
+      onError: () => toast.error("Failed to create project"),
+    })
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -123,7 +128,7 @@ function HomePage() {
               </span>
               <button
                 onClick={handleSubmit}
-                disabled={createProject.isPending}
+                disabled={isSubmitting()}
                 class={cn(
                   "flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium",
                   "bg-foreground text-background",
@@ -131,7 +136,7 @@ function HomePage() {
                   "disabled:opacity-35 disabled:cursor-not-allowed disabled:active:scale-100",
                 )}
               >
-                {createProject.isPending ? (
+                {isSubmitting() ? (
                   <>
                     <LoaderCircle class="animate-spin" size={13} />
                     <span>Creating…</span>

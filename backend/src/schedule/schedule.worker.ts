@@ -1,0 +1,164 @@
+import { Processor, WorkerHost } from "@nestjs/bullmq";
+import { Logger } from "@nestjs/common";
+import { Job } from "bullmq";
+import { eq } from "drizzle-orm";
+import { db } from "../../db";
+import { projectSchedules, projects } from "../../db/schema";
+import { ScheduleService } from "./schedule.service";
+import { ProjectService } from "../project/project.service";
+import { ProxyService } from "../proxy/proxy.service";
+import {
+  SCHEDULE_QUEUE_NAME,
+  type ScheduleJobData,
+  type ScheduleTrigger,
+} from "./schedule.types";
+
+@Processor(SCHEDULE_QUEUE_NAME)
+export class ScheduleWorker extends WorkerHost {
+  private readonly logger = new Logger(ScheduleWorker.name);
+
+  constructor(
+    private readonly scheduleService: ScheduleService,
+    private readonly projectService: ProjectService,
+    private readonly proxyService: ProxyService,
+  ) {
+    super();
+  }
+
+  async process(job: Job<ScheduleJobData>): Promise<void> {
+    const { scheduleId } = job.data;
+    const isManual = job.name === "manual";
+
+    const trigger: ScheduleTrigger = isManual ? "manual" : "cron";
+
+    const schedule = await this.scheduleService.findOneRaw(scheduleId);
+    if (!schedule) {
+      this.logger.warn(`Schedule ${scheduleId} not found, skipping`);
+      return;
+    }
+
+    if (!isManual && !schedule.isActive) {
+      return;
+    }
+
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, schedule.projectId));
+
+    if (!project) {
+      await this.scheduleService.recordExecution(
+        scheduleId,
+        trigger,
+        null,
+        null,
+        "project not found",
+      );
+      return;
+    }
+
+    const ensured = await this.projectService.ensureProjectById(
+      project.id,
+      "app",
+    );
+
+    if (ensured.state === "disabled") {
+      await this.scheduleService.recordExecution(
+        scheduleId,
+        trigger,
+        null,
+        null,
+        "project disabled",
+      );
+      return;
+    }
+
+    if (ensured.state === "starting") {
+      const ready = await this.waitForProjectReady(project.id, 120_000);
+      if (!ready) {
+        await this.scheduleService.recordExecution(
+          scheduleId,
+          trigger,
+          null,
+          null,
+          "pod startup timeout",
+        );
+        return;
+      }
+    }
+    const start = Date.now();
+
+    try {
+      const upstream = await this.proxyService.resolveAppUpstreamByProjectId(
+        project.id,
+      );
+      const url = `${upstream}${schedule.targetPath}`;
+
+      const extraHeaders =
+        schedule.headers && typeof schedule.headers === "object"
+          ? (schedule.headers as Record<string, string>)
+          : {};
+
+      const hasBody =
+        schedule.body != null && schedule.method !== "GET";
+
+      const fetchOptions: RequestInit = {
+        method: schedule.method,
+        headers: {
+          ...(hasBody ? { "Content-Type": "application/json" } : {}),
+          ...extraHeaders,
+        },
+        ...(hasBody ? { body: JSON.stringify(schedule.body) } : {}),
+      };
+
+      const response = await fetch(url, fetchOptions);
+      const latencyMs = Date.now() - start;
+      await this.scheduleService.recordExecution(
+        scheduleId,
+        trigger,
+        response.status,
+        latencyMs,
+      );
+
+      this.logger.log(
+        `Schedule "${schedule.name}" fired: ${response.status} in ${latencyMs}ms`,
+      );
+    } catch (err) {
+      const latencyMs = Date.now() - start;
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      await this.scheduleService.recordExecution(
+        scheduleId,
+        trigger,
+        null,
+        latencyMs,
+        errorMessage,
+      );
+      this.logger.error(`Schedule "${schedule.name}" failed: ${errorMessage}`);
+    }
+  }
+
+  private async waitForProjectReady(
+    projectId: string,
+    timeoutMs: number,
+  ): Promise<boolean> {
+    const interval = 3000;
+    const maxAttempts = Math.ceil(timeoutMs / interval);
+
+    for (let i = 0; i < maxAttempts; i++) {
+      await new Promise((resolve) => setTimeout(resolve, interval));
+
+      try {
+        const ensured = await this.projectService.ensureProjectById(
+          projectId,
+          "app",
+        );
+        if (ensured.state === "ready") return true;
+        if (ensured.state === "disabled") return false;
+      } catch {
+        continue;
+      }
+    }
+
+    return false;
+  }
+}

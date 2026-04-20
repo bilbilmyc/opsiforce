@@ -21,9 +21,6 @@ try {
   ).version
 } catch {}
 
-const DEFAULT_TIMEOUT_IDLE = 30 * 60 * 1000
-const DEFAULT_APP_TIMEOUT_IDLE = 7 * 24 * 60 * 60 * 1000
-
 export default () => {
   return {
   databaseUrl: process.env.DATABASE_URL || "postgresql://localhost:5432/opsiforce",
@@ -53,8 +50,6 @@ export default () => {
   appProxyPort: parseInt(process.env.APP_PROXY_PORT || "3002", 10),
   vscodeProxyPort: parseInt(process.env.VSCODE_PROXY_PORT || "3003", 10),
   dbProxyPort: parseInt(process.env.DB_PROXY_PORT || "3004", 10),
-  defaultTimeoutIdle: DEFAULT_TIMEOUT_IDLE,
-  defaultAppTimeoutIdle: DEFAULT_APP_TIMEOUT_IDLE,
   openaiApiKey: process.env.OPENAI_API_KEY || "",
   storageMountPath: process.env.STORAGE_MOUNT_PATH || "/tmp/opsiforce-data",
   bifrostProxyUrl: process.env.BIFROST_PROXY_URL || "",
@@ -62,8 +57,9 @@ export default () => {
   bifrostAdminUsername: process.env.BIFROST_ADMIN_USERNAME || "",
   bifrostAdminPassword: process.env.BIFROST_ADMIN_PASSWORD || "",
   workspaceCleanupRetentionDays: 7,
-  bifrostDefaultTenantBudget: 100,
-  bifrostDefaultProjectBudget: 10,
-  bifrostDefaultKeyBudget: 5,
-  bifrostDefaultBudgetDuration: "1M",
+  gatewayUrl: process.env.SERVICE_GATEWAY_URL || "http://opsiforce-backend:3001/api/gateway",
+  mailgunApiKey: process.env.MAILGUN_API_KEY || "",
+  mailgunDomain: process.env.MAILGUN_DOMAIN || "",
+  mailgunSender: process.env.MAILGUN_SENDER || "",
+  mailgunUrl: process.env.MAILGUN_URL || "",
 }}

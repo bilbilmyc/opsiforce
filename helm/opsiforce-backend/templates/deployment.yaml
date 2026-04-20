@@ -37,7 +37,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "opsiforce-backend.fullname" . }}-config
-            {{- if or .Values.config.openaiApiKey .Values.config.bifrostAdminUsername .Values.config.bifrostAdminPassword }}
+            {{- if or .Values.config.openaiApiKey .Values.config.bifrostAdminUsername .Values.config.bifrostAdminPassword .Values.config.mailgunApiKey }}
             - secretRef:
                 name: {{ include "opsiforce-backend.fullname" . }}-secret
             {{- end }}

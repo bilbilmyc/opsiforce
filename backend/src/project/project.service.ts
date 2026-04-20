@@ -8,14 +8,18 @@ import {
   OnApplicationBootstrap,
 } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
-import { eq, and, desc, asc, inArray, or, ne, sql } from "drizzle-orm"
+import { eq, and, desc, asc, inArray, isNull, or, ne, sql, type SQL } from "drizzle-orm"
 import crypto from "crypto"
 import { db, pgClient } from "../../db"
-import { projectSettings, projects, pods, deletedProjects } from "../../db/schema"
+import { projectSettings, projects, pods, deletedProjects, workspaceMembers } from "../../db/schema"
 import { PodService } from "../pod/pod.service"
 import { PodPoolService } from "../pod/pod.pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
 import { BifrostService } from "../bifrost/bifrost.service"
+import { assertPositiveMs } from "../common/validation"
+import { DefaultsService } from "../defaults/defaults.service"
+import { GatewayKeyService } from "../gateway/gateway-key.service"
+import { ScheduleService } from "../schedule/schedule.service"
 import {
   CreateProjectDto,
   UpdateProjectDto,
@@ -31,9 +35,18 @@ export interface EnsureProjectResult {
   project: ProjectResponse
 }
 
+// Common orderBy for project listings: active projects first, most-recent activity first.
+const projectOrderBy = () =>
+  [
+    asc(sql`CASE WHEN ${projects.status} = 'disabled' THEN 1 ELSE 0 END`),
+    desc(projects.lastActiveAt),
+    desc(projects.createdAt),
+  ] as const
+
 const projectSelectFields = {
   id: projects.id,
   tenantId: projects.tenantId,
+  workspaceId: projects.workspaceId,
   title: projects.title,
   description: projects.description,
   directory: projects.directory,
@@ -45,6 +58,7 @@ const projectSelectFields = {
   bifrostProjectId: projects.bifrostProjectId,
   timeoutIdle: projectSettings.timeoutIdle,
   appTimeoutIdle: projectSettings.appTimeoutIdle,
+  timezone: projectSettings.timezone,
   lastActiveAt: projects.lastActiveAt,
   createdAt: projects.createdAt,
   updatedAt: projects.updatedAt,
@@ -63,6 +77,10 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => BifrostService))
     private readonly bifrostService: BifrostService,
+    private readonly defaultsService: DefaultsService,
+    private readonly gatewayKeyService: GatewayKeyService,
+    @Inject(forwardRef(() => ScheduleService))
+    private readonly scheduleService: ScheduleService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -76,8 +94,8 @@ export class ProjectService implements OnApplicationBootstrap {
     const directory = `projects/${tenantId}/${id}`
     const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
     const podName = this.podService.assignedPodName(id)
-    const timeoutIdle = this.configService.get<number>("defaultTimeoutIdle", 30 * 60 * 1000)
-    const appTimeoutIdle = this.configService.get<number>("defaultAppTimeoutIdle", 7 * 24 * 60 * 60 * 1000)
+    const { defaultTimeoutIdle: timeoutIdle, defaultAppTimeoutIdle: appTimeoutIdle } =
+      await this.defaultsService.getTenantTimeouts(tenantId)
 
     await db.transaction(async (tx) => {
       await tx
@@ -100,10 +118,12 @@ export class ProjectService implements OnApplicationBootstrap {
           projectId: id,
           timeoutIdle,
           appTimeoutIdle,
+          timezone: dto?.timezone || "UTC",
         })
     })
 
     await this.createBifrostResources(id, tenantId)
+    await this.createGatewayKey(id, tenantId)
     this.queueProjectStartup(id)
 
     return this.findOne(id, tenantId)
@@ -139,10 +159,12 @@ export class ProjectService implements OnApplicationBootstrap {
           projectId: id,
           timeoutIdle: source.timeoutIdle,
           appTimeoutIdle: source.appTimeoutIdle,
+          timezone: source.timezone,
         })
     })
 
     await this.createBifrostResources(id, tenantId)
+    await this.createGatewayKey(id, tenantId)
     this.pendingSourceDirs.set(id, source.directory)
     this.queueProjectStartup(id)
 
@@ -158,16 +180,50 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   async findAll(tenantId: string): Promise<ProjectResponse[]> {
+    return this.selectProjects(eq(projects.tenantId, tenantId))
+  }
+
+  async findAllForUser(params: {
+    tenantId: string
+    userId: string
+    canManageWorkspaces: boolean
+  }): Promise<ProjectResponse[]> {
+    const { tenantId, userId, canManageWorkspaces } = params
+    if (canManageWorkspaces) return this.findAll(tenantId)
+
     return db
       .select(projectSelectFields)
       .from(projects)
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
-      .where(eq(projects.tenantId, tenantId))
-      .orderBy(
-        asc(sql`CASE WHEN ${projects.status} = 'disabled' THEN 1 ELSE 0 END`),
-        desc(projects.lastActiveAt),
-        desc(projects.createdAt),
+      .leftJoin(
+        workspaceMembers,
+        and(
+          eq(workspaceMembers.workspaceId, projects.workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ),
       )
+      .where(
+        and(
+          eq(projects.tenantId, tenantId),
+          or(isNull(projects.workspaceId), sql`${workspaceMembers.workspaceId} is not null`),
+        ),
+      )
+      .orderBy(...projectOrderBy())
+  }
+
+  async findAllInWorkspace(tenantId: string, workspaceId: string): Promise<ProjectResponse[]> {
+    return this.selectProjects(
+      and(eq(projects.tenantId, tenantId), eq(projects.workspaceId, workspaceId))!,
+    )
+  }
+
+  private selectProjects(where: SQL): Promise<ProjectResponse[]> {
+    return db
+      .select(projectSelectFields)
+      .from(projects)
+      .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+      .where(where)
+      .orderBy(...projectOrderBy())
   }
 
   async findOne(id: string, tenantId: string): Promise<ProjectResponse> {
@@ -177,6 +233,36 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .where(and(eq(projects.id, id), eq(projects.tenantId, tenantId)))
     if (!project) throw new NotFoundException(`Project ${id} not found`)
+    return project
+  }
+
+  /**
+   * User-scoped project lookup. Returns 404 (not 403) for invisible projects
+   * so existence of workspace-scoped projects isn't leaked to non-members.
+   */
+  async findOneForUser(params: {
+    projectId: string
+    tenantId: string
+    userId: string
+    canManageWorkspaces: boolean
+  }): Promise<ProjectResponse> {
+    const { projectId, tenantId, userId, canManageWorkspaces } = params
+    const project = await this.findOne(projectId, tenantId)
+
+    if (canManageWorkspaces) return project
+    if (!project.workspaceId) return project
+
+    const [member] = await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(and(
+        eq(workspaceMembers.workspaceId, project.workspaceId),
+        eq(workspaceMembers.userId, userId),
+      ))
+    if (!member) {
+      throw new NotFoundException(`Project ${projectId} not found`)
+    }
+
     return project
   }
 
@@ -199,8 +285,9 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (dto.title !== undefined) projectUpdates.title = dto.title
     if (dto.description !== undefined) projectUpdates.description = dto.description
-    if (dto.timeoutIdle !== undefined) settingsUpdates.timeoutIdle = this.normalizeTimeoutIdle(dto.timeoutIdle, "timeoutIdle")
-    if (dto.appTimeoutIdle !== undefined) settingsUpdates.appTimeoutIdle = this.normalizeTimeoutIdle(dto.appTimeoutIdle, "appTimeoutIdle")
+    if (dto.timeoutIdle !== undefined) settingsUpdates.timeoutIdle = assertPositiveMs(dto.timeoutIdle, "timeoutIdle")
+    if (dto.appTimeoutIdle !== undefined) settingsUpdates.appTimeoutIdle = assertPositiveMs(dto.appTimeoutIdle, "appTimeoutIdle")
+    if (dto.timezone !== undefined) settingsUpdates.timezone = dto.timezone
 
     await db.transaction(async (tx) => {
       if (Object.keys(projectUpdates).length > 0 || Object.keys(settingsUpdates).length > 0) {
@@ -245,6 +332,13 @@ export class ProjectService implements OnApplicationBootstrap {
       })
     }
 
+    await this.gatewayKeyService.revokeKeys(id).catch((err) => {
+      this.logger.warn(`Failed to revoke gateway keys for project ${id}: ${(err as Error).message}`)
+    })
+
+    await this.scheduleService.removeAllForProject(id).catch((err) => {
+      this.logger.warn(`Failed to remove schedules for project ${id}: ${(err as Error).message}`)
+    })
     await this.timeoutService.clear(id)
     await db.delete(projects).where(eq(projects.id, id))
     this.startupTasks.delete(id)
@@ -421,6 +515,14 @@ export class ProjectService implements OnApplicationBootstrap {
     }
   }
 
+  private async createGatewayKey(projectId: string, tenantId: string): Promise<void> {
+    try {
+      await this.gatewayKeyService.createKey(projectId, tenantId)
+    } catch (err) {
+      this.logger.warn(`Failed to create gateway key for project ${projectId}: ${(err as Error).message}`)
+    }
+  }
+
   private async requestProjectStartup(
     project: ProjectResponse,
     options: { deleteExistingPod: boolean },
@@ -488,7 +590,17 @@ export class ProjectService implements OnApplicationBootstrap {
       const current = await this.findOneById(projectId).catch(() => null)
       if (!current || current.status !== ProjectStatus.Starting) return
 
-      const tenantOptions = await this.bifrostService.getProjectPodOptions(projectId)
+      const [bifrostOptions, agentDefaults, gatewayApiKey] = await Promise.all([
+        this.bifrostService.getProjectPodOptions(projectId),
+        this.defaultsService.getTenantAgent(current.tenantId),
+        this.gatewayKeyService.getProjectToken(projectId),
+      ])
+      const tenantOptions = {
+        ...(bifrostOptions ?? {}),
+        agentModel: agentDefaults.defaultModel,
+        gatewayApiKey: gatewayApiKey ?? undefined,
+        gatewayUrl: this.configService.get<string>("gatewayUrl", ""),
+      }
       const claimedPod = await this.podPoolService.claimWarmPod()
       const podName = current.podName ?? this.podService.assignedPodName(projectId)
 
@@ -606,14 +718,6 @@ export class ProjectService implements OnApplicationBootstrap {
     void touch.catch((err) => {
       this.logger.warn(`Failed to touch ${activity} activity for project ${projectId}: ${err.message}`)
     })
-  }
-
-  private normalizeTimeoutIdle(value: number, field: "timeoutIdle" | "appTimeoutIdle"): number {
-    if (!Number.isFinite(value) || value <= 0) {
-      throw new BadRequestException(`${field} must be a positive millisecond value`)
-    }
-
-    return Math.round(value)
   }
 
   private async withProjectStartupLock(projectId: string, run: () => Promise<void>): Promise<void> {

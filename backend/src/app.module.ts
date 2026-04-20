@@ -16,6 +16,11 @@ import { HealthController } from "./health.controller"
 import { BifrostModule } from "./bifrost/bifrost.module"
 import { PermissionModule } from "./permission/permission.module"
 import { CleanupModule } from "./cleanup/cleanup.module"
+import { GatewayModule } from "./gateway/gateway.module"
+import { ScheduleModule } from "./schedule/schedule.module"
+import { UserModule } from "./user/user.module"
+import { DefaultsModule } from "./defaults/defaults.module"
+import { WorkspaceModule } from "./workspace/workspace.module"
 
 function parseRedisUrl(url: string) {
   const parsed = new URL(url)
@@ -44,14 +49,19 @@ function parseRedisUrl(url: string) {
       adapter: BullBoardFastifyAdapter,
     }),
     TenantModule,
+    UserModule,
     PodModule,
     ProjectModule,
+    WorkspaceModule,
     TimeoutModule,
     ProxyModule,
     UploadModule,
     BifrostModule,
     PermissionModule,
     CleanupModule,
+    GatewayModule,
+    ScheduleModule,
+    DefaultsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: TenantGuard }],

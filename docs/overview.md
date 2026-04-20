@@ -56,7 +56,7 @@ The frontend integrates OpenCode at the source level — OpenCode's Solid.js com
 |---------|-------|------|-------------|
 | **opsiforce-proxy** | `nginx:alpine` + oauth2-proxy sidecar | 80 | Routes traffic between services. OAuth2 Proxy for auth. |
 | **opsiforce-frontend** | `nginx:alpine` (static) | 80 | Solid.js app — projects sidebar + OpenCode UI embedded via source-level imports (Vite resolver plugin). Single SPA, no iframe. |
-| **opsiforce-backend** | `node:24-alpine` | 3001 | NestJS + Fastify. Manages K8s pods, proxies to agent pods, tracks timeouts. Pure API. |
+| **opsiforce-backend** | `node:24-alpine` | 3001 | NestJS + Fastify. Manages K8s pods, proxies to agent pods, tracks timeouts, service gateway for external APIs. Pure API. |
 | **opsiforce-agent** | `node:24-slim` + bun | 4096, 3000, 8080, 8081 | OpenCode + code-server (VS Code IDE) + app dev server + datasette DB viewer. One pod per project. CephFS subPath mount. Image tagged with commit SHA in CI/CD. Agent image version in `agent-config/agent-image-version.json` (local dev), platform version in `backend/platform-version.json`. 34 skills, 95 pre-installed packages. |
 
 ---
@@ -74,6 +74,7 @@ packages/opsiforce/
 │   │   ├── pod/                 K8s pod CRUD + warm pool + pod spec builder
 │   │   ├── permission/           RBAC — parses Keycloak roles from x-forwarded-groups header
 │   │   ├── project/             Project CRUD + auto-reassignment
+│   │   ├── gateway/             Service gateway — per-project tokens for external APIs (email, SMS, etc.)
 │   │   └── timeout/             Redis TTL tracking + keyspace notification listener
 │   └── db/
 │       ├── schema.ts            Drizzle schema (projects + pods tables)
@@ -134,5 +135,8 @@ packages/opsiforce/
 - [Pod Management](./pod-management.md)
 - [Persistence & Storage](./persistence.md)
 - [API Reference](./api-reference.md)
+- [Permissions](./permissions.md)
+- [Workspaces](./workspaces.md)
 - [VS Code IDE](./vscode-ide.md)
 - [DB Viewer](./db-viewer.md)
+- [Service Gateway](./service-gateway.md)

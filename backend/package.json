@@ -25,7 +25,8 @@
     "create-bifrost-db": "kubectl run -n local psql-client-bf --restart=Never -i --tty --rm --env PGPASSWORD=dbpass1 --image=postgres:16 -- psql -h local-pg-postgresql -d postgres -U admin -c \"CREATE DATABASE bifrost;\" || :",
     "install-bifrost": "sh ../scripts/install-bifrost.sh",
     "port-forward-bifrost": "sh -c 'while true; do kubectl port-forward svc/opsiforce-bifrost 3050:8080 -n opsiforce; sleep 1; done'",
-    "minikube-dev": "env-cmd -f ./local-envs.sh --use-shell 'yarn run setup-minikube-storage && yarn run build-agent-image && yarn run opsiforce-install-infra && yarn run create-opsiforce-db && yarn run create-bifrost-db && yarn run db:migrate && yarn run install-bifrost && concurrently \"yarn run opsiforce-install-proxy\" \"yarn run port-forward-proxy\" \"yarn run port-forward-bifrost\" \"yarn run kubectl-proxy\" \"yarn run dev\" \"yarn run db:studio\"'"
+    "mailgun:mock": "docker run --rm -t -p 8089:80 -e MAILGUN_API_KEY=key-example asedov/mailgun-mock",
+    "minikube-dev": "env-cmd -f ./local-envs.sh --use-shell 'yarn run setup-minikube-storage && yarn run build-agent-image && yarn run opsiforce-install-infra && yarn run create-opsiforce-db && yarn run create-bifrost-db && yarn run db:migrate && yarn run install-bifrost && concurrently \"yarn run opsiforce-install-proxy\" \"yarn run port-forward-proxy\" \"yarn run port-forward-bifrost\" \"yarn run kubectl-proxy\" \"yarn run dev\" \"yarn run db:studio\" \"yarn run mailgun:mock\"'"
   },
   "dependencies": {
     "@bull-board/api": "^6.21.2",
@@ -44,7 +45,9 @@
     "compression": "^1.8.1",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",
+    "form-data": "^4.0.5",
     "ioredis": "^5.10.1",
+    "mailgun.js": "^13.0.0",
     "postgres": "^3.4.9",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",

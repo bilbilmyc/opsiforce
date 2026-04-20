@@ -12,6 +12,7 @@ export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus]
 export interface CreateProjectDto {
   title?: string
   description?: string
+  timezone?: string
 }
 
 export interface UpdateProjectDto {
@@ -19,6 +20,7 @@ export interface UpdateProjectDto {
   description?: string
   timeoutIdle?: number
   appTimeoutIdle?: number
+  timezone?: string
 }
 
 export interface DuplicateProjectDto {
@@ -31,4 +33,5 @@ type ProjectSettingsRow = typeof projectSettings.$inferSelect
 export interface ProjectResponse extends ProjectRow {
   timeoutIdle: ProjectSettingsRow["timeoutIdle"]
   appTimeoutIdle: ProjectSettingsRow["appTimeoutIdle"]
+  timezone: ProjectSettingsRow["timezone"]
 }

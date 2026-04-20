@@ -1,23 +1,33 @@
-import { Show, createSignal } from "solid-js"
+import { For, Show, createMemo, createSignal } from "solid-js"
 import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { useNavigate } from "@tanstack/solid-router"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
 import { api, type Project } from "~/api/client"
+import { UNASSIGNED_LABEL, useMoveProject, useWorkspaces } from "~/api/workspaces"
 import {
-  Settings,
-  Pencil,
-  Copy,
-  Trash2,
+  ArrowRightLeft,
   Ban,
+  Calendar,
+  ChevronRight,
   CirclePlay,
+  Copy,
   EllipsisVertical,
+  FolderKanban,
+  Inbox,
+  Pencil,
+  Settings,
+  Trash2,
 } from "~/components/icons"
 import {
   DropdownMenu,
-  DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import ProjectSettings from "./project-settings"
 import ConfirmDialog from "./ui/confirm-dialog"
@@ -25,6 +35,7 @@ import ConfirmDialog from "./ui/confirm-dialog"
 export default function ProjectActionsMenu(props: {
   projectId: string
   status: Project["status"]
+  workspaceId: string | null
   showRename?: boolean
   onRename?: () => void
   onSettings?: () => void
@@ -34,6 +45,7 @@ export default function ProjectActionsMenu(props: {
   onTriggerClick?: (e: MouseEvent) => void
 }) {
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const { hasPermission } = usePermissions()
 
   const canSeeSettings = () =>
@@ -41,10 +53,39 @@ export default function ProjectActionsMenu(props: {
     hasPermission(Permission.manageProjectTimeoutSettings)
   const canDisable = () => hasPermission(Permission.disableProject)
   const canDuplicate = () => hasPermission(Permission.duplicateProject)
+  const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces)
+  const canMoveBetweenWorkspaces = () =>
+    canManageWorkspaces() || hasPermission(Permission.moveProjectsBetweenWorkspaces)
   const isDisabled = () => props.status === "disabled"
 
   const [settingsOpen, setSettingsOpen] = createSignal(false)
   const [confirmAction, setConfirmAction] = createSignal<"delete" | "duplicate" | "disable" | null>(null)
+
+  const workspaces = useWorkspaces()
+  const move = useMoveProject()
+
+  const moveTargets = createMemo(() =>
+    (workspaces.data ?? []).filter((w) => w.id !== props.workspaceId),
+  )
+
+  const currentWorkspaceName = createMemo(() => {
+    if (props.workspaceId === null) return UNASSIGNED_LABEL
+    return (workspaces.data ?? []).find((w) => w.id === props.workspaceId)?.name ?? "workspace"
+  })
+
+  const showMove = () =>
+    canMoveBetweenWorkspaces() &&
+    (moveTargets().length > 0 || (canManageWorkspaces() && props.workspaceId !== null))
+
+  const handleMove = (toWorkspaceId: string | null, toName: string) => {
+    move.mutate({
+      projectId: props.projectId,
+      fromWorkspaceId: props.workspaceId,
+      toWorkspaceId,
+      fromName: currentWorkspaceName(),
+      toName,
+    })
+  }
 
   const deleteProject = createMutation(() => ({
     mutationFn: () => api.delete<void>(`/projects/${props.projectId}`),
@@ -85,7 +126,7 @@ export default function ProjectActionsMenu(props: {
         >
           <EllipsisVertical class="w-4 h-4" />
         </DropdownMenuTrigger>
-        <DropdownMenuContent>
+        <DropdownMenuContent onClick={(e: MouseEvent) => e.stopPropagation()}>
           <Show when={props.showRename && props.onRename}>
             <DropdownMenuItem onSelect={() => props.onRename?.()}>
               <Pencil class="w-3.5 h-3.5 text-muted-foreground" />
@@ -102,6 +143,38 @@ export default function ProjectActionsMenu(props: {
               <Settings class="w-3.5 h-3.5 text-muted-foreground" />
               Settings
             </DropdownMenuItem>
+          </Show>
+          <DropdownMenuItem onSelect={() => navigate({ to: "/schedules", search: { project: props.projectId } })}>
+            <Calendar class="w-3.5 h-3.5 text-muted-foreground" />
+            Schedules
+          </DropdownMenuItem>
+          <Show when={showMove()}>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <ArrowRightLeft class="w-3.5 h-3.5 text-muted-foreground" />
+                Move to
+                <ChevronRight class="ml-auto w-3.5 h-3.5 text-muted-foreground" />
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <For each={moveTargets()}>
+                  {(ws) => (
+                    <DropdownMenuItem onSelect={() => handleMove(ws.id, ws.name)}>
+                      <FolderKanban class="w-3.5 h-3.5 text-muted-foreground" />
+                      {ws.name}
+                    </DropdownMenuItem>
+                  )}
+                </For>
+                <Show when={canManageWorkspaces() && props.workspaceId !== null}>
+                  <Show when={moveTargets().length > 0}>
+                    <DropdownMenuSeparator />
+                  </Show>
+                  <DropdownMenuItem onSelect={() => handleMove(null, UNASSIGNED_LABEL)}>
+                    <Inbox class="w-3.5 h-3.5 text-muted-foreground" />
+                    {UNASSIGNED_LABEL}
+                  </DropdownMenuItem>
+                </Show>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </Show>
           <Show when={canDuplicate()}>
             <DropdownMenuItem onSelect={() => setConfirmAction("duplicate")}>

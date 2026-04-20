@@ -1,6 +1,7 @@
 import { Show, createSignal } from "solid-js"
 import type { Project } from "~/api/client"
 import { cn } from "~/lib/cn"
+import { projectDisplayTitle } from "~/lib/project-display"
 import ProjectActionsMenu from "./project-actions-menu"
 
 export default function ProjectCard(props: {
@@ -17,13 +18,7 @@ export default function ProjectCard(props: {
   const [editing, setEditing] = createSignal(false)
   const [editValue, setEditValue] = createSignal("")
 
-  const title = () =>
-    props.project.title ?? new Date(props.project.createdAt).toLocaleDateString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const title = () => projectDisplayTitle(props.project)
 
   function startRename() {
     setEditValue(props.project.title ?? "")
@@ -82,6 +77,7 @@ export default function ProjectCard(props: {
           <ProjectActionsMenu
             projectId={props.project.id}
             status={props.project.status}
+            workspaceId={props.project.workspaceId}
             showRename
             onRename={startRename}
             onSettings={props.onSettings}

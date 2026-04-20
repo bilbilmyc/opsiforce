@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev": "concurrently \"bun run dev:backend\" \"bun run dev:frontend\"",
     "dev:frontend": "vite frontend --host 0.0.0.0",
-    "dev:backend": "tsx watch --include ./bun.lock --include backend/src backend/src/main.ts",
+    "dev:backend": "nest start --watch",
     "build": "vite build frontend && tsc -p backend/tsconfig.json",
     "check": "tsc --noEmit -p frontend/tsconfig.json 2>&1 | head -20; tsc --noEmit -p backend/tsconfig.json 2>&1 | head -20",
     "db:migrate": "tsx backend/src/database/migrate.ts"
@@ -95,6 +95,7 @@
     "@tailwindcss/vite": "^4.2.0",
     "vite": "^8.0.0",
     "typescript": "^5.8.0",
+    "@nestjs/cli": "^11.0.21",
     "tsx": "^4.21.0",
     "concurrently": "^9.2.0"
   }

@@ -1,36 +1,21 @@
-import { createSignal, onCleanup, type Accessor } from "solid-js";
-import { useQueryClient } from "@tanstack/solid-query";
+import { type Accessor } from "solid-js"
+import { useQueryClient } from "@tanstack/solid-query"
+import { createPersistedStringSignal } from "./persisted-signal"
 
-export function createTenantState(): [
-  Accessor<string>,
-  (name: string) => void,
-] {
-  const queryClient = useQueryClient();
-  const [tenant, setTenantSignal] = createSignal(
-    localStorage.getItem("tenant") ?? "",
-  );
+// Grandfathered key: unprefixed because existing tabs already have it.
+// See persisted-signal.ts for the naming convention.
+const TENANT_KEY = "tenant"
 
-  const handler = (e: StorageEvent) => {
-    if (e.key === "tenant") {
-      setTenantSignal(e.newValue ?? "");
-    }
-  };
-  window.addEventListener("storage", handler);
-  onCleanup(() => window.removeEventListener("storage", handler));
+export function createTenantState(): [Accessor<string>, (name: string) => void] {
+  const queryClient = useQueryClient()
+  const [tenant, setTenantSignal] = createPersistedStringSignal(TENANT_KEY, "")
 
   const setTenant = (name: string) => {
-    if (name === tenant()) return;
+    if (name === tenant()) return
+    queryClient.cancelQueries()
+    setTenantSignal(name)
+    queryClient.resetQueries()
+  }
 
-    queryClient.cancelQueries();
-
-    localStorage.setItem("tenant", name);
-    setTenantSignal(name);
-    window.dispatchEvent(
-      new StorageEvent("storage", { key: "tenant", newValue: name }),
-    );
-
-    queryClient.resetQueries();
-  };
-
-  return [tenant, setTenant];
+  return [tenant, setTenant]
 }

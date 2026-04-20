@@ -42,6 +42,10 @@ config:
   bifrostPodProxyUrl: ""
   bifrostAdminUsername: ""
   bifrostAdminPassword: ""
+  gatewayUrl: ""
+  mailgunApiKey: ""
+  mailgunDomain: ""
+  mailgunSender: ""
   agentAffinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:

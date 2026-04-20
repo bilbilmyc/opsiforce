@@ -1,4 +1,4 @@
-FROM node:24-slim
+FROM node:24.14-slim
 
 ARG OPENCODE_CONFIG=agent-config/opencode.json
 
@@ -36,6 +36,10 @@ COPY agent-config/scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY agent-config/scripts/log-writer.ts /usr/local/bin/log-writer
 COPY agent-config/datasette-metadata.yml /opt/opencode/datasette-metadata.yml
 RUN chmod +x /usr/local/bin/guard /usr/local/bin/entrypoint.sh /usr/local/bin/log-writer
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ripgrep file \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV OPENCODE_ENABLE_EXA=true
 
