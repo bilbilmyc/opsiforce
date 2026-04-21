@@ -847,7 +847,5 @@ func jsonHeader(headers http.Header) string {
 func authSignature(headers http.Header) string {
 	hash := sha1.New()
 	_, _ = hash.Write([]byte(headers.Get("x-forwarded-groups")))
-	_, _ = hash.Write([]byte{0})
-	_, _ = hash.Write([]byte(headers.Get("x-tenant-name")))
 	return hex.EncodeToString(hash.Sum(nil))
 }

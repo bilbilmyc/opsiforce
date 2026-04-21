@@ -77,9 +77,6 @@ func (c *Client) Ensure(ctx context.Context, projectID string, surface Surface, 
 	if groups := headers.Get("x-forwarded-groups"); groups != "" {
 		req.Header.Set("x-forwarded-groups", groups)
 	}
-	if tenantName := headers.Get("x-tenant-name"); tenantName != "" {
-		req.Header.Set("x-tenant-name", tenantName)
-	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {

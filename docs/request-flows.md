@@ -98,7 +98,7 @@ Inside one runtime proxy process, concurrent requests for the same cache key sha
 projectId + surface + auth signature
 ```
 
-For the agent proxy, the auth signature is derived from `x-forwarded-groups` and `x-tenant-name`. This means:
+For the agent proxy, the auth signature is derived from `x-forwarded-groups`. This means:
 
 - repeated requests for the same project, surface, and auth context collapse to one backend `ensure` call while the first request is in flight
 - a hot ready project is then served from the short ready TTL cache
