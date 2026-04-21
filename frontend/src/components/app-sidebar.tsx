@@ -1,9 +1,10 @@
 import { Show, createSignal } from "solid-js"
-import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { toast } from "solid-sonner"
 import { useNavigate } from "@tanstack/solid-router"
-import { api, type Project } from "~/api/client"
+import { type Project } from "~/api/client"
 import { usePermissions } from "~/api/permissions"
-import { useUserInfo } from "~/api/user"
+import { useCreateUnassignedProject } from "~/api/projects"
+import { useCurrentUser, useUserInfo } from "~/api/user"
 import { Permission } from "~/constants/permissions"
 import {
   Sidebar,
@@ -27,25 +28,32 @@ import {
 import { Button } from "~/components/ui/button"
 import TenantSelector from "~/components/tenant-selector"
 import ProjectSidebar from "~/components/project-sidebar"
-import { LogOut, Plus, FolderKanban, Wallet, ChevronsUpDown, Search, X } from "~/components/icons"
+import { LogOut, Plus, FolderKanban, Wallet, ChevronsUpDown, Search, X, Calendar, SlidersHorizontal, Settings } from "~/components/icons"
 
 export default function AppSidebar() {
   const navigate = useNavigate()
-  const qc = useQueryClient()
   const { toggleSidebar } = useSidebar()
   const { hasPermission } = usePermissions()
   const userInfo = useUserInfo()
+  useCurrentUser()
 
   const [search, setSearch] = createSignal("")
   let searchRef: HTMLInputElement | undefined
 
-  const createProject = createMutation(() => ({
-    mutationFn: () => api.post<Project>("/projects"),
-    onSuccess: (project: Project) => {
-      qc.invalidateQueries({ queryKey: ["projects"] })
-      navigate({ to: "/projects/$projectId", params: { projectId: project.id }, search: { prompt: undefined } })
-    },
-  }))
+  const createUnassigned = useCreateUnassignedProject()
+
+  const handleCreate = () =>
+    createUnassigned.mutate(undefined, {
+      onSuccess: (project: Project) => {
+        toast.success("Project created")
+        navigate({
+          to: "/projects/$projectId",
+          params: { projectId: project.id },
+          search: { prompt: undefined },
+        })
+      },
+      onError: () => toast.error("Failed to create project"),
+    })
 
   const userName = () => userInfo.data?.preferredUsername ?? ""
   const userInitial = () => {
@@ -118,9 +126,9 @@ export default function AppSidebar() {
             variant="outline"
             size="icon"
             class="h-8 w-8 shrink-0"
-            onClick={() => createProject.mutate(undefined as never)}
-            disabled={createProject.isPending}
-            title="New Project"
+            onClick={handleCreate}
+            disabled={createUnassigned.isPending}
+            title="New project"
           >
             <Plus class="w-4 h-4" />
           </Button>
@@ -128,9 +136,9 @@ export default function AppSidebar() {
         <div class="hidden group-data-[collapsible=icon]/sidebar:flex justify-center pb-2">
           <button
             class="w-7 h-7 rounded-md flex items-center justify-center text-sidebar-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-            onClick={() => createProject.mutate(undefined as never)}
-            disabled={createProject.isPending}
-            title="New Project"
+            onClick={handleCreate}
+            disabled={createUnassigned.isPending}
+            title="New project"
           >
             <Plus class="w-4 h-4" />
           </button>
@@ -183,10 +191,26 @@ export default function AppSidebar() {
                   <p class="text-sm font-medium truncate">{userName()}</p>
                 </div>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => navigate({ to: "/schedules" })}>
+                  <Calendar class="w-4 h-4 text-muted-foreground" />
+                  Schedules
+                </DropdownMenuItem>
+                <Show when={hasPermission(Permission.manageWorkspaces)}>
+                  <DropdownMenuItem onSelect={() => navigate({ to: "/settings/workspaces" })}>
+                    <Settings class="w-4 h-4 text-muted-foreground" />
+                    Workspaces
+                  </DropdownMenuItem>
+                </Show>
                 <Show when={hasPermission(Permission.manageTenantBudget)}>
                   <DropdownMenuItem onSelect={() => navigate({ to: "/billing" })}>
                     <Wallet class="w-4 h-4 text-muted-foreground" />
                     Billing
+                  </DropdownMenuItem>
+                </Show>
+                <Show when={hasPermission(Permission.managePlatformDefaults) || hasPermission(Permission.manageTenantDefaults)}>
+                  <DropdownMenuItem onSelect={() => navigate({ to: "/defaults" })}>
+                    <SlidersHorizontal class="w-4 h-4 text-muted-foreground" />
+                    Defaults
                   </DropdownMenuItem>
                 </Show>
                 <DropdownMenuItem onSelect={() => { window.location.href = "/oauth2/sign_out" }}>

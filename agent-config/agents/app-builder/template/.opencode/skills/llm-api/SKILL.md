@@ -16,7 +16,7 @@ A dedicated OpenAI-compatible API is available for the apps you build, via these
 
 Install:
 ```bash
-npm install openai
+bun add openai
 ```
 
 Initialize:

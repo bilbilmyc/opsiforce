@@ -1,0 +1,23 @@
+{{- $proxies := list
+  (dict "name" "agent" "port" .Values.ports.agent)
+  (dict "name" "app" "port" .Values.ports.app)
+  (dict "name" "vscode" "port" .Values.ports.vscode)
+  (dict "name" "db" "port" .Values.ports.db)
+}}
+{{- range $proxy := $proxies }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opsiforce-runtime-proxies.proxyFullname" (dict "root" $ "name" $proxy.name) }}
+  annotations:
+    service.kubernetes.io/topology-mode: "Auto"
+spec:
+  ports:
+    - name: http
+      port: {{ $proxy.port }}
+      protocol: TCP
+      targetPort: {{ $proxy.port }}
+  selector:
+    app: {{ include "opsiforce-runtime-proxies.proxyFullname" (dict "root" $ "name" $proxy.name) }}
+{{- end }}

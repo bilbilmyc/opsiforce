@@ -1,4 +1,10 @@
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "./dialog"
 import { Button } from "./button"
 
 export interface ConfirmDialogProps {
@@ -18,7 +24,7 @@ export default function ConfirmDialog(props: ConfirmDialogProps) {
       <DialogContent class="max-w-sm">
         <DialogTitle>{props.title}</DialogTitle>
         <DialogDescription>{props.description}</DialogDescription>
-        <div class="flex justify-end gap-2 mt-4">
+        <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => props.onOpenChange(false)}>
             {props.cancelLabel ?? "Cancel"}
           </Button>
@@ -32,7 +38,7 @@ export default function ConfirmDialog(props: ConfirmDialogProps) {
           >
             {props.confirmLabel ?? "Confirm"}
           </Button>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

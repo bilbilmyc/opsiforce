@@ -37,7 +37,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "opsiforce-backend.fullname" . }}-config
-            {{- if or .Values.config.openaiApiKey .Values.config.bifrostAdminUsername .Values.config.bifrostAdminPassword }}
+            {{- if or .Values.config.openaiApiKey .Values.config.bifrostAdminUsername .Values.config.bifrostAdminPassword .Values.config.mailgunApiKey }}
             - secretRef:
                 name: {{ include "opsiforce-backend.fullname" . }}-secret
             {{- end }}
@@ -47,12 +47,6 @@ spec:
           ports:
             - name: http
               containerPort: {{ .Values.backend.containerPort }}
-            - name: app-proxy
-              containerPort: {{ .Values.backend.appProxyPort | default 3002 }}
-            - name: vscode-proxy
-              containerPort: {{ .Values.backend.vscodeProxyPort | default 3003 }}
-            - name: db-proxy
-              containerPort: {{ .Values.backend.dbProxyPort | default 3004 }}
           resources:
             requests:
               cpu: {{ .Values.backend.resources.requests.cpu }}

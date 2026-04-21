@@ -1,0 +1,69 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/simadevelopment/opsiforce
+  tag: runtime-proxies
+  pullPolicy: Always
+
+config:
+  backendUrl: ""
+  k8sNamespace: ""
+  storageType: "cephfs"
+  cephfsPvcName: "opsiforce-cephfs"
+  storageHostPath: "/tmp/opsiforce-data"
+  storageMountPath: "/workspace-data"
+  proxyControlToken: ""
+  vscodePort: "8080"
+  dbViewerPort: "8081"
+
+ports:
+  agent: 3005
+  app: 3002
+  vscode: 3003
+  db: 3004
+
+resources:
+  agent:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  app:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+  vscode:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  db:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+imagePullSecrets:
+  - name: ghcr-pull-secret
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  automount: true
+  annotations: {}
+  name: ""
+
+nodeSelector: {}
+tolerations: []
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: cfke.io/region
+              operator: In
+              values:
+                - northamerica
+            - key: cfke.io/subregion
+              operator: In
+              values:
+                - east

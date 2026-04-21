@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "opsiforce-runtime-proxies.fullname" . }}-config
+data:
+  OPSIFORCE_BACKEND_URL: {{ .Values.config.backendUrl | quote }}
+  K8S_NAMESPACE: {{ .Values.config.k8sNamespace | quote }}
+  STORAGE_MOUNT_PATH: {{ .Values.config.storageMountPath | quote }}
+  VSCODE_PORT: {{ .Values.config.vscodePort | quote }}
+  DB_VIEWER_PORT: {{ .Values.config.dbViewerPort | quote }}

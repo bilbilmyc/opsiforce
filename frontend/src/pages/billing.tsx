@@ -15,6 +15,14 @@ import {
   NumberFieldDecrementTrigger,
 } from "~/components/ui/number-field"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "~/components/ui/select"
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "~/components/ui/table"
 import { toast } from "solid-sonner"
 
 interface TenantBudget {
@@ -169,22 +177,37 @@ export default function BillingPage() {
           </Show>
         </div>
 
-        <div class="rounded-lg border border-border p-4 space-y-3">
+        <div class="space-y-2">
           <span class="text-sm font-medium">Projects</span>
           <Show
             when={projectList.data && projectList.data.length > 0}
-            fallback={<p class="text-xs text-muted-foreground py-2">No projects yet.</p>}
+            fallback={
+              <div class="rounded-lg border border-dashed border-border p-6 text-center">
+                <p class="text-xs text-muted-foreground">No projects yet.</p>
+              </div>
+            }
           >
-            <div class="space-y-1">
-              <For each={projectList.data}>
-                {(project) => (
-                  <ProjectRow
-                    project={project}
-                    canSeeSettings={canSeeSettings()}
-                    onSettings={() => setSettingsProjectId(project.id)}
-                  />
-                )}
-              </For>
+            <div class="rounded-lg border border-border overflow-hidden bg-card">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead class="text-right">Usage</TableHead>
+                    <TableHead class="w-10" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <For each={projectList.data}>
+                    {(project) => (
+                      <ProjectRow
+                        project={project}
+                        canSeeSettings={canSeeSettings()}
+                        onSettings={() => setSettingsProjectId(project.id)}
+                      />
+                    )}
+                  </For>
+                </TableBody>
+              </Table>
             </div>
           </Show>
         </div>
@@ -222,24 +245,27 @@ function ProjectRow(props: {
   }
 
   return (
-    <div class="flex items-center justify-between py-1.5 px-2 rounded hover:bg-muted/50">
-      <span class="text-xs font-medium truncate min-w-0">{name()}</span>
-      <div class="flex items-center gap-2 shrink-0">
-        <span class="text-xs tabular-nums text-muted-foreground">
-          ${currentUsage().toFixed(2)}
-          <Show when={hasBudget()}>
-            {" / $"}{maxBudget()}
-          </Show>
-        </span>
+    <TableRow>
+      <TableCell class="text-xs font-medium">{name()}</TableCell>
+      <TableCell class="text-right text-xs tabular-nums text-muted-foreground">
+        ${currentUsage().toFixed(2)}
+        <Show when={hasBudget()}>
+          {" / $"}{maxBudget()}
+        </Show>
+      </TableCell>
+      <TableCell class="text-right pr-2">
         <Show when={props.canSeeSettings}>
-          <button
-            class="inline-flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          <Button
+            variant="ghost"
+            size="icon"
+            class="w-6 h-6 text-muted-foreground hover:text-foreground"
             onClick={props.onSettings}
+            aria-label="Project settings"
           >
             <Settings class="w-3.5 h-3.5" />
-          </button>
+          </Button>
         </Show>
-      </div>
-    </div>
+      </TableCell>
+    </TableRow>
   )
 }

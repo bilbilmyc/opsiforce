@@ -21,6 +21,9 @@ export interface PodTemplateOptions {
   bifrostProxyUrl?: string
   bifrostApiKey?: string
   bifrostBackendApiKey?: string
+  gatewayApiKey?: string
+  gatewayUrl?: string
+  agentModel?: string
   sourceDir?: string
 }
 
@@ -76,6 +79,9 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             `AGENT="\${AGENT_NAME:-app-builder}"; ` +
             "mkdir -p /workspace/.xdg/config/opencode /workspace/.xdg/code-server /workspace/.opencode/agents; " +
             "cp /opt/opencode/opencode.json /workspace/.xdg/config/opencode/opencode.json; " +
+            (options.agentModel
+              ? `sed -i 's|"model": "[^"]*"|"model": "${options.agentModel}"|' /workspace/.xdg/config/opencode/opencode.json; `
+              : "") +
             "cp /opt/agents/$AGENT/agent.md /workspace/.opencode/agents/$AGENT.md; " +
             "if [ ! -d /workspace/app ]; then " +
             "cp -r /opt/agents/$AGENT/template/. /workspace/; " +
@@ -121,6 +127,12 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
               : options.openaiApiKey
                 ? [{ name: "OPENAI_API_KEY", value: options.openaiApiKey }]
                 : []),
+            ...(options.gatewayApiKey && options.gatewayUrl
+              ? [
+                  { name: "SERVICE_GATEWAY_API_KEY", value: options.gatewayApiKey },
+                  { name: "SERVICE_GATEWAY_URL", value: options.gatewayUrl },
+                ]
+              : []),
           ],
           volumeMounts,
           readinessProbe: {

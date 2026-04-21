@@ -1,0 +1,853 @@
+package server
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/backend"
+	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/bufferpool"
+	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/config"
+	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/portforward"
+	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/proxycache"
+	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/requestlog"
+)
+
+var projectIDPattern = regexp.MustCompile(`^[a-f0-9-]+$`)
+
+var (
+	restartingBody = []byte(`{"error":"Pod is restarting, please retry"}`)
+	badGatewayBody = []byte(`{"error":"Project upstream is unavailable"}`)
+	notFoundBody   = []byte(`{"error":"Project not found"}`)
+	disabledBody   = []byte(`{"error":"Project is disabled"}`)
+)
+
+type Server struct {
+	cfg         config.Config
+	backend     *backend.Client
+	transport   *http.Transport
+	bufferPool  *bufferpool.Pool
+	cache       *proxycache.Cache
+	logger      *requestlog.Logger
+	portForward *portforward.Manager
+}
+
+func New(
+	cfg config.Config,
+	backendClient *backend.Client,
+	requestLogger *requestlog.Logger,
+	portForwardManager *portforward.Manager,
+) *Server {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConns = 200
+	transport.MaxIdleConnsPerHost = 64
+	transport.IdleConnTimeout = 90 * time.Second
+	transport.TLSHandshakeTimeout = 10 * time.Second
+	transport.ExpectContinueTimeout = time.Second
+
+	return &Server{
+		cfg:         cfg,
+		backend:     backendClient,
+		transport:   transport,
+		bufferPool:  bufferpool.New(32 * 1024),
+		cache:       proxycache.New(),
+		logger:      requestLogger,
+		portForward: portForwardManager,
+	}
+}
+
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/health" {
+		writeJSONStatus(w, http.StatusOK, []byte(`{"status":"ok"}`))
+		return
+	}
+
+	switch s.cfg.Mode {
+	case config.ModeAgent:
+		s.handleAgent(w, r)
+	case config.ModeApp:
+		s.handleApp(w, r)
+	case config.ModeVSCode:
+		s.handleSubdomain(w, r, backend.SurfaceVSCode)
+	case config.ModeDB:
+		s.handleSubdomain(w, r, backend.SurfaceDB)
+	default:
+		writeJSONStatus(w, http.StatusNotFound, notFoundBody)
+	}
+}
+
+func (s *Server) Close(ctx context.Context) error {
+	s.transport.CloseIdleConnections()
+
+	var errs []error
+
+	if s.portForward != nil {
+		s.portForward.Close()
+	}
+	if s.logger != nil {
+		if err := s.logger.Close(ctx); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
+	projectID, upstreamPath, ok := extractAgentProject(r.URL.Path)
+	if !ok {
+		writeJSONStatus(w, http.StatusNotFound, notFoundBody)
+		return
+	}
+
+	ensured, err := s.resolve(r.Context(), projectID, backend.SurfaceAgent, r.Header, authSignature(r.Header))
+	if err != nil {
+		s.writeEnsureError(w, err)
+		return
+	}
+
+	if ensured.State != "ready" {
+		writeStateResponse(w, ensured.State)
+		return
+	}
+
+	targetURL, err := buildTargetURL(ensured.Upstream, upstreamPath, r.URL.RawQuery)
+	if err != nil {
+		s.sendFailureResponse(w, r.Context(), projectID)
+		return
+	}
+
+	s.serveReverseProxy(w, r, projectID, targetURL, reverseProxyOptions{})
+}
+
+func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {
+	setCORSHeaders(w, r)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	projectID := extractProjectIDFromHost(r.Host)
+	if projectID == "" {
+		writeJSONStatus(w, http.StatusBadRequest, []byte(`{"error":"Invalid subdomain"}`))
+		return
+	}
+
+	ensured, err := s.resolve(r.Context(), projectID, backend.SurfaceApp, r.Header, "")
+	if err != nil {
+		s.writeEnsureError(w, err)
+		return
+	}
+
+	if ensured.State != "ready" {
+		writeStateResponse(w, ensured.State)
+		return
+	}
+
+	targetURL, err := buildTargetURL(ensured.Upstream, pathOrSlash(r.URL.Path), r.URL.RawQuery)
+	if err != nil {
+		s.sendFailureResponse(w, r.Context(), projectID)
+		return
+	}
+
+	if isUpgradeRequest(r) {
+		s.serveReverseProxy(w, r, projectID, targetURL, reverseProxyOptions{})
+		return
+	}
+
+	startedAt := time.Now()
+	requestBody, requestBodyText, err := s.readRequestBody(r)
+	if err != nil {
+		writeJSONStatus(w, http.StatusBadRequest, badGatewayBody)
+		return
+	}
+
+	responseResult, err := s.roundTripAppRequest(r, targetURL, requestBody)
+	if err != nil {
+		s.sendFailureResponse(w, r.Context(), projectID)
+		return
+	}
+
+	if responseResult.restart {
+		s.sendFailureResponse(w, r.Context(), projectID)
+		return
+	}
+
+	writeHeaderMap(w.Header(), responseResult.headers)
+	w.WriteHeader(responseResult.statusCode)
+
+	if len(responseResult.body) > 0 {
+		_, _ = w.Write(responseResult.body)
+	} else if responseResult.stream != nil {
+		defer responseResult.stream.Close()
+		size, _ := copyBuffer(w, responseResult.stream, s.bufferPool)
+		responseResult.responseSize = size
+	}
+
+	if s.logger != nil {
+		s.logger.Log(ensured.Directory, requestlog.Entry{
+			Method:          r.Method,
+			URL:             r.URL.RequestURI(),
+			Domain:          r.Host,
+			SourceIP:        sourceIP(r),
+			Status:          responseResult.statusCode,
+			Size:            responseResult.responseSize,
+			DurationMillis:  time.Since(startedAt).Milliseconds(),
+			RequestHeaders:  jsonHeader(r.Header),
+			ResponseHeaders: jsonHeader(responseResult.headers),
+			RequestBody:     requestBodyText,
+			ResponseBody:    responseResult.responseBody,
+		})
+	}
+}
+
+func (s *Server) handleSubdomain(w http.ResponseWriter, r *http.Request, surface backend.Surface) {
+	setCORSHeaders(w, r)
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	projectID := extractProjectIDFromHost(r.Host)
+	if projectID == "" {
+		writeJSONStatus(w, http.StatusBadRequest, []byte(`{"error":"Invalid subdomain"}`))
+		return
+	}
+
+	ensured, err := s.resolve(r.Context(), projectID, surface, r.Header, "")
+	if err != nil {
+		s.writeEnsureError(w, err)
+		return
+	}
+
+	if ensured.State != "ready" {
+		writeStateResponse(w, ensured.State)
+		return
+	}
+
+	targetBase := ensured.Upstream
+	if ensured.UsesLocalK8sProxy {
+		if s.portForward == nil || ensured.PodName == "" {
+			s.sendFailureResponse(w, r.Context(), projectID)
+			return
+		}
+
+		targetBase, err = s.portForward.URL(r.Context(), projectID, ensured.PodName)
+		if err != nil {
+			s.sendFailureResponse(w, r.Context(), projectID)
+			return
+		}
+	}
+
+	targetURL, err := buildTargetURL(targetBase, pathOrSlash(r.URL.Path), r.URL.RawQuery)
+	if err != nil {
+		s.sendFailureResponse(w, r.Context(), projectID)
+		return
+	}
+
+	s.serveReverseProxy(w, r, projectID, targetURL, reverseProxyOptions{
+		dropAcceptEncoding: true,
+		stripFrameHeaders:  true,
+		stripOriginUpgrade: true,
+	})
+}
+
+func (s *Server) resolve(
+	ctx context.Context,
+	projectID string,
+	surface backend.Surface,
+	headers http.Header,
+	authKey string,
+) (backend.EnsureResponse, error) {
+	cacheKey := fmt.Sprintf("%s|%s|%s", projectID, surface, authKey)
+
+	return s.cache.GetOrLoad(ctx, cacheKey, projectID, s.cacheTTL, func(ctx context.Context) (backend.EnsureResponse, error) {
+		return s.backend.Ensure(ctx, projectID, surface, headers)
+	})
+}
+
+func (s *Server) cacheTTL(ensured backend.EnsureResponse) time.Duration {
+	if ensured.State == "ready" {
+		return s.cfg.ReadyCacheTTL
+	}
+
+	return s.cfg.NonReadyCacheTTL
+}
+
+func (s *Server) writeEnsureError(w http.ResponseWriter, err error) {
+	var statusErr *backend.StatusError
+	if errors.As(err, &statusErr) {
+		writeStatusError(w, statusErr)
+		return
+	}
+
+	writeJSONStatus(w, http.StatusBadGateway, badGatewayBody)
+}
+
+func (s *Server) sendFailureResponse(w http.ResponseWriter, ctx context.Context, projectID string) {
+	restart, err := s.reportFailure(ctx, projectID)
+	if err != nil {
+		var statusErr *backend.StatusError
+		if errors.As(err, &statusErr) && statusErr.StatusCode == http.StatusNotFound {
+			writeJSONStatus(w, http.StatusNotFound, notFoundBody)
+			return
+		}
+
+		slog.Error("proxy failure reporting failed", "projectId", projectID, "error", err.Error())
+		writeJSONStatus(w, http.StatusBadGateway, badGatewayBody)
+		return
+	}
+
+	if restart {
+		writeJSONStatus(w, http.StatusServiceUnavailable, restartingBody)
+		return
+	}
+
+	writeJSONStatus(w, http.StatusBadGateway, badGatewayBody)
+}
+
+func (s *Server) reportFailure(ctx context.Context, projectID string) (bool, error) {
+	s.cache.InvalidateProject(projectID)
+	return s.backend.ReportFailure(ctx, projectID)
+}
+
+type appProxyResult struct {
+	restart      bool
+	statusCode   int
+	headers      http.Header
+	body         []byte
+	stream       io.ReadCloser
+	responseSize int64
+	responseBody string
+}
+
+func (s *Server) roundTripAppRequest(
+	r *http.Request,
+	targetURL *url.URL,
+	requestBody []byte,
+) (appProxyResult, error) {
+	outgoing := r.Clone(r.Context())
+	outgoing.URL = targetURL
+	outgoing.Host = targetURL.Host
+	outgoing.RequestURI = ""
+	outgoing.Header = copyRequestHeaders(r.Header, true)
+	setXForwardedHeaders(outgoing.Header, r)
+
+	if len(requestBody) > 0 {
+		outgoing.Body = io.NopCloser(bytes.NewReader(requestBody))
+		outgoing.ContentLength = int64(len(requestBody))
+	} else if hasRequestBody(r.Method) {
+		outgoing.Body = r.Body
+	}
+
+	resp, err := s.transport.RoundTrip(outgoing)
+	if err != nil {
+		return appProxyResult{}, err
+	}
+
+	headers := filterResponseHeaders(resp.Header, false)
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return appProxyResult{}, err
+		}
+
+		if isK8sPodError(body) {
+			return appProxyResult{restart: true}, nil
+		}
+
+		return appProxyResult{
+			statusCode:   resp.StatusCode,
+			headers:      headers,
+			body:         body,
+			responseSize: int64(len(body)),
+			responseBody: string(body),
+		}, nil
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	upstreamPath := targetURL.Path
+
+	if upstreamPath != "/" && strings.Contains(contentType, "text/html") {
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return appProxyResult{}, err
+		}
+
+		rewritten := bytes.ReplaceAll(body, []byte(upstreamPath), nil)
+		return appProxyResult{
+			statusCode:   resp.StatusCode,
+			headers:      headers,
+			body:         rewritten,
+			responseSize: int64(len(rewritten)),
+			responseBody: string(body),
+		}, nil
+	}
+
+	if isTextContent(contentType) && (resp.ContentLength <= 0 || resp.ContentLength < s.cfg.ResponseBufferLimit) {
+		defer resp.Body.Close()
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return appProxyResult{}, err
+		}
+
+		return appProxyResult{
+			statusCode:   resp.StatusCode,
+			headers:      headers,
+			body:         body,
+			responseSize: int64(len(body)),
+			responseBody: string(body),
+		}, nil
+	}
+
+	return appProxyResult{
+		statusCode: resp.StatusCode,
+		headers:    headers,
+		stream:     resp.Body,
+	}, nil
+}
+
+type reverseProxyOptions struct {
+	dropAcceptEncoding bool
+	stripFrameHeaders  bool
+	stripOriginUpgrade bool
+}
+
+func (s *Server) serveReverseProxy(
+	w http.ResponseWriter,
+	r *http.Request,
+	projectID string,
+	targetURL *url.URL,
+	options reverseProxyOptions,
+) {
+	proxy := &httputil.ReverseProxy{
+		Transport:     s.transport,
+		FlushInterval: -1,
+		BufferPool:    s.bufferPool,
+		Rewrite: func(proxyRequest *httputil.ProxyRequest) {
+			proxyRequest.Out.URL.Scheme = targetURL.Scheme
+			proxyRequest.Out.URL.Host = targetURL.Host
+			proxyRequest.Out.URL.Path = targetURL.Path
+			proxyRequest.Out.URL.RawPath = targetURL.RawPath
+			proxyRequest.Out.URL.RawQuery = targetURL.RawQuery
+			proxyRequest.Out.Host = targetURL.Host
+			proxyRequest.Out.Header["X-Forwarded-For"] = proxyRequest.In.Header["X-Forwarded-For"]
+			proxyRequest.SetXForwarded()
+			if options.dropAcceptEncoding {
+				proxyRequest.Out.Header.Del("Accept-Encoding")
+			}
+			if options.stripOriginUpgrade && isUpgradeRequest(proxyRequest.In) {
+				proxyRequest.Out.Header.Del("Origin")
+			}
+		},
+		ModifyResponse: func(resp *http.Response) error {
+			sanitizeReverseProxyHeaders(resp.Header, options.stripFrameHeaders)
+			if resp.StatusCode < http.StatusBadRequest {
+				return nil
+			}
+
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+
+			_ = resp.Body.Close()
+
+			if isK8sPodError(body) {
+				restart, reportErr := s.reportFailure(resp.Request.Context(), projectID)
+				if reportErr != nil {
+					slog.Error("proxy failure reporting failed", "projectId", projectID, "error", reportErr.Error())
+					restart = false
+				}
+
+				if restart {
+					mutateResponse(resp, http.StatusServiceUnavailable, restartingBody)
+				} else {
+					mutateResponse(resp, http.StatusBadGateway, badGatewayBody)
+				}
+				return nil
+			}
+
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+			resp.ContentLength = int64(len(body))
+			resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+			return nil
+		},
+		ErrorHandler: func(rw http.ResponseWriter, req *http.Request, err error) {
+			if req.Context().Err() != nil {
+				return
+			}
+
+			slog.Error("reverse proxy error", "projectId", projectID, "error", err.Error())
+			s.sendFailureResponse(rw, req.Context(), projectID)
+		},
+	}
+
+	proxy.ServeHTTP(w, r)
+}
+
+func (s *Server) readRequestBody(r *http.Request) ([]byte, string, error) {
+	if !hasRequestBody(r.Method) {
+		return nil, "", nil
+	}
+
+	if !shouldBufferRequest(r.Header, s.cfg.RequestBufferLimit) {
+		return nil, "", nil
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return nil, "", err
+	}
+
+	r.Body = io.NopCloser(bytes.NewReader(body))
+
+	return body, truncate(string(body), s.cfg.RequestLogBodyLimit), nil
+}
+
+func extractAgentProject(path string) (string, string, bool) {
+	const prefix = "/api/proxy/"
+	if !strings.HasPrefix(path, prefix) {
+		return "", "", false
+	}
+
+	trimmed := strings.TrimPrefix(path, prefix)
+	parts := strings.SplitN(trimmed, "/", 2)
+	if len(parts) == 0 || !projectIDPattern.MatchString(parts[0]) {
+		return "", "", false
+	}
+
+	if len(parts) == 1 {
+		return parts[0], "/", true
+	}
+
+	return parts[0], "/" + parts[1], true
+}
+
+func extractProjectIDFromHost(host string) string {
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+
+	subdomain := strings.Split(host, ".")[0]
+	if !projectIDPattern.MatchString(subdomain) {
+		return ""
+	}
+
+	return subdomain
+}
+
+func buildTargetURL(upstream string, requestPath string, rawQuery string) (*url.URL, error) {
+	base, err := url.Parse(upstream)
+	if err != nil {
+		return nil, err
+	}
+
+	target := *base
+	target.Path = joinURLPath(base.Path, requestPath)
+	target.RawPath = target.Path
+	target.RawQuery = rawQuery
+	return &target, nil
+}
+
+func joinURLPath(basePath string, requestPath string) string {
+	if requestPath == "" {
+		requestPath = "/"
+	}
+
+	switch {
+	case strings.HasSuffix(basePath, "/") && strings.HasPrefix(requestPath, "/"):
+		return basePath + requestPath[1:]
+	case !strings.HasSuffix(basePath, "/") && !strings.HasPrefix(requestPath, "/"):
+		return basePath + "/" + requestPath
+	default:
+		return basePath + requestPath
+	}
+}
+
+func pathOrSlash(path string) string {
+	if path == "" {
+		return "/"
+	}
+
+	return path
+}
+
+func hasRequestBody(method string) bool {
+	return method != http.MethodGet && method != http.MethodHead
+}
+
+func shouldBufferRequest(headers http.Header, limit int64) bool {
+	contentType := headers.Get("Content-Type")
+	if strings.Contains(contentType, "multipart") {
+		return false
+	}
+
+	contentLength, err := strconv.ParseInt(headers.Get("Content-Length"), 10, 64)
+	if err != nil || contentLength <= 0 {
+		return true
+	}
+
+	return contentLength <= limit
+}
+
+func copyRequestHeaders(source http.Header, dropAcceptEncoding bool) http.Header {
+	target := make(http.Header, len(source))
+
+	for key, values := range source {
+		lower := strings.ToLower(key)
+		if isHopByHopHeader(lower) {
+			continue
+		}
+		if dropAcceptEncoding && lower == "accept-encoding" {
+			continue
+		}
+
+		for _, value := range values {
+			target.Add(key, value)
+		}
+	}
+
+	return target
+}
+
+func setXForwardedHeaders(headers http.Header, r *http.Request) {
+	for _, value := range r.Header.Values("X-Forwarded-For") {
+		headers.Add("X-Forwarded-For", value)
+	}
+
+	if remoteIP, _, err := net.SplitHostPort(r.RemoteAddr); err == nil && remoteIP != "" {
+		headers.Add("X-Forwarded-For", remoteIP)
+	}
+
+	if r.Host != "" {
+		headers.Set("X-Forwarded-Host", r.Host)
+	}
+
+	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
+		headers.Set("X-Forwarded-Proto", forwardedProto)
+		return
+	}
+
+	if r.TLS != nil {
+		headers.Set("X-Forwarded-Proto", "https")
+		return
+	}
+
+	headers.Set("X-Forwarded-Proto", "http")
+}
+
+func isHopByHopHeader(name string) bool {
+	switch name {
+	case "connection", "proxy-connection", "keep-alive", "proxy-authenticate", "proxy-authorization", "te", "trailer", "transfer-encoding", "upgrade", "host":
+		return true
+	default:
+		return false
+	}
+}
+
+func sanitizeReverseProxyHeaders(headers http.Header, stripFrameHeaders bool) {
+	headers.Del("Transfer-Encoding")
+	if stripFrameHeaders {
+		headers.Del("Content-Length")
+		headers.Del("Content-Encoding")
+		headers.Del("X-Frame-Options")
+		headers.Del("Content-Security-Policy")
+	}
+}
+
+func filterResponseHeaders(source http.Header, stripFrameHeaders bool) http.Header {
+	target := make(http.Header, len(source))
+
+	for key, values := range source {
+		lower := strings.ToLower(key)
+		if lower == "transfer-encoding" || lower == "content-length" {
+			continue
+		}
+		if stripFrameHeaders && (lower == "content-encoding" || lower == "x-frame-options" || lower == "content-security-policy") {
+			continue
+		}
+
+		for _, value := range values {
+			target.Add(key, value)
+		}
+	}
+
+	return target
+}
+
+func mutateResponse(resp *http.Response, statusCode int, body []byte) {
+	resp.StatusCode = statusCode
+	resp.Status = fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode))
+	resp.Header = make(http.Header)
+	resp.Header.Set("Content-Type", "application/json")
+	resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
+	resp.ContentLength = int64(len(body))
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+}
+
+func writeStateResponse(w http.ResponseWriter, state string) {
+	switch state {
+	case "starting":
+		writeJSONStatus(w, http.StatusServiceUnavailable, restartingBody)
+	case "disabled":
+		writeJSONStatus(w, http.StatusLocked, disabledBody)
+	default:
+		writeJSONStatus(w, http.StatusBadGateway, badGatewayBody)
+	}
+}
+
+func writeStatusError(w http.ResponseWriter, statusErr *backend.StatusError) {
+	if statusErr.StatusCode == http.StatusNotFound {
+		writeJSONStatus(w, http.StatusNotFound, notFoundBody)
+		return
+	}
+
+	contentType := "application/json"
+	if !json.Valid(statusErr.Body) {
+		contentType = "text/plain; charset=utf-8"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.WriteHeader(statusErr.StatusCode)
+	if len(statusErr.Body) > 0 {
+		_, _ = w.Write(statusErr.Body)
+	}
+}
+
+func writeJSONStatus(w http.ResponseWriter, statusCode int, body []byte) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_, _ = w.Write(body)
+}
+
+func writeHeaderMap(target http.Header, source http.Header) {
+	for key, values := range source {
+		for _, value := range values {
+			target.Add(key, value)
+		}
+	}
+}
+
+func setCORSHeaders(w http.ResponseWriter, r *http.Request) {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		origin = "*"
+	}
+
+	w.Header().Set("Access-Control-Allow-Origin", origin)
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "content-type, authorization")
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+}
+
+func copyBuffer(dst io.Writer, src io.Reader, pool *bufferpool.Pool) (int64, error) {
+	buf := pool.Get()
+	defer pool.Put(buf)
+	return io.CopyBuffer(dst, src, buf)
+}
+
+func isTextContent(contentType string) bool {
+	return strings.Contains(contentType, "application/json") ||
+		strings.Contains(contentType, "text/") ||
+		strings.Contains(contentType, "application/xml") ||
+		strings.Contains(contentType, "application/javascript")
+}
+
+func isK8sPodError(body []byte) bool {
+	var payload struct {
+		Kind   string `json:"kind"`
+		Status string `json:"status"`
+	}
+
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return false
+	}
+
+	return payload.Kind == "Status" && payload.Status == "Failure"
+}
+
+func isUpgradeRequest(r *http.Request) bool {
+	return headerContainsToken(r.Header, "Connection", "upgrade") && r.Header.Get("Upgrade") != ""
+}
+
+func headerContainsToken(headers http.Header, key string, token string) bool {
+	for _, value := range headers.Values(key) {
+		for _, part := range strings.Split(value, ",") {
+			if strings.EqualFold(strings.TrimSpace(part), token) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func sourceIP(r *http.Request) string {
+	if realIP := r.Header.Get("X-Real-Ip"); realIP != "" {
+		return realIP
+	}
+
+	if forwardedFor := r.Header.Get("X-Forwarded-For"); forwardedFor != "" {
+		first := strings.Split(forwardedFor, ",")[0]
+		return strings.TrimSpace(first)
+	}
+
+	remoteIP, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return remoteIP
+	}
+
+	return r.RemoteAddr
+}
+
+func truncate(value string, limit int) string {
+	if limit <= 0 || len(value) <= limit {
+		return value
+	}
+
+	return value[:limit]
+}
+
+func jsonHeader(headers http.Header) string {
+	if len(headers) == 0 {
+		return ""
+	}
+
+	payload := make(map[string]string, len(headers))
+	for key := range headers {
+		payload[key] = headers.Get(key)
+	}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return ""
+	}
+
+	return string(encoded)
+}
+
+func authSignature(headers http.Header) string {
+	hash := sha1.New()
+	_, _ = hash.Write([]byte(headers.Get("x-forwarded-groups")))
+	_, _ = hash.Write([]byte{0})
+	_, _ = hash.Write([]byte(headers.Get("x-tenant-name")))
+	return hex.EncodeToString(hash.Sum(nil))
+}

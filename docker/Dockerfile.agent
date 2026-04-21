@@ -1,4 +1,4 @@
-FROM node:24-slim
+FROM node:24.14-slim
 
 ARG OPENCODE_CONFIG=agent-config/opencode.json
 
@@ -37,7 +37,12 @@ COPY agent-config/scripts/log-writer.ts /usr/local/bin/log-writer
 COPY agent-config/datasette-metadata.yml /opt/opencode/datasette-metadata.yml
 RUN chmod +x /usr/local/bin/guard /usr/local/bin/entrypoint.sh /usr/local/bin/log-writer
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ripgrep file \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV OPENCODE_ENABLE_EXA=true
+ENV NODE_OPTIONS=--max-http-header-size=131072
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s \
   CMD wget -q --spider http://localhost:4096/global/health || exit 1

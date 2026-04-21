@@ -4,6 +4,7 @@ import crypto from "crypto"
 import { db } from "../../db"
 import { tenants } from "../../db/schema"
 import { BifrostService } from "../bifrost/bifrost.service"
+import { DefaultsService } from "../defaults/defaults.service"
 
 const TENANT_GROUP_PREFIX = "role:opsiforce_tenant_name_"
 
@@ -11,7 +12,10 @@ const TENANT_GROUP_PREFIX = "role:opsiforce_tenant_name_"
 export class TenantService {
   private readonly logger = new Logger(TenantService.name)
   private readonly pendingTenants = new Map<string, Promise<typeof tenants.$inferSelect>>()
-  constructor(private readonly bifrostService: BifrostService) {}
+  constructor(
+    private readonly bifrostService: BifrostService,
+    private readonly defaultsService: DefaultsService,
+  ) {}
 
   parseTenantGroups(groupsHeader: string): string[] {
     return groupsHeader
@@ -61,6 +65,11 @@ export class TenantService {
       .returning()
 
     const tenant = created ?? (await db.select().from(tenants).where(eq(tenants.name, name)))[0]
+    if (created) {
+      await this.defaultsService.seedTenantDefaults(tenant.id).catch((err) => {
+        this.logger.warn(`Failed to seed defaults for tenant ${tenant.name}: ${(err as Error).message}`)
+      })
+    }
     return this.ensureBifrostCustomer(tenant)
   }
 

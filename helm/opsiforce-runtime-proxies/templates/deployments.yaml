@@ -1,0 +1,82 @@
+{{- $proxies := list
+  (dict "name" "agent" "mode" "agent" "port" .Values.ports.agent "resources" .Values.resources.agent)
+  (dict "name" "app" "mode" "app" "port" .Values.ports.app "resources" .Values.resources.app)
+  (dict "name" "vscode" "mode" "vscode" "port" .Values.ports.vscode "resources" .Values.resources.vscode)
+  (dict "name" "db" "mode" "db" "port" .Values.ports.db "resources" .Values.resources.db)
+}}
+{{- range $proxy := $proxies }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "opsiforce-runtime-proxies.proxyFullname" (dict "root" $ "name" $proxy.name) }}
+  labels:
+    app: {{ include "opsiforce-runtime-proxies.proxyFullname" (dict "root" $ "name" $proxy.name) }}
+spec:
+  replicas: {{ $.Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "opsiforce-runtime-proxies.proxyFullname" (dict "root" $ "name" $proxy.name) }}
+  template:
+    metadata:
+      annotations:
+        rollme: {{ randAlphaNum 5 | quote }}
+        karpenter.sh/do-not-disrupt: "true"
+      labels:
+        app: {{ include "opsiforce-runtime-proxies.proxyFullname" (dict "root" $ "name" $proxy.name) }}
+    spec:
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ default (include "opsiforce-runtime-proxies.fullname" $) $.Values.serviceAccount.name }}
+      containers:
+        - name: {{ $proxy.name }}
+          lifecycle:
+            preStop:
+              exec:
+                command: [ sh, -c, "sleep 10" ]
+          image: "{{ $.Values.image.repository }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          args:
+            - --mode
+            - {{ $proxy.mode }}
+            - --port
+            - {{ printf "%v" $proxy.port | quote }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "opsiforce-runtime-proxies.fullname" $ }}-config
+            - secretRef:
+                name: {{ include "opsiforce-runtime-proxies.fullname" $ }}-secret
+          ports:
+            - name: http
+              containerPort: {{ $proxy.port }}
+          volumeMounts:
+            - name: workspace-data
+              mountPath: {{ $.Values.config.storageMountPath }}
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+          resources:
+            {{- toYaml $proxy.resources | nindent 12 }}
+      volumes:
+        {{- if eq $.Values.config.storageType "cephfs" }}
+        - name: workspace-data
+          persistentVolumeClaim:
+            claimName: {{ $.Values.config.cephfsPvcName }}
+        {{- else }}
+        - name: workspace-data
+          hostPath:
+            path: {{ $.Values.config.storageHostPath }}
+            type: DirectoryOrCreate
+        {{- end }}
+{{- end }}

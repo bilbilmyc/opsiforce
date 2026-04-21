@@ -7,6 +7,9 @@ export interface TenantPodOptions {
   bifrostApiKey?: string
   bifrostBackendApiKey?: string
   bifrostProxyUrl?: string
+  gatewayApiKey?: string
+  gatewayUrl?: string
+  agentModel?: string
 }
 
 @Injectable()

@@ -12,6 +12,7 @@ import {
 } from "solid-js"
 import { cn } from "~/lib/cn"
 import { createResizablePanel, type ResizablePanel } from "~/lib/create-resizable-panel"
+import { createPersistedSignal } from "~/lib/persisted-signal"
 import { ResizeHandle } from "./resize-handle"
 import { Button } from "./button"
 import { PanelLeft } from "~/components/icons"
@@ -60,12 +61,15 @@ export function SidebarProvider(props: ParentProps<{
   const isMobile = createIsMobile()
   const [openMobile, setOpenMobile] = createSignal(false)
 
-  const stored = typeof window !== "undefined" ? localStorage.getItem("sidebar:state") : null
-  const [_open, _setOpen] = createSignal(stored !== null ? stored === "true" : (local.defaultOpen ?? true))
-
-  createEffect(() => {
-    localStorage.setItem("sidebar:state", String(_open()))
-  })
+  // Grandfathered key `sidebar:state` — stored as the string "true"/"false".
+  const [_open, _setOpen] = createPersistedSignal<boolean>(
+    "sidebar:state",
+    local.defaultOpen ?? true,
+    {
+      serialize: (v) => String(v),
+      deserialize: (raw) => raw === "true",
+    },
+  )
 
   const state = (): SidebarState => _open() ? "expanded" : "collapsed"
 

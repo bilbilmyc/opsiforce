@@ -12,17 +12,5 @@ spec:
       protocol: TCP
       port: {{ .Values.backend.containerPort }}
       targetPort: {{ .Values.backend.containerPort }}
-    - name: app-proxy
-      protocol: TCP
-      port: {{ .Values.backend.appProxyPort | default 3002 }}
-      targetPort: {{ .Values.backend.appProxyPort | default 3002 }}
-    - name: vscode-proxy
-      protocol: TCP
-      port: {{ .Values.backend.vscodeProxyPort | default 3003 }}
-      targetPort: {{ .Values.backend.vscodeProxyPort | default 3003 }}
-    - name: db-proxy
-      protocol: TCP
-      port: {{ .Values.backend.dbProxyPort | default 3004 }}
-      targetPort: {{ .Values.backend.dbProxyPort | default 3004 }}
   selector:
     app: {{ include "opsiforce-backend.fullname" . }}

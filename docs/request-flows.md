@@ -4,6 +4,40 @@ How requests move through Opsiforce for project startup, recovery, and timeout.
 
 ---
 
+## Runtime topology
+
+```mermaid
+flowchart LR
+  Browser["Browser / frontend"] --> Edge["Local nginx entrypoint or public edge proxy"]
+  Edge -->|"/api/proxy/:projectId/*"| Agent["Runtime proxy: agent (3005)"]
+  Edge -->|"{projectId}.apps..."| App["Runtime proxy: app (3002)"]
+  Edge -->|"{projectId}.code..."| VSCode["Runtime proxy: vscode (3003)"]
+  Edge -->|"{projectId}.db..."| DB["Runtime proxy: db (3004)"]
+
+  Agent -. "ensure / failure" .-> Backend["Backend control API"]
+  App -. "ensure / failure" .-> Backend
+  VSCode -. "ensure / failure" .-> Backend
+  DB -. "ensure / failure" .-> Backend
+
+  Backend --> State["PostgreSQL + Redis + Kubernetes state"]
+
+  Agent --> Pod["Project pod"]
+  App --> Pod
+  VSCode --> Pod
+  DB --> Pod
+
+  Pod -->|4096| OpenCode["OpenCode agent"]
+  Pod -->|3000| Webapp["Generated app server"]
+  Pod -->|8080| Code["code-server"]
+  Pod -->|8081| Datasette["SQLite observer"]
+
+  App --> Logs["SQLite app_requests log in project database"]
+```
+
+The Node backend is no longer the byte-streaming proxy for chat traffic. It is now a control plane dependency for ensure, restart, and lifecycle state.
+
+---
+
 ## Starting a new project
 
 ```
@@ -30,11 +64,12 @@ How requests move through Opsiforce for project startup, recovery, and timeout.
 
 ## Shared ensure flow
 
-All three runtime entrypoints use the same project-pod lifecycle gate before proxying:
+All four runtime entrypoints use the same backend-managed lifecycle gate before proxying:
 
 - `ALL /api/proxy/:projectId/*`
 - `{projectId}.{WEBAPP_DOMAIN}`
 - `{projectId}.{VSCODE_DOMAIN}`
+- `{projectId}.{DB_DOMAIN}`
 
 ```
 1. Load the project
@@ -55,7 +90,20 @@ All three runtime entrypoints use the same project-pod lifecycle gate before pro
    - return the same temporary 503 response
 ```
 
-The in-process startup map dedupes retries inside one backend instance. A PostgreSQL advisory lock dedupes startup across multiple backend instances.
+The backend startup map dedupes retries inside one backend instance. A PostgreSQL advisory lock dedupes startup across multiple backend instances. The runtime proxies add short-lived in-memory caching on top so they do not re-run the full ensure flow on every request.
+
+Inside one runtime proxy process, concurrent requests for the same cache key share one in-flight ensure call. The cache key is:
+
+```
+projectId + surface + auth signature
+```
+
+For the agent proxy, the auth signature is derived from `x-forwarded-groups` and `x-tenant-name`. This means:
+
+- repeated requests for the same project, surface, and auth context collapse to one backend `ensure` call while the first request is in flight
+- a hot ready project is then served from the short ready TTL cache
+- different proxy processes or different replicas do not currently share that in-flight dedupe
+- different auth contexts for the same project do not currently share that cache entry
 
 When a live proxy request fails (upstream error or K8s pod failure), the proxy server calls `handleProxyFailure` rather than running the full ensure flow again. `handleProxyFailure` checks K8s pod status directly:
 
@@ -73,9 +121,9 @@ This keeps 502 (process failed inside a healthy pod) and 503 (pod gone, restart 
 ```
 1. User sends a message in the embedded OpenCode UI
 2. Frontend calls /api/proxy/{projectId}/session/{sessionId}/message
-3. ProxyController runs the shared ensure flow with activity = agent
-4. If the project is active, backend proxies to the OpenCode agent on port 4096
-5. OpenCode streams the response back through backend -> proxy -> frontend
+3. The Go agent proxy calls the backend control API to run the shared ensure flow with activity = agent
+4. If the project is active, the Go proxy forwards the request to the OpenCode agent on port 4096
+5. OpenCode streams the response back through Go proxy -> nginx proxy -> frontend
 6. If the upstream returns a Kubernetes pod failure, or handleProxyFailure confirms the pod is gone:
    - backend requests project restart
    - backend returns 503 {"error":"Pod is restarting, please retry"}
@@ -93,19 +141,19 @@ App preview and VS Code keep their current ingress/auth topology in this phase. 
 ```
 1. Browser requests {projectId}.{WEBAPP_DOMAIN} or {projectId}.{VSCODE_DOMAIN}
 2. The proxy server extracts projectId from the subdomain
-3. ProjectService runs the shared ensure flow with activity = app
+3. The Go subdomain proxy calls the backend control API to run the shared ensure flow with activity = app
 4. If the project is active, the request is proxied to:
    - app preview -> port 3000
    - VS Code -> port 8080
 5. If the pod is missing or the proxy hits a Kubernetes pod failure and handleProxyFailure confirms the pod is gone:
    - backend requests restart
-   - backend returns the same temporary 503 restart response
+   - the Go proxy returns the same temporary 503 restart response
 6. If app preview or code-server fails but handleProxyFailure confirms the pod is still Ready:
-   - backend returns 502 from the proxy
+   - the Go proxy returns 502
    - backend does not restart the project pod
 ```
 
-App preview and VS Code traffic extend the app TTL, not the agent TTL.
+App preview, VS Code, and DB viewer traffic extend the app TTL, not the agent TTL.
 
 ---
 

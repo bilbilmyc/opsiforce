@@ -9,6 +9,8 @@ Running Opsiforce locally, CI/CD pipeline, Helm charts, and rollout strategy.
 ### Quick start
 
 ```bash
+# Required once on the host: install Go 1.26.2
+
 # First time (installs minikube, PG, Redis, Keycloak, creates DB):
 yarn dev-opsiforce
 
@@ -27,6 +29,7 @@ After running `yarn dev-opsiforce-only`, you'll have:
 | **Proxy (entry point)** | http://localhost:4110 | Open in browser — routes to all services |
 | **Solid.js frontend (internal)** | http://localhost:8084 | Vite HMR, accessed through proxy at :4110 |
 | **NestJS backend API (internal)** | http://localhost:3001 | Accessed through proxy at :4110/api |
+| **Go runtime proxies (internal)** | localhost:3002-3005 | Started locally by `@opsiforce/backend`; app/vscode/db stay on `3002/3003/3004`, agent proxy listens on `3005` |
 | **Drizzle Studio** | http://localhost:4983 | DB browser (opens automatically) |
 | **PostgreSQL** | localhost:5435 | Via port-forward (shared with makara/adam) |
 | **Redis** | localhost:6382 | Via port-forward (shared) |
@@ -60,7 +63,8 @@ yarn dev-opsiforce-only
   │     3. Deploys infra Helm chart (RBAC, hostPath storage, configmaps)
   │     4. Runs Drizzle migrations against PG
   │     5. Starts NestJS dev server on :3001 (hot reload)
-  │     6. Starts Drizzle Studio on :4983
+  │     6. Starts the four Go runtime proxies on :3002-3005
+  │     7. Starts Drizzle Studio on :4983
   │
   └── @opsiforce/frontend minikube-dev:
         1. Starts Vite dev server on :8084 (HMR)
@@ -114,24 +118,24 @@ Handled by CI/CD — see [CI/CD & Deployment](#cicd--deployment) below.
 
 GitHub Actions workflow: `.github/workflows/opsiforce.yml`
 
-All 3 Docker images are built in parallel (inline jobs, not reusable workflows), then deployed sequentially via 5 Helm charts to CloudFleet.
+All 4 Docker images are built in parallel (inline jobs, not reusable workflows), then deployed sequentially via 6 Helm charts to CloudFleet.
 
 ```
                         opsiforce.yml
                              │
          ┌───────────────────┼───────────────────┐
-         ▼                   ▼                   ▼
-  backend-build       frontend-build        agent-build
-  (inline job)        (inline job)          (inline job)
-         │                   │                   │
-         └───────────────────┼───────────────────┘
+         ▼                   ▼                   ▼                    ▼
+  backend-build       frontend-build        agent-build      runtime-proxies-build
+  (inline job)        (inline job)          (inline job)          (inline job)
+         │                   │                   │                    │
+         └───────────────────┼───────────────────┼────────────────────┘
                              ▼
                       opsiforce-deploy
                              │
-         ┌──────────┬────────┼────────┬──────────┐
-         ▼          ▼        ▼        ▼          ▼
-    opsiforce   opsiforce- opsiforce- opsiforce- opsiforce-
-    (infra)     bifrost    backend    frontend   proxy
+         ┌──────────┬────────┬────────┬──────────────┬──────────┐
+         ▼          ▼        ▼        ▼              ▼          ▼
+    opsiforce   opsiforce- opsiforce- opsiforce- runtime-  opsiforce-
+    (infra)     bifrost    backend    frontend   proxies    proxy
 ```
 
 ### Triggers
@@ -156,6 +160,7 @@ Images are distinguished by tag prefix:
 | **backend** | `docker/Dockerfile.backend` | `node:24-alpine` (multi-stage) | Yarn PnP production build of NestJS. CMD: `yarn run start` |
 | **frontend** | `docker/Dockerfile.frontend` | `node:24-alpine` → `nginx:alpine` (multi-stage) | Static Solid.js build served by nginx. Includes OpenCode source (at `frontend/opencode/`) resolved at build time by Vite plugin. |
 | **agent** | `docker/Dockerfile.agent` | `node:24-slim` + bun | Installs opencode-ai, agent-browser, chromium. Stages agent profiles to `/opt/agents/`, shared config to `/opt/opencode/`. Entrypoint runs opencode serve + app dev server via guard scripts. |
+| **runtime-proxies** | `docker/Dockerfile.runtime-proxy` | `golang:1.26.2` → `alpine` | Single Go binary that runs in one of four modes: agent, app, vscode, db. |
 
 ### Image Tagging
 
@@ -233,8 +238,16 @@ helm upgrade --install opsiforce-frontend-{env} ./helm/opsiforce-frontend \
   --set frontend.image.repository=ghcr.io/simadevelopment/opsiforce \
   --set frontend.image.tag=frontend-{env}-{sha7}
 
-# 5. Proxy (nginx + OAuth2 Proxy + Traefik IngressRoute)
+# 5. Runtime proxies (four Go deployments from one image)
+helm upgrade --install opsiforce-runtime-proxies-{env} ./helm/opsiforce-runtime-proxies \
+  --set image.repository=ghcr.io/simadevelopment/opsiforce \
+  --set image.tag=runtime-proxies-{env}-{sha7} \
+  --set config.backendUrl=http://opsiforce-backend-opsiforce-backend-{env}:3001 \
+  --set config.proxyControlToken={PROXY_CONTROL_TOKEN}
+
+# 6. Proxy (nginx + OAuth2 Proxy + Traefik IngressRoute)
 helm upgrade --install opsiforce-proxy-{env} ./helm/opsiforce-proxy \
+  --set proxy.agentService=http://opsiforce-runtime-proxies-{env}-agent:3005 \
   --set proxy.backendService=http://opsiforce-backend-opsiforce-backend-{env}:3001 \
   --set proxy.frontendService=http://opsiforce-frontend-opsiforce-frontend-{env}:80 \
   --set ingressRoute.hostname={hostname} \
@@ -242,7 +255,7 @@ helm upgrade --install opsiforce-proxy-{env} ./helm/opsiforce-proxy \
   --set oauth2Proxy.redisPath=redis://opsiforce-proxy-{env}-valkey:6379
 ```
 
-Deploy order matters: infra creates the ServiceAccount and PVC; Bifrost must be up before backend (backend calls Bifrost Admin API); backend must be up before proxy routes to it.
+Deploy order matters: infra creates the ServiceAccount and PVC; Bifrost must be up before backend (backend calls Bifrost Admin API); backend must be up before runtime proxies because they call the backend control API; runtime proxies and frontend must be up before the nginx proxy routes to them.
 
 **Required GitHub Secrets:** `OPENAI_API_KEY`, `BIFROST_ADMIN_PASSWORD`, `BIFROST_ENCRYPTION_KEY`
 
@@ -293,7 +306,7 @@ The current runtime is pinned to `v1.4.20`, so the backend sends the v1.4-compat
 |----------|----------------|
 | `deployment.yaml` | nginx container + optional OAuth2 Proxy sidecar (Keycloak OIDC). preStop: 30s sleep. |
 | `service.yaml` | ClusterIP:80 |
-| `configmap.yaml` | nginx.conf — routes: `/api` (HTTP to backend, buffering off for SSE), `/` (to frontend) |
+| `configmap.yaml` | nginx.conf — routes: `/api/proxy` (to agent runtime proxy), `/api` (to backend), `/` (to frontend) |
 | `ingressroute.yaml` | Traefik IngressRoute — TLS via Let's Encrypt, external-dns annotation for automatic DNS |
 | `ingressroute-bifrost.yaml` | Traefik IngressRoute for Bifrost dashboard — routes `bifrost.{dev.}opsima.com` directly to `opsiforce-bifrost:8080` |
 
@@ -303,12 +316,26 @@ OAuth2 Proxy sidecar (when `oauth2Proxy.enabled`):
 - Listens on `:4180`, upstreams to nginx on `:80`
 - Passes access token, skips JWT bearer tokens, CSRF per-request
 
+#### 5. `opsiforce-runtime-proxies`
+
+| Template | What it creates |
+|----------|----------------|
+| `deployments.yaml` | Four Go deployments: agent/app/vscode/db |
+| `services.yaml` | Four ClusterIP services, one per proxy mode |
+| `configmap.yaml` | Shared runtime proxy env vars (backend URL, namespace, storage path) |
+| `secret.yaml` | Internal control-plane token shared with backend |
+
 ### Cross-Chart Dependencies
 
 ```
 opsiforce-proxy
+  ├── needs service name of → opsiforce-runtime-proxies-agent (proxy.agentService)
   ├── needs service name of → opsiforce-backend  (proxy.backendService)
   └── needs service name of → opsiforce-frontend (proxy.frontendService)
+
+opsiforce-runtime-proxies
+  ├── needs service name of → opsiforce-backend  (config.backendUrl)
+  └── needs PVC name from   → opsiforce (infra)  (config.cephfsPvcName)
 
 opsiforce-backend
   ├── needs ServiceAccount from → opsiforce (infra)  (serviceAccountName)

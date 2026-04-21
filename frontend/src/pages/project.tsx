@@ -54,6 +54,8 @@ import FileUpload from "~/components/file-upload";
 import Spinner from "~/components/ui/spinner";
 import { createResizablePanel } from "~/lib/create-resizable-panel";
 import { ResizeHandle } from "~/components/ui/resize-handle";
+import { Button } from "~/components/ui/button";
+import { ToolbarButton } from "~/components/ui/toolbar-button";
 
 const platform: Platform = {
   platform: "web",
@@ -135,6 +137,7 @@ export default function ProjectView(props: {
   const [dbTabOpened, setDbTabOpened] = createSignal(false);
   const [codeTabLoading, setCodeTabLoading] = createSignal(true);
   const [dbTabLoading, setDbTabLoading] = createSignal(true);
+  const [previewLoading, setPreviewLoading] = createSignal(true);
   const [previewOpen, setPreviewOpen] = createSignal(false);
   const [webappReady, setWebappReady] = createSignal(false);
   const [appName, setAppName] = createSignal<string | undefined>();
@@ -308,7 +311,10 @@ export default function ProjectView(props: {
     const iframe = document.getElementById(
       "webapp-preview",
     ) as HTMLIFrameElement;
-    if (iframe) iframe.src = iframe.src;
+    if (iframe) {
+      setPreviewLoading(true);
+      iframe.src = iframe.src;
+    }
   }
 
   function copyPreviewUrl() {
@@ -365,6 +371,7 @@ export default function ProjectView(props: {
           <ProjectActionsMenu
             projectId={props.projectId}
             status={project.data!.status}
+            workspaceId={project.data!.workspaceId}
             onDeleted={() => navigate({ to: "/" })}
             onDuplicated={(p) =>
               navigate({
@@ -387,13 +394,14 @@ export default function ProjectView(props: {
               <Ban class="w-8 h-8" />
               <p class="text-sm font-medium">This project is disabled</p>
               <Show when={canDisable()}>
-                <button
-                  class="mt-1 px-3 py-1.5 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
+                <Button
+                  size="sm"
+                  class="mt-1"
                   disabled={enableProject.isPending}
                   onClick={() => enableProject.mutate(undefined as never)}
                 >
                   {enableProject.isPending ? "Enabling..." : "Enable Project"}
-                </button>
+                </Button>
               </Show>
             </div>
           ) : router() ? (
@@ -481,47 +489,52 @@ export default function ProjectView(props: {
             />
             <div class="h-8 flex items-center justify-between px-1.5 bg-sidebar border-b border-border shrink-0">
               <div class="flex items-center gap-1">
-                <button
+                <ToolbarButton
                   onClick={() => {
                     setPreviewOpen(false);
                     setUserDismissed(true);
                   }}
-                  class="w-6 h-6 flex items-center justify-center rounded hover:bg-accent transition-colors"
-                  title="Close preview"
+                  tooltip="Close preview"
                 >
-                  <PanelRightClose class="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
+                  <PanelRightClose class="w-3.5 h-3.5" />
+                </ToolbarButton>
                 <span class="text-xs font-medium text-muted-foreground truncate">
                   {appName() || "Preview"}
                 </span>
               </div>
               <div class="flex items-center">
-                <button
+                <ToolbarButton
                   onClick={copyPreviewUrl}
-                  class="w-6 h-6 flex items-center justify-center rounded hover:bg-accent transition-colors text-muted-foreground"
-                  title={copied() ? "Copied!" : "Copy URL"}
+                  tooltip={copied() ? "Copied!" : "Copy URL"}
                 >
                   {copied() ? (
                     <Check class="w-3.5 h-3.5 text-green-500" />
                   ) : (
                     <Copy class="w-3.5 h-3.5" />
                   )}
-                </button>
-                <button
+                </ToolbarButton>
+                <ToolbarButton
                   onClick={reloadPreview}
-                  class="w-6 h-6 flex items-center justify-center rounded hover:bg-accent transition-colors text-muted-foreground"
-                  title="Reload preview"
+                  tooltip="Reload preview"
                 >
                   <RefreshCw class="w-3.5 h-3.5" />
-                </button>
+                </ToolbarButton>
               </div>
             </div>
-            <iframe
-              id="webapp-preview"
-              src={webappUrl()}
-              class="flex-1 w-full border-0"
-              allow="microphone; camera; clipboard-read; clipboard-write; geolocation; fullscreen; autoplay; display-capture; web-share"
-            />
+            <div class="flex-1 min-h-0 relative">
+              <Show when={previewLoading()}>
+                <div class="absolute inset-0 bg-background z-10">
+                  <Spinner label="Loading preview..." />
+                </div>
+              </Show>
+              <iframe
+                id="webapp-preview"
+                src={webappUrl()}
+                class="w-full h-full border-0"
+                allow="microphone; camera; clipboard-read; clipboard-write; geolocation; fullscreen; autoplay; display-capture; web-share"
+                onLoad={() => setPreviewLoading(false)}
+              />
+            </div>
           </div>
         )}
       </div>

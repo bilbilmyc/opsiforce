@@ -16,3 +16,22 @@ export function hasPermission(groupsHeader: string, permission: string): boolean
 export function getGroupsHeader(request: { headers: Record<string, string | string[] | undefined> }): string {
   return (request.headers["x-forwarded-groups"] as string) ?? ""
 }
+
+function readHeader(request: { headers: Record<string, string | string[] | undefined> }, name: string): string | null {
+  const raw = request.headers[name]
+  if (typeof raw === "string" && raw.length > 0) return raw
+  if (Array.isArray(raw) && raw[0]) return raw[0]
+  return null
+}
+
+export function getUserIdHeader(request: { headers: Record<string, string | string[] | undefined> }): string | null {
+  return readHeader(request, "x-forwarded-user")
+}
+
+export function getUsernameHeader(request: { headers: Record<string, string | string[] | undefined> }): string | null {
+  return readHeader(request, "x-forwarded-preferred-username")
+}
+
+export function getEmailHeader(request: { headers: Record<string, string | string[] | undefined> }): string | null {
+  return readHeader(request, "x-forwarded-email")
+}

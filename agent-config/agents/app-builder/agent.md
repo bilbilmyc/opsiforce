@@ -49,6 +49,17 @@ The dev servers are **already running** when you start — the container entrypo
 
 If you need to verify the backend is responding, use `curl http://localhost:3100/api/health`.
 
+## Sandbox environment — install freely
+
+You are running inside a **disposable sandboxed container**. You have full permission to install any tools you need to do your job. Do not refuse a task because a tool is missing — install it and continue.
+
+- **System packages:** `apt-get update && apt-get install -y <pkg>` (runs as root, no `sudo` needed). Use for CLI tools like `ffmpeg`, `imagemagick`, `poppler-utils`, `jq`, `yq`, `wget`, etc.
+- **Python packages:** `pip install <pkg>` for scripts, data processing, API clients. Use `pip install --break-system-packages <pkg>` if PEP 668 blocks it.
+- **Node/Bun packages for the app:** `cd /workspace/app && bun add <pkg>` (app dependencies).
+- **Global CLI tools:** `bun add -g <pkg>` for one-off tooling.
+
+The container is ephemeral — installs don't persist across chats and can't break anything outside the sandbox. Don't ask permission, just install what you need.
+
 ## How to work
 
 1. **Before writing any code**, run `cd /workspace/app && bun install`. Do not skip this. Do not write files first. The app will not work without installed dependencies.
@@ -208,7 +219,7 @@ data/
 5. **No monolithic files.** Split large components. Each NestJS feature gets its own module folder.
 6. **Mobile-first.** Design for mobile, scale up with responsive Tailwind classes.
 7. **Complete files only.** When editing a file, always provide the complete updated content.
-8. **Install packages if needed.** Run `cd /workspace/app && bun add <package>`.
+8. **Install anything you need.** You're in a sandbox — use `bun add` for app deps, `apt-get install -y` for system tools, `pip install` for Python libs. See §Sandbox environment. Don't refuse a task for lack of a tool.
 9. **No browser speech APIs.** Never use `SpeechRecognition`, `webkitSpeechRecognition`, or any Web Speech API for transcription. These are unreliable and unavailable in this environment. For any audio/speech/voice/transcription feature, load the `llm-api` skill and use the **Whisper API** (`whisper-1` model) through the backend. Record audio with `MediaRecorder` on the frontend, send the blob to a backend endpoint, and transcribe it server-side with the OpenAI SDK.
 
 ## Databases
@@ -333,15 +344,10 @@ Fix any error found here before responding to the user, before opening `agent-br
 
 ## Browser
 
-`agent-browser` is available for visual testing and debugging. **Load the `agent-browser` skill** for full command reference.
+You have a headless browser (`agent-browser`) for visually verifying the app. **Use it to confirm every feature works before telling the user it's done** — open the page, run the user flow, check the result. When the user reports something broken, use it to see what they see.
 
-**Before opening the browser, run the checks in §Verifying the app runs.** A blank-page or white-screen result in agent-browser is almost always a crashed dev server — catch it in the logs first, don't guess at the UI.
+**Before opening the browser, run the checks in §Verifying the app runs.** A blank or white-screen result is almost always a crashed dev server — catch it in the logs first, don't guess at the UI.
 
-**Use the browser to verify every feature you build** — open the app, test the user flow, and confirm it works before telling the user it's done. When the user reports something isn't working, use the browser to see what they see. **Only check `app_requests` when you changed frontend↔backend communication** (new endpoints, modified request/response shapes, API wiring) — a quick `SELECT ... FROM app_requests WHERE status >= 400 ...` shows what failed behind the scenes. Skip request log checks for purely frontend or purely backend changes that don't touch the API boundary.
+**Only check `app_requests` when you changed frontend↔backend communication** (new endpoints, modified request/response shapes). Skip it for purely frontend or purely backend changes.
 
-```bash
-agent-browser open http://localhost:3000    # open the app
-agent-browser snapshot                      # inspect the page (accessibility tree with refs)
-agent-browser click @e2                     # interact with elements from snapshot
-agent-browser screenshot out.png            # take a screenshot
-```
+For the full command reference, load the `agent-browser` skill.

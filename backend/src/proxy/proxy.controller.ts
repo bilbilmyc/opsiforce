@@ -1,136 +1,151 @@
-import { Controller, All, Param, Req, Res, ForbiddenException, NotFoundException } from "@nestjs/common"
-import { FastifyReply, FastifyRequest } from "fastify"
-import { Readable } from "stream"
-import { ProxyService } from "./proxy.service"
-import { ProjectService } from "../project/project.service"
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  ForbiddenException,
+  Headers,
+  NotFoundException,
+  Param,
+  Post,
+  UnauthorizedException,
+} from "@nestjs/common"
+import { ConfigService } from "@nestjs/config"
+import { ProjectService, type EnsureProjectResult } from "../project/project.service"
+import { ProjectResponse } from "../project/project.types"
 import { TenantService } from "../tenant/tenant.service"
-import { BAD_GATEWAY_RESPONSE_BODY, DISABLED_RESPONSE_BODY, isK8sPodError, RESTARTING_RESPONSE_BODY } from "./proxy.shared"
+import { Public } from "../tenant/tenant.decorator"
+import { ProxyService } from "./proxy.service"
 
-@Controller("proxy")
+type ProxySurface = "agent" | "app" | "vscode" | "db"
+
+interface EnsureProxyBody {
+  surface?: ProxySurface
+}
+
+interface EnsureProxyResponse {
+  state: EnsureProjectResult["state"]
+  upstream?: string
+  podName?: string | null
+  directory?: string
+  usesLocalK8sProxy?: boolean
+}
+
+@Public()
+@Controller("internal/proxy")
 export class ProxyController {
+  private readonly proxyControlToken: string
+
   constructor(
+    private readonly configService: ConfigService,
     private readonly proxyService: ProxyService,
     private readonly projectService: ProjectService,
     private readonly tenantService: TenantService,
-  ) {}
-
-  @All(":projectId/*")
-  async proxyRequest(
-    @Param("projectId") projectId: string,
-    @Req() req: FastifyRequest,
-    @Res() reply: FastifyReply,
   ) {
-    const project = await this.projectService.findOneById(projectId)
-    await this.assertProjectTenantAccess(project.tenantId, req)
-    const ensured = await this.projectService.ensureProjectAccess(project, "agent")
+    this.proxyControlToken = this.configService.getOrThrow<string>("proxyControlToken")
+  }
 
-    if (ensured.state === "disabled") {
-      this.sendDisabledResponse(reply)
-      return
+  @Post("projects/:projectId/ensure")
+  async ensureProject(
+    @Param("projectId") projectId: string,
+    @Body() body: EnsureProxyBody,
+    @Headers("x-proxy-control-token") token: string | undefined,
+    @Headers("x-forwarded-groups") groupsHeader: string | undefined,
+    @Headers("x-tenant-name") tenantName: string | undefined,
+  ): Promise<EnsureProxyResponse> {
+    this.assertToken(token)
+
+    const surface = body.surface
+    if (!surface || !isProxySurface(surface)) {
+      throw new BadRequestException("Invalid proxy surface")
     }
 
-    if (ensured.state === "starting") {
-      this.sendRestartingResponse(reply)
-      return
+    const activity = surface === "app" ? "app" : "agent"
+
+    if (surface === "agent") {
+      const project = await this.projectService.findOneById(projectId)
+      await this.assertProjectTenantAccess(project.tenantId, groupsHeader, tenantName)
+      const ensured = await this.projectService.ensureProjectAccess(project, activity)
+      return this.toEnsureResponse(surface, ensured.project, ensured)
     }
 
-    try {
-      const upstream = await this.proxyService.resolveUpstream(projectId, project.tenantId)
-      const targetPath = req.url.replace(`/api/proxy/${projectId}`, "") || "/"
-      const targetUrl = `${upstream}${targetPath}`
+    const ensured = await this.projectService.ensureProjectById(projectId, activity)
+    return this.toEnsureResponse(surface, ensured.project, ensured)
+  }
 
-      const headers: Record<string, string> = {}
-      for (const [key, value] of Object.entries(req.headers)) {
-        if (key === "host" || key === "connection" || key === "content-length" || key === "transfer-encoding") continue
-        if (typeof value === "string") headers[key] = value
-      }
+  @Post("projects/:projectId/failure")
+  async handleProjectFailure(
+    @Param("projectId") projectId: string,
+    @Headers("x-proxy-control-token") token: string | undefined,
+  ): Promise<{ restart: boolean }> {
+    this.assertToken(token)
+    return { restart: await this.projectService.handleProxyFailureById(projectId) }
+  }
 
-      let body: BodyInit | undefined
-      if (!["GET", "HEAD"].includes(req.method) && req.body !== undefined) {
-        body = typeof req.body === "string" ? req.body : JSON.stringify(req.body)
-      }
+  private toEnsureResponse(
+    surface: ProxySurface,
+    project: ProjectResponse,
+    ensured: EnsureProjectResult,
+  ): EnsureProxyResponse {
+    if (ensured.state !== "ready") {
+      return { state: ensured.state }
+    }
 
-      const response = await fetch(targetUrl, {
-        method: req.method,
-        headers,
-        body,
-      })
+    const upstream = resolveUpstreamForSurface(this.proxyService, surface, project)
 
-      if (response.status >= 400) {
-        const text = await response.text()
-        if (isK8sPodError(text)) {
-          if (await this.shouldRestartProject(projectId, project.tenantId)) {
-            this.sendRestartingResponse(reply)
-            return
-          }
-
-          this.sendBadGatewayResponse(reply)
-          return
-        }
-        reply.status(response.status)
-        for (const [key, value] of response.headers.entries()) {
-          if (key === "transfer-encoding") continue
-          reply.header(key, value)
-        }
-        reply.send(text)
-        return
-      }
-
-      reply.status(response.status)
-      for (const [key, value] of response.headers.entries()) {
-        if (key === "transfer-encoding") continue
-        reply.header(key, value)
-      }
-
-      if (response.body) {
-        const nodeStream = Readable.fromWeb(response.body as import("stream/web").ReadableStream)
-        reply.send(nodeStream)
-      } else {
-        reply.send("")
-      }
-    } catch (err) {
-      if (err instanceof NotFoundException) throw err
-
-      if (await this.shouldRestartProject(projectId, project.tenantId)) {
-        this.sendRestartingResponse(reply)
-        return
-      }
-
-      this.sendBadGatewayResponse(reply)
+    return {
+      state: ensured.state,
+      upstream,
+      podName: project.podName,
+      directory: project.directory,
+      usesLocalK8sProxy: this.proxyService.isLocalProxyUpstream(upstream),
     }
   }
 
-  private sendRestartingResponse(reply: FastifyReply) {
-    reply.status(503).header("content-type", "application/json").send(RESTARTING_RESPONSE_BODY)
-  }
-
-  private sendDisabledResponse(reply: FastifyReply) {
-    reply.status(423).header("content-type", "application/json").send(DISABLED_RESPONSE_BODY)
-  }
-
-  private sendBadGatewayResponse(reply: FastifyReply) {
-    reply.status(502).header("content-type", "application/json").send(BAD_GATEWAY_RESPONSE_BODY)
-  }
-
-  private async shouldRestartProject(projectId: string, tenantId: string): Promise<boolean> {
-    try {
-      return await this.projectService.handleProxyFailure(projectId, tenantId)
-    } catch (err) {
-      if (err instanceof NotFoundException) throw err
-      return false
-    }
-  }
-
-  private async assertProjectTenantAccess(tenantId: string, req: FastifyRequest): Promise<void> {
-    const groupsHeader = req.headers["x-forwarded-groups"] as string | undefined
+  private async assertProjectTenantAccess(
+    tenantId: string,
+    groupsHeader: string | undefined,
+    tenantNameHeader: string | undefined,
+  ): Promise<void> {
     if (!groupsHeader) throw new ForbiddenException("No tenant groups found")
 
     const tenantNames = this.tenantService.parseTenantGroups(groupsHeader)
     if (tenantNames.length === 0) throw new ForbiddenException("No opsiforce tenants assigned")
 
-    const tenant = await this.tenantService.getTenantById(tenantId)
-    if (!tenant || !tenantNames.includes(tenant.name)) {
+    const requestedTenantName = tenantNameHeader ?? tenantNames[0]
+    if (!tenantNames.includes(requestedTenantName)) {
       throw new ForbiddenException("No access to this project")
     }
+
+    const tenant = await this.tenantService.getTenantById(tenantId)
+    if (!tenant || tenant.name !== requestedTenantName) {
+      throw new NotFoundException("Project not found")
+    }
   }
+
+  private assertToken(token: string | undefined): void {
+    if (!token || token !== this.proxyControlToken) {
+      throw new UnauthorizedException("Invalid proxy control token")
+    }
+  }
+}
+
+function resolveUpstreamForSurface(
+  proxyService: ProxyService,
+  surface: ProxySurface,
+  project: ProjectResponse,
+): string {
+  switch (surface) {
+    case "agent":
+      return proxyService.resolveUpstreamForProject(project)
+    case "app":
+      return proxyService.resolveAppUpstreamForProject(project)
+    case "vscode":
+      return proxyService.resolveVscodeUpstreamForProject(project)
+    case "db":
+      return proxyService.resolveDbUpstreamForProject(project)
+  }
+}
+
+function isProxySurface(value: string): value is ProxySurface {
+  return value === "agent" || value === "app" || value === "vscode" || value === "db"
 }

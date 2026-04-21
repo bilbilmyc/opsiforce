@@ -49,18 +49,19 @@ Available only when Bifrost is configured.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| ALL | `/api/proxy/:projectId/*` | HTTP proxy to the OpenCode agent on port 4096 |
+| ALL | `/api/proxy/:projectId/*` | Go proxy to the OpenCode agent on port 4096 |
 
-App preview and VS Code stay on subdomain proxies in this phase:
+App preview, VS Code, and DB viewer are handled by dedicated Go runtime proxy deployments:
 
-- app preview -> `{projectId}.{WEBAPP_DOMAIN}` -> backend:3002 -> pod:3000
-- VS Code -> `{projectId}.{VSCODE_DOMAIN}` -> backend:3003 -> pod:8080
+- app preview -> `{projectId}.{WEBAPP_DOMAIN}` -> runtime-app-proxy:3002 -> pod:3000
+- VS Code -> `{projectId}.{VSCODE_DOMAIN}` -> runtime-vscode-proxy:3003 -> pod:8080
+- DB viewer -> `{projectId}.{DB_DOMAIN}` -> runtime-db-proxy:3004 -> pod:8081
 
 ---
 
 ## Restart semantics
 
-All three proxy entrypoints run the same project-pod ensure flow before proxying.
+All four proxy entrypoints run the same backend-managed ensure flow before proxying.
 
 If the project is `starting`, suspended, or missing its pod:
 
@@ -112,7 +113,8 @@ Local development normally uses `kubectl proxy`. In-cluster deployments normally
 | `AGENT_PORT` | `4096` | OpenCode agent port |
 | `APP_PORT` | `3000` | App preview port |
 | `VSCODE_PORT` | `8080` | VS Code port |
-| `VSCODE_PROXY_PORT` | `3003` | Backend VS Code proxy port |
+| `DB_VIEWER_PORT` | `8081` | Datasette DB viewer port |
+| `PROXY_CONTROL_TOKEN` | local default | Shared secret between backend and Go runtime proxies |
 | `AGENT_NAME` | `app-builder` | Agent profile loaded into the workspace |
 | `CEPHFS_PVC_NAME` | `opsiforce-cephfs` | CephFS PVC name |
 | `STORAGE_TYPE` | `cephfs` | `cephfs` or `hostPath` |

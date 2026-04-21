@@ -211,34 +211,15 @@ Clear the `BIFROST_*` vars in `local-envs.sh` to bypass the proxy — pods get t
 
 To test the full Bifrost flow locally, export `OPENAI_API_KEY` in your shell and keep the `BIFROST_*` vars set in `local-envs.sh` — the `minikube-dev` script creates the secrets, deploys the upstream chart, and starts the port-forward automatically.
 
-## Future: Keycloak OIDC for Non-LLM Services
+## Non-LLM Services: Service Gateway
 
-Bifrost handles LLM traffic only. For future non-LLM services (Mailgun, Slack, webhooks), a Keycloak service account per project provides a unified identity.
-
-### How it would work
+Bifrost handles LLM traffic only. For non-LLM external services (email, SMS, storage, webhooks), the **Service Gateway** provides per-project identity and credential isolation without Keycloak overhead.
 
 ```
-LLM calls:     Agent Pod → Bifrost (virtual key) → OpenAI       ← current
-Mailgun:       Agent Pod → Mailgun proxy (JWT) → Mailgun        ← future
-Slack:         Agent Pod → Slack proxy (JWT) → Slack             ← future
+LLM calls:     Agent Pod → Bifrost (virtual key) → OpenAI / Anthropic
+Other calls:   Agent Pod → Service Gateway (gateway token) → Mailgun / Twilio / S3
 ```
 
-Each project gets a Keycloak client (`client_credentials` grant) with `project_id` and `tenant_id` as JWT claims. Any internal proxy validates the JWT against Keycloak's JWKS endpoint.
+Each project gets one universal gateway token (separate from Bifrost virtual keys). The gateway validates the token, resolves the project, and forwards to the real provider. Adding a new service is one provider class — no new keys or schema changes.
 
-### When to add Keycloak
-
-Add per-project Keycloak clients when:
-- Agent-built apps need to send emails (Mailgun integration)
-- Agent-built apps need to call external APIs (Slack, webhooks)
-- Any service needs per-project identity beyond LLM calls
-
-### Implementation pattern
-
-Follow the existing pattern in `keycloak-ms-backend/src/modules/clients/`:
-1. Create Keycloak client via Admin REST API (raw `fetch`, no SDK)
-2. Set `serviceAccountsEnabled: true`, add `oidc-hardcoded-claim-mapper` for `project_id` and `tenant_id`
-3. Store client credentials in `project_virtual_keys` table (add columns) or a new table
-4. Inject `KEYCLOAK_CLIENT_ID` + `KEYCLOAK_CLIENT_SECRET` into pods alongside Bifrost virtual key
-5. Non-LLM service proxies validate JWT, extract project/tenant claims, forward with real service key
-
-The Bifrost virtual key (for LLM) and Keycloak JWT (for everything else) coexist — each handles its own service domain.
+See [Service Gateway](./service-gateway.md) for full documentation.

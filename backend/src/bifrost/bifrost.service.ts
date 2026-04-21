@@ -5,6 +5,8 @@ import crypto from "crypto"
 import { db } from "../../db"
 import { projectVirtualKeys, tenants, projects } from "../../db/schema"
 import type { TenantPodOptions } from "../pod/pod.service"
+import { DefaultsService } from "../defaults/defaults.service"
+import type { BudgetDefaults } from "../defaults/defaults.types"
 import type {
   KeyType,
   BifrostBudget,
@@ -28,7 +30,10 @@ export class BifrostService {
   private readonly adminUsername: string
   private readonly adminPassword: string
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly defaultsService: DefaultsService,
+  ) {
     this.proxyUrl = this.configService.get<string>("bifrostProxyUrl", "")
     this.podProxyUrl = this.configService.get<string>("bifrostPodProxyUrl", "") || this.proxyUrl
     this.adminUsername = this.configService.get<string>("bifrostAdminUsername", "")
@@ -43,16 +48,16 @@ export class BifrostService {
     return this.podProxyUrl
   }
 
-  private defaultBudget(level: "tenant" | "project" | "key"): BifrostBudget {
-    const configKey = level === "tenant"
-      ? "bifrostDefaultTenantBudget"
-      : level === "project"
-        ? "bifrostDefaultProjectBudget"
-        : "bifrostDefaultKeyBudget"
-
-    return {
-      max_limit: this.configService.get<number>(configKey, 5),
-      reset_duration: this.configService.get<string>("bifrostDefaultBudgetDuration", "1M"),
+  private budgetFor(defaults: BudgetDefaults, level: "tenant" | "project" | KeyType): BifrostBudget {
+    switch (level) {
+      case "tenant":
+        return { max_limit: defaults.defaultTenantBudget, reset_duration: defaults.defaultTenantBudgetDuration }
+      case "project":
+        return { max_limit: defaults.defaultProjectBudget, reset_duration: defaults.defaultProjectBudgetDuration }
+      case "backend":
+        return { max_limit: defaults.defaultBackendBudget, reset_duration: defaults.defaultBackendBudgetDuration }
+      case "chat":
+        return { max_limit: defaults.defaultChatBudget, reset_duration: defaults.defaultChatBudgetDuration }
     }
   }
 
@@ -80,13 +85,14 @@ export class BifrostService {
     return response.json() as Promise<T>
   }
 
-  async createTenantCustomer(tenantId: string, tenantName: string): Promise<string> {
+  async createTenantCustomer(tenantId: string, tenantName: string, budgets?: BudgetDefaults): Promise<string> {
     const [fresh] = await db.select().from(tenants).where(eq(tenants.id, tenantId))
     if (fresh?.bifrostTenantId) return fresh.bifrostTenantId
 
+    const resolvedBudgets = budgets ?? await this.defaultsService.getTenantBudgets(tenantId)
     const payload: CreateCustomerRequest = {
       name: `tenant-${tenantName}`,
-      budget: this.defaultBudget("tenant"),
+      budget: this.budgetFor(resolvedBudgets, "tenant"),
     }
 
     const result = await this.request<CreateCustomerResponse>(
@@ -123,11 +129,11 @@ export class BifrostService {
     return data.customer.budget ?? null
   }
 
-  async createProjectTeam(projectId: string, customerId: string): Promise<string> {
+  async createProjectTeam(projectId: string, budgets: BudgetDefaults, customerId: string): Promise<string> {
     const payload: CreateTeamRequest = {
       name: `project-${projectId.slice(0, 8)}`,
       customer_id: customerId,
-      budget: this.defaultBudget("project"),
+      budget: this.budgetFor(budgets, "project"),
     }
 
     const result = await this.request<CreateTeamResponse>(
@@ -167,6 +173,7 @@ export class BifrostService {
   async createProjectKey(
     projectId: string,
     tenantId: string,
+    budgets: BudgetDefaults,
     keyType: KeyType = "chat",
     teamId?: string,
   ): Promise<{ keyId: string; keyToken: string }> {
@@ -190,7 +197,7 @@ export class BifrostService {
         provider,
         weight,
       })),
-      budget: this.defaultBudget("key"),
+      budget: this.budgetFor(budgets, keyType),
       ...(teamId ? { team_id: teamId } : {}),
     }
 
@@ -219,16 +226,17 @@ export class BifrostService {
 
   async createProjectResources(projectId: string, tenantId: string): Promise<void> {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId))
+    if (!tenant) return
 
-    const customerId = tenant?.bifrostTenantId
-      ?? (tenant ? await this.createTenantCustomer(tenantId, tenant.name) : undefined)
-    if (!customerId) return
+    const budgets = await this.defaultsService.getTenantBudgets(tenantId)
+    const customerId = tenant.bifrostTenantId
+      ?? await this.createTenantCustomer(tenantId, tenant.name, budgets)
 
-    const teamId = await this.createProjectTeam(projectId, customerId)
+    const teamId = await this.createProjectTeam(projectId, budgets, customerId)
 
     await Promise.all([
-      this.createProjectKey(projectId, tenantId, "chat", teamId),
-      this.createProjectKey(projectId, tenantId, "backend", teamId),
+      this.createProjectKey(projectId, tenantId, budgets, "chat", teamId),
+      this.createProjectKey(projectId, tenantId, budgets, "backend", teamId),
     ])
   }
 

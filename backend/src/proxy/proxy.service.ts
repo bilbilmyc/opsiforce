@@ -26,12 +26,24 @@ export class ProxyService {
     return this.resolveUpstreamForPort(projectId, tenantId, this.agentPort)
   }
 
+  resolveUpstreamForProject(project: { podName: string | null; podIp: string | null; id: string }): string {
+    return this.upstreamFromProject(project, this.agentPort)
+  }
+
   async resolveAppUpstream(projectId: string, tenantId: string): Promise<string> {
     return this.resolveUpstreamForPort(projectId, tenantId, this.appPort)
   }
 
+  resolveAppUpstreamForProject(project: { podName: string | null; podIp: string | null; id: string }): string {
+    return this.upstreamFromProject(project, this.appPort)
+  }
+
   async resolveVscodeUpstream(projectId: string, tenantId: string): Promise<string> {
     return this.resolveUpstreamForPort(projectId, tenantId, this.vscodePort)
+  }
+
+  resolveVscodeUpstreamForProject(project: { podName: string | null; podIp: string | null; id: string }): string {
+    return this.upstreamFromProject(project, this.vscodePort)
   }
 
   async resolveVscodeUpstreamByProjectId(projectId: string): Promise<string> {
@@ -47,6 +59,10 @@ export class ProxyService {
 
   async resolveDbUpstream(projectId: string, tenantId: string): Promise<string> {
     return this.resolveUpstreamForPort(projectId, tenantId, this.dbViewerPort)
+  }
+
+  resolveDbUpstreamForProject(project: { podName: string | null; podIp: string | null; id: string }): string {
+    return this.upstreamFromProject(project, this.dbViewerPort)
   }
 
   async resolveDbUpstreamByProjectId(projectId: string): Promise<string> {
@@ -91,6 +107,11 @@ export class ProxyService {
     if (!project) throw new NotFoundException(`Project matching ${shortId} not found`)
 
     return this.upstreamFromProject(project, this.appPort)
+  }
+
+  isLocalProxyUpstream(upstream: string): boolean {
+    const upstreamUrl = new URL(upstream)
+    return upstreamUrl.hostname === "localhost" || upstreamUrl.hostname === "127.0.0.1"
   }
 
   private upstreamFromProject(project: { podName: string | null; podIp: string | null; id: string }, port: number): string {

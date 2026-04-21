@@ -2,7 +2,9 @@ import { Select as Kobalte } from "@kobalte/core/select"
 import { splitProps, type ParentProps, type ComponentProps } from "solid-js"
 import { cn } from "~/lib/cn"
 
-function Select<T>(props: ComponentProps<typeof Kobalte<T>>) {
+function Select<Option, OptGroup = never>(
+  props: ComponentProps<typeof Kobalte<Option, OptGroup>>,
+) {
   return <Kobalte gutter={4} {...props} />
 }
 
@@ -80,4 +82,19 @@ function SelectItem(props: ParentProps<ComponentProps<typeof Kobalte.Item>>) {
   )
 }
 
-export { Select, SelectTrigger, SelectValue, SelectContent, SelectItem }
+function SelectSection(props: ParentProps<ComponentProps<typeof Kobalte.Section>>) {
+  const [local, rest] = splitProps(props, ["class", "children"])
+  return (
+    <Kobalte.Section
+      class={cn(
+        "px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground",
+        local.class,
+      )}
+      {...rest}
+    >
+      {local.children}
+    </Kobalte.Section>
+  )
+}
+
+export { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectSection }
