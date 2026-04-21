@@ -131,7 +131,7 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.serveReverseProxy(w, r, projectID, targetURL, reverseProxyOptions{})
+	s.serveReverseProxy(w, r, projectID, targetURL, reverseProxyOptions{stripUserIdentity: true})
 }
 
 func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {
@@ -263,6 +263,7 @@ func (s *Server) handleSubdomain(w http.ResponseWriter, r *http.Request, surface
 		dropAcceptEncoding: true,
 		stripFrameHeaders:  true,
 		stripOriginUpgrade: true,
+		stripUserIdentity:  true,
 	})
 }
 
@@ -345,7 +346,7 @@ func (s *Server) roundTripAppRequest(
 	outgoing.Host = targetURL.Host
 	outgoing.RequestURI = ""
 	outgoing.Header = copyRequestHeaders(r.Header, true)
-	setXForwardedHeaders(outgoing.Header, r)
+	stripAuthProxyHeaders(outgoing.Header)
 
 	if len(requestBody) > 0 {
 		outgoing.Body = io.NopCloser(bytes.NewReader(requestBody))
@@ -428,6 +429,7 @@ type reverseProxyOptions struct {
 	dropAcceptEncoding bool
 	stripFrameHeaders  bool
 	stripOriginUpgrade bool
+	stripUserIdentity  bool
 }
 
 func (s *Server) serveReverseProxy(
@@ -448,8 +450,11 @@ func (s *Server) serveReverseProxy(
 			proxyRequest.Out.URL.RawPath = targetURL.RawPath
 			proxyRequest.Out.URL.RawQuery = targetURL.RawQuery
 			proxyRequest.Out.Host = targetURL.Host
-			proxyRequest.Out.Header["X-Forwarded-For"] = proxyRequest.In.Header["X-Forwarded-For"]
-			proxyRequest.SetXForwarded()
+			passThroughForwardedHeaders(proxyRequest.Out.Header, proxyRequest.In.Header)
+			stripAuthProxyHeaders(proxyRequest.Out.Header)
+			if options.stripUserIdentity {
+				stripUserIdentityHeaders(proxyRequest.Out.Header)
+			}
 			if options.dropAcceptEncoding {
 				proxyRequest.Out.Header.Del("Accept-Encoding")
 			}
@@ -628,30 +633,12 @@ func copyRequestHeaders(source http.Header, dropAcceptEncoding bool) http.Header
 	return target
 }
 
-func setXForwardedHeaders(headers http.Header, r *http.Request) {
-	for _, value := range r.Header.Values("X-Forwarded-For") {
-		headers.Add("X-Forwarded-For", value)
+func passThroughForwardedHeaders(out http.Header, in http.Header) {
+	for _, name := range []string{"X-Forwarded-For", "X-Forwarded-Host", "X-Forwarded-Proto", "Forwarded", "X-Forwarded"} {
+		if vals := in.Values(name); len(vals) > 0 {
+			out[name] = append([]string(nil), vals...)
+		}
 	}
-
-	if remoteIP, _, err := net.SplitHostPort(r.RemoteAddr); err == nil && remoteIP != "" {
-		headers.Add("X-Forwarded-For", remoteIP)
-	}
-
-	if r.Host != "" {
-		headers.Set("X-Forwarded-Host", r.Host)
-	}
-
-	if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
-		headers.Set("X-Forwarded-Proto", forwardedProto)
-		return
-	}
-
-	if r.TLS != nil {
-		headers.Set("X-Forwarded-Proto", "https")
-		return
-	}
-
-	headers.Set("X-Forwarded-Proto", "http")
 }
 
 func isHopByHopHeader(name string) bool {
@@ -661,6 +648,33 @@ func isHopByHopHeader(name string) bool {
 	default:
 		return false
 	}
+}
+
+var authProxyHeaders = []string{
+	"X-Forwarded-Access-Token",
+	"X-Forwarded-Id-Token",
+	"X-Forwarded-Refresh-Token",
+	"X-Forwarded-User",
+	"X-Forwarded-Email",
+	"X-Forwarded-Preferred-Username",
+	"X-Forwarded-Groups",
+	"X-Auth-Request-Access-Token",
+	"X-Auth-Request-User",
+	"X-Auth-Request-Email",
+	"X-Auth-Request-Preferred-Username",
+	"X-Auth-Request-Groups",
+	"X-Auth-Request-Redirect",
+}
+
+func stripAuthProxyHeaders(headers http.Header) {
+	for _, name := range authProxyHeaders {
+		headers.Del(name)
+	}
+}
+
+func stripUserIdentityHeaders(headers http.Header) {
+	headers.Del("Cookie")
+	headers.Del("Authorization")
 }
 
 func sanitizeReverseProxyHeaders(headers http.Header, stripFrameHeaders bool) {
