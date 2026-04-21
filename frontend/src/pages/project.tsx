@@ -280,20 +280,15 @@ export default function ProjectView(props: {
   async function checkWebappStatus() {
     if (webappReady()) return;
     try {
-      const res = await fetch(
-        `${webappProtocol}://${props.projectId}.${webappDomain}/api/app-meta`,
-      );
-      if (res.ok) {
-        const data = (await res.json()) as {
-          exists?: boolean;
-          name?: string;
-          description?: string;
-        };
-        if (data.exists) {
-          setWebappReady(true);
-          if (data.name) setAppName(data.name);
-          if (!userDismissed()) setPreviewOpen(true);
-        }
+      const data = await api.get<{
+        exists?: boolean;
+        name?: string;
+        description?: string;
+      }>(`/projects/${props.projectId}/app-meta`);
+      if (data.exists) {
+        setWebappReady(true);
+        if (data.name) setAppName(data.name);
+        if (!userDismissed()) setPreviewOpen(true);
       }
     } catch {
       /* webapp not ready yet */

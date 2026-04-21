@@ -54,7 +54,6 @@ func main() {
 		Handler:           server.WrapCompressed(handler, server.CompressionOptions{MinSize: cfg.CompressionMinBytes}),
 		ReadHeaderTimeout: 15 * time.Second,
 		IdleTimeout:       2 * time.Minute,
-		MaxHeaderBytes:    128000,
 	}
 
 	go func() {
