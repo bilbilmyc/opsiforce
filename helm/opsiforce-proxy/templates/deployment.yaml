@@ -90,6 +90,7 @@ spec:
                 - --cookie-secure=false
                 - --skip-jwt-bearer-tokens=true
                 - --cookie-csrf-per-request=true
+                - --cookie-csrf-per-request-limit=8
                 - --redirect-url={{ .Values.oauth2Proxy.redirectUrl }}
                 - --skip-auth-route=GET=^/assets/.*$
                 - --skip-auth-route=GET=^/favicon/.*$
