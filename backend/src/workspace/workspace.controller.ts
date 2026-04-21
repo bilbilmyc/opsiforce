@@ -57,7 +57,7 @@ export class WorkspaceController {
       }
       return this.workspaceService.findAllForAdmin(tenant.tenantId)
     }
-    const dbUser = await this.ensureDbUser(user)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.workspaceService.findAll({
       userId: dbUser.id,
       tenantId: tenant.tenantId,
@@ -71,7 +71,7 @@ export class WorkspaceController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ): Promise<WorkspaceResponse> {
-    const dbUser = await this.ensureDbUser(user)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.workspaceService.create(dto, tenant.tenantId, dbUser.id)
   }
 
@@ -82,7 +82,7 @@ export class WorkspaceController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ): Promise<WorkspaceResponse> {
-    const dbUser = await this.ensureDbUser(user)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.workspaceService.findOne({
       workspaceId: id,
       userId: dbUser.id,
@@ -117,7 +117,7 @@ export class WorkspaceController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ): Promise<UserRecord[]> {
-    const dbUser = await this.ensureDbUser(user)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.workspaceService.listMembers({
       workspaceId: id,
       tenantId: tenant.tenantId,
@@ -153,7 +153,7 @@ export class WorkspaceController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ): Promise<ProjectResponse[]> {
-    const dbUser = await this.ensureDbUser(user)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.workspaceService.listProjects({
       workspaceId: id,
       tenantId: tenant.tenantId,
@@ -170,7 +170,7 @@ export class WorkspaceController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ): Promise<ProjectResponse> {
-    const dbUser = await this.ensureDbUser(user)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.workspaceService.createProjectInWorkspace({
       workspaceId: id,
       tenantId: tenant.tenantId,
@@ -188,7 +188,7 @@ export class WorkspaceController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ): Promise<ProjectResponse> {
-    const dbUser = await this.ensureDbUser(user)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.workspaceService.assignProject({
       workspaceId: id,
       projectId,
@@ -207,7 +207,7 @@ export class WorkspaceController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ): Promise<ProjectResponse> {
-    const dbUser = await this.ensureDbUser(user)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.workspaceService.assignProject({
       workspaceId: null,
       projectId,
@@ -218,11 +218,14 @@ export class WorkspaceController {
   }
 
   /** Keycloak sub → DB user row. Handlers need the uuid for FK references. */
-  private ensureDbUser(user: UserContext): Promise<UserRecord> {
-    return this.userService.getOrCreateUser({
-      keycloakId: user.userId,
-      email: user.email ?? undefined,
-      displayName: user.displayName ?? undefined,
-    })
+  private ensureDbUser(user: UserContext, tenantId: string): Promise<UserRecord> {
+    return this.userService.getOrCreateUser(
+      {
+        keycloakId: user.userId,
+        email: user.email ?? undefined,
+        displayName: user.displayName ?? undefined,
+      },
+      tenantId,
+    )
   }
 }

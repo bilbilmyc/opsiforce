@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException } from "@nestjs/common"
 import { eq, sql } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
-import { users, userWorkspacePreferences } from "../../db/schema"
+import { users, userTenants, userWorkspacePreferences } from "../../db/schema"
 
 export interface UserIdentity {
   keycloakId: string
@@ -33,17 +33,18 @@ export class UserService {
   private readonly logger = new Logger(UserService.name)
   private readonly pendingUsers = new Map<string, Promise<UserRecord>>()
 
-  async getOrCreateUser(identity: UserIdentity): Promise<UserRecord> {
-    const pending = this.pendingUsers.get(identity.keycloakId)
+  async getOrCreateUser(identity: UserIdentity, tenantId?: string): Promise<UserRecord> {
+    const cacheKey = tenantId ? `${identity.keycloakId}:${tenantId}` : identity.keycloakId
+    const pending = this.pendingUsers.get(cacheKey)
     if (pending) return pending
 
-    const promise = this.doGetOrCreateUser(identity)
-      .finally(() => this.pendingUsers.delete(identity.keycloakId))
-    this.pendingUsers.set(identity.keycloakId, promise)
+    const promise = this.doGetOrCreateUser(identity, tenantId)
+      .finally(() => this.pendingUsers.delete(cacheKey))
+    this.pendingUsers.set(cacheKey, promise)
     return promise
   }
 
-  private async doGetOrCreateUser(identity: UserIdentity): Promise<UserRecord> {
+  private async doGetOrCreateUser(identity: UserIdentity, tenantId?: string): Promise<UserRecord> {
     const [existing] = await db
       .select()
       .from(users)
@@ -58,6 +59,7 @@ export class UserService {
           .set({ email: newEmail, displayName: newDisplayName, updatedAt: new Date() })
           .where(eq(users.keycloakId, identity.keycloakId))
       }
+      if (tenantId) await this.ensureUserTenant(existing.id, tenantId)
       return { ...existing, email: newEmail ?? existing.email, displayName: newDisplayName ?? existing.displayName }
     }
 
@@ -74,13 +76,27 @@ export class UserService {
 
     const user = created ?? (await db.select().from(users).where(eq(users.keycloakId, identity.keycloakId)))[0]
 
-    this.logger.log(`Created user ${user.email ?? user.keycloakId}`)
+    if (tenantId) await this.ensureUserTenant(user.id, tenantId)
+
+    if (created) this.logger.log(`Created user ${user.email ?? user.keycloakId}`)
     return user
   }
 
-  
-  async listAll(): Promise<UserRecord[]> {
-    return db.select().from(users).orderBy(users.displayName)
+  private async ensureUserTenant(userId: string, tenantId: string): Promise<void> {
+    await db
+      .insert(userTenants)
+      .values({ userId, tenantId })
+      .onConflictDoNothing()
+  }
+
+  async listByTenant(tenantId: string): Promise<UserRecord[]> {
+    const rows = await db
+      .select()
+      .from(users)
+      .innerJoin(userTenants, eq(userTenants.userId, users.id))
+      .where(eq(userTenants.tenantId, tenantId))
+      .orderBy(users.displayName)
+    return rows.map((r) => r.users)
   }
 
   async findById(id: string): Promise<UserRecord> {

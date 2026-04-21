@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Req, UnauthorizedException }
 import { FastifyRequest } from "fastify"
 import { RequirePermission } from "../permission/permission.guard"
 import { Perms } from "../permission/permission.constants"
+import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
 import { CurrentUser, type UserContext } from "./user.decorator"
 import {
   UserService,
@@ -16,45 +17,48 @@ export class UserController {
 
   @Get()
   @RequirePermission(Perms.manageWorkspaces)
-  listUsers(): Promise<UserRecord[]> {
-    return this.userService.listAll()
+  listUsers(@CurrentTenant() tenant: TenantContext): Promise<UserRecord[]> {
+    return this.userService.listByTenant(tenant.tenantId)
   }
 
   @Post("me")
-  async getOrCreateMe(@Req() req: FastifyRequest): Promise<UserRecord> {
+  async getOrCreateMe(
+    @Req() req: FastifyRequest,
+    @CurrentTenant() tenant: TenantContext,
+  ): Promise<UserRecord> {
     const keycloakId = req.headers["x-forwarded-user"] as string | undefined
     if (!keycloakId) {
       throw new UnauthorizedException("Missing x-forwarded-user header")
     }
     const email = req.headers["x-forwarded-email"] as string | undefined
     const displayName = req.headers["x-forwarded-preferred-username"] as string | undefined
-    return this.userService.getOrCreateUser({ keycloakId, email, displayName })
+    return this.userService.getOrCreateUser({ keycloakId, email, displayName }, tenant.tenantId)
   }
 
-  /** Mirror of POST /users/me — handy for frontends that prefer GET for reads. */
   @Get("me")
-  async getMe(@CurrentUser() user: UserContext): Promise<UserRecord> {
-    return this.userService.getOrCreateUser({
-      keycloakId: user.userId,
-      email: user.email ?? undefined,
-      displayName: user.displayName ?? undefined,
-    })
+  async getMe(
+    @CurrentUser() user: UserContext,
+    @CurrentTenant() tenant: TenantContext,
+  ): Promise<UserRecord> {
+    return this.ensureDbUser(user, tenant.tenantId)
   }
 
   @Get("me/workspace-preferences")
   async getWorkspacePreferences(
     @CurrentUser() user: UserContext,
+    @CurrentTenant() tenant: TenantContext,
   ): Promise<WorkspacePreferencesResponse> {
-    const dbUser = await this.ensureDbUser(user)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.userService.getWorkspacePreferences(dbUser.id)
   }
 
   @Patch("me/workspace-preferences")
   async updateWorkspacePreferences(
     @CurrentUser() user: UserContext,
+    @CurrentTenant() tenant: TenantContext,
     @Body() dto: UpdateWorkspacePreferencesDto,
   ): Promise<WorkspacePreferencesResponse> {
-    const dbUser = await this.ensureDbUser(user)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.userService.updateWorkspacePreferences(dbUser.id, dto)
   }
 
@@ -64,11 +68,14 @@ export class UserController {
     return this.userService.findById(id)
   }
 
-  private ensureDbUser(user: UserContext): Promise<UserRecord> {
-    return this.userService.getOrCreateUser({
-      keycloakId: user.userId,
-      email: user.email ?? undefined,
-      displayName: user.displayName ?? undefined,
-    })
+  private ensureDbUser(user: UserContext, tenantId: string): Promise<UserRecord> {
+    return this.userService.getOrCreateUser(
+      {
+        keycloakId: user.userId,
+        email: user.email ?? undefined,
+        displayName: user.displayName ?? undefined,
+      },
+      tenantId,
+    )
   }
 }

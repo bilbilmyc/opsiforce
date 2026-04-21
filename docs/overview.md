@@ -15,7 +15,8 @@ Browser
 opsiforce-proxy (nginx + OAuth2 Proxy)
   │
   ├── /             → opsiforce-frontend (Solid.js — projects sidebar + OpenCode UI embedded directly)
-  └── /api/**       → opsiforce-backend (NestJS — pod orchestration + API proxy)
+  ├── /api/proxy/** → opsiforce-runtime-proxies-agent (Go runtime proxy)
+  └── /api/**       → opsiforce-backend (NestJS — pod orchestration + control plane)
                          │
                          ├── K8s API (create/delete/watch agent pods)
                          ├── PostgreSQL (projects + pods state via Drizzle ORM)
@@ -50,13 +51,17 @@ The frontend integrates OpenCode at the source level — OpenCode's Solid.js com
 | **Redis** | Minikube (port-forwarded) | 6382 | Shared with other sima apps. |
 | **Agent pods** | Minikube | 4096 | Dynamically created by backend. hostPath storage. |
 
-### Production (4 K8s deployments + agent pods)
+### Production (7 K8s deployments + agent pods)
 
 | Service | Image | Port | What it does |
 |---------|-------|------|-------------|
 | **opsiforce-proxy** | `nginx:alpine` + oauth2-proxy sidecar | 80 | Routes traffic between services. OAuth2 Proxy for auth. |
 | **opsiforce-frontend** | `nginx:alpine` (static) | 80 | Solid.js app — projects sidebar + OpenCode UI embedded via source-level imports (Vite resolver plugin). Single SPA, no iframe. |
-| **opsiforce-backend** | `node:24-alpine` | 3001 | NestJS + Fastify. Manages K8s pods, proxies to agent pods, tracks timeouts, service gateway for external APIs. Pure API. |
+| **opsiforce-backend** | `node:24-alpine` | 3001 | NestJS + Fastify. Manages K8s pods, tracks timeouts, exposes internal proxy control APIs, and handles the service gateway. |
+| **opsiforce-runtime-proxies-agent** | Go | 3005 | Path-based OpenCode agent proxy (`/api/proxy/:projectId/*`). |
+| **opsiforce-runtime-proxies-app** | Go | 3002 | App preview subdomain proxy with request logging into project SQLite. |
+| **opsiforce-runtime-proxies-vscode** | Go | 3003 | VS Code subdomain proxy with WebSocket support. |
+| **opsiforce-runtime-proxies-db** | Go | 3004 | Datasette DB viewer subdomain proxy. |
 | **opsiforce-agent** | `node:24-slim` + bun | 4096, 3000, 8080, 8081 | OpenCode + code-server (VS Code IDE) + app dev server + datasette DB viewer. One pod per project. CephFS subPath mount. Image tagged with commit SHA in CI/CD. Agent image version in `agent-config/agent-image-version.json` (local dev), platform version in `backend/platform-version.json`. 34 skills, 95 pre-installed packages. |
 
 ---
@@ -70,7 +75,7 @@ packages/opsiforce/
 │   │   ├── main.ts              NestJS bootstrap (Fastify adapter, port 3001)
 │   │   ├── app.module.ts        Root module
 │   │   ├── config/              Environment configuration
-│   │   ├── proxy/               Dynamic HTTP proxy (agent), subdomain proxy servers (webapp + VS Code)
+│   │   ├── proxy/               Internal proxy control API + upstream resolver
 │   │   ├── pod/                 K8s pod CRUD + warm pool + pod spec builder
 │   │   ├── permission/           RBAC — parses Keycloak roles from x-forwarded-groups header
 │   │   ├── project/             Project CRUD + auto-reassignment
@@ -80,6 +85,10 @@ packages/opsiforce/
 │       ├── schema.ts            Drizzle schema (projects + pods tables)
 │       ├── index.ts             Database connection
 │       └── migrations/          Drizzle Kit generated SQL
+│
+├── proxy/           Go module (runtime proxy servers)
+│   ├── cmd/opsiforce-proxy/     Single binary, mode-switched at startup
+│   └── internal/                Backend client, cache, port-forwarding, request logger, handlers
 │
 ├── frontend/           Yarn workspace (Vite + Solid.js)
 │   ├── opencode/               OpenCode source (imported at build time via Vite resolver plugin)
@@ -104,13 +113,15 @@ packages/opsiforce/
 ├── docker/
 │   ├── Dockerfile.agent         node:24-slim + bun + opencode + app template + agent-browser
 │   ├── Dockerfile.backend       NestJS (multi-stage, Yarn PnP)
-│   └── Dockerfile.frontend      Solid.js app (multi-stage → nginx)
+│   ├── Dockerfile.frontend      Solid.js app (multi-stage → nginx)
+│   └── Dockerfile.runtime-proxy Go runtime proxy image
 │
 └── helm/
     ├── opsiforce/               Infra: PVC, RBAC
     ├── opsiforce-proxy/         nginx + OAuth2 Proxy + Traefik IngressRoute (routes between services)
     ├── opsiforce-frontend/      Solid.js deployment + service
     ├── opsiforce-backend/       NestJS deployment + service + configmap + HPA
+    ├── opsiforce-runtime-proxies/ Go runtime proxy deployments + services
     └── bifrost/                 Values + NetworkPolicy for the upstream Bifrost Helm chart
 ```
 

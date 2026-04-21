@@ -17,9 +17,6 @@ data:
   APP_PORT: {{ .Values.config.appPort | quote }}
   VSCODE_PORT: {{ .Values.config.vscodePort | quote }}
   DB_VIEWER_PORT: {{ .Values.config.dbViewerPort | default "8081" | quote }}
-  APP_PROXY_PORT: {{ .Values.backend.appProxyPort | default 3002 | quote }}
-  VSCODE_PROXY_PORT: {{ .Values.backend.vscodeProxyPort | default 3003 | quote }}
-  DB_PROXY_PORT: {{ .Values.backend.dbProxyPort | default 3004 | quote }}
   CEPHFS_PVC_NAME: {{ .Values.config.cephfsPvcName | quote }}
   STORAGE_TYPE: {{ .Values.config.storageType | quote }}
   STORAGE_HOST_PATH: {{ .Values.config.storageHostPath | quote }}

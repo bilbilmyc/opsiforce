@@ -148,6 +148,19 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
 
+export const userTenants = pgTable("user_tenants", {
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tenantId: text("tenant_id")
+    .notNull()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  primaryKey({ columns: [table.userId, table.tenantId] }),
+  index("idx_user_tenants_tenant").on(table.tenantId),
+])
+
 export const projectSchedules = pgTable("project_schedules", {
   id: text("id").primaryKey(),
   projectId: text("project_id")

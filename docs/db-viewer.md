@@ -36,7 +36,7 @@ DB viewer uses **subdomain-based routing** (same approach as VS Code and webapp 
 
 | Service | Routing | Backend Port | Target |
 |---------|---------|-------------|--------|
-| OpenCode agent | Path-based (`/api/proxy/{id}/*`) | 3001 | pod:4096 |
+| OpenCode agent | Path-based (`/api/proxy/{id}/*`) | 3005 | pod:4096 |
 | VS Code IDE | Subdomain (`{id}.code.domain`) | 3003 | pod:8080 |
 | Webapp preview | Subdomain (`{id}.apps.domain`) | 3002 | pod:3000 |
 | DB viewer | Subdomain (`{id}.db.domain`) | 3004 | pod:8081 |
@@ -45,17 +45,17 @@ DB viewer uses **subdomain-based routing** (same approach as VS Code and webapp 
 
 ```
 Browser → http://{projectId}.db.dev.opsima.com/
-  → Traefik IngressRoute (*.db.dev.opsima.com → backend:3004)
-  → db-proxy-server (extracts projectId from subdomain)
-  → resolves pod IP from DB
+  → Traefik IngressRoute (*.db.dev.opsima.com → runtime-db-proxy:3004)
+  → Go DB proxy (extracts projectId from subdomain)
+  → calls backend control API for project readiness + upstream
   → proxies HTTP + WebSocket to pod:8081
 ```
 
-The proxy strips `X-Frame-Options`, `Content-Security-Policy`, and `Content-Encoding` response headers for iframe compatibility (same pattern as vscode-proxy-server.ts).
+The proxy strips `X-Frame-Options`, `Content-Security-Policy`, and `Content-Encoding` response headers for iframe compatibility.
 
 ### Local dev
 
-In local dev, pod IPs aren't reachable from the host (minikube network isolation). The DB proxy server manages `kubectl port-forward` tunnels automatically via the shared `PortForwardManager` (lives in `proxy.shared.ts`, constructor takes the target pod port — 8081 for DB, 8080 for VS Code).
+In local dev, pod IPs aren't reachable from the host (minikube network isolation). The Go DB proxy manages `kubectl port-forward` tunnels automatically, using the same approach as the Go VS Code proxy.
 
 ---
 
@@ -77,7 +77,7 @@ Frontend env vars:
 ## Authentication & Permissions
 
 - `canViewDb` (Keycloak role `opsiforce_can_view_db_tab`) gates the DB tab in the frontend
-- Backend permission enforcement is **not** applied on db-proxy-server, matching the pre-existing vscode-proxy pattern. Reason: the Traefik IngressRoute for the wildcard subdomain (`*.db.dev.opsima.com`) routes directly to the backend, bypassing the oauth2-proxy sidecar — so `x-forwarded-groups` headers don't reach the backend on subdomain requests.
+- Backend permission enforcement is **not** applied on the DB runtime proxy, matching the pre-existing VS Code posture. Reason: the Traefik IngressRoute for the wildcard subdomain (`*.db.dev.opsima.com`) routes directly to the runtime proxy, bypassing the oauth2-proxy sidecar — so `x-forwarded-groups` headers don't reach it on subdomain requests.
 - Datasette runs with `--auth none` (default). Per-DB write permissions are enforced via `datasette-metadata.yml` (`database` DB denies insert/update/delete).
 
 ### Security note
@@ -94,22 +94,22 @@ Datasette is stateless — no XDG persistence like code-server has. Each pod sta
 
 ## Configuration
 
-### Backend env vars
+### Runtime proxy env vars
 
 | Env var | Default | Description |
 |---------|---------|-------------|
 | DB_VIEWER_PORT | 8081 | Port datasette listens on inside the pod |
-| DB_PROXY_PORT | 3004 | Port the DB proxy server listens on (backend side) |
+| PROXY_CONTROL_TOKEN | local default | Shared backend/runtime-proxy auth token |
 
 ### Helm values
 
 | Chart | Key | Default | Description |
 |-------|-----|---------|-------------|
 | opsiforce-backend | `config.dbViewerPort` | "8081" | Agent pod datasette port |
-| opsiforce-backend | `backend.dbProxyPort` | 3004 | Backend DB proxy port |
+| opsiforce-runtime-proxies | `ports.db` | 3004 | DB runtime proxy port |
 | opsiforce-proxy | `dbProxy.enabled` | true | Enable DB IngressRoute |
 | opsiforce-proxy | `dbProxy.appsHostname` | db.dev.opsima.com | Wildcard domain for DB viewer |
-| opsiforce-proxy | `dbProxy.backendService` | (set in CI) | Backend service name |
+| opsiforce-proxy | `dbProxy.backendService` | (set in CI) | Runtime proxy service name |
 
 ### CI/CD
 

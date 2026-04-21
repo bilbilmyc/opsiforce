@@ -20,6 +20,15 @@ data:
           location /api/gateway {
             return 403;
           }
+          location /api/proxy {
+            proxy_http_version 1.1;
+            proxy_buffering off;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 86400s;
+            proxy_pass {{ .Values.proxy.agentService }};
+          }
           location /api {
             proxy_http_version 1.1;
             proxy_buffering off;

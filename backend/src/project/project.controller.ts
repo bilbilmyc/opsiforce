@@ -46,7 +46,7 @@ export class ProjectController {
     @CurrentUser() user: UserContext,
     @Req() req: FastifyRequest,
   ) {
-    const dbUserId = await this.resolveUserId(user)
+    const dbUserId = await this.resolveUserId(user, tenant.tenantId)
     return this.projectService.findAllForUser({
       tenantId: tenant.tenantId,
       userId: dbUserId,
@@ -61,7 +61,7 @@ export class ProjectController {
     @CurrentUser() user: UserContext,
     @Req() req: FastifyRequest,
   ) {
-    const dbUserId = await this.resolveUserId(user)
+    const dbUserId = await this.resolveUserId(user, tenant.tenantId)
     return this.projectService.findOneForUser({
       projectId: id,
       tenantId: tenant.tenantId,
@@ -137,7 +137,7 @@ export class ProjectController {
     user: UserContext,
     req: FastifyRequest,
   ): Promise<void> {
-    const dbUserId = await this.resolveUserId(user)
+    const dbUserId = await this.resolveUserId(user, tenant.tenantId)
     await this.projectService.findOneForUser({
       projectId,
       tenantId: tenant.tenantId,
@@ -147,12 +147,15 @@ export class ProjectController {
   }
 
   /** Keycloak sub → DB users.id uuid. workspace_members/prefs reference this. */
-  private async resolveUserId(user: UserContext): Promise<string> {
-    const row = await this.userService.getOrCreateUser({
-      keycloakId: user.userId,
-      email: user.email ?? undefined,
-      displayName: user.displayName ?? undefined,
-    })
+  private async resolveUserId(user: UserContext, tenantId: string): Promise<string> {
+    const row = await this.userService.getOrCreateUser(
+      {
+        keycloakId: user.userId,
+        email: user.email ?? undefined,
+        displayName: user.displayName ?? undefined,
+      },
+      tenantId,
+    )
     return row.id
   }
 }

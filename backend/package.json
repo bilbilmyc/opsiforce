@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "NODE_OPTIONS='--max-http-header-size=128000' yarn nest start --watch",
+    "dev": "concurrently -k \"yarn run dev:backend\" \"yarn run dev:proxies\"",
+    "dev:backend": "NODE_OPTIONS='--max-http-header-size=128000' yarn nest start --watch",
+    "dev:proxies": "node ./scripts/check-go-version.mjs && concurrently -k \"go -C ../proxy run ./cmd/opsiforce-proxy --mode agent --port 3005\" \"go -C ../proxy run ./cmd/opsiforce-proxy --mode app --port 3002\" \"go -C ../proxy run ./cmd/opsiforce-proxy --mode vscode --port 3003\" \"go -C ../proxy run ./cmd/opsiforce-proxy --mode db --port 3004\"",
     "build": "nest build",
     "start": "NODE_OPTIONS='--max-http-header-size=128000' yarn node dist/src/main.js",
     "lint": "eslint src/",
@@ -15,7 +17,7 @@
     "backfill-chat-vk-providers": "yarn node dist/src/scripts/backfill-chat-vk-providers.js",
     "db:studio": "drizzle-kit studio",
     "create-opsiforce-db": "kubectl run -n local psql-client --restart=Never -i --tty --rm --env PGPASSWORD=dbpass1 --image=postgres:16 -- psql -h local-pg-postgresql -d postgres -U admin -c \"CREATE DATABASE opsiforce;\" || :",
-    "opsiforce-install-proxy": "helm upgrade --install --wait --create-namespace --namespace local local-opsiforce-proxy ../../opsiforce/helm/opsiforce-proxy --set ingress.enabled=false --set ingressRoute.enabled=false --set affinity=null --set proxy.backendService=http://host.minikube.internal:3001 --set proxy.frontendService=http://host.minikube.internal:8084 --set oauth2Proxy.enabled=true --set oauth2Proxy.image=quay.io/oauth2-proxy/oauth2-proxy:v7.13.0 --set oauth2Proxy.redisPath=redis://redis-session-storage-local-master.local.svc.cluster.local:6379/0 --set oauth2Proxy.clientId=opsiforce --set oauth2Proxy.clientSecret=opsiforce --set oauth2Proxy.cookieSecret=localsecretlocal --set oauth2Proxy.redirectUrl=http://localhost:4110 --set oauth2Proxy.issuerUrl=http://sima-keycloak-local-service:8086/realms/sima --set oauth2Proxy.logoutUrl='http://sima-keycloak-local-service:8086/realms/sima/protocol/openid-connect/logout?id_token_hint={id_token}'",
+    "opsiforce-install-proxy": "helm upgrade --install --wait --create-namespace --namespace local local-opsiforce-proxy ../../opsiforce/helm/opsiforce-proxy --set ingress.enabled=false --set ingressRoute.enabled=false --set affinity=null --set proxy.agentService=http://host.minikube.internal:3005 --set proxy.backendService=http://host.minikube.internal:3001 --set proxy.frontendService=http://host.minikube.internal:8084 --set oauth2Proxy.enabled=true --set oauth2Proxy.image=quay.io/oauth2-proxy/oauth2-proxy:v7.13.0 --set oauth2Proxy.redisPath=redis://redis-session-storage-local-master.local.svc.cluster.local:6379/0 --set oauth2Proxy.clientId=opsiforce --set oauth2Proxy.clientSecret=opsiforce --set oauth2Proxy.cookieSecret=localsecretlocal --set oauth2Proxy.redirectUrl=http://localhost:4110 --set oauth2Proxy.issuerUrl=http://sima-keycloak-local-service:8086/realms/sima --set oauth2Proxy.logoutUrl='http://sima-keycloak-local-service:8086/realms/sima/protocol/openid-connect/logout?id_token_hint={id_token}'",
     "port-forward-proxy": "sh -c 'while true; do kubectl port-forward services/local-opsiforce-proxy 4110:4180 -n local; sleep 1; done'",
     "setup-minikube-storage": "minikube ssh 'sudo mkdir -p /data/opsiforce/projects && sudo chmod 777 /data/opsiforce'",
     "build-agent-image": "sh -c 'TAG=opsiforce-agent:$(node -p \"require(\\\"../agent-config/agent-image-version.json\\\").version\") && minikube image ls | grep -q \"$TAG\" && echo \"Image $TAG already exists, skipping build\" || minikube image build -t $TAG -f docker/Dockerfile.agent --build-opt=build-arg=OPENCODE_CONFIG=agent-config/opencode.local.json ..'",
@@ -42,7 +44,6 @@
     "@nestjs/core": "^11.1.19",
     "@nestjs/platform-fastify": "^11.1.19",
     "bullmq": "^5.73.5",
-    "compression": "^1.8.1",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",
     "form-data": "^4.0.5",
@@ -51,8 +52,6 @@
     "postgres": "^3.4.9",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^6.0.1",
     "tsx": "^4.21.0"
   },
   "devDependencies": {

@@ -28,7 +28,7 @@ VS Code uses **subdomain-based routing** (same approach as the webapp proxy) bec
 
 | Service | Routing | Backend Port | Target |
 |---------|---------|-------------|--------|
-| OpenCode agent | Path-based (`/api/proxy/{id}/*`) | 3001 | pod:4096 |
+| OpenCode agent | Path-based (`/api/proxy/{id}/*`) | 3005 | pod:4096 |
 | VS Code IDE | Subdomain (`{id}.code.domain`) | 3003 | pod:8080 |
 | Webapp preview | Subdomain (`{id}.apps.domain`) | 3002 | pod:3000 |
 
@@ -36,15 +36,15 @@ VS Code uses **subdomain-based routing** (same approach as the webapp proxy) bec
 
 ```
 Browser → http://{projectId}.code.dev.opsima.com/
-  → Traefik IngressRoute (*.code.dev.opsima.com → backend:3003)
-  → vscode-proxy-server (extracts projectId from subdomain)
-  → resolves pod IP from DB
+  → Traefik IngressRoute (*.code.dev.opsima.com → runtime-vscode-proxy:3003)
+  → Go VS Code proxy (extracts projectId from subdomain)
+  → calls backend control API for project readiness + upstream
   → proxies HTTP + WebSocket to pod:8080
 ```
 
 ### Local dev
 
-In local dev, pod IPs aren't reachable from the host (minikube network isolation). The VS Code proxy server manages `kubectl port-forward` tunnels automatically:
+In local dev, pod IPs aren't reachable from the host (minikube network isolation). The Go VS Code proxy manages `kubectl port-forward` tunnels automatically:
 
 1. First request for a project → spawns `kubectl port-forward {podName} {freePort}:8080`
 2. Subsequent requests → reuse cached local port
@@ -54,7 +54,7 @@ This bypasses `kubectl proxy` which has HTTP/2 stream errors with code-server's 
 
 ### WebSocket
 
-The proxy server handles WebSocket upgrades natively (via `server.on("upgrade")`). The `origin` header is stripped from WebSocket requests — code-server performs origin checking that would reject the proxy's origin. This is safe because authentication is handled at the proxy layer (OAuth2 + TenantGuard).
+The proxy handles WebSocket upgrades with Go's `httputil.ReverseProxy`. The `origin` header is stripped from WebSocket requests — code-server performs origin checking that would reject the proxy's origin. This is safe because authentication is handled at the proxy layer.
 
 ---
 
@@ -102,22 +102,22 @@ The proxy strips `X-Frame-Options`, `Content-Security-Policy`, and `Content-Enco
 
 ## Configuration
 
-### Backend env vars
+### Runtime proxy env vars
 
 | Env var | Default | Description |
 |---------|---------|-------------|
 | VSCODE_PORT | 8080 | Port code-server listens on inside the pod |
-| VSCODE_PROXY_PORT | 3003 | Port the VS Code proxy server listens on (backend side) |
+| PROXY_CONTROL_TOKEN | local default | Shared backend/runtime-proxy auth token |
 
 ### Helm values
 
 | Chart | Key | Default | Description |
 |-------|-----|---------|-------------|
 | opsiforce-backend | `config.vscodePort` | 8080 | Agent pod code-server port |
-| opsiforce-backend | `backend.vscodeProxyPort` | 3003 | Backend VS Code proxy port |
+| opsiforce-runtime-proxies | `ports.vscode` | 3003 | VS Code runtime proxy port |
 | opsiforce-proxy | `vscodeProxy.enabled` | true | Enable VS Code IngressRoute |
 | opsiforce-proxy | `vscodeProxy.appsHostname` | code.dev.opsima.com | Wildcard domain for VS Code |
-| opsiforce-proxy | `vscodeProxy.backendService` | (set in CI) | Backend service name |
+| opsiforce-proxy | `vscodeProxy.backendService` | (set in CI) | Runtime proxy service name |
 
 ### CI/CD
 

@@ -11,6 +11,7 @@ STORAGE_HOST_PATH=/data/opsiforce
 STORAGE_MOUNT_PATH=/tmp/opsiforce-data
 K8S_API_PROXY_URL=http://localhost:8001
 AGENT_NAME=app-builder
+PROXY_CONTROL_TOKEN=opsiforce-local-proxy-token
 OPENAI_API_KEY=sk-proj-placeholder
 ANTHROPIC_API_KEY=sk-ant-placeholder
 BIFROST_PROXY_URL=http://localhost:3050/v1

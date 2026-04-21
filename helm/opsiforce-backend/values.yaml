@@ -8,9 +8,6 @@ backend:
     tag: backend
     pullPolicy: Always
   containerPort: 3001
-  appProxyPort: 3002
-  vscodeProxyPort: 3003
-  dbProxyPort: 3004
   resources:
     requests:
       cpu: 50m
@@ -33,6 +30,7 @@ config:
   storageType: "cephfs"
   storageHostPath: "/tmp/opsiforce-data"
   storageMountPath: "/workspace-data"
+  proxyControlToken: ""
   agentName: "app-builder"
   agentResources: {}
   agentNodeSelector: {}

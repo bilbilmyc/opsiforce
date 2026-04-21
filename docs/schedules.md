@@ -154,7 +154,7 @@ Timezone is captured automatically from the user's browser — the agent never a
 | `backend/src/schedule/schedule.service.ts` | DB CRUD, BullMQ sync, Redis tz, execution recording |
 | `backend/src/schedule/schedule.worker.ts` | BullMQ worker — wake-on-fire, HTTP call, execution logging |
 | `backend/src/schedule/schedule.types.ts` | DTOs and constants |
-| `backend/src/proxy/app-proxy-server.ts` | Timezone capture from `X-User-Timezone` header |
+| `proxy/internal/server/server.go` | App preview proxy behavior; timezone still comes from `frontend/src/api/client.ts` |
 | `backend/src/project/project.service.ts` | Schedule cleanup on project delete |
 | `frontend/src/routes/schedules.tsx` | Route entry |
 | `frontend/src/pages/schedules.tsx` | Schedules page with table, edit dialog, executions modal |

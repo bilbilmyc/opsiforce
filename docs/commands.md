@@ -7,6 +7,8 @@ Quick reference for all Opsiforce dev commands, ports, and local environment set
 ## Setup
 
 ```bash
+# Required once on the host: install Go 1.26.2
+
 # First time (installs minikube, PG, Redis, Keycloak, creates DB):
 yarn dev-opsiforce
 
@@ -70,6 +72,10 @@ curl http://localhost:3001/api/health                 # Health check
 |---------|------|-------|
 | Proxy (entry point) | 4110 | Minikube nginx, port-forwarded. Open this in browser. |
 | NestJS backend | 3001 | Local, routed through proxy at /api |
+| Go app proxy | 3002 | Local, wildcard app preview host target |
+| Go VS Code proxy | 3003 | Local, wildcard VS Code host target |
+| Go DB proxy | 3004 | Local, wildcard DB host target |
+| Go agent proxy | 3005 | Local, routed through `/api/proxy/*` |
 | Solid.js frontend (Vite) | 8084 | Local, routed through proxy at / |
 | PostgreSQL | 5435 | Minikube, port-forwarded |
 | Redis | 6382 | Minikube, port-forwarded |

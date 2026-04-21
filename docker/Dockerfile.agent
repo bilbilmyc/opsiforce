@@ -42,6 +42,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 ENV OPENCODE_ENABLE_EXA=true
+ENV NODE_OPTIONS=--max-http-header-size=131072
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s \
   CMD wget -q --spider http://localhost:4096/global/health || exit 1

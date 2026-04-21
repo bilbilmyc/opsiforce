@@ -137,6 +137,7 @@ export default function ProjectView(props: {
   const [dbTabOpened, setDbTabOpened] = createSignal(false);
   const [codeTabLoading, setCodeTabLoading] = createSignal(true);
   const [dbTabLoading, setDbTabLoading] = createSignal(true);
+  const [previewLoading, setPreviewLoading] = createSignal(true);
   const [previewOpen, setPreviewOpen] = createSignal(false);
   const [webappReady, setWebappReady] = createSignal(false);
   const [appName, setAppName] = createSignal<string | undefined>();
@@ -310,7 +311,10 @@ export default function ProjectView(props: {
     const iframe = document.getElementById(
       "webapp-preview",
     ) as HTMLIFrameElement;
-    if (iframe) iframe.src = iframe.src;
+    if (iframe) {
+      setPreviewLoading(true);
+      iframe.src = iframe.src;
+    }
   }
 
   function copyPreviewUrl() {
@@ -517,12 +521,20 @@ export default function ProjectView(props: {
                 </ToolbarButton>
               </div>
             </div>
-            <iframe
-              id="webapp-preview"
-              src={webappUrl()}
-              class="flex-1 w-full border-0"
-              allow="microphone; camera; clipboard-read; clipboard-write; geolocation; fullscreen; autoplay; display-capture; web-share"
-            />
+            <div class="flex-1 min-h-0 relative">
+              <Show when={previewLoading()}>
+                <div class="absolute inset-0 bg-background z-10">
+                  <Spinner label="Loading preview..." />
+                </div>
+              </Show>
+              <iframe
+                id="webapp-preview"
+                src={webappUrl()}
+                class="w-full h-full border-0"
+                allow="microphone; camera; clipboard-read; clipboard-write; geolocation; fullscreen; autoplay; display-capture; web-share"
+                onLoad={() => setPreviewLoading(false)}
+              />
+            </div>
           </div>
         )}
       </div>

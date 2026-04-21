@@ -40,10 +40,12 @@ export class ScheduleAdminController {
   }
 
   @Get("projects/:projectId/schedules/:scheduleId/executions")
-  getExecutions(
+  async getExecutions(
     @Param("scheduleId") scheduleId: string,
+    @CurrentTenant() tenant: TenantContext,
     @Query("limit") limit?: string,
   ) {
+    await this.scheduleService.findOne(scheduleId, tenant.tenantId)
     return this.scheduleService.getExecutions(scheduleId, limit ? parseInt(limit, 10) : 50)
   }
 }
