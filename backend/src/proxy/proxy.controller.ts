@@ -50,7 +50,6 @@ export class ProxyController {
     @Body() body: EnsureProxyBody,
     @Headers("x-proxy-control-token") token: string | undefined,
     @Headers("x-forwarded-groups") groupsHeader: string | undefined,
-    @Headers("x-tenant-name") tenantName: string | undefined,
   ): Promise<EnsureProxyResponse> {
     this.assertToken(token)
 
@@ -63,7 +62,7 @@ export class ProxyController {
 
     if (surface === "agent") {
       const project = await this.projectService.findOneById(projectId)
-      await this.assertProjectTenantAccess(project.tenantId, groupsHeader, tenantName)
+      await this.assertProjectTenantAccess(project.tenantId, groupsHeader)
       const ensured = await this.projectService.ensureProjectAccess(project, activity)
       return this.toEnsureResponse(surface, ensured.project, ensured)
     }
@@ -104,20 +103,14 @@ export class ProxyController {
   private async assertProjectTenantAccess(
     tenantId: string,
     groupsHeader: string | undefined,
-    tenantNameHeader: string | undefined,
   ): Promise<void> {
     if (!groupsHeader) throw new ForbiddenException("No tenant groups found")
 
     const tenantNames = this.tenantService.parseTenantGroups(groupsHeader)
     if (tenantNames.length === 0) throw new ForbiddenException("No opsiforce tenants assigned")
 
-    const requestedTenantName = tenantNameHeader ?? tenantNames[0]
-    if (!tenantNames.includes(requestedTenantName)) {
-      throw new ForbiddenException("No access to this project")
-    }
-
     const tenant = await this.tenantService.getTenantById(tenantId)
-    if (!tenant || tenant.name !== requestedTenantName) {
+    if (!tenant || !tenantNames.includes(tenant.name)) {
       throw new NotFoundException("Project not found")
     }
   }
