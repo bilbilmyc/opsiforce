@@ -44,6 +44,14 @@ config:
   mailgunApiKey: ""
   mailgunDomain: ""
   mailgunSender: ""
+  appsHostname: ""
+  webappServiceName: ""
+  webappServiceNamespace: ""
+  webappServicePort: "3002"
+  oidcPluginSecret: ""
+  makaraOidcClientId: ""
+  makaraOidcClientSecret: ""
+  makaraOidcIssuerUrl: ""
   agentAffinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:

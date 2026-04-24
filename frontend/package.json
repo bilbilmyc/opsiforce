@@ -8,7 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "ts": "tsc --noEmit 2>&1 | grep -v 'opencode/' | grep 'error TS' && exit 1 || exit 0",
-    "minikube-dev": "yarn run dev"
+    "minikube-dev": "env-cmd -f ./local-envs.sh --use-shell 'yarn run dev --host 0.0.0.0'"
   },
   "dependencies": {
     "@dnd-kit/helpers": "0.4.0",
@@ -62,6 +62,7 @@
     "@tsconfig/bun": "^1.0.10",
     "@tsconfig/node22": "^22.0.5",
     "@types/node": "^22.13.9",
+    "env-cmd": "^11.0.0",
     "typescript": "^5.9.3",
     "vite": "^7.3.2",
     "vite-plugin-solid": "^2.11.12"

@@ -15,6 +15,8 @@ export const podStatusEnum = pgEnum("pod_status", [
 
 export const keyTypeEnum = pgEnum("key_type", ["chat", "backend"])
 
+export const projectAuthModeEnum = pgEnum("project_auth_mode", ["public", "manual", "makara"])
+
 export const tenants = pgTable("tenants", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
@@ -85,6 +87,7 @@ export const projectSettings = pgTable("project_settings", {
   timeoutIdle: bigint("timeout_idle", { mode: "number" }).notNull(),
   appTimeoutIdle: bigint("app_timeout_idle", { mode: "number" }).notNull(),
   timezone: text("timezone").notNull().default("UTC"),
+  authMode: projectAuthModeEnum("auth_mode").notNull().default("public"),
 })
 
 export const projectVirtualKeys = pgTable("project_virtual_keys", {

@@ -16,6 +16,7 @@ import {
   FolderKanban,
   Inbox,
   Pencil,
+  RotateCcw,
   Settings,
   Trash2,
 } from "~/components/icons"
@@ -50,8 +51,10 @@ export default function ProjectActionsMenu(props: {
 
   const canSeeSettings = () =>
     hasPermission(Permission.manageProjectBudgetSettings) ||
-    hasPermission(Permission.manageProjectTimeoutSettings)
+    hasPermission(Permission.manageProjectTimeoutSettings) ||
+    hasPermission(Permission.manageProjectAuthSettings)
   const canDisable = () => hasPermission(Permission.disableProject)
+  const canRestart = () => hasPermission(Permission.restartProject)
   const canDuplicate = () => hasPermission(Permission.duplicateProject)
   const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces)
   const canMoveBetweenWorkspaces = () =>
@@ -59,7 +62,7 @@ export default function ProjectActionsMenu(props: {
   const isDisabled = () => props.status === "disabled"
 
   const [settingsOpen, setSettingsOpen] = createSignal(false)
-  const [confirmAction, setConfirmAction] = createSignal<"delete" | "duplicate" | "disable" | null>(null)
+  const [confirmAction, setConfirmAction] = createSignal<"delete" | "duplicate" | "disable" | "restart" | null>(null)
 
   const workspaces = useWorkspaces()
   const move = useMoveProject()
@@ -111,6 +114,14 @@ export default function ProjectActionsMenu(props: {
   const enableProject = createMutation(() => ({
     mutationFn: () => api.post<Project>(`/projects/${props.projectId}/enable`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
+  }))
+
+  const restartProject = createMutation(() => ({
+    mutationFn: () => api.post<Project>(`/projects/${props.projectId}/restart`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] })
+      qc.refetchQueries({ queryKey: ["projects", props.projectId] })
+    },
   }))
 
   return (
@@ -182,6 +193,12 @@ export default function ProjectActionsMenu(props: {
               Duplicate
             </DropdownMenuItem>
           </Show>
+          <Show when={canRestart() && !isDisabled()}>
+            <DropdownMenuItem onSelect={() => setConfirmAction("restart")}>
+              <RotateCcw class="w-3.5 h-3.5 text-muted-foreground" />
+              Restart
+            </DropdownMenuItem>
+          </Show>
           <Show when={canDisable()}>
             <Show
               when={isDisabled()}
@@ -231,7 +248,7 @@ export default function ProjectActionsMenu(props: {
         open={confirmAction() === "disable"}
         onOpenChange={(open) => { if (!open) setConfirmAction(null) }}
         title="Disable project"
-        description="This will shut down the project's pod. The workspace data will be preserved and the project can be re-enabled later."
+        description="This will shut down the project. The project data will be preserved and the project can be re-enabled later."
         confirmLabel="Disable"
         variant="destructive"
         onConfirm={() => disableProject.mutate(undefined as never)}
@@ -244,6 +261,16 @@ export default function ProjectActionsMenu(props: {
         description="This will create a copy of the project with the same workspace files."
         confirmLabel="Duplicate"
         onConfirm={() => duplicateProject.mutate(undefined as never)}
+      />
+
+      <ConfirmDialog
+        open={confirmAction() === "restart"}
+        onOpenChange={(open) => { if (!open) setConfirmAction(null) }}
+        title="Restart project"
+        description="Are you sure you want to restart this project? Project data will be preserved."
+        confirmLabel="Restart"
+        variant="destructive"
+        onConfirm={() => restartProject.mutate(undefined as never)}
       />
     </>
   )

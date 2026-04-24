@@ -51,9 +51,10 @@ Available only when Bifrost is configured.
 |--------|------|-------------|
 | ALL | `/api/proxy/:projectId/*` | Go proxy to the OpenCode agent on port 4096 |
 
-App preview, VS Code, and DB viewer are handled by dedicated Go runtime proxy deployments:
+App preview, public app access, VS Code, and DB viewer are handled by dedicated Go runtime proxy deployments:
 
-- app preview -> `{projectId}.{WEBAPP_DOMAIN}` -> runtime-app-proxy:3002 -> pod:3000
+- in-product app preview -> `{projectId}.{WEBAPP_PREVIEW_DOMAIN}` -> runtime-app-proxy:3002 -> pod:3000
+- public app access -> `{projectId}.{WEBAPP_DOMAIN}` -> runtime-app-proxy:3002 -> pod:3000
 - VS Code -> `{projectId}.{VSCODE_DOMAIN}` -> runtime-vscode-proxy:3003 -> pod:8080
 - DB viewer -> `{projectId}.{DB_DOMAIN}` -> runtime-db-proxy:3004 -> pod:8081
 

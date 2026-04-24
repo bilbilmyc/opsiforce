@@ -91,10 +91,7 @@ Frontend env vars:
 
 ## Authentication
 
-No separate VS Code authentication. code-server runs with `--auth none` because:
-1. nginx oauth2-proxy handles user login (OIDC via Keycloak)
-2. Subdomain IngressRoute routes through the same auth layer
-3. Pod is only reachable through the proxy (no public port)
+No separate VS Code authentication. code-server runs with `--auth none` because the wildcard VS Code IngressRoute goes through the platform OAuth2 Proxy before nginx forwards authenticated traffic to the runtime VS Code proxy. The pod is only reachable through the internal proxy path and has no public port.
 
 The proxy strips `X-Frame-Options`, `Content-Security-Policy`, and `Content-Encoding` response headers for iframe compatibility.
 
@@ -115,7 +112,6 @@ The proxy strips `X-Frame-Options`, `Content-Security-Policy`, and `Content-Enco
 |-------|-----|---------|-------------|
 | opsiforce-backend | `config.vscodePort` | 8080 | Agent pod code-server port |
 | opsiforce-runtime-proxies | `ports.vscode` | 3003 | VS Code runtime proxy port |
-| opsiforce-proxy | `vscodeProxy.enabled` | true | Enable VS Code IngressRoute |
 | opsiforce-proxy | `vscodeProxy.appsHostname` | code.dev.opsima.com | Wildcard domain for VS Code |
 | opsiforce-proxy | `vscodeProxy.backendService` | (set in CI) | Runtime proxy service name |
 

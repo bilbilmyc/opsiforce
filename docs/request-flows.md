@@ -136,10 +136,10 @@ This keeps 502 (process failed inside a healthy pod) and 503 (pod gone, restart 
 
 ## App preview and VS Code
 
-App preview and VS Code keep their current ingress/auth topology in this phase. They now share the same lifecycle behavior as chat.
+The in-product app preview uses a dedicated preview hostname so it can load inside the Opsiforce iframe without project-level OIDC middleware. Preview traffic still passes through the platform OAuth2 Proxy before nginx forwards it to the app runtime proxy. Public app access keeps using the normal app hostname, where per-project Makara or custom auth can attach its Traefik middleware. Both hostnames reach the same app runtime proxy and share lifecycle behavior with chat.
 
 ```
-1. Browser requests {projectId}.{WEBAPP_DOMAIN} or {projectId}.{VSCODE_DOMAIN}
+1. Browser requests {projectId}.{WEBAPP_PREVIEW_DOMAIN}, {projectId}.{WEBAPP_DOMAIN}, or {projectId}.{VSCODE_DOMAIN}
 2. The proxy server extracts projectId from the subdomain
 3. The Go subdomain proxy calls the backend control API to run the shared ensure flow with activity = app
 4. If the project is active, the request is proxied to:

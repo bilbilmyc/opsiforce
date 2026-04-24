@@ -77,12 +77,12 @@ Frontend env vars:
 ## Authentication & Permissions
 
 - `canViewDb` (Keycloak role `opsiforce_can_view_db_tab`) gates the DB tab in the frontend
-- Backend permission enforcement is **not** applied on the DB runtime proxy, matching the pre-existing VS Code posture. Reason: the Traefik IngressRoute for the wildcard subdomain (`*.db.dev.opsima.com`) routes directly to the runtime proxy, bypassing the oauth2-proxy sidecar — so `x-forwarded-groups` headers don't reach it on subdomain requests.
+- The wildcard DB IngressRoute goes through the platform OAuth2 Proxy before nginx forwards authenticated traffic to the runtime DB proxy
 - Datasette runs with `--auth none` (default). Per-DB write permissions are enforced via `datasette-metadata.yml` (`database` DB denies insert/update/delete).
 
 ### Security note
 
-A determined user with a valid oauth2-proxy session AND knowledge of the project UUID could hit `{projectId}.db.dev.opsima.com` directly without having the `canViewDb` role. This matches the existing posture for the VS Code subdomain. Closing this gap requires a Traefik `ForwardAuth` middleware consulting oauth2-proxy before the IngressRoute — an infra refactor that would also need to be applied to the VS Code IngressRoute.
+A determined user with a valid platform OAuth2 Proxy session and knowledge of the project UUID could hit `{projectId}.db.dev.opsima.com` directly without having the `canViewDb` role. Closing that gap requires a project-aware authorization check on the runtime proxy path.
 
 ---
 
@@ -107,7 +107,6 @@ Datasette is stateless — no XDG persistence like code-server has. Each pod sta
 |-------|-----|---------|-------------|
 | opsiforce-backend | `config.dbViewerPort` | "8081" | Agent pod datasette port |
 | opsiforce-runtime-proxies | `ports.db` | 3004 | DB runtime proxy port |
-| opsiforce-proxy | `dbProxy.enabled` | true | Enable DB IngressRoute |
 | opsiforce-proxy | `dbProxy.appsHostname` | db.dev.opsima.com | Wildcard domain for DB viewer |
 | opsiforce-proxy | `dbProxy.backendService` | (set in CI) | Runtime proxy service name |
 

@@ -4,7 +4,7 @@ import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-que
 import { api, type Project } from "~/api/client"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
-import { CircleDollarSign, Clock } from "~/components/icons"
+import { CircleDollarSign, Clock, ShieldCheck } from "~/components/icons"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "~/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs"
 import { Button } from "~/components/ui/button"
@@ -12,6 +12,7 @@ import { BudgetRow } from "~/components/ui/budget-row"
 import { TimeoutRow } from "~/components/ui/timeout-row"
 import { msToUnit, unitToMs } from "~/lib/duration-units"
 import { type BudgetConfig } from "~/constants/budget"
+import { ProjectAuthTab } from "~/components/project-auth"
 
 interface BudgetEntry {
   keyType: "chat" | "backend"
@@ -36,7 +37,10 @@ export default function ProjectSettings(props: {
   const { hasPermission } = usePermissions()
   const canBudgets = () => hasPermission(Permission.manageProjectBudgetSettings)
   const canTimeouts = () => hasPermission(Permission.manageProjectTimeoutSettings)
-  const defaultTab = createMemo(() => canBudgets() ? "budgets" : "timeouts")
+  const canAuth = () => hasPermission(Permission.manageProjectAuthSettings)
+  const defaultTab = createMemo(() =>
+    canAuth() ? "auth" : canBudgets() ? "budgets" : "timeouts",
+  )
   const [activeTab, setActiveTab] = createSignal(defaultTab())
   const [budgetDrafts, setBudgetDrafts] = createSignal<Record<string, BudgetDraft>>({})
   const [projectBudgetDraft, setProjectBudgetDraft] = createSignal("")
@@ -161,12 +165,18 @@ export default function ProjectSettings(props: {
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
-      <DialogContent>
+      <DialogContent class="max-w-2xl">
         <DialogTitle>Project Settings</DialogTitle>
         <DialogDescription>Configure budgets and timeouts for this project.</DialogDescription>
 
         <Tabs defaultValue={defaultTab()} class="mt-4" onChange={setActiveTab}>
           <TabsList>
+            <Show when={canAuth()}>
+              <TabsTrigger value="auth">
+                <ShieldCheck class="w-3.5 h-3.5 mr-1.5" />
+                Auth
+              </TabsTrigger>
+            </Show>
             <Show when={canBudgets()}>
               <TabsTrigger value="budgets">
                 <CircleDollarSign class="w-3.5 h-3.5 mr-1.5" />
@@ -180,6 +190,12 @@ export default function ProjectSettings(props: {
               </TabsTrigger>
             </Show>
           </TabsList>
+
+          <Show when={canAuth()}>
+            <TabsContent value="auth">
+              <ProjectAuthTab projectId={props.projectId} />
+            </TabsContent>
+          </Show>
 
           <Show when={canBudgets()}>
             <TabsContent value="budgets">
@@ -245,18 +261,20 @@ export default function ProjectSettings(props: {
           </Show>
         </Tabs>
 
-        <div class="mt-4 flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={handleCancel}>
-            Cancel
-          </Button>
-          <Button
-            size="sm"
-            disabled={!isDirty() || saving()}
-            onClick={handleSave}
-          >
-            {saving() ? "Saving..." : "Save"}
-          </Button>
-        </div>
+        <Show when={activeTab() !== "auth"}>
+          <div class="mt-4 flex justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={handleCancel}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              disabled={!isDirty() || saving()}
+              onClick={handleSave}
+            >
+              {saving() ? "Saving..." : "Save"}
+            </Button>
+          </div>
+        </Show>
       </DialogContent>
     </Dialog>
   )

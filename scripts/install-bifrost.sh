@@ -9,11 +9,11 @@ if ! helm repo list | grep -q "^bifrost[[:space:]]"; then
 fi
 helm repo update bifrost
 
-sh "${script_dir}/upsert-bifrost-secrets.sh" opsiforce
+sh "${script_dir}/upsert-bifrost-secrets.sh" local
 
-helm upgrade --install --wait --namespace opsiforce --create-namespace \
+helm upgrade --install --wait --namespace local --create-namespace \
   opsiforce-bifrost bifrost/bifrost \
   --version 2.0.15 \
   -f "${package_dir}/helm/bifrost/values.local.yaml"
 
-kubectl apply --namespace opsiforce -f "${package_dir}/helm/bifrost/networkpolicy.yaml"
+kubectl apply --namespace local -f "${package_dir}/helm/bifrost/networkpolicy.yaml"

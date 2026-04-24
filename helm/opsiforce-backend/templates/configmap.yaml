@@ -52,3 +52,24 @@ data:
   {{- if .Values.config.mailgunSender }}
   MAILGUN_SENDER: {{ .Values.config.mailgunSender | quote }}
   {{- end }}
+  {{- if .Values.config.appsHostname }}
+  APPS_HOSTNAME: {{ .Values.config.appsHostname | quote }}
+  {{- end }}
+  {{- if .Values.config.webappServiceName }}
+  WEBAPP_SERVICE_NAME: {{ .Values.config.webappServiceName | quote }}
+  {{- end }}
+  {{- if .Values.config.webappServiceNamespace }}
+  WEBAPP_SERVICE_NAMESPACE: {{ .Values.config.webappServiceNamespace | quote }}
+  {{- end }}
+  {{- if .Values.config.webappServicePort }}
+  WEBAPP_SERVICE_PORT: {{ .Values.config.webappServicePort | quote }}
+  {{- end }}
+  {{- if .Values.config.makaraOidcClientId }}
+  MAKARA_OIDC_CLIENT_ID: {{ .Values.config.makaraOidcClientId | quote }}
+  {{- end }}
+  {{- if .Values.config.makaraOidcClientSecret }}
+  MAKARA_OIDC_CLIENT_SECRET: {{ .Values.config.makaraOidcClientSecret | quote }}
+  {{- end }}
+  {{- if .Values.config.makaraOidcIssuerUrl }}
+  MAKARA_OIDC_ISSUER_URL: {{ .Values.config.makaraOidcIssuerUrl | quote }}
+  {{- end }}

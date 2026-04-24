@@ -9,6 +9,7 @@ export const Perms = {
   viewCodeTab: "can_view_code_tab",
   viewDbTab: "can_view_db_tab",
   disableProject: "can_disable_project",
+  restartProject: "can_restart_project",
   duplicateProject: "can_duplicate_project",
   manageWorkspaces: "can_manage_workspaces",
   moveProjectsBetweenWorkspaces: "can_move_projects_between_workspaces",

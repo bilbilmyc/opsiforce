@@ -272,10 +272,31 @@ export default function ProjectView(props: {
     }
   });
 
-  const webappDomain = import.meta.env.VITE_WEBAPP_DOMAIN || "localhost:3002";
-  const webappProtocol = webappDomain.includes("localhost") ? "http" : "https";
+  let prevStatus: Project["status"] | undefined;
+  createEffect(() => {
+    const status = project.data?.status;
+    if (!status) return;
+
+    if (status === "starting" && prevStatus && prevStatus !== "starting") {
+      setRouter(null);
+      connecting = false;
+      setWebappReady(false);
+      setAppName(undefined);
+      setPreviewOpen(false);
+      setUserDismissed(false);
+      setPreviewLoading(true);
+    }
+
+    prevStatus = status;
+  });
+
+  const webappDomain = import.meta.env.VITE_WEBAPP_DOMAIN;
+  const webappPreviewDomain =
+    import.meta.env.VITE_WEBAPP_PREVIEW_DOMAIN;
   const webappUrl = () =>
-    `${webappProtocol}://${props.projectId}.${webappDomain}/`;
+    `https://${props.projectId}.${webappDomain}/`;
+  const webappPreviewUrl = () =>
+    `https://${props.projectId}.${webappPreviewDomain}/`;
 
   async function checkWebappStatus() {
     if (webappReady()) return;
@@ -318,14 +339,12 @@ export default function ProjectView(props: {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  const vscodeDomain = import.meta.env.VITE_VSCODE_DOMAIN || "localhost:3003";
-  const vscodeProtocol = vscodeDomain.includes("localhost") ? "http" : "https";
+  const vscodeDomain = import.meta.env.VITE_VSCODE_DOMAIN;
   const vscodeUrl = () =>
-    `${vscodeProtocol}://${props.projectId}.${vscodeDomain}/?folder=/workspace`;
+    `https://${props.projectId}.${vscodeDomain}/?folder=/workspace`;
 
-  const dbDomain = import.meta.env.VITE_DB_DOMAIN || "localhost:3004";
-  const dbProtocol = dbDomain.includes("localhost") ? "http" : "https";
-  const dbUrl = () => `${dbProtocol}://${props.projectId}.${dbDomain}/`;
+  const dbDomain = import.meta.env.VITE_DB_DOMAIN;
+  const dbUrl = () => `https://${props.projectId}.${dbDomain}/`;
 
   return (
     <div class="h-full w-full flex flex-col overflow-hidden">
@@ -524,7 +543,7 @@ export default function ProjectView(props: {
               </Show>
               <iframe
                 id="webapp-preview"
-                src={webappUrl()}
+                src={webappPreviewUrl()}
                 class="w-full h-full border-0"
                 allow="microphone; camera; clipboard-read; clipboard-write; geolocation; fullscreen; autoplay; display-capture; web-share"
                 onLoad={() => setPreviewLoading(false)}

@@ -55,9 +55,20 @@ export default () => {
   bifrostAdminUsername: process.env.BIFROST_ADMIN_USERNAME || "",
   bifrostAdminPassword: process.env.BIFROST_ADMIN_PASSWORD || "",
   workspaceCleanupRetentionDays: 7,
+  requestLogRetentionDays: parseInt(process.env.REQUEST_LOG_RETENTION_DAYS || "3", 10),
   gatewayUrl: process.env.SERVICE_GATEWAY_URL || "http://opsiforce-backend:3001/api/gateway",
   mailgunApiKey: process.env.MAILGUN_API_KEY || "",
   mailgunDomain: process.env.MAILGUN_DOMAIN || "",
   mailgunSender: process.env.MAILGUN_SENDER || "",
   mailgunUrl: process.env.MAILGUN_URL || "",
+  appsHostname: process.env.APPS_HOSTNAME || "apps.opsiforce.traefik.me",
+  webappServiceName: process.env.WEBAPP_SERVICE_NAME || "host-go-proxy-app",
+  webappServiceNamespace: process.env.WEBAPP_SERVICE_NAMESPACE || "local",
+  webappServicePort: parseInt(process.env.WEBAPP_SERVICE_PORT || "3002", 10),
+  oidcPluginSecret: process.env.OIDC_PLUGIN_SECRET || "opsiforcedev0123456789abcdef1234",
+  makaraOidcClientId: process.env.MAKARA_OIDC_CLIENT_ID || "opsiforce-apps",
+  makaraOidcClientSecret: process.env.MAKARA_OIDC_CLIENT_SECRET || "",
+  makaraOidcIssuerUrl:
+    process.env.MAKARA_OIDC_ISSUER_URL ||
+    "http://sima-keycloak-local-service.local.svc:8086/realms/sima",
 }}
