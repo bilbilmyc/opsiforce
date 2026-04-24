@@ -55,7 +55,6 @@ spec:
                 mountPath: /etc/nginx/nginx.conf
                 subPath: nginx.conf
                 readOnly: true
-          {{- if .Values.oauth2Proxy.enabled }}
           - name: opsiforce-oauth2-proxy
             image: {{ .Values.oauth2Proxy.image }}
             readinessProbe:
@@ -78,6 +77,7 @@ spec:
                 - --upstream="http://localhost:{{ .Values.service.port }}/"
                 - --client-id={{ .Values.oauth2Proxy.clientId }}
                 - --cookie-secret={{ .Values.oauth2Proxy.cookieSecret }}
+                - --cookie-domain={{ .Values.oauth2Proxy.cookieDomain }}
                 - --session-store-type=redis
                 - --redis-connection-url={{ .Values.oauth2Proxy.redisPath }}
                 - --skip-provider-button=true
@@ -95,4 +95,3 @@ spec:
                 - --skip-auth-route=GET=^/favicon/.*$
                 - --skip-auth-route=GET=^/manifest.webmanifest$
                 - --cookie-refresh=4m
-          {{- end }}

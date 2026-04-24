@@ -120,6 +120,20 @@
       "when": 1776766315561,
       "tag": "0016_add-user-tenants",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1776921270459,
+      "tag": "0017_lovely_peter_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1776926639496,
+      "tag": "0018_magical_wither",
+      "breakpoints": true
     }
   ]
 }

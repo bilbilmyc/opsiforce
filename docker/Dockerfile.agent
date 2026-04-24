@@ -17,12 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN ln -s /usr/bin/python3 /usr/local/bin/python
 
 RUN pip3 install --no-cache-dir --break-system-packages \
-    requests Pillow datasette datasette-write-ui
+    requests Pillow datasette==1.0a28 datasette-write-ui==0.0.1a14
 
 RUN npm install -g bun opencode-ai@1.3.2 agent-browser \
     opencode-large-image-optimizer@1.1.0 sharp@^0.33.0
 
-RUN curl -fsSL https://code-server.dev/install.sh | sh
+RUN curl -fsSL https://code-server.dev/install.sh | sh -s -- --version 4.117.0
 
 RUN mkdir -p /workspace /opt/opencode /opt/agents
 WORKDIR /workspace

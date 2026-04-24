@@ -63,8 +63,30 @@ export interface Project {
   timeoutIdle: number
   appTimeoutIdle: number
   timezone: string
+  authMode: ProjectAuthMode
   lastActiveAt: string | null
   createdAt: string
+}
+
+export type ProjectAuthMode = "public" | "manual" | "makara"
+
+export interface ProjectAuthOidcConfig {
+  clientId?: string
+  clientSecret?: string
+  discoveryUrl?: string
+  scope?: string
+}
+
+export interface ProjectAuthResponse {
+  mode: ProjectAuthMode
+  config?: ProjectAuthOidcConfig
+  bypassAuthPaths?: string[]
+}
+
+export interface UpdateProjectAuthDto {
+  mode: ProjectAuthMode
+  config?: ProjectAuthOidcConfig
+  bypassAuthPaths?: string[]
 }
 
 export interface Workspace {

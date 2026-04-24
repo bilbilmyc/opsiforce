@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -14,10 +13,7 @@ import (
 )
 
 const (
-	maxRows       = 50_000
-	pruneTo       = 40_000
-	pruneInterval = 500
-	idleTTL       = 5 * time.Minute
+	idleTTL = 5 * time.Minute
 )
 
 type Entry struct {
@@ -47,9 +43,8 @@ type task struct {
 }
 
 type cachedDB struct {
-	db          *sql.DB
-	lastUsed    time.Time
-	insertCount int
+	db       *sql.DB
+	lastUsed time.Time
 }
 
 func New(rootPath string, queueDepth int) *Logger {
@@ -144,16 +139,7 @@ func handleTask(rootPath string, cache map[string]*cachedDB, task task) error {
 		nullIfEmpty(truncate(task.entry.RequestBody)),
 		nullIfEmpty(truncate(task.entry.ResponseBody)),
 	)
-	if err != nil {
-		return err
-	}
-
-	cached.insertCount++
-	if cached.insertCount%pruneInterval == 0 {
-		return pruneIfNeeded(cached.db)
-	}
-
-	return nil
+	return err
 }
 
 func getOrOpen(rootPath string, cache map[string]*cachedDB, directory string) (*cachedDB, error) {
@@ -223,24 +209,6 @@ func getOrOpen(rootPath string, cache map[string]*cachedDB, directory string) (*
 	}
 	cache[directory] = cached
 	return cached, nil
-}
-
-func pruneIfNeeded(db *sql.DB) error {
-	var count int
-	if err := db.QueryRow("SELECT COUNT(*) FROM app_requests").Scan(&count); err != nil {
-		return err
-	}
-
-	if count <= maxRows {
-		return nil
-	}
-
-	_, err := db.Exec(
-		fmt.Sprintf(`DELETE FROM app_requests WHERE id IN (
-			SELECT id FROM app_requests ORDER BY id ASC LIMIT %d
-		)`, count-pruneTo),
-	)
-	return err
 }
 
 func closeIdle(cache map[string]*cachedDB) {

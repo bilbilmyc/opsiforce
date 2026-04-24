@@ -1,4 +1,4 @@
-{{- if and .Values.ingressRoute.enabled .Values.appProxy.enabled }}
+{{- if .Values.ingressRoute.enabled }}
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "opsiforce-proxy.labels" . | nindent 4 }}
   annotations:
-    external-dns.alpha.kubernetes.io/hostname: "*.{{ .Values.appProxy.appsHostname }}"
+    external-dns.alpha.kubernetes.io/hostname: "*.{{ .Values.appProxy.appsHostname }}{{- if .Values.appProxy.previewAppsHostname }},*.{{ .Values.appProxy.previewAppsHostname }}{{- end }}"
     external-dns.alpha.kubernetes.io/target: {{ .Values.ingressRoute.traefikTarget }}
 spec:
   entryPoints:
@@ -17,8 +17,20 @@ spec:
       services:
         - name: {{ .Values.appProxy.backendService }}
           port: 3002
+    {{- if .Values.appProxy.previewAppsHostname }}
+    - match: HostRegexp(`[a-f0-9-]+\.{{ .Values.appProxy.previewAppsHostname | replace "." "\\." }}`)
+      kind: Rule
+      services:
+        - name: {{ include "opsiforce-proxy.fullname" . }}
+          port: 4180
+    {{- end }}
+  {{- if .Values.ingressRoute.certResolver }}
   tls:
-    certResolver: letsencrypt
+    certResolver: {{ .Values.ingressRoute.certResolver }}
     domains:
       - main: "*.{{ .Values.appProxy.appsHostname }}"
+      {{- if .Values.appProxy.previewAppsHostname }}
+      - main: "*.{{ .Values.appProxy.previewAppsHostname }}"
+      {{- end }}
+  {{- end }}
 {{- end }}

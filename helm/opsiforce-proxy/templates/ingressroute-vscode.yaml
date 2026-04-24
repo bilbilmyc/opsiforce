@@ -1,4 +1,4 @@
-{{- if and .Values.ingressRoute.enabled .Values.vscodeProxy.enabled }}
+{{- if .Values.ingressRoute.enabled }}
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -15,10 +15,12 @@ spec:
     - match: HostRegexp(`[a-f0-9-]+\.{{ .Values.vscodeProxy.appsHostname | replace "." "\\." }}`)
       kind: Rule
       services:
-        - name: {{ .Values.vscodeProxy.backendService }}
-          port: 3003
+        - name: {{ include "opsiforce-proxy.fullname" . }}
+          port: 4180
+  {{- if .Values.ingressRoute.certResolver }}
   tls:
-    certResolver: letsencrypt
+    certResolver: {{ .Values.ingressRoute.certResolver }}
     domains:
       - main: "*.{{ .Values.vscodeProxy.appsHostname }}"
+  {{- end }}
 {{- end }}

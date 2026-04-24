@@ -150,7 +150,7 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     port: 8084,
-    allowedHosts: ["host.minikube.internal"],
+    allowedHosts: ["host.minikube.internal", ".opsiforce.traefik.me"],
     proxy: {
       "/api": {
         target: "http://localhost:3001",

@@ -34,4 +34,26 @@ export interface ProjectResponse extends ProjectRow {
   timeoutIdle: ProjectSettingsRow["timeoutIdle"]
   appTimeoutIdle: ProjectSettingsRow["appTimeoutIdle"]
   timezone: ProjectSettingsRow["timezone"]
+  authMode: ProjectSettingsRow["authMode"]
+}
+
+export interface ProjectAuthOidcConfig {
+  clientId?: string
+  clientSecret?: string
+  discoveryUrl?: string
+  scope?: string
+}
+
+export type ProjectAuthMode = "public" | "manual" | "makara"
+
+export interface ProjectAuthResponse {
+  mode: ProjectAuthMode
+  config?: ProjectAuthOidcConfig
+  bypassAuthPaths?: string[]
+}
+
+export interface UpdateProjectAuthDto {
+  mode: ProjectAuthMode
+  config?: ProjectAuthOidcConfig
+  bypassAuthPaths?: string[]
 }

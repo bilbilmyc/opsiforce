@@ -1,6 +1,7 @@
 import { Module, forwardRef } from "@nestjs/common"
 import { ProjectController } from "./project.controller"
 import { ProjectService } from "./project.service"
+import { ProjectAuthService } from "./project-auth.service"
 import { PodModule } from "../pod/pod.module"
 import { TimeoutModule } from "../timeout/timeout.module"
 import { BifrostModule } from "../bifrost/bifrost.module"
@@ -11,7 +12,7 @@ import { ProxyService } from "../proxy/proxy.service"
 @Module({
   imports: [PodModule, TimeoutModule, forwardRef(() => BifrostModule), GatewayModule, forwardRef(() => ScheduleModule)],
   controllers: [ProjectController],
-  providers: [ProjectService, ProxyService],
-  exports: [ProjectService],
+  providers: [ProjectService, ProjectAuthService, ProxyService],
+  exports: [ProjectService, ProjectAuthService],
 })
 export class ProjectModule {}

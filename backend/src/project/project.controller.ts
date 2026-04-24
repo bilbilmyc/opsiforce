@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Put,
   Delete,
   Body,
   Param,
@@ -10,7 +11,12 @@ import {
 } from "@nestjs/common"
 import type { FastifyRequest } from "fastify"
 import { ProjectService } from "./project.service"
-import { CreateProjectDto, UpdateProjectDto, DuplicateProjectDto } from "./project.types"
+import {
+  CreateProjectDto,
+  UpdateProjectDto,
+  DuplicateProjectDto,
+  UpdateProjectAuthDto,
+} from "./project.types"
 import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
 import { CurrentUser, type UserContext } from "../user/user.decorator"
 import { UserService } from "../user/user.service"
@@ -126,6 +132,29 @@ export class ProjectController {
     return this.projectService.update(id, dto, tenant.tenantId)
   }
 
+  @Get(":id/auth")
+  async getAuth(
+    @Param("id") id: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.gate(id, tenant, user, req)
+    return this.projectService.getAuth(id, tenant.tenantId)
+  }
+
+  @Put(":id/auth")
+  async updateAuth(
+    @Param("id") id: string,
+    @Body() dto: UpdateProjectAuthDto,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.gate(id, tenant, user, req)
+    return this.projectService.updateAuth(id, dto, tenant.tenantId)
+  }
+
   @Delete(":id")
   async remove(
     @Param("id") id: string,
@@ -172,6 +201,18 @@ export class ProjectController {
   ) {
     await this.gate(id, tenant, user, req)
     return this.projectService.enable(id, tenant.tenantId)
+  }
+
+  @Post(":id/restart")
+  @RequirePermission(Perms.restartProject)
+  async restart(
+    @Param("id") id: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+    @Req() req: FastifyRequest,
+  ) {
+    await this.gate(id, tenant, user, req)
+    return this.projectService.restart(id, tenant.tenantId)
   }
 
   /** 404 if the caller can't see this project (avoids existence leak). */

@@ -11,7 +11,7 @@ import { ConfigService } from "@nestjs/config"
 import { eq, and, desc, asc, inArray, isNull, or, ne, sql, type SQL } from "drizzle-orm"
 import crypto from "crypto"
 import { db, pgClient } from "../../db"
-import { projectSettings, projects, pods, deletedProjects, workspaceMembers } from "../../db/schema"
+import { projectSettings, projects, pods, deletedProjects, workspaceMembers, tenants } from "../../db/schema"
 import { PodService } from "../pod/pod.service"
 import { PodPoolService } from "../pod/pod.pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
@@ -26,7 +26,10 @@ import {
   DuplicateProjectDto,
   ProjectResponse,
   ProjectStatus,
+  ProjectAuthResponse,
+  UpdateProjectAuthDto,
 } from "./project.types"
+import { ProjectAuthService } from "./project-auth.service"
 
 type ProjectActivityKind = "agent" | "app"
 
@@ -59,6 +62,7 @@ const projectSelectFields = {
   timeoutIdle: projectSettings.timeoutIdle,
   appTimeoutIdle: projectSettings.appTimeoutIdle,
   timezone: projectSettings.timezone,
+  authMode: projectSettings.authMode,
   lastActiveAt: projects.lastActiveAt,
   createdAt: projects.createdAt,
   updatedAt: projects.updatedAt,
@@ -81,6 +85,7 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly gatewayKeyService: GatewayKeyService,
     @Inject(forwardRef(() => ScheduleService))
     private readonly scheduleService: ScheduleService,
+    private readonly projectAuthService: ProjectAuthService,
   ) {}
 
   async onApplicationBootstrap() {
@@ -319,6 +324,42 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId)
   }
 
+  async getAuth(id: string, tenantId: string): Promise<ProjectAuthResponse> {
+    const project = await this.findOne(id, tenantId)
+    if (project.authMode === "public") return { mode: "public" }
+    const { config, bypassAuthPaths } = await this.projectAuthService.getConfig(id)
+    if (project.authMode === "makara") return { mode: "makara", bypassAuthPaths }
+    return { mode: "manual", config, bypassAuthPaths }
+  }
+
+  async updateAuth(
+    id: string,
+    dto: UpdateProjectAuthDto,
+    tenantId: string,
+  ): Promise<ProjectAuthResponse> {
+    const project = await this.findOne(id, tenantId)
+    if (dto.mode !== "public" && dto.mode !== "manual" && dto.mode !== "makara") {
+      throw new BadRequestException(`Unknown auth mode: ${dto.mode}`)
+    }
+
+    if (dto.mode === "manual") {
+      await this.projectAuthService.apply(project.id, dto.config ?? {}, dto.bypassAuthPaths)
+    } else if (dto.mode === "makara") {
+      const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId))
+      if (!tenant) throw new BadRequestException(`Tenant ${tenantId} not found`)
+      await this.projectAuthService.applyMakara(project.id, tenant.name, dto.bypassAuthPaths)
+    } else {
+      await this.projectAuthService.remove(project.id)
+    }
+
+    await db
+      .update(projectSettings)
+      .set({ authMode: dto.mode })
+      .where(eq(projectSettings.projectId, project.id))
+
+    return this.getAuth(id, tenantId)
+  }
+
   async remove(id: string, tenantId: string): Promise<void> {
     const project = await this.findOne(id, tenantId)
     const podName = project.podName ?? this.podService.assignedPodName(id)
@@ -407,6 +448,16 @@ export class ProjectService implements OnApplicationBootstrap {
   async reassignPod(id: string, tenantId: string): Promise<void> {
     const project = await this.findOne(id, tenantId)
     await this.requestProjectStartup(project, { deleteExistingPod: true })
+  }
+
+  async restart(id: string, tenantId: string): Promise<ProjectResponse> {
+    const project = await this.findOne(id, tenantId)
+    if (project.status === ProjectStatus.Disabled) {
+      throw new BadRequestException("Disabled project cannot be restarted")
+    }
+
+    await this.requestProjectStartup(project, { deleteExistingPod: true })
+    return this.findOne(id, tenantId)
   }
 
   async reassignPodById(id: string): Promise<void> {

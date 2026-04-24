@@ -1,0 +1,1 @@
+ALTER TYPE "public"."project_auth_mode" ADD VALUE 'makara';

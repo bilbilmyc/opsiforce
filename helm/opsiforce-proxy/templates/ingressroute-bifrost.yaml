@@ -17,6 +17,8 @@ spec:
       services:
         - name: {{ .Values.bifrostDashboard.serviceName }}
           port: 8080
+  {{- if .Values.ingressRoute.certResolver }}
   tls:
-    certResolver: letsencrypt
+    certResolver: {{ .Values.ingressRoute.certResolver }}
+  {{- end }}
 {{- end }}

@@ -16,7 +16,9 @@ spec:
       kind: Rule
       services:
         - name: {{ include "opsiforce-proxy.fullname" . }}
-          port: {{ if .Values.oauth2Proxy.enabled }}4180{{ else }}{{ .Values.service.port }}{{ end }}
+          port: 4180
+  {{- if .Values.ingressRoute.certResolver }}
   tls:
-    certResolver: letsencrypt
+    certResolver: {{ .Values.ingressRoute.certResolver }}
+  {{- end }}
 {{- end }}
