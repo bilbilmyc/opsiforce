@@ -15,7 +15,6 @@ export function useUserInfo() {
       if (!res.ok) return { user: "", email: "", preferredUsername: "" }
       return res.json() as Promise<UserInfo>
     },
-    staleTime: Infinity,
   }))
 }
 
@@ -23,6 +22,5 @@ export function useCurrentUser() {
   return createQuery(() => ({
     queryKey: ["currentUser"],
     queryFn: () => userApi.me(),
-    staleTime: Infinity,
   }))
 }

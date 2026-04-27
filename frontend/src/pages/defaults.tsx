@@ -71,17 +71,14 @@ function DefaultsForm(props: { scope: Scope }) {
   const timeouts = createQuery(() => ({
     queryKey: [...keyPrefix(), "timeouts"],
     queryFn: () => api.get<TimeoutDefaults>(`${base()}/timeouts`),
-    staleTime: Infinity,
   }))
   const budgets = createQuery(() => ({
     queryKey: [...keyPrefix(), "budgets"],
     queryFn: () => api.get<BudgetDefaults>(`${base()}/budgets`),
-    staleTime: Infinity,
   }))
   const agent = createQuery(() => ({
     queryKey: [...keyPrefix(), "agent"],
     queryFn: () => api.get<AgentDefaults>(`${base()}/agent`),
-    staleTime: Infinity,
   }))
 
   async function invalidate() {

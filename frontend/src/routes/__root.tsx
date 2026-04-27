@@ -16,7 +16,6 @@ import { Button } from "~/components/ui/button";
 import { Menu } from "~/components/icons";
 import { HotjarScript } from "~/scripts/hotjar";
 import { Toaster } from "solid-sonner";
-import { createTenantState } from "~/lib/tenant-state";
 
 const queryClient = new QueryClient({
   defaultOptions: {

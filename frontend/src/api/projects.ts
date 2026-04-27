@@ -39,13 +39,9 @@ export function useProjects(options?: { enabled?: () => boolean }) {
     queryKey: projectKeys.list(),
     queryFn: () => api.get<Project[]>("/projects"),
     enabled: options?.enabled ? options.enabled() : true,
-    staleTime: 30_000,
   }))
 }
 
-/**
- * Rename a project. Handy helper since a few components do this in-place.
- */
 export function useRenameProject() {
   const qc = useQueryClient()
   return createMutation(() => ({
@@ -63,11 +59,7 @@ function detectTimezone(): string {
   }
 }
 
-/**
- * Create a project outside any workspace. Admin-only on the backend.
- * Auto-includes the caller's timezone (the project.schedules table needs it).
- * Use useCreateProjectInWorkspace for workspace-scoped creation.
- */
+
 export function useCreateUnassignedProject() {
   const qc = useQueryClient()
   return createMutation(() => ({

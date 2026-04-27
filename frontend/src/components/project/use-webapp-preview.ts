@@ -25,7 +25,6 @@ export function useWebappPreview(options: {
       if (q.state.data?.exists) return false
       return POLL_INTERVAL_MS
     },
-    staleTime: 0,
   }))
 
   let prevStatus: ProjectStatus | undefined
