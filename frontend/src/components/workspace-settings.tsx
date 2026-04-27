@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/compone
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import { Button } from "~/components/ui/button"
 import ConfirmDialog from "~/components/ui/confirm-dialog"
+import Skeleton from "~/components/ui/skeleton"
 import { Settings, AppWindow, Trash2, Users } from "~/components/icons"
 import WorkspaceMembersTab from "./workspace-members-tab"
 import WorkspaceProjectsTab from "./workspace-projects-tab"
@@ -80,7 +81,11 @@ export default function WorkspaceSettings(props: {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent>
         <DialogTitle>Workspace Settings</DialogTitle>
-        <DialogDescription>{workspace.data?.name ?? "Loading..."}</DialogDescription>
+        <DialogDescription>
+          <Show when={workspace.data?.name} fallback={<Skeleton class="h-4 w-32 inline-block" />}>
+            {workspace.data?.name}
+          </Show>
+        </DialogDescription>
 
         <Show
           when={canManage()}
@@ -149,7 +154,7 @@ export default function WorkspaceSettings(props: {
                     variant="outline"
                     class="text-destructive hover:text-destructive"
                     onClick={() => setConfirmDeleteOpen(true)}
-                    disabled={remove.isPending}
+                    loading={remove.isPending}
                   >
                     <Trash2 class="w-3.5 h-3.5 mr-1.5" />
                     Delete workspace
@@ -181,10 +186,11 @@ export default function WorkspaceSettings(props: {
             <Show when={activeTab() === "general"}>
               <Button
                 size="sm"
-                disabled={!dirty() || !name().trim() || update.isPending}
+                disabled={!dirty() || !name().trim()}
+                loading={update.isPending}
                 onClick={handleSave}
               >
-                {update.isPending ? "Saving..." : "Save"}
+                Save
               </Button>
             </Show>
           </div>

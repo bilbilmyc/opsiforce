@@ -10,6 +10,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs"
 import { Button } from "~/components/ui/button"
 import { BudgetRow } from "~/components/ui/budget-row"
 import { TimeoutRow } from "~/components/ui/timeout-row"
+import Skeleton from "~/components/ui/skeleton"
 import { msToUnit, unitToMs } from "~/lib/duration-units"
 import { type BudgetConfig } from "~/constants/budget"
 import { ProjectAuthTab } from "~/components/project-auth"
@@ -212,9 +213,19 @@ export default function ProjectSettings(props: {
                 <Show
                   when={budgets.data && budgets.data.length > 0}
                   fallback={
-                    <p class="text-xs text-muted-foreground py-4 text-center">
-                      {budgets.isLoading ? "Loading..." : "No API keys configured."}
-                    </p>
+                    <Show
+                      when={budgets.isLoading}
+                      fallback={
+                        <p class="text-xs text-muted-foreground py-4 text-center">
+                          No API keys configured.
+                        </p>
+                      }
+                    >
+                      <div class="space-y-2 py-2">
+                        <Skeleton class="h-8 w-full" />
+                        <Skeleton class="h-8 w-full" />
+                      </div>
+                    </Show>
                   }
                 >
                   <For each={budgets.data}>

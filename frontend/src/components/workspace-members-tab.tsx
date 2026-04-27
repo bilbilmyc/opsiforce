@@ -13,6 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
+import Spinner from "~/components/ui/spinner"
 import { ChevronDown, Plus, Trash2 } from "~/components/icons"
 
 export default function WorkspaceMembersTab(props: {
@@ -86,9 +87,18 @@ export default function WorkspaceMembersTab(props: {
           <Show
             when={addable().length > 0}
             fallback={
-              <div class="px-2 py-6 text-xs text-center text-muted-foreground">
-                {users.isLoading ? "Loading..." : "No users available."}
-              </div>
+              <Show
+                when={users.isLoading}
+                fallback={
+                  <div class="px-2 py-6 text-xs text-center text-muted-foreground">
+                    No users available.
+                  </div>
+                }
+              >
+                <div class="px-2 py-3">
+                  <Spinner size="sm" />
+                </div>
+              </Show>
             }
           >
             <For each={addable()}>

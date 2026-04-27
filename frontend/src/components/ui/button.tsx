@@ -1,5 +1,6 @@
-import { splitProps, type JSX, type ParentProps } from "solid-js"
+import { Show, splitProps, type JSX, type ParentProps } from "solid-js"
 import { cva, type VariantProps } from "class-variance-authority"
+import { LoaderCircle } from "~/components/icons"
 import { cn } from "~/lib/cn"
 
 const buttonVariants = cva(
@@ -29,13 +30,34 @@ const buttonVariants = cva(
 )
 
 type ButtonProps = ParentProps<
-  JSX.ButtonHTMLAttributes<HTMLButtonElement> & VariantProps<typeof buttonVariants>
+  JSX.ButtonHTMLAttributes<HTMLButtonElement> &
+    VariantProps<typeof buttonVariants> & {
+      loading?: boolean
+    }
 >
 
 function Button(props: ButtonProps) {
-  const [local, rest] = splitProps(props, ["class", "variant", "size", "children"])
+  const [local, rest] = splitProps(props, [
+    "class",
+    "variant",
+    "size",
+    "children",
+    "loading",
+    "disabled",
+  ])
   return (
-    <button class={cn(buttonVariants({ variant: local.variant, size: local.size }), local.class)} {...rest}>
+    <button
+      class={cn(
+        buttonVariants({ variant: local.variant, size: local.size }),
+        "gap-2",
+        local.class,
+      )}
+      disabled={local.disabled || local.loading}
+      {...rest}
+    >
+      <Show when={local.loading}>
+        <LoaderCircle class="w-3.5 h-3.5 animate-spin" />
+      </Show>
       {local.children}
     </button>
   )

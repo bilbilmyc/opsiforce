@@ -37,6 +37,12 @@ export interface ProjectResponse extends ProjectRow {
   authMode: ProjectSettingsRow["authMode"]
 }
 
+export interface ProjectStatusResponse {
+  id: string
+  status: ProjectStatus
+  workspaceId: string | null
+}
+
 export interface ProjectAuthOidcConfig {
   clientId?: string
   clientSecret?: string

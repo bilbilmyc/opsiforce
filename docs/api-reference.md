@@ -119,7 +119,8 @@ Local development normally uses `kubectl proxy`. In-cluster deployments normally
 | `AGENT_NAME` | `app-builder` | Agent profile loaded into the workspace |
 | `CEPHFS_PVC_NAME` | `opsiforce-cephfs` | CephFS PVC name |
 | `STORAGE_TYPE` | `cephfs` | `cephfs` or `hostPath` |
-| `STORAGE_HOST_PATH` | `/tmp/opsiforce-data` | Local hostPath root |
+| `STORAGE_HOST_PATH` | `/tmp/opsiforce-data` | Kubernetes hostPath root used by agent pods |
+| `STORAGE_MOUNT_PATH` | `/tmp/opsiforce-data` | Backend-visible storage root |
 | `PLATFORM_VERSION` | file-derived | Recorded per project at creation |
 | `AGENT_RESOURCES` | see values | JSON pod resources |
 | `AGENT_NODE_SELECTOR` | `{}` | JSON nodeSelector |

@@ -114,7 +114,7 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
       <Show
         when={!query.isLoading}
         fallback={
-          <div class="flex items-center justify-center py-6">
+          <div class="py-6">
             <Spinner label="Loading auth settings…" />
           </div>
         }
@@ -164,9 +164,10 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
           <Button
             size="sm"
             onClick={save}
-            disabled={props.disabled || !dirty() || mutation.isPending}
+            disabled={props.disabled || !dirty()}
+            loading={mutation.isPending}
           >
-            {mutation.isPending ? "Saving…" : "Save"}
+            Save
           </Button>
         </div>
       </Show>

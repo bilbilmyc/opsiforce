@@ -52,13 +52,15 @@ export interface Tenant {
   displayName: string
 }
 
+export type ProjectStatus = "starting" | "active" | "suspended" | "disabled"
+
 export interface Project {
   id: string
   tenantId: string
   workspaceId: string | null
   title: string | null
   description: string | null
-  status: "starting" | "active" | "suspended" | "disabled"
+  status: ProjectStatus
   bifrostProjectId: string | null
   timeoutIdle: number
   appTimeoutIdle: number
@@ -66,6 +68,12 @@ export interface Project {
   authMode: ProjectAuthMode
   lastActiveAt: string | null
   createdAt: string
+}
+
+export interface ProjectStatusResponse {
+  id: string
+  status: ProjectStatus
+  workspaceId: string | null
 }
 
 export type ProjectAuthMode = "public" | "manual" | "makara"

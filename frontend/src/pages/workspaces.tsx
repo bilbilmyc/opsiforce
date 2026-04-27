@@ -6,10 +6,10 @@ import { useCreateWorkspace, useWorkspaces } from "~/api/workspaces"
 import { Permission } from "~/constants/permissions"
 import { Button } from "~/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog"
+import Spinner from "~/components/ui/spinner"
 import WorkspaceSettings from "~/components/workspace-settings"
 import {
   FolderKanban,
-  LoaderCircle,
   Plus,
   Settings,
   AppWindow,
@@ -74,8 +74,8 @@ export default function WorkspacesPage() {
         <Show
           when={workspaces.data}
           fallback={
-            <div class="flex items-center justify-center py-20">
-              <LoaderCircle class="w-5 h-5 text-muted-foreground animate-spin" />
+            <div class="py-20">
+              <Spinner />
             </div>
           }
         >
@@ -182,9 +182,10 @@ export default function WorkspacesPage() {
             <Button
               size="sm"
               onClick={handleCreate}
-              disabled={!newName().trim() || createWorkspace.isPending}
+              disabled={!newName().trim()}
+              loading={createWorkspace.isPending}
             >
-              {createWorkspace.isPending ? "Creating..." : "Create"}
+              Create
             </Button>
           </div>
         </DialogContent>

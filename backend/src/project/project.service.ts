@@ -26,6 +26,7 @@ import {
   DuplicateProjectDto,
   ProjectResponse,
   ProjectStatus,
+  ProjectStatusResponse,
   ProjectAuthResponse,
   UpdateProjectAuthDto,
 } from "./project.types"
@@ -269,6 +270,39 @@ export class ProjectService implements OnApplicationBootstrap {
     }
 
     return project
+  }
+
+  async getStatusForUser(params: {
+    projectId: string
+    tenantId: string
+    userId: string
+    canManageWorkspaces: boolean
+  }): Promise<ProjectStatusResponse> {
+    const { projectId, tenantId, userId, canManageWorkspaces } = params
+
+    const [row] = await db
+      .select({
+        id: projects.id,
+        status: projects.status,
+        workspaceId: projects.workspaceId,
+      })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.tenantId, tenantId)))
+
+    if (!row) throw new NotFoundException(`Project ${projectId} not found`)
+
+    if (!canManageWorkspaces && row.workspaceId) {
+      const [member] = await db
+        .select({ userId: workspaceMembers.userId })
+        .from(workspaceMembers)
+        .where(and(
+          eq(workspaceMembers.workspaceId, row.workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ))
+      if (!member) throw new NotFoundException(`Project ${projectId} not found`)
+    }
+
+    return { id: row.id, status: row.status as ProjectStatus, workspaceId: row.workspaceId }
   }
 
   async findOneById(id: string): Promise<ProjectResponse> {
