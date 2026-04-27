@@ -16,7 +16,6 @@ export function useWorkspaces(scope: "member" | "all" = "member") {
     queryKey: workspaceKeys.list(scope),
     queryFn: () =>
       api.get<Workspace[]>(scope === "all" ? "/workspaces?scope=all" : "/workspaces"),
-    staleTime: 30_000,
   }))
 }
 
@@ -25,7 +24,6 @@ export function useWorkspace(workspaceId: () => string | null) {
     queryKey: workspaceKeys.detail(workspaceId() ?? ""),
     queryFn: () => api.get<Workspace>(`/workspaces/${workspaceId()}`),
     enabled: !!workspaceId(),
-    staleTime: 30_000,
   }))
 }
 
@@ -34,7 +32,6 @@ export function useWorkspaceMembers(workspaceId: () => string | null) {
     queryKey: workspaceKeys.members(workspaceId() ?? ""),
     queryFn: () => api.get<User[]>(`/workspaces/${workspaceId()}/members`),
     enabled: !!workspaceId(),
-    staleTime: 30_000,
   }))
 }
 
@@ -43,7 +40,6 @@ export function useWorkspaceProjects(workspaceId: () => string | null) {
     queryKey: workspaceKeys.projects(workspaceId() ?? ""),
     queryFn: () => api.get<Project[]>(`/workspaces/${workspaceId()}/projects`),
     enabled: !!workspaceId(),
-    staleTime: 30_000,
   }))
 }
 

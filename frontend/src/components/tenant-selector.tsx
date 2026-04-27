@@ -19,7 +19,6 @@ export default function TenantSelector() {
   const tenantsQuery = createQuery(() => ({
     queryKey: ["tenants"],
     queryFn: () => api.get<Tenant[]>("/tenants"),
-    staleTime: Infinity,
   }))
 
   const currentDisplayName = () => {

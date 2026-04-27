@@ -57,15 +57,17 @@ yarn dev-opsiforce-only
   ├── yarn port-forward-all (background)
   │     Exposes minikube PG:5435, Redis:6382, Keycloak:8086
   │
+  ├── yarn start-minikube (from first-time setup):
+  │     Binds /tmp/opsiforce-data into the minikube node at /data/opsiforce
+  │
   ├── @opsiforce/backend minikube-dev:
-  │     1. Creates /data/opsiforce on minikube node (one-time)
+  │     1. Prepares /tmp/opsiforce-data on the host
   │     2. Builds agent Docker image into minikube
   │     3. Deploys infra Helm chart (RBAC, hostPath storage, configmaps)
-  │     4. Mounts /tmp/opsiforce-data into minikube at /data/opsiforce
-  │     5. Runs Drizzle migrations against PG
-  │     6. Starts NestJS dev server on :3001 (hot reload)
-  │     7. Starts the four Go runtime proxies on :3002-3005
-  │     8. Starts Drizzle Studio on :4983
+  │     4. Runs Drizzle migrations against PG
+  │     5. Starts NestJS dev server on :3001 (hot reload)
+  │     6. Starts the four Go runtime proxies on :3002-3005
+  │     7. Starts Drizzle Studio on :4983
   │
   └── @opsiforce/frontend minikube-dev:
         1. Starts Vite dev server on :8084 (HMR)

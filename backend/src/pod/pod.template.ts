@@ -73,6 +73,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
           imagePullPolicy: options.imagePullPolicy,
           command: [
             "sh", "-c",
+            "set -e; " +
             (options.sourceDir
               ? `if [ -d /storage/${options.sourceDir} ]; then cp -a /storage/${options.sourceDir}/. /workspace/; fi; `
               : "") +
@@ -84,7 +85,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
               : "") +
             "cp /opt/agents/$AGENT/agent.md /workspace/.opencode/agents/$AGENT.md; " +
             "if [ ! -d /workspace/app ]; then " +
-            "cp -r /opt/agents/$AGENT/template/. /workspace/; " +
+            "cp -a /opt/agents/$AGENT/template/. /workspace/; " +
             "cd /workspace && printf '.config/\\n.cache/\\n.bun/\\n.opencode/\\n.xdg/\\nnode_modules/\\ndata/\\n' > .gitignore && " +
             "git init && git config user.email 'agent@opsiforce.com' && git config user.name 'OpsiForce' && git add -A && git commit -m 'Initial template'; " +
             "fi",

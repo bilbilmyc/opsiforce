@@ -5,7 +5,6 @@ export function usePermissions() {
   const query = createQuery(() => ({
     queryKey: ["permissions"],
     queryFn: () => api.get<string[]>("/permissions"),
-    staleTime: Infinity,
   }))
 
   const hasPermission = (permission: string) =>
