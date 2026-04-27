@@ -49,7 +49,7 @@ The frontend integrates OpenCode at the source level — OpenCode's Solid.js com
 | **Frontend** | Local (Vite HMR) | 8084 | Hot reload. |
 | **PostgreSQL** | Minikube (port-forwarded) | 5435 | Shared with other sima apps. |
 | **Redis** | Minikube (port-forwarded) | 6382 | Shared with other sima apps. |
-| **Agent pods** | Minikube | 4096 | Dynamically created by backend. hostPath storage. |
+| **Agent pods** | Minikube | 4096 | Dynamically created by backend. hostPath storage via minikube mount. |
 
 ### Production (7 K8s deployments + agent pods)
 

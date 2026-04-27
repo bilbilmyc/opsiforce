@@ -163,7 +163,7 @@ App preview, VS Code, and DB viewer traffic extend the app TTL, not the agent TT
 1. Frontend uploads files to POST /api/projects/{projectId}/upload
 2. Backend resolves the project and writes files into the persistent project directory
 3. Backend touches the agent TTL
-4. If the project currently has a pod, backend best-effort syncs the uploaded file into the running pod
+4. If the project currently has a pod, the pod sees the files through the same mounted storage
 5. If no pod is running, the file still persists on storage and is visible after the next startup
 ```
 

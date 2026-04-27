@@ -68,6 +68,22 @@ export class ProjectController {
     })
   }
 
+  @Get(":id/status")
+  async getStatus(
+    @Param("id") id: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+    @Req() req: FastifyRequest,
+  ) {
+    const dbUserId = await this.resolveUserId(user, tenant.tenantId)
+    return this.projectService.getStatusForUser({
+      projectId: id,
+      tenantId: tenant.tenantId,
+      userId: dbUserId,
+      canManageWorkspaces: canManageWorkspaces(req),
+    })
+  }
+
   @Get(":id")
   async findOne(
     @Param("id") id: string,

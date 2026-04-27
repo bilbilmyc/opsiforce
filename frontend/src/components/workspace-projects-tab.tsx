@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
+import Spinner from "~/components/ui/spinner"
 import { ChevronDown, Plus, AppWindow, Trash2 } from "~/components/icons"
 
 export default function WorkspaceProjectsTab(props: {
@@ -94,9 +95,18 @@ export default function WorkspaceProjectsTab(props: {
           <Show
             when={assignable().length > 0}
             fallback={
-              <div class="px-2 py-6 text-xs text-center text-muted-foreground">
-                {allProjects.isLoading ? "Loading..." : "No unassigned projects."}
-              </div>
+              <Show
+                when={allProjects.isLoading}
+                fallback={
+                  <div class="px-2 py-6 text-xs text-center text-muted-foreground">
+                    No unassigned projects.
+                  </div>
+                }
+              >
+                <div class="px-2 py-3">
+                  <Spinner size="sm" />
+                </div>
+              </Show>
             }
           >
             <For each={assignable()}>

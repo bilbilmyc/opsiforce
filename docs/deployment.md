@@ -61,10 +61,11 @@ yarn dev-opsiforce-only
   │     1. Creates /data/opsiforce on minikube node (one-time)
   │     2. Builds agent Docker image into minikube
   │     3. Deploys infra Helm chart (RBAC, hostPath storage, configmaps)
-  │     4. Runs Drizzle migrations against PG
-  │     5. Starts NestJS dev server on :3001 (hot reload)
-  │     6. Starts the four Go runtime proxies on :3002-3005
-  │     7. Starts Drizzle Studio on :4983
+  │     4. Mounts /tmp/opsiforce-data into minikube at /data/opsiforce
+  │     5. Runs Drizzle migrations against PG
+  │     6. Starts NestJS dev server on :3001 (hot reload)
+  │     7. Starts the four Go runtime proxies on :3002-3005
+  │     8. Starts Drizzle Studio on :4983
   │
   └── @opsiforce/frontend minikube-dev:
         1. Starts Vite dev server on :8084 (HMR)
@@ -227,7 +228,7 @@ helm upgrade --install opsiforce-backend-{env} ./helm/opsiforce-backend \
   --set serviceAccountName=opsiforce-opsiforce-infra-{env}-agent \
   --set config.k8sNamespace={namespace} \
   --set config.agentImage=ghcr.io/simadevelopment/opsiforce:agent-{env}-{sha7} \
-  --set config.cephfsPvcName=opsiforce-opsiforce-infra-{env}-cephfs \
+  --set config.cephfsPvcName=opsiforce-cephfs \
   --set config.platformVersion={sha7} \
   --set config.bifrostProxyUrl=http://opsiforce-bifrost:8080/v1 \
   --set config.bifrostAdminUsername=opsiforce-admin \

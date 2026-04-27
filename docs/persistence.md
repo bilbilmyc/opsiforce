@@ -81,7 +81,9 @@ Stores Bifrost team ID and budget config per project (1:1 with `projects`).
 
 - `hostPath`
 - same `subPath` layout
-- data lives on the minikube VM disk
+- backend writes to `STORAGE_MOUNT_PATH`
+- agent pods mount `STORAGE_HOST_PATH`
+- `minikube mount` maps the backend-visible directory into the VM so uploads are visible without a copy step
 
 Both modes preserve project data across pod deletion and recreation.
 

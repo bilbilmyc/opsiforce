@@ -20,6 +20,7 @@ import {
 } from "~/components/ui/dialog"
 import ConfirmDialog from "~/components/ui/confirm-dialog"
 import { Badge } from "~/components/ui/badge"
+import Skeleton from "~/components/ui/skeleton"
 import { CronPicker } from "~/components/ui/cron-picker"
 import {
   Table,
@@ -130,7 +131,18 @@ export default function SchedulesPage() {
       </p>
 
       <Show when={schedules.isPending}>
-        <p class="text-sm text-muted-foreground">Loading...</p>
+        <div class="rounded-lg border border-border overflow-hidden bg-card divide-y divide-border">
+          <For each={[0, 1, 2]}>
+            {() => (
+              <div class="flex items-center gap-3 px-4 py-3">
+                <Skeleton class="h-4 w-40" />
+                <Skeleton class="h-4 w-32" />
+                <Skeleton class="h-4 w-24" />
+                <Skeleton class="h-4 w-16 ml-auto" />
+              </div>
+            )}
+          </For>
+        </div>
       </Show>
 
       <Show when={!schedules.isPending && count() === 0}>
@@ -347,7 +359,11 @@ function ExecutionsDialog(props: {
         <DialogDescription>Recent execution history</DialogDescription>
 
         <Show when={props.loading}>
-          <p class="text-sm text-muted-foreground py-4">Loading...</p>
+          <div class="space-y-2 py-4">
+            <Skeleton class="h-4 w-full" />
+            <Skeleton class="h-4 w-4/5" />
+            <Skeleton class="h-4 w-3/5" />
+          </div>
         </Show>
 
         <Show when={!props.loading && props.executions.length === 0}>

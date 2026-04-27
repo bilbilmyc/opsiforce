@@ -9,12 +9,16 @@ import { requirePermissionHook } from "./permission/permission.hook";
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter(),
+    new FastifyAdapter({ bodyLimit: Number.MAX_SAFE_INTEGER }),
   );
 
   const fastify = app.getHttpAdapter().getInstance();
   await fastify.register(import("@fastify/multipart"), {
-    limits: { fileSize: 100 * 1024 * 1024, files: 100 },
+    limits: {
+      fileSize: Number.MAX_SAFE_INTEGER,
+      files: Number.MAX_SAFE_INTEGER,
+      parts: Number.MAX_SAFE_INTEGER,
+    },
   });
   await fastify.register(import("@fastify/compress"), {
     encodings: ["br", "gzip", "deflate"],

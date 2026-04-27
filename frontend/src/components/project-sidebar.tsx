@@ -16,7 +16,8 @@ import { useUpdateWorkspacePreferences } from "~/api/users"
 import { createPersistedSignal } from "~/lib/persisted-signal"
 import { DndType, UNASSIGNED_ID } from "~/lib/sidebar-dnd"
 import { Permission } from "~/constants/permissions"
-import { FolderOpen, LoaderCircle } from "~/components/icons"
+import { FolderOpen } from "~/components/icons"
+import Spinner from "~/components/ui/spinner"
 import ProjectSettings from "./project-settings"
 import WorkspaceSettings from "./workspace-settings"
 import SidebarWorkspaceGroup from "./sidebar-workspace-group"
@@ -140,8 +141,8 @@ export default function ProjectSidebar(props: { search: string }) {
       <Show
         when={workspaces.data && projects.data}
         fallback={
-          <div class="flex items-center justify-center py-10">
-            <LoaderCircle class="w-4 h-4 text-muted-foreground animate-spin" />
+          <div class="py-10">
+            <Spinner size="sm" />
           </div>
         }
       >

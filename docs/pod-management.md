@@ -119,7 +119,7 @@ These remain deployment-time settings, not runtime overrides:
 - imagePullSecrets
 - storage backend
 
-Local development uses minikube with `hostPath`. Cluster deployments use CephFS.
+Local development uses minikube with `hostPath` mounted from the host. Cluster deployments use CephFS.
 
 ---
 
