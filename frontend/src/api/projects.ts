@@ -39,6 +39,7 @@ export function useProjects(options?: { enabled?: () => boolean }) {
     queryKey: projectKeys.list(),
     queryFn: () => api.get<Project[]>("/projects"),
     enabled: options?.enabled ? options.enabled() : true,
+    reconcile: "id",
   }))
 }
 
