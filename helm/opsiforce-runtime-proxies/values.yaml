@@ -10,7 +10,6 @@ config:
   k8sNamespace: ""
   storageType: "cephfs"
   cephfsPvcName: "opsiforce-cephfs"
-  storageHostPath: "/tmp/opsiforce-data"
   storageMountPath: "/workspace-data"
   proxyControlToken: ""
   vscodePort: "8080"

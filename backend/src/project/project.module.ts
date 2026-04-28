@@ -1,7 +1,13 @@
 import { Module, forwardRef } from "@nestjs/common"
+import { BullModule } from "@nestjs/bullmq"
+import { BullBoardModule } from "@bull-board/nestjs"
+import { BullMQAdapter } from "@bull-board/api/bullMQAdapter"
 import { ProjectController } from "./project.controller"
 import { ProjectService } from "./project.service"
 import { ProjectAuthService } from "./project-auth.service"
+import { ProjectDuplicateProcessor } from "./project-duplicate.processor"
+import { ProjectEventsModule } from "./project-events.module"
+import { PROJECT_DUPLICATE_QUEUE } from "./project-duplicate.types"
 import { PodModule } from "../pod/pod.module"
 import { TimeoutModule } from "../timeout/timeout.module"
 import { BifrostModule } from "../bifrost/bifrost.module"
@@ -10,9 +16,21 @@ import { ScheduleModule } from "../schedule/schedule.module"
 import { ProxyService } from "../proxy/proxy.service"
 
 @Module({
-  imports: [PodModule, TimeoutModule, forwardRef(() => BifrostModule), GatewayModule, forwardRef(() => ScheduleModule)],
+  imports: [
+    BullModule.registerQueue({ name: PROJECT_DUPLICATE_QUEUE }),
+    BullBoardModule.forFeature({
+      name: PROJECT_DUPLICATE_QUEUE,
+      adapter: BullMQAdapter,
+    }),
+    PodModule,
+    TimeoutModule,
+    forwardRef(() => BifrostModule),
+    GatewayModule,
+    ProjectEventsModule,
+    forwardRef(() => ScheduleModule),
+  ],
   controllers: [ProjectController],
-  providers: [ProjectService, ProjectAuthService, ProxyService],
+  providers: [ProjectService, ProjectAuthService, ProjectDuplicateProcessor, ProxyService],
   exports: [ProjectService, ProjectAuthService],
 })
 export class ProjectModule {}

@@ -19,7 +19,6 @@ data:
   DB_VIEWER_PORT: {{ .Values.config.dbViewerPort | default "8081" | quote }}
   CEPHFS_PVC_NAME: {{ .Values.config.cephfsPvcName | quote }}
   STORAGE_TYPE: {{ .Values.config.storageType | quote }}
-  STORAGE_HOST_PATH: {{ .Values.config.storageHostPath | quote }}
   STORAGE_MOUNT_PATH: {{ .Values.config.storageMountPath | default "/workspace-data" | quote }}
   AGENT_NAME: {{ .Values.config.agentName | quote }}
   {{- if .Values.config.agentResources }}
@@ -48,6 +47,9 @@ data:
   {{- end }}
   {{- if .Values.config.mailgunDomain }}
   MAILGUN_DOMAIN: {{ .Values.config.mailgunDomain | quote }}
+  {{- end }}
+  {{- if .Values.config.mailgunUrl }}
+  MAILGUN_URL: {{ .Values.config.mailgunUrl | quote }}
   {{- end }}
   {{- if .Values.config.mailgunSender }}
   MAILGUN_SENDER: {{ .Values.config.mailgunSender | quote }}

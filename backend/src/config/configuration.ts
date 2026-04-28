@@ -14,12 +14,9 @@ const platformVersion = JSON.parse(
   readFileSync(join(process.cwd(), "platform-version.json"), "utf8"),
 ).version as string
 
-let agentImageVersion = platformVersion
-try {
-  agentImageVersion = JSON.parse(
-    readFileSync(join(process.cwd(), "..", "agent-config", "agent-image-version.json"), "utf8"),
-  ).version
-} catch {}
+const agentImageVersion = JSON.parse(
+  readFileSync(join(process.cwd(), "..", "agent-config", "agent-image-version.json"), "utf8"),
+).version as string
 
 export default () => {
   return {
@@ -32,10 +29,8 @@ export default () => {
   appPort: parseInt(process.env.APP_PORT || "3000", 10),
   vscodePort: parseInt(process.env.VSCODE_PORT || "8080", 10),
   dbViewerPort: parseInt(process.env.DB_VIEWER_PORT || "8081", 10),
-  k8sApiProxyUrl: process.env.K8S_API_PROXY_URL || "",
   cephfsPvcName: process.env.CEPHFS_PVC_NAME || "opsiforce-cephfs",
   storageType: (process.env.STORAGE_TYPE || "cephfs") as "cephfs" | "hostPath",
-  storageHostPath: process.env.STORAGE_HOST_PATH || "/tmp/opsiforce-data",
   agentImagePullPolicy: process.env.AGENT_IMAGE_PULL_POLICY || "IfNotPresent",
   platformVersion: platformVersion,
   agentResources: parseJsonEnv(process.env.AGENT_RESOURCES, {
@@ -49,7 +44,7 @@ export default () => {
   defaultAgentName: process.env.AGENT_NAME || "app-builder",
   proxyControlToken: process.env.PROXY_CONTROL_TOKEN || "opsiforce-local-proxy-token",
   openaiApiKey: process.env.OPENAI_API_KEY || "",
-  storageMountPath: process.env.STORAGE_MOUNT_PATH || "/tmp/opsiforce-data",
+  storageMountPath: process.env.STORAGE_MOUNT_PATH || "/workspace-data",
   bifrostProxyUrl: process.env.BIFROST_PROXY_URL || "",
   bifrostPodProxyUrl: process.env.BIFROST_POD_PROXY_URL || process.env.BIFROST_PROXY_URL || "",
   bifrostAdminUsername: process.env.BIFROST_ADMIN_USERNAME || "",
@@ -62,7 +57,7 @@ export default () => {
   mailgunSender: process.env.MAILGUN_SENDER || "",
   mailgunUrl: process.env.MAILGUN_URL || "",
   appsHostname: process.env.APPS_HOSTNAME || "apps.opsiforce.traefik.me",
-  webappServiceName: process.env.WEBAPP_SERVICE_NAME || "host-go-proxy-app",
+  webappServiceName: process.env.WEBAPP_SERVICE_NAME || "proxy-app",
   webappServiceNamespace: process.env.WEBAPP_SERVICE_NAMESPACE || "local",
   webappServicePort: parseInt(process.env.WEBAPP_SERVICE_PORT || "3002", 10),
   oidcPluginSecret: process.env.OIDC_PLUGIN_SECRET || "opsiforcedev0123456789abcdef1234",

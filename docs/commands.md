@@ -1,26 +1,36 @@
 # Commands Reference
 
-Quick reference for all Opsiforce dev commands, ports, and local environment setup.
+Quick reference for Opsiforce dev commands, ports, and local environment setup. The package README is the canonical local setup entrypoint: [`../README.md`](../README.md).
 
 ---
 
 ## Setup
 
 ```bash
-# Required once on the host: install Go 1.26.2
+# First time from repo root:
+yarn install
+yarn run install-all
 
-# First time (installs minikube, PG, Redis, Keycloak, creates DB):
-yarn dev-opsiforce
-
-# Subsequent runs (minikube already set up):
-yarn dev-opsiforce-only
+# Daily dev: run in separate terminals from repo root:
+yarn run tunnel-traefik
+yarn run port-forward-all
+yarn run dev-opsiforce-only
 ```
 
-Same pattern as `yarn dev-makara` / `yarn dev-makara-only`.
+`tunnel-traefik` keeps the minikube LoadBalancer reachable for `*.opsiforce.traefik.me`.
 
 What `dev-opsiforce-only` starts:
-- **Backend:** setup storage → build agent image → deploy infra chart → migrate DB → start NestJS (hot reload)
+- **Backend workspace:** setup minikube storage → build agent image → deploy infra chart → create DBs → migrate DB → install Bifrost → start Drizzle Studio, Mailgun mock, and Tilt
+- **Tilt:** build/deploy backend and runtime proxy dev images, live-update source into pods
 - **Frontend:** start Vite (HMR) — imports OpenCode from `opencode/` at build time
+
+Shortcut:
+
+```bash
+yarn run dev-opsiforce
+```
+
+This runs shared install + port forwards + Opsiforce, but `yarn run tunnel-traefik` still needs to run separately.
 
 ---
 
@@ -68,27 +78,31 @@ curl http://localhost:3001/api/health                 # Health check
 
 ## Ports (local dev)
 
-| Service | Port | Notes |
-|---------|------|-------|
-| Proxy (entry point) | 4110 | Minikube nginx, port-forwarded. Open this in browser. |
-| NestJS backend | 3001 | Local, routed through proxy at /api |
-| Go app proxy | 3002 | Local, wildcard app preview host target |
-| Go VS Code proxy | 3003 | Local, wildcard VS Code host target |
-| Go DB proxy | 3004 | Local, wildcard DB host target |
-| Go agent proxy | 3005 | Local, routed through `/api/proxy/*` |
-| Solid.js frontend (Vite) | 8084 | Local, routed through proxy at / |
-| PostgreSQL | 5435 | Minikube, port-forwarded |
-| Redis | 6382 | Minikube, port-forwarded |
-| Agent pods | 4096 | In minikube, per-pod |
-| Drizzle Studio | 4983 | DB browser |
+| Service | URL / Port | Notes |
+|---------|------------|-------|
+| Opsiforce app | `https://opsiforce.traefik.me` | Browser entrypoint through local Traefik |
+| Project app previews | `https://{project}.apps.opsiforce.traefik.me` | Routed through runtime app proxy |
+| VS Code | `https://{project}.code.opsiforce.traefik.me` | Routed through runtime VS Code proxy |
+| DB viewer | `https://{project}.db.opsiforce.traefik.me` | Routed through runtime DB proxy |
+| Bifrost dashboard | `https://bifrost.opsiforce.traefik.me` | Local Bifrost dashboard |
+| Tilt UI | `https://tilt.opsiforce.traefik.me` | Requires `tilt up --host=0.0.0.0`, handled by backend script |
+| NestJS backend | `localhost:3001` | Tilt port-forward for direct API calls |
+| Node debug | `localhost:9229` | Tilt port-forward |
+| Solid.js frontend | `localhost:8084` | Vite HMR on host |
+| PostgreSQL | `localhost:5435` | Minikube port-forward |
+| Redis | `localhost:6382` | Minikube port-forward |
+| Keycloak | `localhost:8086` | Minikube port-forward |
+| Drizzle Studio | `localhost:4983` | DB browser |
+| Mailgun mock | `localhost:8089` | Docker mailgun mock |
 
 ---
 
 ## Local Environment
 
-- `local-envs.sh` in `backend/` has all env vars for local dev
-- Export `OPENAI_API_KEY` in your shell before running the local Bifrost flow (`local-envs.sh` reads it from the shell environment)
-- Vite configs must include `allowedHosts: ["host.minikube.internal"]` (proxy routes through minikube)
+- `backend/local-envs.sh` has local backend and Bifrost bootstrap vars
+- `frontend/local-envs.sh` has local app, preview, VS Code, and DB viewer domains
+- `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are optional locally; when omitted, Bifrost provider secrets are created with empty values
+- Vite config must allow `host.minikube.internal` and `.opsiforce.traefik.me` because local Traefik reaches the host Vite server from inside minikube
 - Local dev uses `AGENT_IMAGE_PULL_POLICY=Never` (image built into minikube), prod uses `Always`
-- Local dev follows makara pattern: apps local, proxy in minikube, access via :4110
+- Local dev uses in-cluster backend/proxies via Tilt and host Vite via Traefik
 - See [API Reference](api-reference.md) for full env var list

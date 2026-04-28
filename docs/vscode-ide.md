@@ -44,13 +44,7 @@ Browser → http://{projectId}.code.dev.opsima.com/
 
 ### Local dev
 
-In local dev, pod IPs aren't reachable from the host (minikube network isolation). The Go VS Code proxy manages `kubectl port-forward` tunnels automatically:
-
-1. First request for a project → spawns `kubectl port-forward {podName} {freePort}:8080`
-2. Subsequent requests → reuse cached local port
-3. Port-forwards cleaned up on process exit
-
-This bypasses `kubectl proxy` which has HTTP/2 stream errors with code-server's large responses.
+In local dev, the Go VS Code proxy runs inside minikube via Tilt, so it reaches agent pod IPs directly on the pod network. Browser traffic enters through Traefik at `{projectId}.code.opsiforce.traefik.me`, then flows through the in-cluster opsiforce proxy to the runtime VS Code proxy.
 
 ### WebSocket
 

@@ -22,7 +22,6 @@ import (
 	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/backend"
 	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/bufferpool"
 	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/config"
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/portforward"
 	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/proxycache"
 	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/requestlog"
 )
@@ -37,20 +36,18 @@ var (
 )
 
 type Server struct {
-	cfg         config.Config
-	backend     *backend.Client
-	transport   *http.Transport
-	bufferPool  *bufferpool.Pool
-	cache       *proxycache.Cache
-	logger      *requestlog.Logger
-	portForward *portforward.Manager
+	cfg        config.Config
+	backend    *backend.Client
+	transport  *http.Transport
+	bufferPool *bufferpool.Pool
+	cache      *proxycache.Cache
+	logger     *requestlog.Logger
 }
 
 func New(
 	cfg config.Config,
 	backendClient *backend.Client,
 	requestLogger *requestlog.Logger,
-	portForwardManager *portforward.Manager,
 ) *Server {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.MaxIdleConns = 200
@@ -60,13 +57,12 @@ func New(
 	transport.ExpectContinueTimeout = time.Second
 
 	return &Server{
-		cfg:         cfg,
-		backend:     backendClient,
-		transport:   transport,
-		bufferPool:  bufferpool.New(32 * 1024),
-		cache:       proxycache.New(),
-		logger:      requestLogger,
-		portForward: portForwardManager,
+		cfg:        cfg,
+		backend:    backendClient,
+		transport:  transport,
+		bufferPool: bufferpool.New(32 * 1024),
+		cache:      proxycache.New(),
+		logger:     requestLogger,
 	}
 }
 
@@ -95,9 +91,6 @@ func (s *Server) Close(ctx context.Context) error {
 
 	var errs []error
 
-	if s.portForward != nil {
-		s.portForward.Close()
-	}
 	if s.logger != nil {
 		if err := s.logger.Close(ctx); err != nil {
 			errs = append(errs, err)
@@ -240,18 +233,6 @@ func (s *Server) handleSubdomain(w http.ResponseWriter, r *http.Request, surface
 	}
 
 	targetBase := ensured.Upstream
-	if ensured.UsesLocalK8sProxy {
-		if s.portForward == nil || ensured.PodName == "" {
-			s.sendFailureResponse(w, r.Context(), projectID)
-			return
-		}
-
-		targetBase, err = s.portForward.URL(r.Context(), projectID, ensured.PodName)
-		if err != nil {
-			s.sendFailureResponse(w, r.Context(), projectID)
-			return
-		}
-	}
 
 	targetURL, err := buildTargetURL(targetBase, pathOrSlash(r.URL.Path), r.URL.RawQuery)
 	if err != nil {

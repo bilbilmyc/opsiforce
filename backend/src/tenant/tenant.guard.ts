@@ -25,7 +25,8 @@ export class TenantGuard implements CanActivate {
     const tenantNames = this.tenantService.parseTenantGroups(groupsHeader)
     if (tenantNames.length === 0) throw new ForbiddenException("No opsiforce tenants assigned")
 
-    const requestedTenantName = (request.headers["x-tenant-name"] as string | undefined) ?? tenantNames[0]
+    const query = request.query as { tenant?: string } | undefined
+    const requestedTenantName = (request.headers["x-tenant-name"] as string | undefined) ?? query?.tenant ?? tenantNames[0]
 
     if (!tenantNames.includes(requestedTenantName)) {
       throw new ForbiddenException(`No access to tenant: ${requestedTenantName}`)

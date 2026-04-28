@@ -27,7 +27,6 @@ interface EnsureProxyResponse {
   upstream?: string
   podName?: string | null
   directory?: string
-  usesLocalK8sProxy?: boolean
 }
 
 @Public()
@@ -96,7 +95,6 @@ export class ProxyController {
       upstream,
       podName: project.podName,
       directory: project.directory,
-      usesLocalK8sProxy: this.proxyService.isLocalProxyUpstream(upstream),
     }
   }
 

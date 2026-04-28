@@ -10,16 +10,12 @@ export class ProxyService {
   private readonly appPort: number
   private readonly vscodePort: number
   private readonly dbViewerPort: number
-  private readonly k8sApiProxyUrl: string
-  private readonly k8sNamespace: string
 
   constructor(private readonly configService: ConfigService) {
     this.agentPort = this.configService.getOrThrow<number>("agentPort")
     this.appPort = this.configService.getOrThrow<number>("appPort")
     this.vscodePort = this.configService.getOrThrow<number>("vscodePort")
     this.dbViewerPort = this.configService.getOrThrow<number>("dbViewerPort")
-    this.k8sApiProxyUrl = this.configService.getOrThrow<string>("k8sApiProxyUrl")
-    this.k8sNamespace = this.configService.getOrThrow<string>("k8sNamespace")
   }
 
   async resolveUpstream(projectId: string, tenantId: string): Promise<string> {
@@ -109,16 +105,7 @@ export class ProxyService {
     return this.upstreamFromProject(project, this.appPort)
   }
 
-  isLocalProxyUpstream(upstream: string): boolean {
-    const upstreamUrl = new URL(upstream)
-    return upstreamUrl.hostname === "localhost" || upstreamUrl.hostname === "127.0.0.1"
-  }
-
   private upstreamFromProject(project: { podName: string | null; podIp: string | null; id: string }, port: number): string {
-    if (this.k8sApiProxyUrl && project.podName) {
-      return `${this.k8sApiProxyUrl}/api/v1/namespaces/${this.k8sNamespace}/pods/${project.podName}:${port}/proxy`
-    }
-
     if (project.podIp) {
       return `http://${project.podIp}:${port}`
     }
@@ -133,10 +120,6 @@ export class ProxyService {
       .where(and(eq(projects.id, projectId), eq(projects.tenantId, tenantId)))
 
     if (!project) throw new NotFoundException(`Project ${projectId} not found`)
-
-    if (this.k8sApiProxyUrl && project.podName) {
-      return `${this.k8sApiProxyUrl}/api/v1/namespaces/${this.k8sNamespace}/pods/${project.podName}:${port}/proxy`
-    }
 
     if (project.podIp) {
       return `http://${project.podIp}:${port}`

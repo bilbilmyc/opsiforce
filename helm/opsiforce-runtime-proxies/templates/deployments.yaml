@@ -76,7 +76,7 @@ spec:
         {{- else }}
         - name: workspace-data
           hostPath:
-            path: {{ $.Values.config.storageHostPath }}
+            path: {{ $.Values.config.storageMountPath }}
             type: DirectoryOrCreate
         {{- end }}
 {{- end }}

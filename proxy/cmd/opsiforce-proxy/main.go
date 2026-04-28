@@ -13,7 +13,6 @@ import (
 
 	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/backend"
 	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/config"
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/portforward"
 	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/requestlog"
 	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/server"
 )
@@ -39,15 +38,7 @@ func main() {
 		requestLogger = requestlog.New(cfg.StorageMountPath, cfg.RequestLogQueueDepth)
 	}
 
-	var portForwardManager *portforward.Manager
-	if cfg.Mode == config.ModeVSCode {
-		portForwardManager = portforward.New(ctx, cfg.K8sNamespace, cfg.VSCodePort, cfg.PortForwardTimeout)
-	}
-	if cfg.Mode == config.ModeDB {
-		portForwardManager = portforward.New(ctx, cfg.K8sNamespace, cfg.DBViewerPort, cfg.PortForwardTimeout)
-	}
-
-	handler := server.New(cfg, controlClient, requestLogger, portForwardManager)
+	handler := server.New(cfg, controlClient, requestLogger)
 
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),

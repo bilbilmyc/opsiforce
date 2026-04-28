@@ -15,6 +15,9 @@ backend:
 
 serviceAccountName: ""
 
+rbac:
+  create: false
+
 config:
   databaseUrl: ""
   redisUrl: ""
@@ -28,7 +31,6 @@ config:
   dbViewerPort: "8081"
   cephfsPvcName: "opsiforce-cephfs"
   storageType: "cephfs"
-  storageHostPath: "/tmp/opsiforce-data"
   storageMountPath: "/workspace-data"
   proxyControlToken: ""
   agentName: "app-builder"

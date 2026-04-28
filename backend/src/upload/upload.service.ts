@@ -15,10 +15,7 @@ export class UploadService {
   private readonly storageMountPath: string
 
   constructor(private readonly configService: ConfigService) {
-    this.storageMountPath = this.configService.get<string>(
-      "storageMountPath",
-      "/tmp/opsiforce-data",
-    )
+    this.storageMountPath = this.configService.getOrThrow<string>("storageMountPath")
   }
 
   resolveUploadPath(directory: string, relativePath: string): string {

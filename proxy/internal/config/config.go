@@ -22,14 +22,10 @@ type Config struct {
 	Port                 int
 	BackendURL           string
 	ProxyControlToken    string
-	K8sNamespace         string
 	StorageMountPath     string
-	VSCodePort           int
-	DBViewerPort         int
 	ReadyCacheTTL        time.Duration
 	NonReadyCacheTTL     time.Duration
 	ControlPlaneTimeout  time.Duration
-	PortForwardTimeout   time.Duration
 	CompressionMinBytes  int
 	RequestBufferLimit   int64
 	ResponseBufferLimit  int64
@@ -48,14 +44,10 @@ func Load(modeArg string, portArg int) (Config, error) {
 		Port:                 intEnv("PORT", defaultPort(mode, portArg)),
 		BackendURL:           strings.TrimRight(firstNonEmpty(os.Getenv("OPSIFORCE_BACKEND_URL"), "http://localhost:3001"), "/"),
 		ProxyControlToken:    firstNonEmpty(os.Getenv("PROXY_CONTROL_TOKEN"), "opsiforce-local-proxy-token"),
-		K8sNamespace:         firstNonEmpty(os.Getenv("K8S_NAMESPACE"), "opsiforce"),
-		StorageMountPath:     firstNonEmpty(os.Getenv("STORAGE_MOUNT_PATH"), "/tmp/opsiforce-data"),
-		VSCodePort:           intEnv("VSCODE_PORT", 8080),
-		DBViewerPort:         intEnv("DB_VIEWER_PORT", 8081),
+		StorageMountPath:     firstNonEmpty(os.Getenv("STORAGE_MOUNT_PATH"), "/workspace-data"),
 		ReadyCacheTTL:        durationEnv("OPSIFORCE_PROXY_READY_CACHE_TTL", 5*time.Second),
 		NonReadyCacheTTL:     durationEnv("OPSIFORCE_PROXY_NON_READY_CACHE_TTL", time.Second),
 		ControlPlaneTimeout:  durationEnv("OPSIFORCE_PROXY_CONTROL_TIMEOUT", 10*time.Second),
-		PortForwardTimeout:   durationEnv("OPSIFORCE_PROXY_PORT_FORWARD_TIMEOUT", 10*time.Second),
 		CompressionMinBytes:  intEnv("OPSIFORCE_PROXY_COMPRESSION_MIN_BYTES", 1024),
 		RequestBufferLimit:   int64(intEnv("OPSIFORCE_PROXY_REQUEST_BUFFER_LIMIT_BYTES", 1*1024*1024)),
 		ResponseBufferLimit:  int64(intEnv("OPSIFORCE_PROXY_RESPONSE_BUFFER_LIMIT_BYTES", 1*1024*1024)),

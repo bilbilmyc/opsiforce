@@ -21,11 +21,10 @@ const (
 )
 
 type EnsureResponse struct {
-	State             string `json:"state"`
-	Upstream          string `json:"upstream"`
-	PodName           string `json:"podName"`
-	Directory         string `json:"directory"`
-	UsesLocalK8sProxy bool   `json:"usesLocalK8sProxy"`
+	State     string `json:"state"`
+	Upstream  string `json:"upstream"`
+	PodName   string `json:"podName"`
+	Directory string `json:"directory"`
 }
 
 type StatusError struct {

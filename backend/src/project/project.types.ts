@@ -41,6 +41,18 @@ export interface ProjectStatusResponse {
   id: string
   status: ProjectStatus
   workspaceId: string | null
+  operation?: ProjectDuplicateOperation
+}
+
+export interface ProjectDuplicateOperation {
+  type: "duplicate"
+  status: "queued" | "copying" | "starting" | "failed"
+  bytesTotal: number
+  bytesCopied: number
+  error: string | null
+  startedAt: Date | null
+  completedAt: Date | null
+  updatedAt: Date
 }
 
 export interface ProjectAuthOidcConfig {

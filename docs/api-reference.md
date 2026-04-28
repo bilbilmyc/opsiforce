@@ -87,16 +87,9 @@ The project is suspended only when both TTLs expire.
 
 ---
 
-## Proxy routing modes
+## Proxy routing
 
-The backend resolves pod upstreams in two ways:
-
-| Mode | When | URL pattern |
-|------|------|-------------|
-| Kubernetes API proxy | `K8S_API_PROXY_URL` is set | `{K8S_API_PROXY_URL}/api/v1/namespaces/{ns}/pods/{pod}:{port}/proxy` |
-| Direct pod IP | `K8S_API_PROXY_URL` is empty | `http://{podIp}:{port}` |
-
-Local development normally uses `kubectl proxy`. In-cluster deployments normally route directly to pod IPs.
+The backend routes traffic to agent pods via direct pod IPs (`http://{podIp}:{port}`). Both local dev (backend in-cluster via Tilt) and prod (backend in-cluster via Helm) share the same pod-network reachability, so no API-server pod-proxy hop is needed.
 
 ---
 
@@ -106,8 +99,7 @@ Local development normally uses `kubectl proxy`. In-cluster deployments normally
 |----------|---------|-------------|
 | `DATABASE_URL` | - | PostgreSQL connection string |
 | `REDIS_URL` | `redis://localhost:6379` | Redis or Valkey for timeout tracking |
-| `K8S_NAMESPACE` | `opsiforce` | Namespace for agent pods |
-| `K8S_API_PROXY_URL` | `""` | Kubernetes API proxy base URL for local dev |
+| `K8S_NAMESPACE` | `opsiforce` (prod) / `local` (dev) | Namespace for agent pods |
 | `WARM_POOL_SIZE` | `2` | Number of warm pods to keep available |
 | `AGENT_IMAGE` | derived | Agent image used for assigned and warm pods |
 | `AGENT_IMAGE_PULL_POLICY` | `IfNotPresent` | Pod image pull policy |
@@ -119,8 +111,7 @@ Local development normally uses `kubectl proxy`. In-cluster deployments normally
 | `AGENT_NAME` | `app-builder` | Agent profile loaded into the workspace |
 | `CEPHFS_PVC_NAME` | `opsiforce-cephfs` | CephFS PVC name |
 | `STORAGE_TYPE` | `cephfs` | `cephfs` or `hostPath` |
-| `STORAGE_HOST_PATH` | `/tmp/opsiforce-data` | Kubernetes hostPath root used by agent pods |
-| `STORAGE_MOUNT_PATH` | `/tmp/opsiforce-data` | Backend-visible storage root |
+| `STORAGE_MOUNT_PATH` | `/workspace-data` | Where the shared volume is mounted: in-pod path for the backend, and (for hostPath mode) also the host filesystem path on the K8s node |
 | `PLATFORM_VERSION` | file-derived | Recorded per project at creation |
 | `AGENT_RESOURCES` | see values | JSON pod resources |
 | `AGENT_NODE_SELECTOR` | `{}` | JSON nodeSelector |

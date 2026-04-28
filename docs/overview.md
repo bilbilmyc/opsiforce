@@ -41,15 +41,18 @@ The frontend integrates OpenCode at the source level — OpenCode's Solid.js com
 
 ## Services
 
-### Local dev (apps run locally, infra in minikube)
+### Local dev (frontend on host, control plane in minikube)
 
 | Service | Where | Port | Notes |
 |---------|-------|------|-------|
-| **Backend** | Local (NestJS --watch) | 3001 | Hot reload. Connects to minikube PG/Redis/K8s. |
+| **opsiforce-proxy** | Minikube pod | 80 | Local Traefik routes `https://opsiforce.traefik.me` to this proxy. |
+| **Backend** | Minikube pod via Tilt | 3001 | Hot reload via Tilt's `live_update`. Mounts same hostPath as agents — file ops have parity with prod. |
+| **Runtime proxies** | Minikube pods via Tilt | 3002-3005 | App, VS Code, DB, and agent traffic proxies. |
 | **Frontend** | Local (Vite HMR) | 8084 | Hot reload. |
+| **Bifrost** | Minikube pod | 8080 | Local upstream chart using shared PostgreSQL. |
 | **PostgreSQL** | Minikube (port-forwarded) | 5435 | Shared with other sima apps. |
 | **Redis** | Minikube (port-forwarded) | 6382 | Shared with other sima apps. |
-| **Agent pods** | Minikube | 4096 | Dynamically created by backend. hostPath storage; minikube node binds host dir at boot via `--mount-string` (Docker bind, not 9p). |
+| **Agent pods** | Minikube | 4096 | Dynamically created by backend. `hostPath` at `/workspace-data` inside the minikube node. |
 
 ### Production (7 K8s deployments + agent pods)
 
@@ -88,7 +91,7 @@ packages/opsiforce/
 │
 ├── proxy/           Go module (runtime proxy servers)
 │   ├── cmd/opsiforce-proxy/     Single binary, mode-switched at startup
-│   └── internal/                Backend client, cache, port-forwarding, request logger, handlers
+│   └── internal/                Backend client, cache, request logger, handlers
 │
 ├── frontend/           Yarn workspace (Vite + Solid.js)
 │   ├── opencode/               OpenCode source (imported at build time via Vite resolver plugin)

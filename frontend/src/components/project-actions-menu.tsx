@@ -1,6 +1,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js"
 import { createMutation, useQueryClient } from "@tanstack/solid-query"
 import { useNavigate } from "@tanstack/solid-router"
+import { toast } from "solid-sonner"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
 import { api, type Project } from "~/api/client"
@@ -67,9 +68,7 @@ export default function ProjectActionsMenu(props: {
   const workspaces = useWorkspaces()
   const move = useMoveProject()
 
-  const moveTargets = createMemo(() =>
-    (workspaces.data ?? []).filter((w) => w.id !== props.workspaceId),
-  )
+  const moveTargets = createMemo(() => (workspaces.data ?? []).filter((w) => w.id !== props.workspaceId))
 
   const currentWorkspaceName = createMemo(() => {
     if (props.workspaceId === null) return UNASSIGNED_LABEL
@@ -77,8 +76,7 @@ export default function ProjectActionsMenu(props: {
   })
 
   const showMove = () =>
-    canMoveBetweenWorkspaces() &&
-    (moveTargets().length > 0 || (canManageWorkspaces() && props.workspaceId !== null))
+    canMoveBetweenWorkspaces() && (moveTargets().length > 0 || (canManageWorkspaces() && props.workspaceId !== null))
 
   const handleMove = (toWorkspaceId: string | null, toName: string) => {
     move.mutate({
@@ -102,8 +100,10 @@ export default function ProjectActionsMenu(props: {
     mutationFn: () => api.post<Project>(`/projects/${props.projectId}/duplicate`),
     onSuccess: (p: Project) => {
       qc.invalidateQueries({ queryKey: ["projects"] })
+      toast.success("Duplicate started")
       props.onDuplicated?.(p)
     },
+    onError: () => toast.error("Failed to duplicate project"),
   }))
 
   const disableProject = createMutation(() => ({
@@ -155,7 +155,14 @@ export default function ProjectActionsMenu(props: {
               Settings
             </DropdownMenuItem>
           </Show>
-          <DropdownMenuItem onSelect={() => navigate({ to: "/schedules", search: { project: props.projectId } })}>
+          <DropdownMenuItem
+            onSelect={() =>
+              navigate({
+                to: "/schedules",
+                search: { project: props.projectId },
+              })
+            }
+          >
             <Calendar class="w-3.5 h-3.5 text-muted-foreground" />
             Schedules
           </DropdownMenuItem>
@@ -227,16 +234,14 @@ export default function ProjectActionsMenu(props: {
       </DropdownMenu>
 
       <Show when={!props.onSettings}>
-        <ProjectSettings
-          projectId={props.projectId}
-          open={settingsOpen()}
-          onOpenChange={setSettingsOpen}
-        />
+        <ProjectSettings projectId={props.projectId} open={settingsOpen()} onOpenChange={setSettingsOpen} />
       </Show>
 
       <ConfirmDialog
         open={confirmAction() === "delete"}
-        onOpenChange={(open) => { if (!open) setConfirmAction(null) }}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null)
+        }}
         title="Delete project"
         description="This will permanently delete the project and all its data. This action cannot be undone."
         confirmLabel="Delete"
@@ -246,7 +251,9 @@ export default function ProjectActionsMenu(props: {
 
       <ConfirmDialog
         open={confirmAction() === "disable"}
-        onOpenChange={(open) => { if (!open) setConfirmAction(null) }}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null)
+        }}
         title="Disable project"
         description="This will shut down the project. The project data will be preserved and the project can be re-enabled later."
         confirmLabel="Disable"
@@ -256,7 +263,9 @@ export default function ProjectActionsMenu(props: {
 
       <ConfirmDialog
         open={confirmAction() === "duplicate"}
-        onOpenChange={(open) => { if (!open) setConfirmAction(null) }}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null)
+        }}
         title="Duplicate project"
         description="This will create a copy of the project with the same workspace files."
         confirmLabel="Duplicate"
@@ -265,7 +274,9 @@ export default function ProjectActionsMenu(props: {
 
       <ConfirmDialog
         open={confirmAction() === "restart"}
-        onOpenChange={(open) => { if (!open) setConfirmAction(null) }}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null)
+        }}
         title="Restart project"
         description="Are you sure you want to restart this project? Project data will be preserved."
         confirmLabel="Restart"
