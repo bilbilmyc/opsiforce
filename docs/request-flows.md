@@ -55,10 +55,31 @@ The Node backend is no longer the byte-streaming proxy for chat traffic. It is n
 6. Backend creates a new assigned pod with subPath = projects/{tenantId}/{projectId}
 7. Backend waits for the pod Ready condition and pod IP
 8. Backend writes/repairs the assigned pods row, sets project status = active, stores podIp
-9. Frontend polls GET /api/projects/:id until status becomes active
+9. Frontend listens to GET /api/projects/:id/status/events until status becomes active
 10. ProjectView fetches /api/proxy/{projectId}/path and /api/proxy/{projectId}/session
 11. Frontend restores the latest updated root session, or opens a new session if none exist
 ```
+
+---
+
+## Duplicate project
+
+Project duplication is a storage preparation flow followed by the normal pod startup flow. The copy step is not part of pod creation, so large CephFS workspaces do not consume the pod readiness timeout.
+
+```
+1. User chooses Duplicate from project actions
+2. Frontend POST /api/projects/{projectId}/duplicate
+3. Backend creates the target project row with status = starting
+4. Backend records a duplicate job linked to the source and target project
+5. BullMQ duplicate worker copies source workspace files into a temporary target directory
+6. Worker updates copied bytes and publishes status events for the frontend stream
+7. Worker renames the completed temporary directory to the target workspace path
+8. Worker marks copy complete and queues normal project startup
+9. Backend creates the assigned pod against the already-prepared target workspace
+10. Project becomes active through the standard startup path
+```
+
+The duplicate worker copies the source workspace as-is. If copying fails, the project stays in a non-ready starting state and the status endpoint returns the duplicate failure instead of starting an empty workspace.
 
 ---
 

@@ -97,7 +97,7 @@ The `bifrost` database stores virtual keys, governance config, and per-request l
 - Backend reaches Bifrost via `BIFROST_PROXY_URL` (Admin API calls)
 - Agent pods reach Bifrost via `BIFROST_POD_PROXY_URL` (LLM calls)
 
-In production, both URLs point to the same in-cluster address. In local dev, the backend uses a port-forward (`localhost:3050`) while pods use the in-cluster service name.
+In both production and local dev, both URLs point to the same in-cluster service address (`http://opsiforce-bifrost.local.svc.cluster.local:8080/v1`). The local backend runs as a pod via Tilt, so it has cluster DNS and reaches Bifrost the same way agent pods do.
 
 ## Virtual Key Lifecycle
 
@@ -139,18 +139,18 @@ The `llm-api` skill is included in the app-builder template at `.opencode/skills
 
 | Env Variable | Purpose | Production | Local |
 |---|---|---|---|
-| `OPENAI_API_KEY` | Upstream OpenAI provider key for Bifrost | GitHub Secret | shell env |
-| `ANTHROPIC_API_KEY` | Upstream Anthropic provider key for Bifrost | GitHub Secret | shell env |
-| `BIFROST_PROXY_URL` | Backend → Bifrost (Admin API) | In-cluster svc URL | `http://localhost:3050/v1` |
+| `OPENAI_API_KEY` | Upstream OpenAI provider key for Bifrost | GitHub Secret | optional shell env |
+| `ANTHROPIC_API_KEY` | Upstream Anthropic provider key for Bifrost | GitHub Secret | optional shell env |
+| `BIFROST_PROXY_URL` | Backend → Bifrost (Admin API) | In-cluster svc URL | In-cluster svc URL (backend runs as a pod via Tilt) |
 | `BIFROST_POD_PROXY_URL` | Pod → Bifrost (LLM calls) | Same as above (omit) | In-cluster svc URL |
 | `BIFROST_ADMIN_USERNAME` | Bifrost Admin API username | `opsiforce-admin` | `opsiforce-admin` |
 | `BIFROST_ADMIN_PASSWORD` | Bifrost Admin API password | GitHub Secret | `opsiforce-local-admin` |
 | `BIFROST_ENCRYPTION_KEY` | Bifrost encryption key | GitHub Secret | local env file |
 | `BIFROST_POSTGRES_PASSWORD` | Password copied into namespace-local chart secret | CNPG superuser password | `dbpass1` |
 
-No feature flag — Bifrost is active when `BIFROST_PROXY_URL` + admin credentials are set. Omit them to disable (pods get `OPENAI_API_KEY` directly).
+No feature flag — Bifrost is active when `BIFROST_PROXY_URL` + admin credentials are set. Omit them to disable Bifrost. Pods only get a direct `OPENAI_API_KEY` in that mode when the backend chart is explicitly configured with one.
 
-`BIFROST_POD_PROXY_URL` defaults to `BIFROST_PROXY_URL` when omitted — only needed in local dev where backend and pods have different network paths.
+`BIFROST_POD_PROXY_URL` defaults to `BIFROST_PROXY_URL` when omitted. Override it only if agent pods need a different Bifrost URL than the backend.
 
 ## Files And Relationships
 
@@ -169,9 +169,9 @@ No feature flag — Bifrost is active when `BIFROST_PROXY_URL` + admin credentia
 | `helm/bifrost/values.local.yaml` | Local upstream chart values | stable secret names, local PG host | Local Bifrost release config |
 | `helm/bifrost/values.prod.yaml` | Cluster upstream chart values | stable secret names, CNPG host | Dev/prod cluster Bifrost release config |
 | `helm/bifrost/networkpolicy.yaml` | Restricts Bifrost ingress to same namespace | upstream pod label `app.kubernetes.io/name=bifrost` | K8s ingress policy |
-| `scripts/upsert-bifrost-secrets.sh` | Creates namespace-local secrets expected by upstream chart | OpenAI key, admin creds, encryption key, PG password | `opsiforce-bifrost-*` secrets |
+| `scripts/upsert-bifrost-secrets.sh` | Creates namespace-local secrets expected by upstream chart | optional provider keys, admin creds, encryption key, PG password | `opsiforce-bifrost-*` secrets |
 | `scripts/install-bifrost.sh` | Local install entrypoint for upstream chart | local env vars + values file | local Bifrost release + NetworkPolicy |
-| `backend/package.json` | Local command wiring | scripts above | `install-bifrost`, `port-forward-bifrost`, `minikube-dev` flow |
+| `backend/package.json` | Local command wiring | scripts above | `install-bifrost`, `minikube-dev` flow |
 | `backend/local-envs.sh` | Local Bifrost runtime and bootstrap env | developer machine | backend env + local secret/bootstrap inputs |
 | `agent-config/opencode.json` | Agent-side default provider/model catalog | built into agent image | OpenAI models available in cluster builds |
 | `agent-config/opencode.local.json` | Agent-side local override config | built into local minikube agent image | Local agent model/provider config without affecting cluster builds |
@@ -207,9 +207,9 @@ Deploy order: infra → **Bifrost** → backend → frontend → proxy
 
 ## Local Development
 
-Clear the `BIFROST_*` vars in `local-envs.sh` to bypass the proxy — pods get the direct OpenAI API key instead of Bifrost virtual keys.
+Clear the `BIFROST_*` vars in `local-envs.sh` to bypass the proxy. Pods get a direct OpenAI key only if the backend local Helm values provide one.
 
-To test the full Bifrost flow locally, export `OPENAI_API_KEY` in your shell and keep the `BIFROST_*` vars set in `local-envs.sh` — the `minikube-dev` script creates the secrets, deploys the upstream chart, and starts the port-forward automatically.
+To test the full Bifrost flow locally, keep the `BIFROST_*` vars set in `local-envs.sh`. `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are optional locally; when omitted, the script still creates the provider secret keys expected by the upstream chart, but calls routed to those upstream providers will not work until real keys are supplied.
 
 ## Non-LLM Services: Service Gateway
 

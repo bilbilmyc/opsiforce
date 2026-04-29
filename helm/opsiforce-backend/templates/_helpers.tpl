@@ -11,7 +11,7 @@
 {{- end -}}
 
 {{- define "opsiforce-backend.serviceName" -}}
-{{- printf "%s-%s" (include "opsiforce-backend.name" .) .Release.Name | trunc 63 | trimSuffix "-" -}}
+{{- include "opsiforce-backend.fullname" . -}}
 {{- end -}}
 
 {{- define "opsiforce-backend.chart" -}}

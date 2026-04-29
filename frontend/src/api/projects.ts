@@ -1,4 +1,5 @@
 import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
+import { createEffect, createSignal, onCleanup } from "solid-js"
 import { api, type Project, type ProjectStatusResponse } from "./client"
 
 export const projectKeys = {
@@ -9,29 +10,75 @@ export const projectKeys = {
   appMeta: (id: string) => [...projectKeys.all, id, "app-meta"] as const,
 }
 
-export function useProjectStatus(
-  projectId: () => string,
-  options?: { enabled?: () => boolean },
-) {
-  return createQuery(() => ({
-    queryKey: projectKeys.status(projectId()),
-    queryFn: async () => {
-      const id = projectId()
-      const data = await api.get<ProjectStatusResponse>(`/projects/${id}/status`)
-      if (data.status === "suspended") {
-        fetch(`/api/proxy/${id}/ping`).catch(() => {})
+export function useProjectStatus(projectId: () => string, options?: { enabled?: () => boolean }) {
+  const [data, setData] = createSignal<ProjectStatusResponse>()
+  const [error, setError] = createSignal<unknown>()
+  let sequence = 0
+
+  const applyStatus = (status: ProjectStatusResponse) => {
+    setData(status)
+    setError(undefined)
+    if (status.status === "suspended") {
+      fetch(`/api/proxy/${status.id}/ping`).catch(() => {})
+    }
+  }
+
+  createEffect(() => {
+    const id = projectId()
+    const enabled = options?.enabled?.() ?? true
+    const currentSequence = ++sequence
+    if (!enabled) return
+
+    let closed = false
+    void api
+      .get<ProjectStatusResponse>(`/projects/${id}/status`)
+      .then((status) => {
+        if (!closed && currentSequence === sequence) applyStatus(status)
+      })
+      .catch((err) => {
+        if (!closed && currentSequence === sequence) setError(err)
+      })
+
+    const events = new EventSource(statusEventsUrl(id))
+
+    events.onmessage = (event) => {
+      try {
+        applyStatus(JSON.parse(event.data) as ProjectStatusResponse)
+      } catch (err) {
+        setError(err)
       }
-      return data
+    }
+
+    events.addEventListener("close", () => {
+      events.close()
+    })
+
+    events.onerror = () => {
+      if (!closed) setError(new Error("Project status stream disconnected"))
+    }
+
+    onCleanup(() => {
+      closed = true
+      events.close()
+    })
+  })
+
+  return {
+    get data() {
+      return data()
     },
-    enabled: options?.enabled?.() ?? true,
-    refetchInterval: (query: { state: { data: ProjectStatusResponse | undefined; error: unknown } }) => {
-      const { data, error } = query.state
-      if (error) return false
-      if (!data) return 3000
-      if (data.status === "disabled") return false
-      return data.status === "starting" || data.status === "suspended" ? 3000 : false
+    get error() {
+      return error()
     },
-  }))
+  }
+}
+
+function statusEventsUrl(projectId: string): string {
+  const params = new URLSearchParams()
+  const tenant = localStorage.getItem("tenant")
+  if (tenant) params.set("tenant", tenant)
+  const query = params.toString()
+  return `/api/projects/${projectId}/status/events${query ? `?${query}` : ""}`
 }
 
 export function useProjects(options?: { enabled?: () => boolean }) {
@@ -46,8 +93,7 @@ export function useProjects(options?: { enabled?: () => boolean }) {
 export function useRenameProject() {
   const qc = useQueryClient()
   return createMutation(() => ({
-    mutationFn: (params: { id: string; title: string }) =>
-      api.patch<Project>(`/projects/${params.id}`, { title: params.title }),
+    mutationFn: (params: { id: string; title: string }) => api.patch<Project>(`/projects/${params.id}`, { title: params.title }),
     onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
   }))
 }
@@ -60,12 +106,14 @@ function detectTimezone(): string {
   }
 }
 
-
 export function useCreateUnassignedProject() {
   const qc = useQueryClient()
   return createMutation(() => ({
     mutationFn: (dto: { title?: string; description?: string } | void) =>
-      api.post<Project>("/projects", { timezone: detectTimezone(), ...(dto ?? {}) }),
+      api.post<Project>("/projects", {
+        timezone: detectTimezone(),
+        ...(dto ?? {}),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: projectKeys.all })
       qc.invalidateQueries({ queryKey: ["workspaces"] })

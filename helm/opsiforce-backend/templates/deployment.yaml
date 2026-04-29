@@ -37,7 +37,7 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "opsiforce-backend.fullname" . }}-config
-            {{- if or .Values.config.openaiApiKey .Values.config.bifrostAdminUsername .Values.config.bifrostAdminPassword .Values.config.mailgunApiKey }}
+            {{- if or .Values.config.openaiApiKey .Values.config.bifrostAdminUsername .Values.config.bifrostAdminPassword .Values.config.mailgunApiKey .Values.config.proxyControlToken .Values.config.oidcPluginSecret }}
             - secretRef:
                 name: {{ include "opsiforce-backend.fullname" . }}-secret
             {{- end }}
@@ -51,6 +51,10 @@ spec:
             requests:
               cpu: {{ .Values.backend.resources.requests.cpu }}
               memory: {{ .Values.backend.resources.requests.memory }}
+          {{- with .Values.startupProbe }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           livenessProbe:
             httpGet:
               path: /api/health
@@ -67,6 +71,6 @@ spec:
         {{- else }}
         - name: workspace-data
           hostPath:
-            path: {{ .Values.config.storageHostPath }}
+            path: {{ .Values.config.storageMountPath }}
             type: DirectoryOrCreate
         {{- end }}

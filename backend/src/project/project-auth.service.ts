@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import * as k8s from "@kubernetes/client-node"
+import { loadKubeConfig } from "../common/k8s-client"
 import { ProjectAuthOidcConfig } from "./project.types"
 
 const TRAEFIK_GROUP = "traefik.io"
@@ -83,8 +84,7 @@ export class ProjectAuthService {
   private readonly makaraIssuerUrl: string
 
   constructor(private readonly configService: ConfigService) {
-    const kc = new k8s.KubeConfig()
-    kc.loadFromDefault()
+    const kc = loadKubeConfig()
     this.customApi = kc.makeApiClient(k8s.CustomObjectsApi)
     this.namespace = this.configService.getOrThrow<string>("k8sNamespace")
     this.appsHostname = this.configService.getOrThrow<string>("appsHostname")

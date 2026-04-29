@@ -8,8 +8,9 @@ import {
   Body,
   Param,
   Req,
+  Res,
 } from "@nestjs/common"
-import type { FastifyRequest } from "fastify"
+import type { FastifyReply, FastifyRequest } from "fastify"
 import { ProjectService } from "./project.service"
 import {
   CreateProjectDto,
@@ -24,6 +25,7 @@ import { RequirePermission } from "../permission/permission.guard"
 import { Perms } from "../permission/permission.constants"
 import { getGroupsHeader, hasPermission } from "../permission/permission.utils"
 import { ProxyService } from "../proxy/proxy.service"
+import { ProjectEventsService } from "./project-events.service"
 
 interface AppMetaResponse {
   exists: boolean
@@ -41,6 +43,7 @@ export class ProjectController {
     private readonly projectService: ProjectService,
     private readonly userService: UserService,
     private readonly proxyService: ProxyService,
+    private readonly projectEventsService: ProjectEventsService,
   ) {}
 
   /**
@@ -82,6 +85,63 @@ export class ProjectController {
       userId: dbUserId,
       canManageWorkspaces: canManageWorkspaces(req),
     })
+  }
+
+  @Get(":id/status/events")
+  async streamStatus(
+    @Param("id") id: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+    @Req() req: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ) {
+    const dbUserId = await this.resolveUserId(user, tenant.tenantId)
+    const loadStatus = () =>
+      this.projectService.getStatusForUser({
+        projectId: id,
+        tenantId: tenant.tenantId,
+        userId: dbUserId,
+        canManageWorkspaces: canManageWorkspaces(req),
+      })
+
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+      "x-no-compression": "1",
+    })
+
+    let closed = false
+    let unsubscribe = () => {}
+    const heartbeat = setInterval(() => {
+      if (!closed) reply.raw.write(": ping\n\n")
+    }, 25000)
+    const close = () => {
+      closed = true
+      clearInterval(heartbeat)
+      unsubscribe()
+    }
+
+    const send = async () => {
+      if (closed) return
+      try {
+        const status = await loadStatus()
+        if (closed) return
+        reply.raw.write(`data: ${JSON.stringify(status)}\n\n`)
+      } catch {
+        reply.raw.write("event: close\ndata: {}\n\n")
+        reply.raw.end()
+        close()
+      }
+    }
+
+    unsubscribe = this.projectEventsService.subscribe(id, () => {
+      void send()
+    })
+
+    req.raw.on("close", close)
+    await send()
   }
 
   @Get(":id")

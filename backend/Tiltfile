@@ -1,0 +1,131 @@
+# -*- mode: Python -*-
+
+load('ext://restart_process', 'docker_build_with_restart')
+
+docker_build(
+    'opsiforce-backend',
+    context='../../..',
+    dockerfile='../docker/Dockerfile.backend.dev',
+    only=[
+        'package.json',
+        'yarn.lock',
+        '.yarnrc.yml',
+        '.yarn/releases',
+        'packages/opsiforce/backend',
+        'packages/opsiforce/agent-config/agent-image-version.json',
+    ],
+    live_update=[
+        fall_back_on('./package.json'),
+        fall_back_on('../../../package.json'),
+        fall_back_on('../../../yarn.lock'),
+        fall_back_on('../../../.yarnrc.yml'),
+        fall_back_on('../../../.yarn/releases'),
+        sync('./src', '/app/packages/opsiforce/backend/src'),
+        sync('./db', '/app/packages/opsiforce/backend/db'),
+    ],
+)
+
+k8s_yaml(helm(
+    '../helm/opsiforce-backend',
+    name='opsiforce-backend',
+    namespace='local',
+    values=['../helm/opsiforce-backend/values.local.yaml'],
+))
+
+k8s_resource(
+    'opsiforce-backend',
+    port_forwards=[
+        '3001:3001',
+        '9229:9229',
+    ],
+)
+
+# ───────────────────────── Runtime proxies ─────────────────────────
+# Go binaries (mode={agent,app,vscode,db}). Deployed in the same namespace
+# as backend + agents so RBAC stays namespaced and service references
+# resolve via short name.
+docker_build_with_restart(
+    'opsiforce-runtime-proxy',
+    context='../../..',
+    dockerfile='../docker/Dockerfile.runtime-proxy.dev',
+    entrypoint=['/usr/local/bin/opsiforce-proxy'],
+    only=['packages/opsiforce/proxy'],
+    live_update=[
+        sync('../proxy', '/src/packages/opsiforce/proxy'),
+        run('cd /src/packages/opsiforce/proxy && go build -o /usr/local/bin/opsiforce-proxy ./cmd/opsiforce-proxy'),
+    ],
+)
+
+k8s_yaml(helm(
+    '../helm/opsiforce-runtime-proxies',
+    name='proxy',
+    namespace='local',
+    values=['../helm/opsiforce-runtime-proxies/values.local.yaml'],
+))
+
+# Group all four proxy deployments under one Tilt resource for tidier UI.
+k8s_resource(
+    workload='proxy-agent',
+    new_name='runtime-proxies',
+    objects=[
+        'proxy:serviceaccount',
+        'proxy-config:configmap',
+        'proxy-secret:secret',
+    ],
+)
+k8s_resource(workload='proxy-app', new_name='runtime-proxies-app')
+k8s_resource(workload='proxy-vscode', new_name='runtime-proxies-vscode')
+k8s_resource(workload='proxy-db', new_name='runtime-proxies-db')
+
+# ───────────────────────── Opsiforce Proxy (Traefik routing + oauth2-proxy) ─────────────────────────
+# Depends on the runtime-proxies Services existing so nginx's startup-time DNS
+# resolution doesn't fail. Uses prod nginx image (no source to live-reload).
+k8s_yaml(helm(
+    '../helm/opsiforce-proxy',
+    name='opsiforce-proxy',
+    namespace='local',
+    values=['../helm/opsiforce-proxy/values.local.yaml'],
+))
+
+k8s_resource(
+    'opsiforce-proxy',
+    resource_deps=[
+        'runtime-proxies-app',
+        'runtime-proxies-vscode',
+        'runtime-proxies-db',
+        'opsiforce-backend',
+    ],
+)
+
+# ───────────────────────── Tilt UI exposed via Traefik ─────────────────────────
+# Routes https://tilt.opsiforce.traefik.me to the host's `tilt up` web UI on
+# :10350 via an ExternalName service. Requires `tilt up --host=0.0.0.0` so the
+# UI is reachable from inside the cluster.
+k8s_yaml(blob("""
+apiVersion: v1
+kind: Service
+metadata:
+  name: tilt-ui
+  namespace: local
+spec:
+  type: ExternalName
+  externalName: host.minikube.internal
+  ports:
+    - port: 10350
+      targetPort: 10350
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: tilt-ui
+  namespace: local
+spec:
+  entryPoints: [websecure]
+  routes:
+    - match: Host(`tilt.opsiforce.traefik.me`)
+      kind: Rule
+      services:
+        - name: tilt-ui
+          port: 10350
+  tls: {}
+"""))

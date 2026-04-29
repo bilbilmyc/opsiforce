@@ -1,0 +1,74 @@
+replicaCount: 1
+
+fullnameOverride: opsiforce-backend
+npmMigrationJob: false
+
+backend:
+  image:
+    repository: opsiforce-backend
+    tag: dev
+    pullPolicy: Never
+  containerPort: 3001
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256M
+
+imagePullSecrets: []
+
+rbac:
+  create: true
+serviceAccount:
+  create: true
+  automount: true
+  name: opsiforce-backend
+serviceAccountName: opsiforce-backend
+
+config:
+  databaseUrl: "postgres://admin:dbpass1@local-pg-postgresql:5432/opsiforce"
+  redisUrl: "redis://redis-session-storage-local-master:6379/2"
+  k8sNamespace: "local"
+  warmPoolSize: "1"
+  agentImage: ""
+  agentImagePullPolicy: "Never"
+  agentPort: "4096"
+  appPort: "3000"
+  vscodePort: "8080"
+  dbViewerPort: "8081"
+  cephfsPvcName: "opsiforce-data"
+  storageType: "hostPath"
+  storageMountPath: "/workspace-data"
+  proxyControlToken: "opsiforce-local-proxy-token"
+  agentName: "app-builder"
+  agentResources: ~
+  agentNodeSelector: ~
+  agentTolerations: ~
+  agentAffinity: ~
+  bifrostProxyUrl: "http://opsiforce-bifrost:8080/v1"
+  bifrostPodProxyUrl: "http://opsiforce-bifrost:8080/v1"
+  bifrostAdminUsername: "opsiforce-admin"
+  bifrostAdminPassword: "opsiforce-local-admin"
+  gatewayUrl: "http://opsiforce-backend:3001/api/gateway"
+  mailgunApiKey: "key-example"
+  mailgunDomain: "sima"
+  mailgunSender: "local@sima-local"
+  mailgunUrl: "http://host.minikube.internal:8089"
+  appsHostname: "apps.opsiforce.traefik.me"
+  webappServiceName: "proxy-app"
+  webappServiceNamespace: "local"
+  webappServicePort: "3002"
+  oidcPluginSecret: "1198c2e7c224237098895d53543b074c"
+  makaraOidcClientId: "opsiforce-apps"
+  makaraOidcClientSecret: "a037227dd1c2aee75f1056ad6ab3c088"
+  makaraOidcIssuerUrl: "http://sima-keycloak-local-service:8086/realms/sima"
+
+affinity: ~
+nodeSelector: {}
+tolerations: []
+
+startupProbe:
+  httpGet:
+    path: /api/health
+    port: 3001
+  failureThreshold: 60
+  periodSeconds: 5

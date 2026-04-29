@@ -7,6 +7,7 @@ import { ProjectStatus } from "../project/project.types"
 import { TimeoutService } from "./timeout.service"
 import { PodService } from "../pod/pod.service"
 import { PodPoolService } from "../pod/pod.pool.service"
+import { ProjectEventsService } from "../project/project-events.service"
 
 @Injectable()
 export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
@@ -18,6 +19,7 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
     private readonly timeoutService: TimeoutService,
     private readonly podService: PodService,
     private readonly podPoolService: PodPoolService,
+    private readonly projectEventsService: ProjectEventsService,
   ) {}
 
   async onModuleInit() {
@@ -88,6 +90,7 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
       .where(eq(projects.id, projectId))
 
     this.logger.log(`Project ${projectId} suspended due to idle timeout`)
+    await this.projectEventsService.publish(projectId)
     await this.podPoolService.replenish()
   }
 

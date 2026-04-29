@@ -7,7 +7,9 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = { ...(options?.headers as Record<string, string>) }
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string>),
+  }
   if (options?.body) {
     headers["Content-Type"] = "application/json"
   }
@@ -16,7 +18,6 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   if (tenant) {
     headers["x-tenant-name"] = tenant
   }
-
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
   if (!res.ok) {
@@ -38,11 +39,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
-    request<T>(path, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
-  patch: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
-  put: <T>(path: string, body: unknown) =>
-    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
+    request<T>(path, {
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    }),
+  patch: <T>(path: string, body: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 }
 
@@ -74,6 +76,20 @@ export interface ProjectStatusResponse {
   id: string
   status: ProjectStatus
   workspaceId: string | null
+  operation?: ProjectOperation
+}
+
+export type ProjectOperationStatus = "queued" | "copying" | "starting" | "failed"
+
+export interface ProjectOperation {
+  type: "duplicate"
+  status: ProjectOperationStatus
+  bytesTotal: number
+  bytesCopied: number
+  error: string | null
+  startedAt: string | null
+  completedAt: string | null
+  updatedAt: string
 }
 
 export type ProjectAuthMode = "public" | "manual" | "makara"
@@ -171,18 +187,15 @@ export interface UpdateScheduleDto {
 }
 
 export const scheduleApi = {
-  list: (projectId?: string) =>
-    api.get<Schedule[]>(projectId ? `/schedules?projectId=${projectId}` : "/schedules"),
-  listByProject: (projectId: string) =>
-    api.get<Schedule[]>(`/projects/${projectId}/schedules`),
+  list: (projectId?: string) => api.get<Schedule[]>(projectId ? `/schedules?projectId=${projectId}` : "/schedules"),
+  listByProject: (projectId: string) => api.get<Schedule[]>(`/projects/${projectId}/schedules`),
   update: (projectId: string, scheduleId: string, dto: UpdateScheduleDto) =>
     api.patch<Schedule>(`/projects/${projectId}/schedules/${scheduleId}`, dto),
-  remove: (projectId: string, scheduleId: string) =>
-    api.delete<void>(`/projects/${projectId}/schedules/${scheduleId}`),
+  remove: (projectId: string, scheduleId: string) => api.delete<void>(`/projects/${projectId}/schedules/${scheduleId}`),
   triggerRun: (projectId: string, scheduleId: string) =>
     api.post<{ success: boolean }>(`/projects/${projectId}/schedules/${scheduleId}/run`),
   getExecutions: (scheduleId: string, projectId: string, limit = 50) =>
-    api.get<ScheduleExecution[]>(`/projects/${projectId}/schedules/${scheduleId}/executions?limit=${limit}`)
+    api.get<ScheduleExecution[]>(`/projects/${projectId}/schedules/${scheduleId}/executions?limit=${limit}`),
 }
 
 export interface TimeoutDefaults {

@@ -1,0 +1,53 @@
+replicaCount: 1
+
+fullnameOverride: proxy
+
+image:
+  repository: opsiforce-runtime-proxy
+  tag: dev
+  pullPolicy: Never
+
+config:
+  backendUrl: "http://opsiforce-backend:3001"
+  k8sNamespace: "local"
+  storageType: "hostPath"
+  cephfsPvcName: "opsiforce-data"
+  storageMountPath: "/workspace-data"
+  proxyControlToken: "opsiforce-local-proxy-token"
+  vscodePort: "8080"
+  dbViewerPort: "8081"
+
+ports:
+  agent: 3005
+  app: 3002
+  vscode: 3003
+  db: 3004
+
+resources:
+  agent:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  app:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+  vscode:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  db:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  automount: true
+  name: proxy
+
+nodeSelector: {}
+tolerations: []
+affinity: ~

@@ -7,11 +7,21 @@ import {
   forwardRef,
   OnApplicationBootstrap,
 } from "@nestjs/common"
+import { InjectQueue } from "@nestjs/bullmq"
 import { ConfigService } from "@nestjs/config"
 import { eq, and, desc, asc, inArray, isNull, or, ne, sql, type SQL } from "drizzle-orm"
+import { Queue } from "bullmq"
 import crypto from "crypto"
 import { db, pgClient } from "../../db"
-import { projectSettings, projects, pods, deletedProjects, workspaceMembers, tenants } from "../../db/schema"
+import {
+  projectSettings,
+  projects,
+  pods,
+  deletedProjects,
+  workspaceMembers,
+  tenants,
+  projectDuplicateJobs,
+} from "../../db/schema"
 import { PodService } from "../pod/pod.service"
 import { PodPoolService } from "../pod/pod.pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
@@ -29,8 +39,15 @@ import {
   ProjectStatusResponse,
   ProjectAuthResponse,
   UpdateProjectAuthDto,
+  ProjectDuplicateOperation,
 } from "./project.types"
 import { ProjectAuthService } from "./project-auth.service"
+import { ProjectEventsService } from "./project-events.service"
+import {
+  PROJECT_DUPLICATE_QUEUE,
+  ProjectDuplicateStatus,
+  type ProjectDuplicateJobData,
+} from "./project-duplicate.types"
 
 type ProjectActivityKind = "agent" | "app"
 
@@ -73,7 +90,6 @@ const projectSelectFields = {
 export class ProjectService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ProjectService.name)
   private readonly startupTasks = new Map<string, Promise<void>>()
-  private readonly pendingSourceDirs = new Map<string, string>()
 
   constructor(
     private readonly podService: PodService,
@@ -87,11 +103,17 @@ export class ProjectService implements OnApplicationBootstrap {
     @Inject(forwardRef(() => ScheduleService))
     private readonly scheduleService: ScheduleService,
     private readonly projectAuthService: ProjectAuthService,
+    private readonly projectEventsService: ProjectEventsService,
+    @InjectQueue(PROJECT_DUPLICATE_QUEUE)
+    private readonly duplicateQueue: Queue<ProjectDuplicateJobData>,
   ) {}
 
   async onApplicationBootstrap() {
     await this.reconcileProjects().catch((err) => {
       this.logger.warn(`Failed to reconcile projects on startup: ${err.message}`)
+    })
+    await this.recoverDuplicateJobs().catch((err) => {
+      this.logger.warn(`Failed to recover duplicate jobs on startup: ${err.message}`)
     })
   }
 
@@ -104,28 +126,24 @@ export class ProjectService implements OnApplicationBootstrap {
       await this.defaultsService.getTenantTimeouts(tenantId)
 
     await db.transaction(async (tx) => {
-      await tx
-        .insert(projects)
-        .values({
-          id,
-          tenantId,
-          title: dto?.title ?? null,
-          description: dto?.description ?? null,
-          directory,
-          status: ProjectStatus.Starting,
-          podName,
-          podIp: null,
-          platformVersion,
-        })
+      await tx.insert(projects).values({
+        id,
+        tenantId,
+        title: dto?.title ?? null,
+        description: dto?.description ?? null,
+        directory,
+        status: ProjectStatus.Starting,
+        podName,
+        podIp: null,
+        platformVersion,
+      })
 
-      await tx
-        .insert(projectSettings)
-        .values({
-          projectId: id,
-          timeoutIdle,
-          appTimeoutIdle,
-          timezone: dto?.timezone || "UTC",
-        })
+      await tx.insert(projectSettings).values({
+        projectId: id,
+        timeoutIdle,
+        appTimeoutIdle,
+        timezone: dto?.timezone || "UTC",
+      })
     })
 
     await this.createBifrostResources(id, tenantId)
@@ -139,48 +157,54 @@ export class ProjectService implements OnApplicationBootstrap {
     const source = await this.findOne(sourceId, tenantId)
 
     const id = crypto.randomUUID()
+    const duplicateJobId = crypto.randomUUID()
     const directory = `projects/${tenantId}/${id}`
     const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
     const podName = this.podService.assignedPodName(id)
     const title = dto?.title ?? (source.title ? `${source.title} (copy)` : null)
 
     await db.transaction(async (tx) => {
-      await tx
-        .insert(projects)
-        .values({
-          id,
-          tenantId,
-          title,
-          description: source.description,
-          directory,
-          status: ProjectStatus.Starting,
-          podName,
-          podIp: null,
-          platformVersion,
-        })
+      await tx.insert(projects).values({
+        id,
+        tenantId,
+        title,
+        description: source.description,
+        directory,
+        status: ProjectStatus.Starting,
+        podName,
+        podIp: null,
+        platformVersion,
+      })
 
-      await tx
-        .insert(projectSettings)
-        .values({
-          projectId: id,
-          timeoutIdle: source.timeoutIdle,
-          appTimeoutIdle: source.appTimeoutIdle,
-          timezone: source.timezone,
-        })
+      await tx.insert(projectSettings).values({
+        projectId: id,
+        timeoutIdle: source.timeoutIdle,
+        appTimeoutIdle: source.appTimeoutIdle,
+        timezone: source.timezone,
+      })
+
+      await tx.insert(projectDuplicateJobs).values({
+        id: duplicateJobId,
+        sourceProjectId: source.id,
+        targetProjectId: id,
+        tenantId,
+        status: ProjectDuplicateStatus.Queued,
+      })
     })
 
     await this.createBifrostResources(id, tenantId)
     await this.createGatewayKey(id, tenantId)
-    this.pendingSourceDirs.set(id, source.directory)
-    this.queueProjectStartup(id)
+    await this.enqueueDuplicateJob({
+      duplicateJobId,
+      sourceProjectId: source.id,
+      targetProjectId: id,
+    })
+    await this.projectEventsService.publish(id)
 
     return this.findOne(id, tenantId)
   }
 
-  async ensureProjectById(
-    projectId: string,
-    activity: ProjectActivityKind,
-  ): Promise<EnsureProjectResult> {
+  async ensureProjectById(projectId: string, activity: ProjectActivityKind): Promise<EnsureProjectResult> {
     const project = await this.findOneById(projectId)
     return this.ensureProjectAccess(project, activity)
   }
@@ -203,10 +227,7 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .leftJoin(
         workspaceMembers,
-        and(
-          eq(workspaceMembers.workspaceId, projects.workspaceId),
-          eq(workspaceMembers.userId, userId),
-        ),
+        and(eq(workspaceMembers.workspaceId, projects.workspaceId), eq(workspaceMembers.userId, userId)),
       )
       .where(
         and(
@@ -218,9 +239,7 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   async findAllInWorkspace(tenantId: string, workspaceId: string): Promise<ProjectResponse[]> {
-    return this.selectProjects(
-      and(eq(projects.tenantId, tenantId), eq(projects.workspaceId, workspaceId))!,
-    )
+    return this.selectProjects(and(eq(projects.tenantId, tenantId), eq(projects.workspaceId, workspaceId))!)
   }
 
   private selectProjects(where: SQL): Promise<ProjectResponse[]> {
@@ -261,10 +280,7 @@ export class ProjectService implements OnApplicationBootstrap {
     const [member] = await db
       .select({ userId: workspaceMembers.userId })
       .from(workspaceMembers)
-      .where(and(
-        eq(workspaceMembers.workspaceId, project.workspaceId),
-        eq(workspaceMembers.userId, userId),
-      ))
+      .where(and(eq(workspaceMembers.workspaceId, project.workspaceId), eq(workspaceMembers.userId, userId)))
     if (!member) {
       throw new NotFoundException(`Project ${projectId} not found`)
     }
@@ -295,14 +311,17 @@ export class ProjectService implements OnApplicationBootstrap {
       const [member] = await db
         .select({ userId: workspaceMembers.userId })
         .from(workspaceMembers)
-        .where(and(
-          eq(workspaceMembers.workspaceId, row.workspaceId),
-          eq(workspaceMembers.userId, userId),
-        ))
+        .where(and(eq(workspaceMembers.workspaceId, row.workspaceId), eq(workspaceMembers.userId, userId)))
       if (!member) throw new NotFoundException(`Project ${projectId} not found`)
     }
 
-    return { id: row.id, status: row.status as ProjectStatus, workspaceId: row.workspaceId }
+    const operation = await this.findDuplicateOperation(row.id)
+    return {
+      id: row.id,
+      status: row.status as ProjectStatus,
+      workspaceId: row.workspaceId,
+      ...(operation ? { operation } : {}),
+    }
   }
 
   async findOneById(id: string): Promise<ProjectResponse> {
@@ -325,7 +344,8 @@ export class ProjectService implements OnApplicationBootstrap {
     if (dto.title !== undefined) projectUpdates.title = dto.title
     if (dto.description !== undefined) projectUpdates.description = dto.description
     if (dto.timeoutIdle !== undefined) settingsUpdates.timeoutIdle = assertPositiveMs(dto.timeoutIdle, "timeoutIdle")
-    if (dto.appTimeoutIdle !== undefined) settingsUpdates.appTimeoutIdle = assertPositiveMs(dto.appTimeoutIdle, "appTimeoutIdle")
+    if (dto.appTimeoutIdle !== undefined)
+      settingsUpdates.appTimeoutIdle = assertPositiveMs(dto.appTimeoutIdle, "appTimeoutIdle")
     if (dto.timezone !== undefined) settingsUpdates.timezone = dto.timezone
 
     await db.transaction(async (tx) => {
@@ -337,10 +357,7 @@ export class ProjectService implements OnApplicationBootstrap {
       }
 
       if (Object.keys(settingsUpdates).length > 0) {
-        await tx
-          .update(projectSettings)
-          .set(settingsUpdates)
-          .where(eq(projectSettings.projectId, project.id))
+        await tx.update(projectSettings).set(settingsUpdates).where(eq(projectSettings.projectId, project.id))
       }
     })
 
@@ -366,11 +383,7 @@ export class ProjectService implements OnApplicationBootstrap {
     return { mode: "manual", config, bypassAuthPaths }
   }
 
-  async updateAuth(
-    id: string,
-    dto: UpdateProjectAuthDto,
-    tenantId: string,
-  ): Promise<ProjectAuthResponse> {
+  async updateAuth(id: string, dto: UpdateProjectAuthDto, tenantId: string): Promise<ProjectAuthResponse> {
     const project = await this.findOne(id, tenantId)
     if (dto.mode !== "public" && dto.mode !== "manual" && dto.mode !== "makara") {
       throw new BadRequestException(`Unknown auth mode: ${dto.mode}`)
@@ -386,10 +399,7 @@ export class ProjectService implements OnApplicationBootstrap {
       await this.projectAuthService.remove(project.id)
     }
 
-    await db
-      .update(projectSettings)
-      .set({ authMode: dto.mode })
-      .where(eq(projectSettings.projectId, project.id))
+    await db.update(projectSettings).set({ authMode: dto.mode }).where(eq(projectSettings.projectId, project.id))
 
     return this.getAuth(id, tenantId)
   }
@@ -420,11 +430,14 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.podPoolService.replenish().catch((err) => {
       this.logger.warn(`Failed to replenish warm pool after deleting project ${id}: ${err.message}`)
     })
-    await db.insert(deletedProjects).values({
-      id: project.id,
-      tenantId: project.tenantId,
-      directory: project.directory,
-    }).onConflictDoNothing()
+    await db
+      .insert(deletedProjects)
+      .values({
+        id: project.id,
+        tenantId: project.tenantId,
+        directory: project.directory,
+      })
+      .onConflictDoNothing()
   }
 
   async disable(id: string, tenantId: string): Promise<ProjectResponse> {
@@ -450,6 +463,7 @@ export class ProjectService implements OnApplicationBootstrap {
         updatedAt: new Date(),
       })
       .where(eq(projects.id, id))
+    await this.projectEventsService.publish(id)
 
     await this.podPoolService.replenish().catch((err) => {
       this.logger.warn(`Failed to replenish warm pool after disabling project ${id}: ${err.message}`)
@@ -476,6 +490,7 @@ export class ProjectService implements OnApplicationBootstrap {
       .where(eq(projects.id, id))
 
     this.queueProjectStartup(id)
+    await this.projectEventsService.publish(id)
     return this.findOne(id, tenantId)
   }
 
@@ -501,24 +516,15 @@ export class ProjectService implements OnApplicationBootstrap {
 
   async touchActivity(projectId: string): Promise<void> {
     await this.timeoutService.touch(projectId)
-    await db
-      .update(projects)
-      .set({ lastActiveAt: new Date(), updatedAt: new Date() })
-      .where(eq(projects.id, projectId))
+    await db.update(projects).set({ lastActiveAt: new Date(), updatedAt: new Date() }).where(eq(projects.id, projectId))
   }
 
   async touchAppActivity(projectId: string): Promise<void> {
     await this.timeoutService.touchApp(projectId)
-    await db
-      .update(projects)
-      .set({ lastActiveAt: new Date(), updatedAt: new Date() })
-      .where(eq(projects.id, projectId))
+    await db.update(projects).set({ lastActiveAt: new Date(), updatedAt: new Date() }).where(eq(projects.id, projectId))
   }
 
-  async ensureProjectAccess(
-    project: ProjectResponse,
-    activity: ProjectActivityKind,
-  ): Promise<EnsureProjectResult> {
+  async ensureProjectAccess(project: ProjectResponse, activity: ProjectActivityKind): Promise<EnsureProjectResult> {
     if (project.status === ProjectStatus.Disabled) {
       return { state: "disabled", project }
     }
@@ -541,10 +547,7 @@ export class ProjectService implements OnApplicationBootstrap {
         if (podIp) {
           await Promise.all([
             this.ensureAssignedPodRow(project.id, project.podName, podIp),
-            db
-              .update(projects)
-              .set({ podIp, updatedAt: new Date() })
-              .where(eq(projects.id, project.id)),
+            db.update(projects).set({ podIp, updatedAt: new Date() }).where(eq(projects.id, project.id)),
           ])
           return { state: "ready", project: { ...project, podIp } }
         }
@@ -556,7 +559,9 @@ export class ProjectService implements OnApplicationBootstrap {
       return { state: "starting", project: startingProject }
     }
 
-    const startingProject = await this.requestProjectStartup(project, { deleteExistingPod: false })
+    const startingProject = await this.requestProjectStartup(project, {
+      deleteExistingPod: false,
+    })
     return { state: "starting", project: startingProject }
   }
 
@@ -608,6 +613,96 @@ export class ProjectService implements OnApplicationBootstrap {
     }
   }
 
+  private async enqueueDuplicateJob(data: ProjectDuplicateJobData): Promise<void> {
+    await this.duplicateQueue.add("copy", data, {
+      jobId: data.duplicateJobId,
+      attempts: 2,
+      backoff: { type: "exponential", delay: 5000 },
+    })
+  }
+
+  private async recoverDuplicateJobs(): Promise<void> {
+    const activeJobs = await db
+      .select()
+      .from(projectDuplicateJobs)
+      .where(
+        inArray(projectDuplicateJobs.status, [
+          ProjectDuplicateStatus.Queued,
+          ProjectDuplicateStatus.Copying,
+          ProjectDuplicateStatus.Starting,
+        ]),
+      )
+
+    for (const job of activeJobs) {
+      if (job.status === ProjectDuplicateStatus.Starting) {
+        this.queueProjectStartup(job.targetProjectId)
+        continue
+      }
+
+      await this.enqueueDuplicateJob({
+        duplicateJobId: job.id,
+        sourceProjectId: job.sourceProjectId,
+        targetProjectId: job.targetProjectId,
+      })
+    }
+  }
+
+  private async findDuplicateOperation(projectId: string): Promise<ProjectDuplicateOperation | undefined> {
+    const [job] = await db
+      .select({
+        status: projectDuplicateJobs.status,
+        bytesTotal: projectDuplicateJobs.bytesTotal,
+        bytesCopied: projectDuplicateJobs.bytesCopied,
+        error: projectDuplicateJobs.error,
+        startedAt: projectDuplicateJobs.startedAt,
+        completedAt: projectDuplicateJobs.completedAt,
+        updatedAt: projectDuplicateJobs.updatedAt,
+      })
+      .from(projectDuplicateJobs)
+      .where(
+        and(
+          eq(projectDuplicateJobs.targetProjectId, projectId),
+          inArray(projectDuplicateJobs.status, [
+            ProjectDuplicateStatus.Queued,
+            ProjectDuplicateStatus.Copying,
+            ProjectDuplicateStatus.Starting,
+            ProjectDuplicateStatus.Failed,
+          ]),
+        ),
+      )
+
+    if (!job) return undefined
+    if (job.status === ProjectDuplicateStatus.Completed) return undefined
+
+    return {
+      type: "duplicate",
+      status: job.status,
+      bytesTotal: job.bytesTotal,
+      bytesCopied: job.bytesCopied,
+      error: job.error,
+      startedAt: job.startedAt,
+      completedAt: job.completedAt,
+      updatedAt: job.updatedAt,
+    }
+  }
+
+  private async hasBlockingDuplicateOperation(projectId: string): Promise<boolean> {
+    const [job] = await db
+      .select({ id: projectDuplicateJobs.id })
+      .from(projectDuplicateJobs)
+      .where(
+        and(
+          eq(projectDuplicateJobs.targetProjectId, projectId),
+          inArray(projectDuplicateJobs.status, [
+            ProjectDuplicateStatus.Queued,
+            ProjectDuplicateStatus.Copying,
+            ProjectDuplicateStatus.Failed,
+          ]),
+        ),
+      )
+    return !!job
+  }
+
   private async requestProjectStartup(
     project: ProjectResponse,
     options: { deleteExistingPod: boolean },
@@ -626,13 +721,9 @@ export class ProjectService implements OnApplicationBootstrap {
         podIp: null,
         updatedAt: new Date(),
       })
-      .where(and(
-        eq(projects.id, project.id),
-        inArray(projects.status, [
-          ProjectStatus.Active,
-          ProjectStatus.Suspended,
-        ]),
-      ))
+      .where(
+        and(eq(projects.id, project.id), inArray(projects.status, [ProjectStatus.Active, ProjectStatus.Suspended])),
+      )
       .returning()
 
     if (!updated) {
@@ -644,19 +735,18 @@ export class ProjectService implements OnApplicationBootstrap {
     }
 
     if (options.deleteExistingPod) {
-      const podNames = Array.from(new Set(
-        [project.podName, podName].filter((name): name is string => !!name),
-      ))
+      const podNames = Array.from(new Set([project.podName, podName].filter((name): name is string => !!name)))
       await Promise.all(podNames.map((name) => this.podService.deletePod(name).catch(() => {})))
     }
 
     await this.deleteProjectPods(project.id, podName)
     this.queueProjectStartup(project.id)
+    await this.projectEventsService.publish(project.id)
 
     return this.findOneById(project.id)
   }
 
-  private queueProjectStartup(projectId: string) {
+  queueProjectStartup(projectId: string) {
     if (this.startupTasks.has(projectId)) return
 
     const task = this.startProject(projectId)
@@ -672,6 +762,8 @@ export class ProjectService implements OnApplicationBootstrap {
 
   private async startProject(projectId: string): Promise<void> {
     await this.withProjectStartupLock(projectId, async () => {
+      if (await this.hasBlockingDuplicateOperation(projectId)) return
+
       const current = await this.findOneById(projectId).catch(() => null)
       if (!current || current.status !== ProjectStatus.Starting) return
 
@@ -703,15 +795,13 @@ export class ProjectService implements OnApplicationBootstrap {
         }
 
         await this.deleteProjectPods(projectId, podName)
-        const sourceDir = this.pendingSourceDirs.get(projectId)
-        this.pendingSourceDirs.delete(projectId)
-        await this.podService.createAssignedPod(projectId, current.directory, tenantOptions, sourceDir)
+        await this.podService.createAssignedPod(projectId, current.directory, tenantOptions)
         await this.ensureAssignedPodRow(projectId, podName, null)
 
         const podIp = await this.podService.waitForReady(podName)
         await this.setProjectActive(projectId, podName, podIp)
       } catch (err) {
-        await this.handleStartupFailure(projectId, podName)
+        await this.handleStartupFailure(projectId, podName, err)
         throw err
       }
     })
@@ -734,35 +824,63 @@ export class ProjectService implements OnApplicationBootstrap {
 
     await this.ensureAssignedPodRow(projectId, podName, podIp)
     await this.timeoutService.touch(projectId)
+    await db
+      .update(projectDuplicateJobs)
+      .set({
+        status: ProjectDuplicateStatus.Completed,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(projectDuplicateJobs.targetProjectId, projectId),
+          eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting),
+        ),
+      )
+    await this.projectEventsService.publish(projectId)
     this.logger.log(`Project ${projectId} active on pod ${podName} (${podIp})`)
   }
 
-  private async handleStartupFailure(projectId: string, podName: string): Promise<void> {
+  private async handleStartupFailure(projectId: string, podName: string, error: unknown): Promise<void> {
     await this.podService.deletePod(podName).catch(() => {})
     await this.deleteProjectPods(projectId, podName)
 
-    const [project] = await db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(eq(projects.id, projectId))
+    const [project] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId))
 
     if (!project) return
 
-    await db
-      .update(projects)
-      .set({
-        status: ProjectStatus.Suspended,
-        podName: null,
-        podIp: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(projects.id, projectId))
+    const now = new Date()
+    const message = error instanceof Error ? error.message : "Project pod failed to start"
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(projects)
+        .set({
+          status: ProjectStatus.Suspended,
+          podName: null,
+          podIp: null,
+          updatedAt: now,
+        })
+        .where(eq(projects.id, projectId))
+
+      await tx
+        .update(projectDuplicateJobs)
+        .set({
+          status: ProjectDuplicateStatus.Failed,
+          error: message,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(projectDuplicateJobs.targetProjectId, projectId),
+            eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting),
+          ),
+        )
+    })
+    await this.projectEventsService.publish(projectId)
   }
 
   private async ensureAssignedPodRow(projectId: string, podName: string, podIp: string | null): Promise<void> {
-    await db
-      .delete(pods)
-      .where(and(eq(pods.projectId, projectId), ne(pods.podName, podName)))
+    await db.delete(pods).where(and(eq(pods.projectId, projectId), ne(pods.podName, podName)))
 
     await db
       .insert(pods)
@@ -786,9 +904,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
   private async deleteProjectPods(projectId: string, podName?: string): Promise<void> {
     if (podName) {
-      await db
-        .delete(pods)
-        .where(or(eq(pods.projectId, projectId), eq(pods.podName, podName)))
+      await db.delete(pods).where(or(eq(pods.projectId, projectId), eq(pods.podName, podName)))
       return
     }
 
@@ -796,9 +912,7 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   private recordActivity(projectId: string, activity: ProjectActivityKind) {
-    const touch = activity === "agent"
-      ? this.touchActivity(projectId)
-      : this.touchAppActivity(projectId)
+    const touch = activity === "agent" ? this.touchActivity(projectId) : this.touchAppActivity(projectId)
 
     void touch.catch((err) => {
       this.logger.warn(`Failed to touch ${activity} activity for project ${projectId}: ${err.message}`)
@@ -825,10 +939,7 @@ export class ProjectService implements OnApplicationBootstrap {
     } finally {
       if (locked) {
         await connection
-          .unsafe(
-            "select pg_advisory_unlock(hashtext($1), hashtext($2))",
-            ["opsiforce-project-startup", projectId],
-          )
+          .unsafe("select pg_advisory_unlock(hashtext($1), hashtext($2))", ["opsiforce-project-startup", projectId])
           .catch((err) => {
             this.logger.warn(`Failed to release startup lock for project ${projectId}: ${err.message}`)
           })
@@ -843,10 +954,7 @@ export class ProjectService implements OnApplicationBootstrap {
       .select(projectSelectFields)
       .from(projects)
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
-      .where(inArray(projects.status, [
-        ProjectStatus.Starting,
-        ProjectStatus.Active,
-      ]))
+      .where(inArray(projects.status, [ProjectStatus.Starting, ProjectStatus.Active]))
 
     await Promise.allSettled(candidateProjects.map((project) => this.reconcileProject(project)))
   }
@@ -894,10 +1002,7 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.ensureAssignedPodRow(project.id, project.podName, podIp)
 
     if (podIp && podIp !== project.podIp) {
-      await db
-        .update(projects)
-        .set({ podIp, updatedAt: new Date() })
-        .where(eq(projects.id, project.id))
+      await db.update(projects).set({ podIp, updatedAt: new Date() }).where(eq(projects.id, project.id))
     }
   }
 }

@@ -9,39 +9,41 @@ Running Opsiforce locally, CI/CD pipeline, Helm charts, and rollout strategy.
 ### Quick start
 
 ```bash
-# Required once on the host: install Go 1.26.2
+# First time from repo root:
+yarn install
+yarn run install-all
 
-# First time (installs minikube, PG, Redis, Keycloak, creates DB):
-yarn dev-opsiforce
-
-# Subsequent runs (minikube already set up):
-yarn dev-opsiforce-only
+# Daily dev: run in separate terminals from repo root:
+yarn run tunnel-traefik
+yarn run port-forward-all
+yarn run dev-opsiforce-only
 ```
 
-Same pattern as `yarn dev-makara` / `yarn dev-makara-only`.
+See [`../README.md`](../README.md) for the full local prerequisites and command flow.
 
 ### What starts
 
-After running `yarn dev-opsiforce-only`, you'll have:
+After running the local dev commands, you'll have:
 
 | What | URL / Port | How to access |
 |------|-----------|---------------|
-| **Proxy (entry point)** | http://localhost:4110 | Open in browser — routes to all services |
-| **Solid.js frontend (internal)** | http://localhost:8084 | Vite HMR, accessed through proxy at :4110 |
-| **NestJS backend API (internal)** | http://localhost:3001 | Accessed through proxy at :4110/api |
-| **Go runtime proxies (internal)** | localhost:3002-3005 | Started locally by `@opsiforce/backend`; app/vscode/db stay on `3002/3003/3004`, agent proxy listens on `3005` |
-| **Drizzle Studio** | http://localhost:4983 | DB browser (opens automatically) |
+| **App (entry point)** | https://opsiforce.traefik.me | Open in browser — Traefik routes to in-cluster services |
+| **Solid.js frontend** | http://localhost:8084 | Vite HMR on host; reached through Traefik |
+| **NestJS backend** | In `local` namespace via Tilt | Tilt port-forwards `localhost:3001` for direct calls; debug on `:9229` |
+| **Go runtime proxies** | In `local` namespace via Tilt, services `proxy-{agent,app,vscode,db}` (4 deployments, one per mode) | Reached cluster-internally; Traefik routes agent/app/vscode/db through them |
+| **Drizzle Studio** | http://localhost:4983 | DB browser (opens automatically via `db:studio`) |
 | **PostgreSQL** | localhost:5435 | Via port-forward (shared with makara/adam) |
 | **Redis** | localhost:6382 | Via port-forward (shared) |
-| **Agent pods** | In minikube (no external port) | Backend routes to them internally |
+| **Agent pods** | In `local` namespace | Backend routes to pod IPs directly |
 
 ### How to access the full app
 
-**For local dev, open http://localhost:4110** — this goes through the nginx proxy in minikube,
-which routes to your local dev servers (same pattern as makara on :4111, keycloak-ms on :4112).
+**For local dev, open https://opsiforce.traefik.me** — Traefik routes through the in-cluster
+opsiforce-proxy (oauth2-proxy + nginx), which fans out to backend, frontend (host Vite via the
+Traefik IngressRoute), and the runtime proxies.
 
 The frontend embeds OpenCode directly (source-level integration via Vite resolver plugin — no iframe).
-API calls go to http://localhost:3001 (the backend) via Vite's dev proxy.
+API calls go to the in-cluster backend service via Traefik routing.
 
 **In production**, everything is behind the nginx proxy at one URL:
 - `/` → Solid.js frontend (with OpenCode embedded)
@@ -52,22 +54,20 @@ Users access one URL and the proxy routes internally.
 ### What happens under the hood
 
 ```
-yarn dev-opsiforce-only
-  │
-  ├── yarn port-forward-all (background)
-  │     Exposes minikube PG:5435, Redis:6382, Keycloak:8086
-  │
-  ├── yarn start-minikube (from first-time setup):
-  │     Binds /tmp/opsiforce-data into the minikube node at /data/opsiforce
+yarn run dev-opsiforce-only
   │
   ├── @opsiforce/backend minikube-dev:
-  │     1. Prepares /tmp/opsiforce-data on the host
+  │     1. Creates /workspace-data inside minikube (via minikube ssh)
   │     2. Builds agent Docker image into minikube
   │     3. Deploys infra Helm chart (RBAC, hostPath storage, configmaps)
-  │     4. Runs Drizzle migrations against PG
-  │     5. Starts NestJS dev server on :3001 (hot reload)
-  │     6. Starts the four Go runtime proxies on :3002-3005
-  │     7. Starts Drizzle Studio on :4983
+  │     4. Creates opsiforce and bifrost databases if missing
+  │     5. Runs Drizzle migrations against PG
+  │     6. Installs Bifrost
+  │     7. Starts Drizzle Studio, Mailgun mock, and Tilt
+  │
+  ├── tilt up (in packages/opsiforce/backend):
+  │     Builds backend and runtime proxy dev images, deploys them via Helm,
+  │     syncs source edits into pods, and port-forwards 3001 + 9229.
   │
   └── @opsiforce/frontend minikube-dev:
         1. Starts Vite dev server on :8084 (HMR)

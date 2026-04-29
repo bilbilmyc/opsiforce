@@ -7,7 +7,7 @@ export interface PodTemplateOptions {
   agentPort: number
   storageType: "cephfs" | "hostPath"
   cephfsPvcName: string
-  storageHostPath: string
+  storageMountPath: string
   subPath?: string
   projectId?: string
   imagePullPolicy: string
@@ -24,7 +24,6 @@ export interface PodTemplateOptions {
   gatewayApiKey?: string
   gatewayUrl?: string
   agentModel?: string
-  sourceDir?: string
 }
 
 export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
@@ -57,12 +56,8 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
       ...(options.nodeSelector && Object.keys(options.nodeSelector).length > 0
         ? { nodeSelector: options.nodeSelector }
         : {}),
-      ...(options.tolerations && options.tolerations.length > 0
-        ? { tolerations: options.tolerations }
-        : {}),
-      ...(options.affinity && Object.keys(options.affinity).length > 0
-        ? { affinity: options.affinity }
-        : {}),
+      ...(options.tolerations && options.tolerations.length > 0 ? { tolerations: options.tolerations } : {}),
+      ...(options.affinity && Object.keys(options.affinity).length > 0 ? { affinity: options.affinity } : {}),
       ...(options.imagePullSecrets && options.imagePullSecrets.length > 0
         ? { imagePullSecrets: options.imagePullSecrets }
         : {}),
@@ -72,27 +67,23 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
           image: options.agentImage,
           imagePullPolicy: options.imagePullPolicy,
           command: [
-            "sh", "-c",
+            "sh",
+            "-c",
             "set -e; " +
-            (options.sourceDir
-              ? `if [ -d /storage/${options.sourceDir} ]; then cp -a /storage/${options.sourceDir}/. /workspace/; fi; `
-              : "") +
-            `AGENT="\${AGENT_NAME:-app-builder}"; ` +
-            "mkdir -p /workspace/.xdg/config/opencode /workspace/.xdg/code-server /workspace/.opencode/agents; " +
-            "cp /opt/opencode/opencode.json /workspace/.xdg/config/opencode/opencode.json; " +
-            (options.agentModel
-              ? `sed -i 's|"model": "[^"]*"|"model": "${options.agentModel}"|' /workspace/.xdg/config/opencode/opencode.json; `
-              : "") +
-            "cp /opt/agents/$AGENT/agent.md /workspace/.opencode/agents/$AGENT.md; " +
-            "if [ ! -d /workspace/app ]; then " +
-            "cp -a /opt/agents/$AGENT/template/. /workspace/; " +
-            "cd /workspace && printf '.config/\\n.cache/\\n.bun/\\n.opencode/\\n.xdg/\\nnode_modules/\\ndata/\\n' > .gitignore && " +
-            "git init && git config user.email 'agent@opsiforce.com' && git config user.name 'OpsiForce' && git add -A && git commit -m 'Initial template'; " +
-            "fi",
+              `AGENT="\${AGENT_NAME:-app-builder}"; ` +
+              "mkdir -p /workspace/.xdg/config/opencode /workspace/.xdg/code-server /workspace/.opencode/agents; " +
+              "cp /opt/opencode/opencode.json /workspace/.xdg/config/opencode/opencode.json; " +
+              (options.agentModel
+                ? `sed -i 's|"model": "[^"]*"|"model": "${options.agentModel}"|' /workspace/.xdg/config/opencode/opencode.json; `
+                : "") +
+              "cp /opt/agents/$AGENT/agent.md /workspace/.opencode/agents/$AGENT.md; " +
+              "if [ ! -d /workspace/app ]; then " +
+              "cp -a /opt/agents/$AGENT/template/. /workspace/; " +
+              "cd /workspace && printf '.config/\\n.cache/\\n.bun/\\n.opencode/\\n.xdg/\\nnode_modules/\\ndata/\\n' > .gitignore && " +
+              "git init && git config user.email 'agent@opsiforce.com' && git config user.name 'OpsiForce' && git add -A && git commit -m 'Initial template'; " +
+              "fi",
           ],
-          volumeMounts: options.sourceDir
-            ? [...volumeMounts, { name: "workspace", mountPath: "/storage" }]
-            : volumeMounts,
+          volumeMounts,
         },
       ],
       containers: [
@@ -101,11 +92,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
           image: options.agentImage,
           imagePullPolicy: options.imagePullPolicy,
           workingDir: "/workspace",
-          ports: [
-            { containerPort: options.agentPort },
-            { containerPort: 3000 },
-            { containerPort: 8080 },
-          ],
+          ports: [{ containerPort: options.agentPort }, { containerPort: 3000 }, { containerPort: 8080 }],
           env: [
             { name: "XDG_DATA_HOME", value: "/workspace/.xdg/share" },
             { name: "XDG_CONFIG_HOME", value: "/workspace/.xdg/config" },
@@ -117,11 +104,20 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
                   { name: "OPENAI_API_KEY", value: options.bifrostApiKey },
                   { name: "OPENAI_BASE_URL", value: options.bifrostProxyUrl },
                   { name: "ANTHROPIC_API_KEY", value: options.bifrostApiKey },
-                  { name: "ANTHROPIC_BASE_URL", value: options.bifrostProxyUrl.replace(/\/v1\/?$/, "/anthropic/v1") },
+                  {
+                    name: "ANTHROPIC_BASE_URL",
+                    value: options.bifrostProxyUrl.replace(/\/v1\/?$/, "/anthropic/v1"),
+                  },
                   ...(options.bifrostBackendApiKey
                     ? [
-                        { name: "APP_LLM_API_KEY", value: options.bifrostBackendApiKey },
-                        { name: "APP_LLM_BASE_URL", value: options.bifrostProxyUrl },
+                        {
+                          name: "APP_LLM_API_KEY",
+                          value: options.bifrostBackendApiKey,
+                        },
+                        {
+                          name: "APP_LLM_BASE_URL",
+                          value: options.bifrostProxyUrl,
+                        },
                       ]
                     : []),
                 ]
@@ -130,7 +126,10 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
                 : []),
             ...(options.gatewayApiKey && options.gatewayUrl
               ? [
-                  { name: "SERVICE_GATEWAY_API_KEY", value: options.gatewayApiKey },
+                  {
+                    name: "SERVICE_GATEWAY_API_KEY",
+                    value: options.gatewayApiKey,
+                  },
                   { name: "SERVICE_GATEWAY_URL", value: options.gatewayUrl },
                 ]
               : []),
@@ -161,7 +160,7 @@ function buildStorageVolume(options: PodTemplateOptions): k8s.V1Volume {
     return {
       name: "workspace",
       hostPath: {
-        path: options.storageHostPath,
+        path: options.storageMountPath,
         type: "DirectoryOrCreate",
       },
     }

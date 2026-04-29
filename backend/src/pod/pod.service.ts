@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import * as k8s from "@kubernetes/client-node"
+import { loadKubeConfig } from "../common/k8s-client"
 import { buildPodSpec, PodTemplateOptions } from "./pod.template"
 
 export interface TenantPodOptions {
@@ -19,8 +20,7 @@ export class PodService {
   private readonly namespace: string
 
   constructor(private readonly configService: ConfigService) {
-    const kc = new k8s.KubeConfig()
-    kc.loadFromDefault()
+    const kc = loadKubeConfig()
     this.coreApi = kc.makeApiClient(k8s.CoreV1Api)
     this.namespace = this.configService.getOrThrow<string>("k8sNamespace")
   }
@@ -33,7 +33,7 @@ export class PodService {
       agentPort: this.configService.getOrThrow<number>("agentPort"),
       storageType: this.configService.getOrThrow<"cephfs" | "hostPath">("storageType"),
       cephfsPvcName: this.configService.getOrThrow<string>("cephfsPvcName"),
-      storageHostPath: this.configService.getOrThrow<string>("storageHostPath"),
+      storageMountPath: this.configService.getOrThrow<string>("storageMountPath"),
       imagePullPolicy: this.configService.getOrThrow<string>("agentImagePullPolicy"),
       resources: this.configService.get("agentResources"),
       nodeSelector: this.configService.get("agentNodeSelector"),
@@ -59,7 +59,7 @@ export class PodService {
     return response
   }
 
-  async createAssignedPod(projectId: string, directory: string, tenantOptions?: TenantPodOptions, sourceDir?: string): Promise<{ podName: string }> {
+  async createAssignedPod(projectId: string, directory: string, tenantOptions?: TenantPodOptions): Promise<{ podName: string }> {
     const podName = this.assignedPodName(projectId)
 
     await this.waitForPodDeletion(podName)
@@ -69,7 +69,6 @@ export class PodService {
       subPath: directory,
       projectId,
       ...tenantOptions,
-      ...(sourceDir ? { sourceDir } : {}),
     }
 
     const spec = buildPodSpec(options)
@@ -108,9 +107,7 @@ export class PodService {
     while (Date.now() - start < timeoutMs) {
       try {
         const pod = await this.getPod(podName)
-        const ready = pod.status?.conditions?.find(
-          (c) => c.type === "Ready" && c.status === "True",
-        )
+        const ready = pod.status?.conditions?.find((c) => c.type === "Ready" && c.status === "True")
         if (ready && pod.status?.podIP) {
           return pod.status.podIP
         }
@@ -141,8 +138,6 @@ export class PodService {
   }
 
   isPodReady(pod: k8s.V1Pod): boolean {
-    return !!pod.status?.conditions?.find(
-      (condition) => condition.type === "Ready" && condition.status === "True",
-    )
+    return !!pod.status?.conditions?.find((condition) => condition.type === "Ready" && condition.status === "True")
   }
 }

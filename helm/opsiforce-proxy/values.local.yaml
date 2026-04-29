@@ -1,0 +1,50 @@
+replicaCount: 1
+
+imagePullSecrets: []
+
+ingress:
+  enabled: false
+
+ingressRoute:
+  enabled: true
+  hostname: opsiforce.traefik.me
+  traefikTarget: ""
+  certResolver: ""
+
+proxy:
+  agentService: "http://proxy-agent:3005"
+  backendService: "http://opsiforce-backend:3001"
+  frontendService: "http://host.minikube.internal:8084"
+
+appProxy:
+  backendService: "proxy-app"
+  appsHostname: apps.opsiforce.traefik.me
+  previewAppsHostname: preview.apps.opsiforce.traefik.me
+
+vscodeProxy:
+  backendService: "proxy-vscode"
+  appsHostname: code.opsiforce.traefik.me
+
+dbProxy:
+  backendService: "proxy-db"
+  appsHostname: db.opsiforce.traefik.me
+
+bifrostDashboard:
+  enabled: true
+  serviceName: opsiforce-bifrost
+  hostname: bifrost.opsiforce.traefik.me
+
+oauth2Proxy:
+  image: quay.io/oauth2-proxy/oauth2-proxy:v7.13.0
+  clientId: opsiforce
+  clientSecret: opsiforce
+  cookieSecret: localsecretlocal
+  cookieDomain: .opsiforce.traefik.me
+  redirectUrl: https://opsiforce.traefik.me/oauth2/callback
+  issuerUrl: http://sima-keycloak-local-service:8086/realms/sima
+  logoutUrl: "http://sima-keycloak-local-service:8086/realms/sima/protocol/openid-connect/logout?id_token_hint={id_token}"
+  redisPath: redis://redis-session-storage-local-master:6379/0
+
+affinity: ~
+nodeSelector: {}
+tolerations: []

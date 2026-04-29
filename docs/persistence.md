@@ -79,11 +79,10 @@ Stores Bifrost team ID and budget config per project (1:1 with `projects`).
 
 ### Local minikube
 
-- `hostPath`
+- `hostPath` at `/workspace-data` inside the minikube node (same as `storageMountPath` — single path, no host/container translation)
 - same `subPath` layout
-- backend writes to `STORAGE_MOUNT_PATH`
-- agent pods mount `STORAGE_HOST_PATH`
-- the backend-visible directory is bound into the minikube node at boot via `minikube start --mount --mount-string=$STORAGE_MOUNT_PATH:$STORAGE_HOST_PATH` (Docker bind, not 9p) so uploads are visible without a copy step and SQLite WAL works against the workspace volume
+- backend runs in-cluster (deployed via Tilt) and mounts the same hostPath as agents, so the backend and agents see identical bytes — no host bind mount, no cross-VM sync layer to fail
+- file ops in `upload`, `duplication`, and `cleanup` all happen pod-side, against the shared volume
 
 Both modes preserve project data across pod deletion and recreation.
 

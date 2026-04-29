@@ -1,21 +1,32 @@
-import { pgTable, text, timestamp, pgEnum, bigint, boolean, jsonb, integer, index, unique, primaryKey } from "drizzle-orm/pg-core"
+import {
+  pgTable,
+  text,
+  timestamp,
+  pgEnum,
+  bigint,
+  boolean,
+  jsonb,
+  integer,
+  index,
+  unique,
+  primaryKey,
+} from "drizzle-orm/pg-core"
 
-export const projectStatusEnum = pgEnum("project_status", [
-  "starting",
-  "active",
-  "suspended",
-  "disabled",
-])
+export const projectStatusEnum = pgEnum("project_status", ["starting", "active", "suspended", "disabled"])
 
-export const podStatusEnum = pgEnum("pod_status", [
-  "warm",
-  "assigned",
-  "terminating",
-])
+export const podStatusEnum = pgEnum("pod_status", ["warm", "assigned", "terminating"])
 
 export const keyTypeEnum = pgEnum("key_type", ["chat", "backend"])
 
 export const projectAuthModeEnum = pgEnum("project_auth_mode", ["public", "manual", "makara"])
+
+export const projectDuplicateStatusEnum = pgEnum("project_duplicate_status", [
+  "queued",
+  "copying",
+  "starting",
+  "completed",
+  "failed",
+])
 
 export const tenants = pgTable("tenants", {
   id: text("id").primaryKey(),
@@ -65,7 +76,9 @@ export const workspaceMembers = pgTable(
 export const projects = pgTable("projects", {
   id: text("id").primaryKey(),
   tenantId: tenantIdField,
-  workspaceId: text("workspace_id").references(() => workspaces.id, { onDelete: "set null" }),
+  workspaceId: text("workspace_id").references(() => workspaces.id, {
+    onDelete: "set null",
+  }),
   title: text("title"),
   description: text("description"),
   directory: text("directory").notNull(),
@@ -113,6 +126,31 @@ export const deletedProjects = pgTable("deleted_projects", {
   deletedAt: timestamp("deleted_at").defaultNow().notNull(),
 })
 
+export const projectDuplicateJobs = pgTable(
+  "project_duplicate_jobs",
+  {
+    id: text("id").primaryKey(),
+    sourceProjectId: text("source_project_id").notNull(),
+    targetProjectId: text("target_project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    tenantId: text("tenant_id").notNull(),
+    status: projectDuplicateStatusEnum("status").notNull().default("queued"),
+    bytesTotal: bigint("bytes_total", { mode: "number" }).notNull().default(0),
+    bytesCopied: bigint("bytes_copied", { mode: "number" }).notNull().default(0),
+    error: text("error"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    unique("project_duplicate_jobs_target_unique").on(table.targetProjectId),
+    index("idx_project_duplicate_jobs_source").on(table.sourceProjectId),
+    index("idx_project_duplicate_jobs_status").on(table.status),
+  ],
+)
+
 export const projectGatewayKeys = pgTable("project_gateway_keys", {
   id: text("id").primaryKey(),
   projectId: text("project_id")
@@ -151,54 +189,62 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
 
-export const userTenants = pgTable("user_tenants", {
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  tenantId: text("tenant_id")
-    .notNull()
-    .references(() => tenants.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => [
-  primaryKey({ columns: [table.userId, table.tenantId] }),
-  index("idx_user_tenants_tenant").on(table.tenantId),
-])
+export const userTenants = pgTable(
+  "user_tenants",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    tenantId: text("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.tenantId] }),
+    index("idx_user_tenants_tenant").on(table.tenantId),
+  ],
+)
 
-export const projectSchedules = pgTable("project_schedules", {
-  id: text("id").primaryKey(),
-  projectId: text("project_id")
-    .references(() => projects.id, { onDelete: "cascade" })
-    .notNull(),
-  tenantId: text("tenant_id")
-    .references(() => tenants.id)
-    .notNull(),
-  name: text("name").notNull(),
-  cronPattern: text("cron_pattern").notNull(),
-  timeZone: text("time_zone").notNull().default("UTC"),
-  targetPath: text("target_path").notNull(),
-  method: text("method").notNull().default("POST"),
-  body: jsonb("body"),
-  headers: jsonb("headers"),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => [
-  unique("project_schedules_project_id_name_unique").on(table.projectId, table.name),
-])
+export const projectSchedules = pgTable(
+  "project_schedules",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    tenantId: text("tenant_id")
+      .references(() => tenants.id)
+      .notNull(),
+    name: text("name").notNull(),
+    cronPattern: text("cron_pattern").notNull(),
+    timeZone: text("time_zone").notNull().default("UTC"),
+    targetPath: text("target_path").notNull(),
+    method: text("method").notNull().default("POST"),
+    body: jsonb("body"),
+    headers: jsonb("headers"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [unique("project_schedules_project_id_name_unique").on(table.projectId, table.name)],
+)
 
-export const scheduleExecutions = pgTable("schedule_executions", {
-  id: text("id").primaryKey(),
-  scheduleId: text("schedule_id")
-    .references(() => projectSchedules.id, { onDelete: "cascade" })
-    .notNull(),
-  trigger: text("trigger").notNull().default("cron"),
-  firedAt: timestamp("fired_at").defaultNow().notNull(),
-  statusCode: integer("status_code"),
-  latencyMs: bigint("latency_ms", { mode: "number" }),
-  error: text("error"),
-}, (table) => [
-  index("schedule_executions_schedule_id_fired_at_idx").on(table.scheduleId, table.firedAt),
-])
+export const scheduleExecutions = pgTable(
+  "schedule_executions",
+  {
+    id: text("id").primaryKey(),
+    scheduleId: text("schedule_id")
+      .references(() => projectSchedules.id, { onDelete: "cascade" })
+      .notNull(),
+    trigger: text("trigger").notNull().default("cron"),
+    firedAt: timestamp("fired_at").defaultNow().notNull(),
+    statusCode: integer("status_code"),
+    latencyMs: bigint("latency_ms", { mode: "number" }),
+    error: text("error"),
+  },
+  (table) => [index("schedule_executions_schedule_id_fired_at_idx").on(table.scheduleId, table.firedAt)],
+)
 
 export const pods = pgTable("pods", {
   id: text("id").primaryKey(),
@@ -212,20 +258,32 @@ export const pods = pgTable("pods", {
 
 export const globalTimeoutDefaults = pgTable("global_timeout_defaults", {
   id: text("id").primaryKey(),
-  defaultTimeoutIdle: bigint("default_timeout_idle", { mode: "number" }).notNull(),
-  defaultAppTimeoutIdle: bigint("default_app_timeout_idle", { mode: "number" }).notNull(),
+  defaultTimeoutIdle: bigint("default_timeout_idle", {
+    mode: "number",
+  }).notNull(),
+  defaultAppTimeoutIdle: bigint("default_app_timeout_idle", {
+    mode: "number",
+  }).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
 
 export const globalBudgetDefaults = pgTable("global_budget_defaults", {
   id: text("id").primaryKey(),
-  defaultTenantBudget: bigint("default_tenant_budget", { mode: "number" }).notNull(),
+  defaultTenantBudget: bigint("default_tenant_budget", {
+    mode: "number",
+  }).notNull(),
   defaultTenantBudgetDuration: text("default_tenant_budget_duration").notNull(),
-  defaultProjectBudget: bigint("default_project_budget", { mode: "number" }).notNull(),
+  defaultProjectBudget: bigint("default_project_budget", {
+    mode: "number",
+  }).notNull(),
   defaultProjectBudgetDuration: text("default_project_budget_duration").notNull(),
-  defaultChatBudget: bigint("default_chat_budget", { mode: "number" }).notNull(),
+  defaultChatBudget: bigint("default_chat_budget", {
+    mode: "number",
+  }).notNull(),
   defaultChatBudgetDuration: text("default_chat_budget_duration").notNull(),
-  defaultBackendBudget: bigint("default_backend_budget", { mode: "number" }).notNull(),
+  defaultBackendBudget: bigint("default_backend_budget", {
+    mode: "number",
+  }).notNull(),
   defaultBackendBudgetDuration: text("default_backend_budget_duration").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
@@ -240,8 +298,12 @@ export const tenantTimeoutDefaults = pgTable("tenant_timeout_defaults", {
   tenantId: text("tenant_id")
     .primaryKey()
     .references(() => tenants.id, { onDelete: "cascade" }),
-  defaultTimeoutIdle: bigint("default_timeout_idle", { mode: "number" }).notNull(),
-  defaultAppTimeoutIdle: bigint("default_app_timeout_idle", { mode: "number" }).notNull(),
+  defaultTimeoutIdle: bigint("default_timeout_idle", {
+    mode: "number",
+  }).notNull(),
+  defaultAppTimeoutIdle: bigint("default_app_timeout_idle", {
+    mode: "number",
+  }).notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
 
@@ -249,13 +311,21 @@ export const tenantBudgetDefaults = pgTable("tenant_budget_defaults", {
   tenantId: text("tenant_id")
     .primaryKey()
     .references(() => tenants.id, { onDelete: "cascade" }),
-  defaultTenantBudget: bigint("default_tenant_budget", { mode: "number" }).notNull(),
+  defaultTenantBudget: bigint("default_tenant_budget", {
+    mode: "number",
+  }).notNull(),
   defaultTenantBudgetDuration: text("default_tenant_budget_duration").notNull(),
-  defaultProjectBudget: bigint("default_project_budget", { mode: "number" }).notNull(),
+  defaultProjectBudget: bigint("default_project_budget", {
+    mode: "number",
+  }).notNull(),
   defaultProjectBudgetDuration: text("default_project_budget_duration").notNull(),
-  defaultChatBudget: bigint("default_chat_budget", { mode: "number" }).notNull(),
+  defaultChatBudget: bigint("default_chat_budget", {
+    mode: "number",
+  }).notNull(),
   defaultChatBudgetDuration: text("default_chat_budget_duration").notNull(),
-  defaultBackendBudget: bigint("default_backend_budget", { mode: "number" }).notNull(),
+  defaultBackendBudget: bigint("default_backend_budget", {
+    mode: "number",
+  }).notNull(),
   defaultBackendBudgetDuration: text("default_backend_budget_duration").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })

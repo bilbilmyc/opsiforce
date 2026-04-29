@@ -1,4 +1,4 @@
-import { Show, createEffect, createSignal, untrack } from "solid-js"
+import { Show, createEffect, createMemo, createSignal, untrack } from "solid-js"
 import { useNavigate } from "@tanstack/solid-router"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
@@ -11,13 +11,11 @@ import ProjectCodeTab from "~/components/project/project-code-tab"
 import ProjectDbTab from "~/components/project/project-db-tab"
 import ProjectPreviewPanel from "~/components/project/project-preview-panel"
 import ProjectDisabled from "~/components/project/project-disabled"
+import ProjectDuplicateProgress from "~/components/project/project-duplicate-progress"
 import { useOpenCodeConnection } from "~/components/project/use-opencode-connection"
 import { useWebappPreview } from "~/components/project/use-webapp-preview"
 
-export default function ProjectView(props: {
-  projectId: string
-  initialPrompt?: string
-}) {
+export default function ProjectView(props: { projectId: string; initialPrompt?: string }) {
   const navigate = useNavigate()
   const { hasPermission } = usePermissions()
   const canViewCode = () => hasPermission(Permission.viewCodeTab)
@@ -30,6 +28,7 @@ export default function ProjectView(props: {
     enabled: () => activeTab() === "chat",
   })
   const status = () => statusQuery.data?.status
+  const duplicateOperation = createMemo(() => (status() !== "active" ? statusQuery.data?.operation : undefined))
 
   createEffect(() => {
     if (statusQuery.error instanceof ApiError && statusQuery.error.status === 404) {
@@ -51,7 +50,6 @@ export default function ProjectView(props: {
       fn()
     }
   }
-
 
   return (
     <div class="h-full w-full flex flex-col overflow-hidden">
@@ -81,18 +79,22 @@ export default function ProjectView(props: {
           class="flex-1 min-w-0 flex flex-col oc-chat-only"
           style={{ display: activeTab() === "chat" ? "flex" : "none" }}
         >
-          <Show
-            when={status() !== "disabled"}
-            fallback={<ProjectDisabled projectId={props.projectId} />}
-          >
-            <Show when={connection.router()} fallback={<Spinner label="Connecting..." />}>
-              {(router) => (
-                <ProjectChatTab
-                  projectId={props.projectId}
-                  router={router()}
-                  onPreviewReload={() => reloadPreview()}
-                />
-              )}
+          <Show when={status() !== "disabled"} fallback={<ProjectDisabled projectId={props.projectId} />}>
+            <Show
+              when={duplicateOperation()}
+              fallback={
+                <Show when={connection.router()} fallback={<Spinner label="Connecting..." />}>
+                  {(router) => (
+                    <ProjectChatTab
+                      projectId={props.projectId}
+                      router={router()}
+                      onPreviewReload={() => reloadPreview()}
+                    />
+                  )}
+                </Show>
+              }
+            >
+              {(operation) => <ProjectDuplicateProgress operation={operation()} />}
             </Show>
           </Show>
         </div>
@@ -106,11 +108,7 @@ export default function ProjectView(props: {
         </Show>
 
         <Show when={webapp.ready()}>
-          <ProjectPreviewPanel
-            projectId={props.projectId}
-            appName={webapp.appName()}
-            onReloadRef={onReloadRef}
-          />
+          <ProjectPreviewPanel projectId={props.projectId} appName={webapp.appName()} onReloadRef={onReloadRef} />
         </Show>
       </div>
     </div>
