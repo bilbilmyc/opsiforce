@@ -16,6 +16,7 @@ export function useWorkspaces(scope: "member" | "all" = "member") {
     queryKey: workspaceKeys.list(scope),
     queryFn: () =>
       api.get<Workspace[]>(scope === "all" ? "/workspaces?scope=all" : "/workspaces"),
+    reconcile: "id"
   }))
 }
 
