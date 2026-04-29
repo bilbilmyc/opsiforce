@@ -14,9 +14,18 @@ const platformVersion = JSON.parse(
   readFileSync(join(process.cwd(), "platform-version.json"), "utf8"),
 ).version as string
 
-const agentImageVersion = JSON.parse(
-  readFileSync(join(process.cwd(), "..", "agent-config", "agent-image-version.json"), "utf8"),
-).version as string
+function resolveAgentImage(): string {
+  if (process.env.AGENT_IMAGE) return process.env.AGENT_IMAGE
+
+  let agentImageVersion = platformVersion
+  try {
+    agentImageVersion = JSON.parse(
+      readFileSync(join(process.cwd(), "..", "agent-config", "agent-image-version.json"), "utf8"),
+    ).version as string
+  } catch {}
+
+  return `opsiforce-agent:${agentImageVersion}`
+}
 
 export default () => {
   return {
@@ -24,7 +33,7 @@ export default () => {
   redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
   k8sNamespace: process.env.K8S_NAMESPACE || "opsiforce",
   warmPoolSize: parseInt(process.env.WARM_POOL_SIZE || "2", 10),
-  agentImage: process.env.AGENT_IMAGE || `opsiforce-agent:${agentImageVersion}`,
+  agentImage: resolveAgentImage(),
   agentPort: parseInt(process.env.AGENT_PORT || "4096", 10),
   appPort: parseInt(process.env.APP_PORT || "3000", 10),
   vscodePort: parseInt(process.env.VSCODE_PORT || "8080", 10),
