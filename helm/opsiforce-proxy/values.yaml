@@ -23,6 +23,7 @@ oauth2Proxy:
 
 imagePullSecrets:
   - name: ghcr-pull-secret
+hostAliases: []
 nameOverride: ""
 fullnameOverride: ""
 
