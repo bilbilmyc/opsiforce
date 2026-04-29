@@ -2,6 +2,15 @@
 
 load('ext://restart_process', 'docker_build_with_restart')
 
+minikube_host_ip = str(local("minikube ssh -- 'getent hosts host.minikube.internal' | awk 'NR == 1 { print $1 }'", quiet=True)).strip()
+if minikube_host_ip == '':
+    fail('host.minikube.internal was not resolved inside minikube')
+
+host_aliases = [
+    'hostAliases[0].ip=' + minikube_host_ip,
+    'hostAliases[0].hostnames[0]=host.minikube.internal',
+]
+
 docker_build(
     'opsiforce-backend',
     context='../../..',
@@ -30,6 +39,7 @@ k8s_yaml(helm(
     name='opsiforce-backend',
     namespace='local',
     values=['../helm/opsiforce-backend/values.local.yaml'],
+    set=host_aliases,
 ))
 
 k8s_resource(
@@ -85,6 +95,7 @@ k8s_yaml(helm(
     name='opsiforce-proxy',
     namespace='local',
     values=['../helm/opsiforce-proxy/values.local.yaml'],
+    set=host_aliases,
 ))
 
 k8s_resource(
@@ -99,20 +110,36 @@ k8s_resource(
 
 # ───────────────────────── Tilt UI exposed via Traefik ─────────────────────────
 # Routes https://tilt.opsiforce.traefik.me to the host's `tilt up` web UI on
-# :10350 via an ExternalName service. Requires `tilt up --host=0.0.0.0` so the
-# UI is reachable from inside the cluster.
+# :10350. Requires `tilt up --host=0.0.0.0` so the UI is reachable from inside
+# the cluster.
 k8s_yaml(blob("""
 apiVersion: v1
 kind: Service
 metadata:
-  name: tilt-ui
+  name: opsiforce-host
   namespace: local
 spec:
-  type: ExternalName
-  externalName: host.minikube.internal
   ports:
-    - port: 10350
+    - name: frontend
+      port: 8084
+      targetPort: 8084
+    - name: tilt
+      port: 10350
       targetPort: 10350
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: opsiforce-host
+  namespace: local
+subsets:
+  - addresses:
+      - ip: """ + minikube_host_ip + """
+    ports:
+      - name: frontend
+        port: 8084
+      - name: tilt
+        port: 10350
 ---
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
@@ -125,7 +152,7 @@ spec:
     - match: Host(`tilt.opsiforce.traefik.me`)
       kind: Rule
       services:
-        - name: tilt-ui
+        - name: opsiforce-host
           port: 10350
   tls: {}
 """))
