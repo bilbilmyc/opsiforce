@@ -70,7 +70,6 @@ config:
 
 imagePullSecrets:
   - name: ghcr-pull-secret
-hostAliases: []
 nameOverride: ""
 fullnameOverride: ""
 

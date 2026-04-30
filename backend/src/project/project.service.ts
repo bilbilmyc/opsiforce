@@ -36,13 +36,14 @@ import {
   DuplicateProjectDto,
   ProjectResponse,
   ProjectStatus,
-  ProjectStatusResponse,
+  ProjectState,
   ProjectAuthResponse,
   UpdateProjectAuthDto,
   ProjectDuplicateOperation,
 } from "./project.types"
 import { ProjectAuthService } from "./project-auth.service"
 import { ProjectEventsService } from "./project-events.service"
+import { AppService } from "./app.service"
 import {
   PROJECT_DUPLICATE_QUEUE,
   ProjectDuplicateStatus,
@@ -104,6 +105,8 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly scheduleService: ScheduleService,
     private readonly projectAuthService: ProjectAuthService,
     private readonly projectEventsService: ProjectEventsService,
+    @Inject(forwardRef(() => AppService))
+    private readonly appService: AppService,
     @InjectQueue(PROJECT_DUPLICATE_QUEUE)
     private readonly duplicateQueue: Queue<ProjectDuplicateJobData>,
   ) {}
@@ -288,12 +291,12 @@ export class ProjectService implements OnApplicationBootstrap {
     return project
   }
 
-  async getStatusForUser(params: {
+  async getState(params: {
     projectId: string
     tenantId: string
     userId: string
     canManageWorkspaces: boolean
-  }): Promise<ProjectStatusResponse> {
+  }): Promise<ProjectState> {
     const { projectId, tenantId, userId, canManageWorkspaces } = params
 
     const [row] = await db
@@ -315,12 +318,15 @@ export class ProjectService implements OnApplicationBootstrap {
       if (!member) throw new NotFoundException(`Project ${projectId} not found`)
     }
 
+    const status = row.status as ProjectStatus
     const operation = await this.findDuplicateOperation(row.id)
+    const app = status === ProjectStatus.Active ? this.appService.get(row.id) : null
     return {
       id: row.id,
-      status: row.status as ProjectStatus,
+      status,
       workspaceId: row.workspaceId,
-      ...(operation ? { operation } : {}),
+      operation: operation ?? null,
+      app,
     }
   }
 
@@ -463,6 +469,7 @@ export class ProjectService implements OnApplicationBootstrap {
         updatedAt: new Date(),
       })
       .where(eq(projects.id, id))
+    this.appService.invalidate(id)
     await this.projectEventsService.publish(id)
 
     await this.podPoolService.replenish().catch((err) => {
@@ -741,6 +748,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
     await this.deleteProjectPods(project.id, podName)
     this.queueProjectStartup(project.id)
+    this.appService.invalidate(project.id)
     await this.projectEventsService.publish(project.id)
 
     return this.findOneById(project.id)
@@ -876,6 +884,7 @@ export class ProjectService implements OnApplicationBootstrap {
           ),
         )
     })
+    this.appService.invalidate(projectId)
     await this.projectEventsService.publish(projectId)
   }
 

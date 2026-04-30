@@ -1,21 +1,23 @@
 import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
 import { createEffect, createSignal, onCleanup } from "solid-js"
-import { api, type Project, type ProjectStatusResponse } from "./client"
+import { ApiError, api, type Project, type ProjectState } from "./client"
 
 export const projectKeys = {
   all: ["projects"] as const,
   list: () => [...projectKeys.all, "list"] as const,
   detail: (id: string) => [...projectKeys.all, id] as const,
-  status: (id: string) => [...projectKeys.all, id, "status"] as const,
-  appMeta: (id: string) => [...projectKeys.all, id, "app-meta"] as const,
+}
+
+interface ProjectStatusErrorPayload {
+  code: "not_found" | "forbidden" | "internal"
+  message?: string
 }
 
 export function useProjectStatus(projectId: () => string, options?: { enabled?: () => boolean }) {
-  const [data, setData] = createSignal<ProjectStatusResponse>()
+  const [data, setData] = createSignal<ProjectState>()
   const [error, setError] = createSignal<unknown>()
-  let sequence = 0
 
-  const applyStatus = (status: ProjectStatusResponse) => {
+  const applyStatus = (status: ProjectState) => {
     setData(status)
     setError(undefined)
     if (status.status === "suspended") {
@@ -26,36 +28,35 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
   createEffect(() => {
     const id = projectId()
     const enabled = options?.enabled?.() ?? true
-    const currentSequence = ++sequence
     if (!enabled) return
 
     let closed = false
-    void api
-      .get<ProjectStatusResponse>(`/projects/${id}/status`)
-      .then((status) => {
-        if (!closed && currentSequence === sequence) applyStatus(status)
-      })
-      .catch((err) => {
-        if (!closed && currentSequence === sequence) setError(err)
-      })
-
     const events = new EventSource(statusEventsUrl(id))
 
     events.onmessage = (event) => {
       try {
-        applyStatus(JSON.parse(event.data) as ProjectStatusResponse)
+        applyStatus(JSON.parse(event.data) as ProjectState)
       } catch (err) {
         setError(err)
       }
     }
 
-    events.addEventListener("close", () => {
-      events.close()
+    events.addEventListener("error", (event) => {
+      if (closed) return
+      const data = (event as MessageEvent).data
+      if (typeof data === "string" && data.length > 0) {
+        try {
+          const payload = JSON.parse(data) as ProjectStatusErrorPayload
+          setError(new ApiError(statusForCode(payload.code)))
+          closed = true
+          events.close()
+          return
+        } catch {
+          // fall through to generic disconnect
+        }
+      }
+      setError(new Error("Project status stream disconnected"))
     })
-
-    events.onerror = () => {
-      if (!closed) setError(new Error("Project status stream disconnected"))
-    }
 
     onCleanup(() => {
       closed = true
@@ -73,12 +74,18 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
   }
 }
 
+function statusForCode(code: ProjectStatusErrorPayload["code"]): number {
+  if (code === "not_found") return 404
+  if (code === "forbidden") return 403
+  return 500
+}
+
 function statusEventsUrl(projectId: string): string {
   const params = new URLSearchParams()
   const tenant = localStorage.getItem("tenant")
   if (tenant) params.set("tenant", tenant)
   const query = params.toString()
-  return `/api/projects/${projectId}/status/events${query ? `?${query}` : ""}`
+  return `/api/projects/${projectId}/events${query ? `?${query}` : ""}`
 }
 
 export function useProjects(options?: { enabled?: () => boolean }) {

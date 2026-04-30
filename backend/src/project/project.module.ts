@@ -7,6 +7,7 @@ import { ProjectService } from "./project.service"
 import { ProjectAuthService } from "./project-auth.service"
 import { ProjectDuplicateProcessor } from "./project-duplicate.processor"
 import { ProjectEventsModule } from "./project-events.module"
+import { AppService } from "./app.service"
 import { PROJECT_DUPLICATE_QUEUE } from "./project-duplicate.types"
 import { PodModule } from "../pod/pod.module"
 import { TimeoutModule } from "../timeout/timeout.module"
@@ -30,7 +31,7 @@ import { ProxyService } from "../proxy/proxy.service"
     forwardRef(() => ScheduleModule),
   ],
   controllers: [ProjectController],
-  providers: [ProjectService, ProjectAuthService, ProjectDuplicateProcessor, ProxyService],
+  providers: [ProjectService, ProjectAuthService, ProjectDuplicateProcessor, ProxyService, AppService],
   exports: [ProjectService, ProjectAuthService],
 })
 export class ProjectModule {}

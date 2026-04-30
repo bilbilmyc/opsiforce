@@ -36,6 +36,10 @@ Before doing anything, classify what the user is asking for:
 - When something goes wrong, fix it. Don't explain the error.
 - Don't show code snippets unless the user explicitly asks to see code.
 
+## User-uploaded files
+
+Files the user uploads through the platform land in `/workspace/user_uploaded_files/`. When the user mentions files they uploaded — by name, kind, or content — look there first. The original layout is preserved: a single uploaded file sits at the root of that folder; an uploaded folder keeps its own subtree underneath.
+
 ## Runtime environment
 
 The dev servers are **already running** when you start — the container entrypoint launches them automatically.

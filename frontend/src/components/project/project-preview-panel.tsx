@@ -2,13 +2,13 @@ import { Show, createSignal, onMount } from "solid-js"
 import {
   Check,
   Copy,
+  LoaderCircle,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
 } from "~/components/icons"
 import { ToolbarButton } from "~/components/ui/toolbar-button"
 import { ResizeHandle } from "~/components/ui/resize-handle"
-import Spinner from "~/components/ui/spinner"
 import { createResizablePanel } from "~/lib/create-resizable-panel"
 
 export interface ProjectPreviewPanelProps {
@@ -80,6 +80,9 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             <span class="text-xs font-medium text-muted-foreground truncate">
               {props.appName || "Preview"}
             </span>
+            <Show when={iframeLoading()}>
+              <LoaderCircle class="w-3 h-3 text-muted-foreground animate-spin shrink-0" />
+            </Show>
           </div>
           <div class="flex items-center">
             <ToolbarButton onClick={copyUrl} tooltip={copied() ? "Copied!" : "Copy URL"}>
@@ -94,16 +97,14 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             </ToolbarButton>
           </div>
         </div>
-        <div class="flex-1 min-h-0 relative">
-          <Show when={iframeLoading()}>
-            <Spinner overlay label="Loading preview..." />
-          </Show>
+        <div class="flex-1 min-h-0">
           <iframe
             id="webapp-preview"
             src={previewUrl}
             class="w-full h-full border-0"
             allow="microphone; camera; clipboard-read; clipboard-write; geolocation; fullscreen; autoplay; display-capture; web-share"
             onLoad={() => setIframeLoading(false)}
+            onError={() => setIframeLoading(false)}
           />
         </div>
       </div>

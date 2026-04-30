@@ -55,7 +55,7 @@ The Node backend is no longer the byte-streaming proxy for chat traffic. It is n
 6. Backend creates a new assigned pod with subPath = projects/{tenantId}/{projectId}
 7. Backend waits for the pod Ready condition and pod IP
 8. Backend writes/repairs the assigned pods row, sets project status = active, stores podIp
-9. Frontend listens to GET /api/projects/:id/status/events until status becomes active
+9. Frontend listens to GET /api/projects/:id/events (SSE: status, duplicate operation, app readiness) until status becomes active
 10. ProjectView fetches /api/proxy/{projectId}/path and /api/proxy/{projectId}/session
 11. Frontend restores the latest updated root session, or opens a new session if none exist
 ```

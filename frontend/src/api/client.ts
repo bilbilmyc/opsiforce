@@ -72,11 +72,18 @@ export interface Project {
   createdAt: string
 }
 
-export interface ProjectStatusResponse {
+export interface ProjectState {
   id: string
   status: ProjectStatus
   workspaceId: string | null
-  operation?: ProjectOperation
+  operation: ProjectOperation | null
+  app: ProjectAppMeta | null
+}
+
+export interface ProjectAppMeta {
+  exists: boolean
+  name: string | null
+  description: string | null
 }
 
 export type ProjectOperationStatus = "queued" | "copying" | "starting" | "failed"
