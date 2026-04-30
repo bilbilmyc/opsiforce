@@ -13,7 +13,6 @@ import ProjectPreviewPanel from "~/components/project/project-preview-panel"
 import ProjectDisabled from "~/components/project/project-disabled"
 import ProjectDuplicateProgress from "~/components/project/project-duplicate-progress"
 import { useOpenCodeConnection } from "~/components/project/use-opencode-connection"
-import { useWebappPreview } from "~/components/project/use-webapp-preview"
 
 export default function ProjectView(props: { projectId: string; initialPrompt?: string }) {
   const navigate = useNavigate()
@@ -41,14 +40,11 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
     status,
     initialPrompt: props.initialPrompt,
   })
-  const webapp = useWebappPreview({ projectId: props.projectId, status })
+  const app = () => statusQuery.data?.app
 
-  let reloadPreview: () => void = () => webapp.recheck()
+  let reloadPreview: () => void = () => {}
   const onReloadRef = (fn: () => void) => {
-    reloadPreview = () => {
-      webapp.recheck()
-      fn()
-    }
+    reloadPreview = fn
   }
 
   return (
@@ -107,8 +103,14 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
           <ProjectDbTab projectId={props.projectId} />
         </Show>
 
-        <Show when={webapp.ready()}>
-          <ProjectPreviewPanel projectId={props.projectId} appName={webapp.appName()} onReloadRef={onReloadRef} />
+        <Show when={app()?.exists ? app() : null}>
+          {(meta) => (
+            <ProjectPreviewPanel
+              projectId={props.projectId}
+              appName={meta().name ?? undefined}
+              onReloadRef={onReloadRef}
+            />
+          )}
         </Show>
       </div>
     </div>

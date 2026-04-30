@@ -37,11 +37,12 @@ export interface ProjectResponse extends ProjectRow {
   authMode: ProjectSettingsRow["authMode"]
 }
 
-export interface ProjectStatusResponse {
+export interface ProjectState {
   id: string
   status: ProjectStatus
   workspaceId: string | null
-  operation?: ProjectDuplicateOperation
+  operation: ProjectDuplicateOperation | null
+  app: ProjectAppMeta | null
 }
 
 export interface ProjectDuplicateOperation {
@@ -53,6 +54,12 @@ export interface ProjectDuplicateOperation {
   startedAt: Date | null
   completedAt: Date | null
   updatedAt: Date
+}
+
+export interface ProjectAppMeta {
+  exists: boolean
+  name: string | null
+  description: string | null
 }
 
 export interface ProjectAuthOidcConfig {

@@ -120,6 +120,49 @@ async function* multipartChunks(
   yield multipartText(`--${boundary}--\r\n`)
 }
 
+function topLevelEntriesOf(files: FileList | File[]): string[] {
+  const seen = new Set<string>()
+  const entries: string[] = []
+  for (const file of files) {
+    const top = relativePathOf(file).split("/")[0]
+    if (!top || seen.has(top)) continue
+    seen.add(top)
+    entries.push(top)
+  }
+  return entries
+}
+
+function injectUploadSummary(entries: string[]) {
+  if (entries.length === 0) return
+  const editor = document.querySelector<HTMLDivElement>(
+    '[data-component="prompt-input"]',
+  )
+  if (!editor) return
+  editor.focus()
+
+  const PREFIX = "Uploaded files: "
+  const existing = editor.innerText
+  const lastIdx = existing.lastIndexOf(PREFIX)
+
+  let next: string
+  if (lastIdx >= 0) {
+    const lineEnd = existing.indexOf("\n", lastIdx)
+    const endPos = lineEnd === -1 ? existing.length : lineEnd
+    next = existing.slice(0, endPos) + ", " + entries.join(", ") + existing.slice(endPos)
+  } else {
+    const hasContent = /[^\u200B]/.test(editor.textContent ?? "")
+    next = (hasContent ? existing + "\n\n" : "") + `${PREFIX}${entries.join(", ")}`
+  }
+
+  const range = document.createRange()
+  range.selectNodeContents(editor)
+  const selection = window.getSelection()
+  selection?.removeAllRanges()
+  selection?.addRange(range)
+  // execCommand fires a real input event opencode's editor listens to; DOM-only writes bypass its store.
+  document.execCommand("insertText", false, next)
+}
+
 function streamingMultipartBody(
   files: FileList | File[],
   boundary: string,
@@ -181,6 +224,8 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
     setUploading(true)
     cancelRequested = false
 
+    const topLevelEntries = topLevelEntriesOf(files)
+
     await nextFrame()
 
     try {
@@ -201,6 +246,7 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
 
       const result = await sendUpload(files, totalData)
       showUploadResult(result)
+      if (result.uploaded > 0) injectUploadSummary(topLevelEntries)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       if (msg === "cancelled") toast.info("Upload cancelled")

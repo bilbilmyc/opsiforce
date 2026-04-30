@@ -25,10 +25,6 @@ spec:
           affinity:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.hostAliases }}
-          hostAliases:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
           volumes:
             - name: nginx-conf
               configMap:

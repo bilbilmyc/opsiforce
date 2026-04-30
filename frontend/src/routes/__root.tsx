@@ -11,7 +11,7 @@ import { SolidQueryDevtoolsPanel } from "@tanstack/solid-query-devtools";
 import { TanStackRouterDevtoolsPanel } from "@tanstack/solid-router-devtools";
 import { ApiError } from "~/api/client";
 import AppSidebar from "~/components/app-sidebar";
-import { SidebarProvider, useSidebar } from "~/components/ui/sidebar";
+import { useSidebar } from "~/components/ui/sidebar";
 import { Button } from "~/components/ui/button";
 import { Menu } from "~/components/icons";
 import { HotjarScript } from "~/scripts/hotjar";
@@ -30,6 +30,7 @@ const queryClient = new QueryClient({
 
 function MobileHeader() {
   const { isMobile, toggleSidebar } = useSidebar();
+
   return (
     <Show when={isMobile()}>
       <header class="flex items-center h-10 px-3 shrink-0 bg-background border-b border-border">
@@ -43,6 +44,28 @@ function MobileHeader() {
         </Button>
       </header>
     </Show>
+  );
+}
+
+function SidebarLayout() {
+  const { sidebarResize } = useSidebar();
+
+  return (
+    <div
+      class="group/sidebar-wrapper flex h-full w-full"
+      style={{
+        "--sidebar-width": `${sidebarResize.width()}px`,
+        "--sidebar-width-icon": "3rem",
+      }}
+    >
+      <AppSidebar />
+      <div class="flex flex-1 flex-col min-w-0 h-full overflow-hidden bg-background">
+        <MobileHeader />
+        <div class="flex-1 min-w-0 h-full overflow-hidden">
+          <Outlet />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -68,15 +91,7 @@ function AppContent() {
       <Toaster position="bottom-right" richColors />
       <HotjarScript />
       <Show when={!isPermissionDenied()} fallback={<Outlet />}>
-        <SidebarProvider>
-          <AppSidebar />
-          <div class="flex flex-1 flex-col min-w-0 h-full overflow-hidden bg-background">
-            <MobileHeader />
-            <div class="flex-1 min-w-0 h-full overflow-hidden">
-              <Outlet />
-            </div>
-          </div>
-        </SidebarProvider>
+        <SidebarLayout />
       </Show>
       <Show when={import.meta.env.DEV}>
         <TanStackDevtools

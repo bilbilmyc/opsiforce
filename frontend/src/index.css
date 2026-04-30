@@ -147,7 +147,8 @@ body {
   --main-left: 0px !important;
 }
 
-.oc-chat-only button[aria-label="More options"] {
+.oc-chat-only button[aria-label="More options"],
+.oc-chat-only [data-action="prompt-attach"] {
   display: none !important;
 }
 

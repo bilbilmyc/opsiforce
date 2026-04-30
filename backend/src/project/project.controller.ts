@@ -9,6 +9,8 @@ import {
   Param,
   Req,
   Res,
+  ForbiddenException,
+  NotFoundException,
 } from "@nestjs/common"
 import type { FastifyReply, FastifyRequest } from "fastify"
 import { ProjectService } from "./project.service"
@@ -17,6 +19,7 @@ import {
   UpdateProjectDto,
   DuplicateProjectDto,
   UpdateProjectAuthDto,
+  ProjectStatus,
 } from "./project.types"
 import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
 import { CurrentUser, type UserContext } from "../user/user.decorator"
@@ -24,14 +27,8 @@ import { UserService } from "../user/user.service"
 import { RequirePermission } from "../permission/permission.guard"
 import { Perms } from "../permission/permission.constants"
 import { getGroupsHeader, hasPermission } from "../permission/permission.utils"
-import { ProxyService } from "../proxy/proxy.service"
 import { ProjectEventsService } from "./project-events.service"
-
-interface AppMetaResponse {
-  exists: boolean
-  name?: string
-  description?: string
-}
+import { AppService } from "./app.service"
 
 function canManageWorkspaces(req: FastifyRequest): boolean {
   return hasPermission(getGroupsHeader(req), Perms.manageWorkspaces)
@@ -42,8 +39,8 @@ export class ProjectController {
   constructor(
     private readonly projectService: ProjectService,
     private readonly userService: UserService,
-    private readonly proxyService: ProxyService,
     private readonly projectEventsService: ProjectEventsService,
+    private readonly appService: AppService,
   ) {}
 
   /**
@@ -71,23 +68,7 @@ export class ProjectController {
     })
   }
 
-  @Get(":id/status")
-  async getStatus(
-    @Param("id") id: string,
-    @CurrentTenant() tenant: TenantContext,
-    @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
-  ) {
-    const dbUserId = await this.resolveUserId(user, tenant.tenantId)
-    return this.projectService.getStatusForUser({
-      projectId: id,
-      tenantId: tenant.tenantId,
-      userId: dbUserId,
-      canManageWorkspaces: canManageWorkspaces(req),
-    })
-  }
-
-  @Get(":id/status/events")
+  @Get(":id/events")
   async streamStatus(
     @Param("id") id: string,
     @CurrentTenant() tenant: TenantContext,
@@ -97,7 +78,7 @@ export class ProjectController {
   ) {
     const dbUserId = await this.resolveUserId(user, tenant.tenantId)
     const loadStatus = () =>
-      this.projectService.getStatusForUser({
+      this.projectService.getState({
         projectId: id,
         tenantId: tenant.tenantId,
         userId: dbUserId,
@@ -114,6 +95,7 @@ export class ProjectController {
 
     let closed = false
     let unsubscribe = () => {}
+    let polling = false
     const heartbeat = setInterval(() => {
       if (!closed) reply.raw.write(": ping\n\n")
     }, 25000)
@@ -121,6 +103,17 @@ export class ProjectController {
       closed = true
       clearInterval(heartbeat)
       unsubscribe()
+      if (polling) {
+        this.appService.stopPolling(id)
+        polling = false
+      }
+    }
+
+    const sendError = (code: "not_found" | "forbidden" | "internal", message: string) => {
+      if (closed) return
+      reply.raw.write(`event: error\ndata: ${JSON.stringify({ code, message })}\n\n`)
+      reply.raw.end()
+      close()
     }
 
     const send = async () => {
@@ -129,10 +122,20 @@ export class ProjectController {
         const status = await loadStatus()
         if (closed) return
         reply.raw.write(`data: ${JSON.stringify(status)}\n\n`)
-      } catch {
-        reply.raw.write("event: close\ndata: {}\n\n")
-        reply.raw.end()
-        close()
+
+        const shouldPoll =
+          status.status === ProjectStatus.Active && (status.app === null || status.app.exists === false)
+        if (shouldPoll && !polling) {
+          this.appService.startPolling(id)
+          polling = true
+        } else if (!shouldPoll && polling) {
+          this.appService.stopPolling(id)
+          polling = false
+        }
+      } catch (err) {
+        if (err instanceof NotFoundException) sendError("not_found", err.message)
+        else if (err instanceof ForbiddenException) sendError("forbidden", err.message)
+        else sendError("internal", err instanceof Error ? err.message : "Internal error")
       }
     }
 
@@ -158,42 +161,6 @@ export class ProjectController {
       userId: dbUserId,
       canManageWorkspaces: canManageWorkspaces(req),
     })
-  }
-
-  @Get(":id/app-meta")
-  async getAppMeta(
-    @Param("id") id: string,
-    @CurrentTenant() tenant: TenantContext,
-    @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
-  ): Promise<AppMetaResponse> {
-    await this.gate(id, tenant, user, req)
-
-    const ensured = await this.projectService.ensureProjectById(id, "app")
-    if (ensured.state !== "ready") {
-      return { exists: false }
-    }
-
-    const upstream = this.proxyService.resolveAppUpstreamForProject(ensured.project)
-
-    try {
-      const response = await fetch(`${upstream}/api/app-meta`, {
-        signal: AbortSignal.timeout(5000),
-      })
-
-      if (!response.ok) {
-        return { exists: false }
-      }
-
-      const payload = await response.json()
-      if (!isAppMetaResponse(payload)) {
-        return { exists: false }
-      }
-
-      return payload
-    } catch {
-      return { exists: false }
-    }
   }
 
   @Patch(":id")
@@ -321,16 +288,3 @@ export class ProjectController {
   }
 }
 
-function isAppMetaResponse(value: unknown): value is AppMetaResponse {
-  if (!value || typeof value !== "object") return false
-
-  const payload = value as Record<string, unknown>
-
-  return typeof payload.exists === "boolean"
-    && isOptionalString(payload.name)
-    && isOptionalString(payload.description)
-}
-
-function isOptionalString(value: unknown): value is string | undefined {
-  return value == null || typeof value === "string"
-}

@@ -1,13 +1,11 @@
 import {
-  createContext,
-  useContext,
+  createRoot,
   createSignal,
   createEffect,
   onCleanup,
   Show,
   splitProps,
   type ParentProps,
-  type JSX,
   type Accessor,
 } from "solid-js"
 import { cn } from "~/lib/cn"
@@ -19,7 +17,7 @@ import { PanelLeft } from "~/components/icons"
 
 type SidebarState = "expanded" | "collapsed"
 
-interface SidebarContextValue {
+interface SidebarStore {
   state: Accessor<SidebarState>
   open: Accessor<boolean>
   setOpen: (open: boolean) => void
@@ -28,14 +26,6 @@ interface SidebarContextValue {
   isMobile: Accessor<boolean>
   toggleSidebar: () => void
   sidebarResize: ResizablePanel
-}
-
-const SidebarCtx = createContext<SidebarContextValue>()
-
-export function useSidebar() {
-  const ctx = useContext(SidebarCtx)
-  if (!ctx) throw new Error("useSidebar must be used within SidebarProvider")
-  return ctx
 }
 
 function createIsMobile(breakpoint = 768) {
@@ -52,61 +42,55 @@ function createIsMobile(breakpoint = 768) {
   return isMobile
 }
 
-export function SidebarProvider(props: ParentProps<{
-  defaultOpen?: boolean
-  class?: string
-  style?: JSX.CSSProperties
-}>) {
-  const [local] = splitProps(props, ["defaultOpen", "class", "style", "children"])
-  const isMobile = createIsMobile()
-  const [openMobile, setOpenMobile] = createSignal(false)
+let _store: SidebarStore | null = null
 
-  // Grandfathered key `sidebar:state` — stored as the string "true"/"false".
-  const [_open, _setOpen] = createPersistedSignal<boolean>(
-    "sidebar:state",
-    local.defaultOpen ?? true,
-    {
-      serialize: (v) => String(v),
-      deserialize: (raw) => raw === "true",
-    },
-  )
+function initStore(): SidebarStore {
+  return createRoot(() => {
+    const isMobile = createIsMobile()
+    const [openMobile, setOpenMobile] = createSignal(false)
 
-  const state = (): SidebarState => _open() ? "expanded" : "collapsed"
+    const [_open, _setOpen] = createPersistedSignal<boolean>(
+      "sidebar:state",
+      true,
+      {
+        serialize: (v) => String(v),
+        deserialize: (raw) => raw === "true",
+      },
+    )
 
-  const toggleSidebar = () => {
-    if (isMobile()) setOpenMobile(!openMobile())
-    else _setOpen(!_open())
-  }
+    const state = (): SidebarState => _open() ? "expanded" : "collapsed"
 
-  const sidebarResize = createResizablePanel({
-    storageKey: "opsiforce:sidebar-width",
-    minWidth: 200,
-    defaultWidth: 256,
-    maxWidth: () => Math.round(window.innerWidth * 0.5),
-    direction: "right",
-  })
-
-  createEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "b" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        toggleSidebar()
-      }
+    const toggleSidebar = () => {
+      if (isMobile()) setOpenMobile(!openMobile())
+      else _setOpen(!_open())
     }
-    window.addEventListener("keydown", handler)
-    onCleanup(() => window.removeEventListener("keydown", handler))
-  })
 
-  return (
-    <SidebarCtx.Provider value={{ state, open: _open, setOpen: _setOpen, openMobile, setOpenMobile, isMobile, toggleSidebar, sidebarResize }}>
-      <div
-        class={cn("group/sidebar-wrapper flex h-full w-full", local.class)}
-        style={{ "--sidebar-width": `${sidebarResize.width()}px`, "--sidebar-width-icon": "3rem", ...local.style } as JSX.CSSProperties}
-      >
-        {local.children}
-      </div>
-    </SidebarCtx.Provider>
-  )
+    const sidebarResize = createResizablePanel({
+      storageKey: "opsiforce:sidebar-width",
+      minWidth: 200,
+      defaultWidth: 256,
+      maxWidth: () => Math.round(window.innerWidth * 0.5),
+      direction: "right",
+    })
+
+    createEffect(() => {
+      const handler = (e: KeyboardEvent) => {
+        if (e.key === "b" && (e.metaKey || e.ctrlKey)) {
+          e.preventDefault()
+          toggleSidebar()
+        }
+      }
+      window.addEventListener("keydown", handler)
+      onCleanup(() => window.removeEventListener("keydown", handler))
+    })
+
+    return { state, open: _open, setOpen: _setOpen, openMobile, setOpenMobile, isMobile, toggleSidebar, sidebarResize }
+  })
+}
+
+export function useSidebar(): SidebarStore {
+  if (!_store) _store = initStore()
+  return _store
 }
 
 export function Sidebar(props: ParentProps<{
