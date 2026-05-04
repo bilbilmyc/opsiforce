@@ -28,12 +28,28 @@ export const projectDuplicateStatusEnum = pgEnum("project_duplicate_status", [
   "failed",
 ])
 
+export const agentUpdateStatusEnum = pgEnum("agent_update_status", ["queued", "running", "applied", "conflict", "failed"])
+
+export const agentMigrationStatusEnum = pgEnum("agent_migration_status", [
+  "queued",
+  "running",
+  "applied",
+  "skipped",
+  "conflict",
+  "failed",
+])
+
 export const tenants = pgTable("tenants", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
   displayName: text("display_name").notNull(),
   bifrostTenantId: text("bifrost_tenant_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+})
+
+export const agents = pgTable("agents", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
 })
 
 const tenantIdField = text("tenant_id")
@@ -102,6 +118,70 @@ export const projectSettings = pgTable("project_settings", {
   timezone: text("timezone").notNull().default("UTC"),
   authMode: projectAuthModeEnum("auth_mode").notNull().default("public"),
 })
+
+export const projectAgentUpdates = pgTable(
+  "project_agent_updates",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    agentId: text("agent_id")
+      .references(() => agents.id)
+      .notNull(),
+    fromVersion: text("from_version"),
+    targetVersion: text("target_version").notNull(),
+    agentOwnedHash: text("agent_owned_hash"),
+    status: agentUpdateStatusEnum("status").notNull().default("queued"),
+    requiresOpenCodeReload: boolean("requires_open_code_reload").notNull().default(false),
+    requiresAppRestart: boolean("requires_app_restart").notNull().default(false),
+    requiresPodRecreate: boolean("requires_pod_recreate").notNull().default(false),
+    reloadStatus: text("reload_status"),
+    error: text("error"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_project_agent_updates_project").on(table.projectId),
+    index("idx_project_agent_updates_agent").on(table.agentId),
+    index("idx_project_agent_updates_status").on(table.status),
+    index("idx_project_agent_updates_project_agent").on(table.projectId, table.agentId),
+  ],
+)
+
+export const projectAgentMigrations = pgTable(
+  "project_agent_migrations",
+  {
+    id: text("id").primaryKey(),
+    updateId: text("update_id")
+      .references(() => projectAgentUpdates.id, { onDelete: "cascade" })
+      .notNull(),
+    projectId: text("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    agentId: text("agent_id")
+      .references(() => agents.id)
+      .notNull(),
+    migrationId: text("migration_id").notNull(),
+    targetVersion: text("target_version").notNull(),
+    status: agentMigrationStatusEnum("status").notNull().default("queued"),
+    path: text("path"),
+    reason: text("reason"),
+    error: text("error"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_project_agent_migrations_update").on(table.updateId),
+    index("idx_project_agent_migrations_project").on(table.projectId),
+    index("idx_project_agent_migrations_status").on(table.status),
+    index("idx_project_agent_migrations_migration").on(table.migrationId),
+  ],
+)
 
 export const projectVirtualKeys = pgTable("project_virtual_keys", {
   id: text("id").primaryKey(),

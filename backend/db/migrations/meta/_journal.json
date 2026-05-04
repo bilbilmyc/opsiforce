@@ -141,6 +141,13 @@
       "when": 1777362953795,
       "tag": "0019_add-project-duplicate-jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1777897620031,
+      "tag": "0020_gifted_goliath",
+      "breakpoints": true
     }
   ]
 }
