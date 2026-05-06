@@ -28,12 +28,25 @@ export const projectDuplicateStatusEnum = pgEnum("project_duplicate_status", [
   "failed",
 ])
 
+export const agentUpdateStatusEnum = pgEnum("agent_update_status", [
+  "running",
+  "reload_pending",
+  "applied",
+  "conflict",
+  "failed",
+])
+
 export const tenants = pgTable("tenants", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
   displayName: text("display_name").notNull(),
   bifrostTenantId: text("bifrost_tenant_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+})
+
+export const agents = pgTable("agents", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
 })
 
 const tenantIdField = text("tenant_id")
@@ -102,6 +115,46 @@ export const projectSettings = pgTable("project_settings", {
   timezone: text("timezone").notNull().default("UTC"),
   authMode: projectAuthModeEnum("auth_mode").notNull().default("public"),
 })
+
+export const projectAgentUpdates = pgTable(
+  "project_agent_updates",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    agentId: text("agent_id")
+      .references(() => agents.id)
+      .notNull(),
+    fromVersion: text("from_version"),
+    targetVersion: text("target_version").notNull(),
+    status: agentUpdateStatusEnum("status").notNull().default("running"),
+    requiresOpenCodeReload: boolean("requires_open_code_reload").notNull().default(false),
+    requiresPodRecreate: boolean("requires_pod_recreate").notNull().default(false),
+    reloadStatus: text("reload_status"),
+    reloadAttempt: integer("reload_attempt").notNull().default(0),
+    appliedMigrations: jsonb("applied_migrations").$type<string[]>().notNull().default([]),
+    skippedMigrations: jsonb("skipped_migrations").$type<string[]>().notNull().default([]),
+    conflicts: jsonb("conflicts")
+      .$type<{ migrationId: string; path: string; reason: string }[]>()
+      .notNull()
+      .default([]),
+    failedMigrations: jsonb("failed_migrations")
+      .$type<{ migrationId: string; error: string }[]>()
+      .notNull()
+      .default([]),
+    error: text("error"),
+    startedAt: timestamp("started_at"),
+    finishedAt: timestamp("finished_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_project_agent_updates_project").on(table.projectId),
+    index("idx_project_agent_updates_status").on(table.status),
+    index("idx_project_agent_updates_project_agent").on(table.projectId, table.agentId),
+  ],
+)
 
 export const projectVirtualKeys = pgTable("project_virtual_keys", {
   id: text("id").primaryKey(),

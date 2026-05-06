@@ -2,10 +2,10 @@
 set -e
 cd "$(dirname "$0")"
 
-while [ ! -f "bun.lock" ]; do
+while [ ! -f ".pnp.cjs" ]; do
   sleep 2
 done
 
-guard app-backend bun run dev:backend &
-guard app-frontend bun run dev:frontend &
+guard app-backend yarn dev:backend &
+guard app-frontend yarn dev:frontend &
 wait -n

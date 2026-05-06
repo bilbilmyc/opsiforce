@@ -5,14 +5,14 @@
 NAME="$1"
 shift
 
-LOG_WRITER="/usr/local/bin/log-writer"
+LOG_WRITER="/usr/local/bin/log-writer.ts"
 MAX_RESTARTS=50
 INITIAL_DELAY=2
 MAX_DELAY=60
 STABLE_THRESHOLD=30
 
 USE_LOG_WRITER=false
-if [ -x "$LOG_WRITER" ] && command -v bun >/dev/null 2>&1; then
+if [ -x "$LOG_WRITER" ] && command -v node >/dev/null 2>&1; then
   USE_LOG_WRITER=true
 fi
 

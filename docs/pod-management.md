@@ -144,6 +144,7 @@ The agent image bakes config into `/opt/...`, and an init container copies it on
 |---|---|
 | `/opt/opencode/opencode.json` | `/workspace/.xdg/config/opencode/opencode.json` |
 | `/opt/agents/{AGENT_NAME}/agent.md` | `/workspace/.opencode/agents/{AGENT_NAME}.md` |
-| `/opt/agents/{AGENT_NAME}/template/` | `/workspace/` |
+| `/opt/agents/{AGENT_NAME}/skills/` | `/workspace/.opencode/skills/` |
+| `/opt/agents/{AGENT_NAME}/template/` | `/workspace/` when `/workspace/app` does not exist |
 
-This keeps the mounted project workspace persistent while still letting the image supply the initial agent profile and template files.
+Agent config and skills are platform-owned and refreshed on assigned pod creation. The app template is project-owned after creation, so existing apps keep their files unless an explicit migration changes them.

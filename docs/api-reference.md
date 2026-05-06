@@ -101,8 +101,8 @@ The backend routes traffic to agent pods via direct pod IPs (`http://{podIp}:{po
 | `REDIS_URL` | `redis://localhost:6379` | Redis or Valkey for timeout tracking |
 | `K8S_NAMESPACE` | `opsiforce` (prod) / `local` (dev) | Namespace for agent pods |
 | `WARM_POOL_SIZE` | `2` | Number of warm pods to keep available |
-| `AGENT_IMAGE` | derived | Agent image used for assigned and warm pods |
-| `AGENT_IMAGE_PULL_POLICY` | `IfNotPresent` | Pod image pull policy |
+| `AGENT_CONTAINER_IMAGE` | derived | Agent container image used for assigned and warm pods |
+| `AGENT_CONTAINER_IMAGE_PULL_POLICY` | `IfNotPresent` | Pod image pull policy |
 | `AGENT_PORT` | `4096` | OpenCode agent port |
 | `APP_PORT` | `3000` | App preview port |
 | `VSCODE_PORT` | `8080` | VS Code port |

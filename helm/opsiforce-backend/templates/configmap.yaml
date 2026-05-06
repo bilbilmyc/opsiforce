@@ -9,10 +9,10 @@ data:
   REDIS_URL: {{ .Values.config.redisUrl | quote }}
   K8S_NAMESPACE: {{ .Values.config.k8sNamespace | quote }}
   WARM_POOL_SIZE: {{ .Values.config.warmPoolSize | quote }}
-  {{- if .Values.config.agentImage }}
-  AGENT_IMAGE: {{ .Values.config.agentImage | quote }}
+  {{- if .Values.config.agentContainerImage }}
+  AGENT_CONTAINER_IMAGE: {{ .Values.config.agentContainerImage | quote }}
   {{- end }}
-  AGENT_IMAGE_PULL_POLICY: {{ .Values.config.agentImagePullPolicy | quote }}
+  AGENT_CONTAINER_IMAGE_PULL_POLICY: {{ .Values.config.agentContainerImagePullPolicy | quote }}
   AGENT_PORT: {{ .Values.config.agentPort | quote }}
   APP_PORT: {{ .Values.config.appPort | quote }}
   VSCODE_PORT: {{ .Values.config.vscodePort | quote }}
@@ -21,6 +21,8 @@ data:
   STORAGE_TYPE: {{ .Values.config.storageType | quote }}
   STORAGE_MOUNT_PATH: {{ .Values.config.storageMountPath | default "/workspace-data" | quote }}
   AGENT_NAME: {{ .Values.config.agentName | quote }}
+  AGENT_WORKSPACE_UPDATE_ON_STARTUP: {{ .Values.config.agentWorkspaceUpdateOnStartup | default "true" | quote }}
+  AGENT_UPDATE_JOB_TIMEOUT_MS: {{ .Values.config.agentUpdateJobTimeoutMs | default "1800000" | quote }}
   {{- if .Values.config.agentResources }}
   AGENT_RESOURCES: {{ .Values.config.agentResources | toJson | quote }}
   {{- end }}

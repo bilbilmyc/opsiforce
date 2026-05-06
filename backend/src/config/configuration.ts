@@ -10,21 +10,26 @@ function parseJsonEnv<T>(env: string | undefined, fallback: T): T {
   }
 }
 
+function parseBooleanEnv(env: string | undefined, fallback: boolean): boolean {
+  if (!env) return fallback
+  return env === "true" || env === "1"
+}
+
 const platformVersion = JSON.parse(
   readFileSync(join(process.cwd(), "platform-version.json"), "utf8"),
 ).version as string
 
-function resolveAgentImage(): string {
-  if (process.env.AGENT_IMAGE) return process.env.AGENT_IMAGE
+function resolveAgentContainerImage(): string {
+  if (process.env.AGENT_CONTAINER_IMAGE) return process.env.AGENT_CONTAINER_IMAGE
 
-  let agentImageVersion = platformVersion
+  let imageVersion = platformVersion
   try {
-    agentImageVersion = JSON.parse(
+    imageVersion = JSON.parse(
       readFileSync(join(process.cwd(), "..", "agent-config", "agent-image-version.json"), "utf8"),
     ).version as string
   } catch {}
 
-  return `opsiforce-agent:${agentImageVersion}`
+  return `opsiforce-agent:${imageVersion}`
 }
 
 export default () => {
@@ -33,14 +38,14 @@ export default () => {
   redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
   k8sNamespace: process.env.K8S_NAMESPACE || "opsiforce",
   warmPoolSize: parseInt(process.env.WARM_POOL_SIZE || "2", 10),
-  agentImage: resolveAgentImage(),
+  agentContainerImage: resolveAgentContainerImage(),
   agentPort: parseInt(process.env.AGENT_PORT || "4096", 10),
   appPort: parseInt(process.env.APP_PORT || "3000", 10),
   vscodePort: parseInt(process.env.VSCODE_PORT || "8080", 10),
   dbViewerPort: parseInt(process.env.DB_VIEWER_PORT || "8081", 10),
   cephfsPvcName: process.env.CEPHFS_PVC_NAME || "opsiforce-cephfs",
   storageType: (process.env.STORAGE_TYPE || "cephfs") as "cephfs" | "hostPath",
-  agentImagePullPolicy: process.env.AGENT_IMAGE_PULL_POLICY || "IfNotPresent",
+  agentContainerImagePullPolicy: process.env.AGENT_CONTAINER_IMAGE_PULL_POLICY || "IfNotPresent",
   platformVersion: platformVersion,
   agentResources: parseJsonEnv(process.env.AGENT_RESOURCES, {
     requests: { cpu: "200m", memory: "512Mi" },
@@ -61,6 +66,8 @@ export default () => {
   workspaceCleanupRetentionDays: 7,
   requestLogRetentionDays: parseInt(process.env.REQUEST_LOG_RETENTION_DAYS || "3", 10),
   gatewayUrl: process.env.SERVICE_GATEWAY_URL || "http://opsiforce-backend:3001/api/gateway",
+  agentWorkspaceUpdateOnStartup: parseBooleanEnv(process.env.AGENT_WORKSPACE_UPDATE_ON_STARTUP, true),
+  agentUpdateJobTimeoutMs: parseInt(process.env.AGENT_UPDATE_JOB_TIMEOUT_MS || "1800000", 10),
   mailgunApiKey: process.env.MAILGUN_API_KEY || "",
   mailgunDomain: process.env.MAILGUN_DOMAIN || "",
   mailgunSender: process.env.MAILGUN_SENDER || "",

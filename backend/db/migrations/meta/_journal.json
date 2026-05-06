@@ -141,6 +141,27 @@
       "when": 1777362953795,
       "tag": "0019_add-project-duplicate-jobs",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1777897620031,
+      "tag": "0020_gifted_goliath",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1777985760004,
+      "tag": "0021_uuid-app-builder-agent-id",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1777988800000,
+      "tag": "0022_simplify-agent-updates",
+      "breakpoints": true
     }
   ]
 }

@@ -1,18 +1,18 @@
 import { Injectable, OnModuleInit } from "@nestjs/common"
-import Database from "better-sqlite3"
+import { DatabaseSync } from "node:sqlite"
 import * as path from "path"
 import * as fs from "fs"
 
-type SqliteParam = string | number | bigint | Buffer | null
+type SqliteParam = string | number | bigint | Uint8Array | null
 
 @Injectable()
 export class DatabaseService implements OnModuleInit {
-  private db!: Database.Database
+  private db!: DatabaseSync
 
   onModuleInit() {
     const dbPath = path.resolve(process.cwd(), "data", "app.db")
     fs.mkdirSync(path.dirname(dbPath), { recursive: true })
-    this.db = new Database(dbPath)
+    this.db = new DatabaseSync(dbPath)
     this.db.exec("PRAGMA busy_timeout = 5000")
     this.db.exec("PRAGMA journal_mode = TRUNCATE")
     this.db.exec("PRAGMA synchronous = FULL")

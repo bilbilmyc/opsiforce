@@ -6,8 +6,13 @@
 **/.turbo
 **/.next
 **/.yarn/cache
+**/.yarn/unplugged
+**/.yarn/sdks
 **/.yarn/install-state.gz
 **/.yarn/build-state.yml
+**/.pnp.cjs
+**/.pnp.loader.mjs
+agent-config/agents/**/template/**/yarn.lock
 
 **/.env
 **/.env.local

@@ -135,7 +135,7 @@ Timezone is captured automatically from the user's browser — the agent never a
 
 ## Agent Skill
 
-`agent-config/agents/app-builder/template/.opencode/skills/schedules/SKILL.md` teaches the agent:
+`agent-config/agents/app-builder/skills/schedules/SKILL.md` teaches the agent:
 
 - How to use `SERVICE_GATEWAY_URL` + `SERVICE_GATEWAY_API_KEY` for schedule CRUD
 - Build the target endpoint first, then register the schedule
@@ -159,7 +159,7 @@ Timezone is captured automatically from the user's browser — the agent never a
 | `frontend/src/routes/schedules.tsx` | Route entry |
 | `frontend/src/pages/schedules.tsx` | Schedules page with table, edit dialog, executions modal |
 | `frontend/src/api/client.ts` | `scheduleApi` methods + `X-User-Timezone` header |
-| `agent-config/agents/app-builder/template/.opencode/skills/schedules/SKILL.md` | Agent skill |
+| `agent-config/agents/app-builder/skills/schedules/SKILL.md` | Agent skill |
 
 ## Comparison with Service Gateway
 

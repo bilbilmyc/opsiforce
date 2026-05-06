@@ -1,10 +1,10 @@
-#!/usr/bin/env bun
-import { Database } from "bun:sqlite"
-import { mkdirSync } from "fs"
-import { parseArgs } from "util"
+#!/usr/bin/env node
+import { DatabaseSync, type StatementSync } from "node:sqlite"
+import { mkdirSync } from "node:fs"
+import { parseArgs } from "node:util"
 
 const { values } = parseArgs({
-  args: Bun.argv.slice(2),
+  args: process.argv.slice(2),
   options: {
     name: { type: "string" },
     line: { type: "string" },
@@ -24,17 +24,17 @@ const BATCH_SIZE = 100
 const FLUSH_MS = 500
 const MAX_LINE_LENGTH = 10 * 1024
 
-let db: Database | null = null
-let insertStmt: ReturnType<Database["prepare"]> | null = null
-let eventStmt: ReturnType<Database["prepare"]> | null = null
+let db: DatabaseSync | null = null
+let insertStmt: StatementSync | null = null
+let eventStmt: StatementSync | null = null
 let totalInserts = 0
 let batch: string[] = []
-let flushTimer: Timer | null = null
+let flushTimer: NodeJS.Timeout | null = null
 
 function initDb(): boolean {
   try {
     mkdirSync("/workspace/data", { recursive: true })
-    db = new Database(DB_PATH)
+    db = new DatabaseSync(DB_PATH)
     db.exec("PRAGMA busy_timeout = 5000")
     db.exec("PRAGMA journal_mode = TRUNCATE")
     db.exec("PRAGMA synchronous = FULL")
@@ -69,15 +69,14 @@ function truncateLine(line: string): string {
   return line.length > MAX_LINE_LENGTH ? line.slice(0, MAX_LINE_LENGTH) : line
 }
 
-function flushBatch() {
+function flushBatch(): void {
   if (batch.length === 0 || !db || !insertStmt) return
   try {
-    const tx = db.transaction(() => {
-      for (const line of batch) {
-        insertStmt!.run(processName, truncateLine(line))
-      }
-    })
-    tx()
+    db.exec("BEGIN")
+    for (const line of batch) {
+      insertStmt.run(processName, truncateLine(line))
+    }
+    db.exec("COMMIT")
     totalInserts += batch.length
     batch = []
 
@@ -85,15 +84,16 @@ function flushBatch() {
       pruneIfNeeded()
     }
   } catch {
+    try { db.exec("ROLLBACK") } catch {}
     batch = []
   }
 }
 
-function pruneIfNeeded() {
+function pruneIfNeeded(): void {
   if (!db) return
   try {
-    const row = db.prepare("SELECT COUNT(*) as count FROM process_logs").get() as { count: number }
-    if (row.count > MAX_ROWS) {
+    const row = db.prepare("SELECT COUNT(*) as count FROM process_logs").get() as { count: number } | undefined
+    if (row && row.count > MAX_ROWS) {
       db.exec(`DELETE FROM process_logs WHERE id IN (
         SELECT id FROM process_logs ORDER BY id ASC LIMIT ${row.count - PRUNE_TO}
       )`)
@@ -101,7 +101,7 @@ function pruneIfNeeded() {
   } catch {}
 }
 
-function scheduleFlush() {
+function scheduleFlush(): void {
   if (flushTimer) return
   flushTimer = setTimeout(() => {
     flushTimer = null
@@ -109,7 +109,7 @@ function scheduleFlush() {
   }, FLUSH_MS)
 }
 
-function addLine(line: string) {
+function addLine(line: string): void {
   batch.push(line)
   if (batch.length >= BATCH_SIZE) {
     if (flushTimer) { clearTimeout(flushTimer); flushTimer = null }
@@ -119,12 +119,12 @@ function addLine(line: string) {
   }
 }
 
-function insertEvent() {
+function insertEvent(): void {
   if (!db || !eventStmt) return
   try {
     eventStmt.run(
       processName,
-      values.event!,
+      values.event ?? null,
       values["exit-code"] ? parseInt(values["exit-code"], 10) : null,
       values.uptime ? parseInt(values.uptime, 10) : null,
       values.restart ? parseInt(values.restart, 10) : null,
@@ -147,33 +147,24 @@ if (values.line !== undefined) {
   process.exit(0)
 }
 
-const writer = Bun.stdout.writer()
-const decoder = new TextDecoder()
+process.stdin.setEncoding("utf-8")
 let remainder = ""
 
-async function readStdin() {
-  try {
-    for await (const chunk of Bun.stdin.stream()) {
-      const text = remainder + decoder.decode(chunk, { stream: true })
-      const lines = text.split("\n")
-      remainder = lines.pop() || ""
+process.stdin.on("data", (chunk: string) => {
+  const text = remainder + chunk
+  const lines = text.split("\n")
+  remainder = lines.pop() || ""
+  for (const line of lines) {
+    process.stdout.write(line + "\n")
+    addLine(line)
+  }
+})
 
-      for (const line of lines) {
-        writer.write(line + "\n")
-        addLine(line)
-      }
-      writer.flush()
-    }
-
-    if (remainder) {
-      writer.write(remainder + "\n")
-      writer.flush()
-      addLine(remainder)
-    }
-  } catch {}
-
+process.stdin.on("end", () => {
+  if (remainder) {
+    process.stdout.write(remainder + "\n")
+    addLine(remainder)
+  }
   flushBatch()
   if (db) try { db.close() } catch {}
-}
-
-readStdin()
+})
