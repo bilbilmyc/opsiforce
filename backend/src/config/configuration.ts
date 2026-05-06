@@ -48,7 +48,7 @@ export default () => {
   agentContainerImagePullPolicy: process.env.AGENT_CONTAINER_IMAGE_PULL_POLICY || "IfNotPresent",
   platformVersion: platformVersion,
   agentResources: parseJsonEnv(process.env.AGENT_RESOURCES, {
-    requests: { cpu: "200m", memory: "512Mi" },
+    requests: { cpu: "200m", memory: "1312Mi" },
     limits: { memory: "2Gi" },
   }),
   agentNodeSelector: parseJsonEnv<Record<string, string>>(process.env.AGENT_NODE_SELECTOR, {}),

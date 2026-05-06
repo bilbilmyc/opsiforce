@@ -2135,7 +2135,6 @@
       "values": [
         "queued",
         "running",
-        "reload_pending",
         "applied",
         "conflict",
         "failed"

@@ -147,7 +147,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             periodSeconds: 5,
           },
           resources: options.resources ?? {
-            requests: { cpu: "200m", memory: "512Mi" },
+            requests: { cpu: "200m", memory: "1312Mi" },
             limits: { memory: "2Gi" },
           },
         },

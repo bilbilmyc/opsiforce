@@ -1,5 +1,5 @@
 CREATE TYPE "public"."agent_migration_status" AS ENUM('queued', 'running', 'applied', 'skipped', 'conflict', 'failed');--> statement-breakpoint
-CREATE TYPE "public"."agent_update_status" AS ENUM('queued', 'running', 'reload_pending', 'applied', 'conflict', 'failed');--> statement-breakpoint
+CREATE TYPE "public"."agent_update_status" AS ENUM('queued', 'running', 'applied', 'conflict', 'failed');--> statement-breakpoint
 CREATE TABLE "agents" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
