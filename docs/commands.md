@@ -103,6 +103,6 @@ curl http://localhost:3001/api/health                 # Health check
 - `frontend/local-envs.sh` has local app, preview, VS Code, and DB viewer domains
 - `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are optional locally; when omitted, Bifrost provider secrets are created with empty values
 - Vite config must allow `host.minikube.internal` and `.opsiforce.traefik.me` because local Traefik reaches the host Vite server from inside minikube
-- Local dev uses `AGENT_IMAGE_PULL_POLICY=Never` (image built into minikube), prod uses `Always`
+- Local dev uses `AGENT_CONTAINER_IMAGE_PULL_POLICY=Never` (image built into minikube), prod uses `Always`
 - Local dev uses in-cluster backend/proxies via Tilt and host Vite via Traefik
 - See [API Reference](api-reference.md) for full env var list

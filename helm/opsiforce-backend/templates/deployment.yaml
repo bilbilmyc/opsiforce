@@ -26,6 +26,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       serviceAccountName: {{ .Values.serviceAccountName }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds | default 180 }}
       containers:
         - name: opsiforce-backend
           lifecycle:

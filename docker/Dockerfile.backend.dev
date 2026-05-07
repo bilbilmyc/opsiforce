@@ -9,6 +9,7 @@ COPY .yarn/releases .yarn/releases
 
 COPY packages/opsiforce/backend/ ./packages/opsiforce/backend/
 COPY packages/opsiforce/agent-config/agent-image-version.json ./packages/opsiforce/agent-config/agent-image-version.json
+COPY packages/opsiforce/agent-config/agents.json ./packages/opsiforce/agent-config/agents.json
 
 RUN yarn workspaces focus @opsiforce/backend
 

@@ -229,7 +229,7 @@ helm upgrade --install opsiforce-backend-{env} ./helm/opsiforce-backend \
   --set config.databaseUrl="{DATABASE_URL}" \
   --set serviceAccountName=opsiforce-opsiforce-infra-{env}-agent \
   --set config.k8sNamespace={namespace} \
-  --set config.agentImage=ghcr.io/simadevelopment/opsiforce:agent-{env}-{sha7} \
+  --set config.agentContainerImage=ghcr.io/simadevelopment/opsiforce:agent-{env}-{sha7} \
   --set config.cephfsPvcName=opsiforce-cephfs \
   --set config.platformVersion={sha7} \
   --set config.bifrostProxyUrl=http://opsiforce-bifrost:8080/v1 \
@@ -293,7 +293,7 @@ The current runtime is pinned to `v1.4.20`, so the backend sends the v1.4-compat
 |----------|----------------|
 | `deployment.yaml` | NestJS container (port 3001). Uses serviceAccount from infra chart. Health: `/api/health`. preStop: 30s sleep for graceful drain. |
 | `service.yaml` | ClusterIP:80 → 3001 |
-| `configmap.yaml` | All backend env vars (DATABASE_URL, REDIS_URL, K8S_NAMESPACE, AGENT_IMAGE, APP_PORT, AGENT_NAME, etc.) injected via `envFrom` |
+| `configmap.yaml` | All backend env vars (DATABASE_URL, REDIS_URL, K8S_NAMESPACE, AGENT_CONTAINER_IMAGE, APP_PORT, AGENT_NAME, etc.) injected via `envFrom` |
 | `hpa.yaml` | HorizontalPodAutoscaler (disabled by default, CPU-based) |
 
 #### 4. `opsiforce-frontend`
@@ -344,7 +344,7 @@ opsiforce-runtime-proxies
 opsiforce-backend
   ├── needs ServiceAccount from → opsiforce (infra)  (serviceAccountName)
   ├── needs PVC name from       → opsiforce (infra)  (config.cephfsPvcName)
-  ├── needs agent image tag from → opsiforce (infra) (config.agentImage)
+  ├── needs agent image tag from → opsiforce (infra) (config.agentContainerImage)
   └── needs service URL from    → opsiforce-bifrost  (config.bifrostProxyUrl)
 ```
 

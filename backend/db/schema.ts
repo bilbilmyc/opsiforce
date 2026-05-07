@@ -28,13 +28,10 @@ export const projectDuplicateStatusEnum = pgEnum("project_duplicate_status", [
   "failed",
 ])
 
-export const agentUpdateStatusEnum = pgEnum("agent_update_status", ["queued", "running", "applied", "conflict", "failed"])
-
-export const agentMigrationStatusEnum = pgEnum("agent_migration_status", [
-  "queued",
+export const agentUpdateStatusEnum = pgEnum("agent_update_status", [
   "running",
+  "reload_pending",
   "applied",
-  "skipped",
   "conflict",
   "failed",
 ])
@@ -131,12 +128,21 @@ export const projectAgentUpdates = pgTable(
       .notNull(),
     fromVersion: text("from_version"),
     targetVersion: text("target_version").notNull(),
-    agentOwnedHash: text("agent_owned_hash"),
-    status: agentUpdateStatusEnum("status").notNull().default("queued"),
+    status: agentUpdateStatusEnum("status").notNull().default("running"),
     requiresOpenCodeReload: boolean("requires_open_code_reload").notNull().default(false),
-    requiresAppRestart: boolean("requires_app_restart").notNull().default(false),
     requiresPodRecreate: boolean("requires_pod_recreate").notNull().default(false),
     reloadStatus: text("reload_status"),
+    reloadAttempt: integer("reload_attempt").notNull().default(0),
+    appliedMigrations: jsonb("applied_migrations").$type<string[]>().notNull().default([]),
+    skippedMigrations: jsonb("skipped_migrations").$type<string[]>().notNull().default([]),
+    conflicts: jsonb("conflicts")
+      .$type<{ migrationId: string; path: string; reason: string }[]>()
+      .notNull()
+      .default([]),
+    failedMigrations: jsonb("failed_migrations")
+      .$type<{ migrationId: string; error: string }[]>()
+      .notNull()
+      .default([]),
     error: text("error"),
     startedAt: timestamp("started_at"),
     finishedAt: timestamp("finished_at"),
@@ -145,41 +151,8 @@ export const projectAgentUpdates = pgTable(
   },
   (table) => [
     index("idx_project_agent_updates_project").on(table.projectId),
-    index("idx_project_agent_updates_agent").on(table.agentId),
     index("idx_project_agent_updates_status").on(table.status),
     index("idx_project_agent_updates_project_agent").on(table.projectId, table.agentId),
-  ],
-)
-
-export const projectAgentMigrations = pgTable(
-  "project_agent_migrations",
-  {
-    id: text("id").primaryKey(),
-    updateId: text("update_id")
-      .references(() => projectAgentUpdates.id, { onDelete: "cascade" })
-      .notNull(),
-    projectId: text("project_id")
-      .references(() => projects.id, { onDelete: "cascade" })
-      .notNull(),
-    agentId: text("agent_id")
-      .references(() => agents.id)
-      .notNull(),
-    migrationId: text("migration_id").notNull(),
-    targetVersion: text("target_version").notNull(),
-    status: agentMigrationStatusEnum("status").notNull().default("queued"),
-    path: text("path"),
-    reason: text("reason"),
-    error: text("error"),
-    startedAt: timestamp("started_at"),
-    finishedAt: timestamp("finished_at"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => [
-    index("idx_project_agent_migrations_update").on(table.updateId),
-    index("idx_project_agent_migrations_project").on(table.projectId),
-    index("idx_project_agent_migrations_status").on(table.status),
-    index("idx_project_agent_migrations_migration").on(table.migrationId),
   ],
 )
 

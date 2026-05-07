@@ -23,8 +23,8 @@ config:
   redisUrl: ""
   k8sNamespace: ""
   warmPoolSize: "1"
-  agentImage: ""
-  agentImagePullPolicy: "Always"
+  agentContainerImage: ""
+  agentContainerImagePullPolicy: "Always"
   agentPort: "4096"
   appPort: "3000"
   vscodePort: "8080"
@@ -34,6 +34,8 @@ config:
   storageMountPath: "/workspace-data"
   proxyControlToken: ""
   agentName: "app-builder"
+  agentWorkspaceUpdateOnStartup: "true"
+  agentUpdateJobTimeoutMs: "1800000"
   agentResources: {}
   agentNodeSelector: {}
   agentTolerations: []

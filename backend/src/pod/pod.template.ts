@@ -3,7 +3,7 @@ import * as k8s from "@kubernetes/client-node"
 export interface PodTemplateOptions {
   podName: string
   namespace: string
-  agentImage: string
+  agentContainerImage: string
   agentPort: number
   storageType: "cephfs" | "hostPath"
   cephfsPvcName: string
@@ -64,7 +64,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
       initContainers: [
         {
           name: "init-config",
-          image: options.agentImage,
+          image: options.agentContainerImage,
           imagePullPolicy: options.imagePullPolicy,
           command: [
             "sh",
@@ -77,10 +77,13 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
                 ? `sed -i 's|"model": "[^"]*"|"model": "${options.agentModel}"|' /workspace/.xdg/config/opencode/opencode.json; `
                 : "") +
               "cp /opt/agents/$AGENT/agent.md /workspace/.opencode/agents/$AGENT.md; " +
+              "rm -rf /workspace/.opencode/skills; " +
+              "if [ -d /opt/agents/$AGENT/skills ]; then cp -a /opt/agents/$AGENT/skills /workspace/.opencode/skills; fi; " +
               "if [ ! -d /workspace/app ]; then " +
               "cp -a /opt/agents/$AGENT/template/. /workspace/; " +
-              "cd /workspace && printf '.config/\\n.cache/\\n.bun/\\n.opencode/\\n.xdg/\\nnode_modules/\\ndata/\\n' > .gitignore && " +
+              "cd /workspace && printf '.config/\\n.cache/\\n.bun/\\n.opencode/\\n.opsiforce/\\n.xdg/\\nnode_modules/\\ndata/\\n**/.yarn/cache\\n**/.yarn/unplugged\\n**/.yarn/build-state.yml\\n**/.yarn/install-state.gz\\n**/.yarn/sdks\\n**/.pnp.*\\n' > .gitignore && " +
               "git init && git config user.email 'agent@opsiforce.com' && git config user.name 'OpsiForce' && git add -A && git commit -m 'Initial template'; " +
+              "AGENT_NAME=$AGENT WORKSPACE=/workspace agent-workspace-migrate --seed-baseline; " +
               "fi",
           ],
           volumeMounts,
@@ -89,7 +92,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
       containers: [
         {
           name: "opencode",
-          image: options.agentImage,
+          image: options.agentContainerImage,
           imagePullPolicy: options.imagePullPolicy,
           workingDir: "/workspace",
           ports: [{ containerPort: options.agentPort }, { containerPort: 3000 }, { containerPort: 8080 }],

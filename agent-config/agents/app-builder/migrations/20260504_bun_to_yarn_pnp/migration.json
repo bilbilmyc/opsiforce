@@ -1,0 +1,15 @@
+{
+  "id": "20260504_bun_to_yarn_pnp",
+  "requiresPodRecreate": true,
+  "operations": [
+    {
+      "type": "command",
+      "command": "node",
+      "args": [
+        "${MIGRATION_DIR}/migrate.mjs"
+      ],
+      "cwd": ".",
+      "timeoutSeconds": 900
+    }
+  ]
+}

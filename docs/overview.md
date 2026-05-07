@@ -109,7 +109,8 @@ packages/opsiforce/
 │   │   └── app-builder/         Default agent — template, skills, agent definition
 │   │       ├── agent.md         OpenCode agent def (→ .opencode/agents/app-builder.md)
 │   │       ├── config.json      Agent metadata (name, description, ports)
-│   │       └── template/        Files copied to workspace (app/, .opencode/skills/)
+│   │       ├── skills/          Files synced to .opencode/skills/
+│   │       └── template/        Files copied to workspace for new projects
 │   ├── opencode.json            Shared config (providers, permissions, default_agent)
 │   └── scripts/                 Entrypoint + guard scripts
 │

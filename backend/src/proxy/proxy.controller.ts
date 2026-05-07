@@ -4,6 +4,7 @@ import {
   Controller,
   ForbiddenException,
   Headers,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -14,6 +15,7 @@ import { ProjectService, type EnsureProjectResult } from "../project/project.ser
 import { ProjectResponse } from "../project/project.types"
 import { TenantService } from "../tenant/tenant.service"
 import { Public } from "../tenant/tenant.decorator"
+import { AgentUpdateService } from "../agent-update/agent-update.service"
 import { ProxyService } from "./proxy.service"
 
 type ProxySurface = "agent" | "app" | "vscode" | "db"
@@ -32,6 +34,7 @@ interface EnsureProxyResponse {
 @Public()
 @Controller("internal/proxy")
 export class ProxyController {
+  private readonly logger = new Logger(ProxyController.name)
   private readonly proxyControlToken: string
 
   constructor(
@@ -39,6 +42,7 @@ export class ProxyController {
     private readonly proxyService: ProxyService,
     private readonly projectService: ProjectService,
     private readonly tenantService: TenantService,
+    private readonly agentUpdateService: AgentUpdateService,
   ) {
     this.proxyControlToken = this.configService.getOrThrow<string>("proxyControlToken")
   }
@@ -58,15 +62,26 @@ export class ProxyController {
     }
 
     const activity = surface === "app" ? "app" : "agent"
+    let ensured: EnsureProjectResult
 
     if (surface === "agent") {
       const project = await this.projectService.findOneById(projectId)
       await this.assertProjectTenantAccess(project.tenantId, groupsHeader)
-      const ensured = await this.projectService.ensureProjectAccess(project, activity)
-      return this.toEnsureResponse(surface, ensured.project, ensured)
+      ensured = await this.projectService.ensureProjectAccess(project, activity)
+    } else {
+      ensured = await this.projectService.ensureProjectById(projectId, activity)
     }
 
-    const ensured = await this.projectService.ensureProjectById(projectId, activity)
+    if (surface === "agent" && ensured.state === "ready") {
+      const reload = await this.agentUpdateService.applyPendingReloadForProject(projectId).catch((err) => {
+        this.logger.warn(`Failed to apply pending agent reload for project ${projectId}: ${(err as Error).message}`)
+        return null
+      })
+      if (reload?.podRecreated) {
+        ensured = await this.projectService.ensureProjectById(projectId, activity)
+      }
+    }
+
     return this.toEnsureResponse(surface, ensured.project, ensured)
   }
 

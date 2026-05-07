@@ -26,6 +26,8 @@ COPY --from=builder /app/packages/opsiforce/backend/dist ./packages/opsiforce/ba
 COPY --from=builder /app/packages/opsiforce/backend/db ./packages/opsiforce/backend/db
 COPY --from=builder /app/packages/opsiforce/backend/package.json ./packages/opsiforce/backend/package.json
 COPY packages/opsiforce/backend/platform-version.json ./packages/opsiforce/backend/platform-version.json
+COPY packages/opsiforce/agent-config/agent-image-version.json ./packages/opsiforce/agent-config/agent-image-version.json
+COPY packages/opsiforce/agent-config/agents.json ./packages/opsiforce/agent-config/agents.json
 
 WORKDIR /app/packages/opsiforce/backend/
 

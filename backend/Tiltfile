@@ -13,6 +13,7 @@ docker_build(
         '.yarn/releases',
         'packages/opsiforce/backend',
         'packages/opsiforce/agent-config/agent-image-version.json',
+        'packages/opsiforce/agent-config/agents.json',
     ],
     live_update=[
         fall_back_on('./package.json'),
@@ -22,6 +23,7 @@ docker_build(
         fall_back_on('../../../.yarn/releases'),
         sync('./src', '/app/packages/opsiforce/backend/src'),
         sync('./db', '/app/packages/opsiforce/backend/db'),
+        sync('../agent-config/agents.json', '/app/packages/opsiforce/agent-config/agents.json'),
     ],
 )
 

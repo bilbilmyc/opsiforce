@@ -21,6 +21,7 @@ import { ScheduleModule } from "./schedule/schedule.module"
 import { UserModule } from "./user/user.module"
 import { DefaultsModule } from "./defaults/defaults.module"
 import { WorkspaceModule } from "./workspace/workspace.module"
+import { AgentUpdateModule } from "./agent-update/agent-update.module"
 
 function parseRedisUrl(url: string) {
   const parsed = new URL(url)
@@ -62,6 +63,7 @@ function parseRedisUrl(url: string) {
     GatewayModule,
     ScheduleModule,
     DefaultsModule,
+    AgentUpdateModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: TenantGuard }],

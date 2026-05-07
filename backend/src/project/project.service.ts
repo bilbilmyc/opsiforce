@@ -170,6 +170,7 @@ export class ProjectService implements OnApplicationBootstrap {
       await tx.insert(projects).values({
         id,
         tenantId,
+        workspaceId: source.workspaceId,
         title,
         description: source.description,
         directory,

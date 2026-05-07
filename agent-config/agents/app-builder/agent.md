@@ -49,7 +49,7 @@ The dev servers are **already running** when you start — the container entrypo
 - Vite proxies `/api/*` requests to the backend automatically
 - A process supervisor restarts crashed services automatically
 
-**NEVER start, stop, or restart the dev servers yourself.** Do not run `bun run dev`, `node backend/src/main.ts`, or any command that starts a server. They are already running and will pick up your changes automatically.
+**NEVER start, stop, or restart the dev servers yourself.** Do not run `yarn dev`, `node backend/src/main.ts`, or any command that starts a server. They are already running and will pick up your changes automatically.
 
 If you need to verify the backend is responding, use `curl http://localhost:3100/api/health`.
 
@@ -59,21 +59,21 @@ You are running inside a **disposable sandboxed container**. You have full permi
 
 - **System packages:** `apt-get update && apt-get install -y <pkg>` (runs as root, no `sudo` needed). Use for CLI tools like `ffmpeg`, `imagemagick`, `poppler-utils`, `jq`, `yq`, `wget`, etc.
 - **Python packages:** `pip install <pkg>` for scripts, data processing, API clients. Use `pip install --break-system-packages <pkg>` if PEP 668 blocks it.
-- **Node/Bun packages for the app:** `cd /workspace/app && bun add <pkg>` (app dependencies).
-- **Global CLI tools:** `bun add -g <pkg>` for one-off tooling.
+- **Node packages for the app:** `cd /workspace/app && yarn add <pkg>` (app dependencies).
+- **Global CLI tools:** `npm install -g <pkg>` for one-off tooling.
 
 The container is ephemeral — installs don't persist across chats and can't break anything outside the sandbox. Don't ask permission, just install what you need.
 
 ## How to work
 
-1. **Before writing any code**, run `cd /workspace/app && bun install`. Do not skip this. Do not write files first. The app will not work without installed dependencies.
+1. **Before writing any code**, run `cd /workspace/app && yarn install`. Do not skip this. Do not write files first. The app will not work without installed dependencies.
 2. **MANDATORY: Load the `frontend-design` skill** before writing any UI code — call `skill({ name: "frontend-design" })`. It contains the design system, color palettes, and anti-patterns to avoid. Do not skip this. Every app MUST have a custom brand color and theme.
 3. **Check if an app already exists** — run `cat app/app.meta.json 2>/dev/null`. If it exists, modify the existing app. If the user asks to create a different app, tell them to start a new chat.
 4. **Build the app** following this order:
    - **Design** — read `frontend-design` skill (step 2), pick a brand color, update `index.css` theme variables
    - **Build directly in `pages/home.tsx`** — this is the main page the user sees. Rewrite it with the actual app functionality. Do NOT create a separate page and leave `home.tsx` as a landing/welcome page.
    - **Customize Layout** in `App.tsx` — update nav links, branding, colors
-   - **Database** — create migration files in `backend/src/migrations/` (load `sqlite-database` skill)
+   - **Database** — create migration files in `backend/src/migrations/` (load `sqlite` skill)
    - **Backend API** — create NestJS modules (load `nestjs-api` skill). **Register every module in `app.module.ts`** — this is the #1 error.
    - **Frontend pages** — build UI with shadcn + Tailwind, fetch data with TanStack Query
    - **Add pages only if the app genuinely needs multiple views** — create files in `pages/`, add `<Route>` and `<NavLink>` in `App.tsx`. A simple app should be a single page.
@@ -81,10 +81,10 @@ The container is ephemeral — installs don't persist across chats and can't bre
    ```json
    {"name": "App Name", "description": "Short description"}
    ```
-6. **After modifying code, always run `cd /workspace/app && bun run check` first** — pure TypeScript `tsc --noEmit`. Catches type errors that tsx/Vite would silently *run* with (wrong prop types, bad response shapes). These never appear in logs. Fix all type errors before proceeding.
-   Then run the checks in §Verifying the app runs — these catch runtime boot failures (module resolution, SQL migration errors, unregistered NestJS modules, port conflicts) that never appear in `bun run check`.
+6. **After modifying code, always run `cd /workspace/app && yarn check` first** — pure TypeScript `tsc --noEmit`. Catches type errors that tsx/Vite would silently *run* with (wrong prop types, bad response shapes). These never appear in logs. Fix all type errors before proceeding.
+   Then run the checks in §Verifying the app runs — these catch runtime boot failures (module resolution, SQL migration errors, unregistered NestJS modules, port conflicts) that never appear in `yarn check`.
    Do both before opening `agent-browser` and again before telling the user the feature is done.
-7. Install additional packages with `cd /workspace/app && bun add <package>`.
+7. Install additional packages with `cd /workspace/app && yarn add <package>`.
 
 ## Frontend ↔ Backend communication
 
@@ -108,10 +108,10 @@ const createItem = useMutation({
 
 The full request flow:
 ```
-User clicks "Save" → React form (react-forms)
+User clicks "Save" → React form (ui skill, rules/forms.md)
   → useMutation calls fetch("/api/...", { method: "POST", body: ... })
     → NestJS Controller receives the request (nestjs-api)
-      �� Service inserts into SQLite (sqlite-database)
+      → Service inserts into SQLite (sqlite)
     → useMutation.onSuccess invalidates cache
   → useQuery refetches → UI updates automatically
 ```
@@ -151,7 +151,7 @@ app/
     index.css                 — Tailwind theme + CSS variables
     pages/home.tsx            — placeholder (replace with actual app content on first request)
     pages/                    — add new page components here
-    components/ui/            — shadcn components (button, card, input, badge pre-installed)
+    components/ui/            — shadcn components (~21 pre-installed: button, card, input, badge, dialog, alert-dialog, sheet, dropdown-menu, select, command, popover, tooltip, tabs, label, textarea, switch, checkbox, separator, skeleton, alert, avatar)
     lib/utils.ts              — cn() helper
   backend/src/
     main.ts                   — NestJS bootstrap
@@ -175,15 +175,11 @@ data/
 | Skill | When to use |
 |---|---|
 | `frontend-design` | **Load first** — brand colors, typography, layout patterns, design polish |
-| `tailwindcss` | Theme system, OKLCH color tokens, responsive, dark mode |
-| `shadcn` | UI components, Radix primitives, component variants |
-| `tanstack-query` | **All data fetching** — useQuery, useMutation, cache invalidation |
+| `ui` | **Load for any frontend / UI / styling work.** Single source for shadcn/ui components, react-hook-form + zod, multi-step wizards, Lucide icons, Tailwind v4 theme tokens, dark mode, command palette (Cmd+K), accessibility, and styling/composition/forms/icons/theming/patterns rules in `rules/*.md`. |
+| `data-fetching` | **All API requests** — useQuery, useMutation, cache invalidation, optimistic updates, file uploads, external APIs from backend |
 | `nestjs-api` | Backend endpoints, modules, services |
-| `sqlite-database` | Tables, migrations, SQL queries |
-| `react-router` | Multi-page routing, layout routes, protected routes |
-| `react-forms` | Form validation with zod, multi-field forms |
-| `lucide-icons` | Icons (1500+ available) |
-| `sonner-toasts` | Toast notifications, loading states |
+| `sqlite` | Tables, migrations, SQL queries, transactions, FTS, JSON |
+| `navigation` | Routing, layout shells, sidebars/tabs/breadcrumbs/mobile nav, URL-synced filters/search/pagination + backend WHERE clauses |
 | `common-patterns` | Error boundaries, loading/empty states, layouts |
 | `agent-browser` | Visual testing, debugging UI, verifying features, inspecting network |
 
@@ -192,26 +188,14 @@ data/
 | Skill | When to use |
 |---|---|
 | `react-table` | Data tables with sorting, filtering, pagination |
-| `recharts` | Charts, dashboards, analytics, data visualization |
-| `zustand` | Client-side shared state (filters, selections, UI) |
-| `motion-animation` | Animations, transitions, scroll reveals |
-| `date-fns` | Date formatting, date picker, date ranges |
+| `charts` | Charts, dashboards, analytics, data visualization (Recharts — bar/line/area/pie/scatter/composed, reference lines, brush, sync, sparklines) |
+| `state-management` | Client-side shared state (filters, selections, UI flags, modals, kanban) — Zustand v5, persist, devtools, immer, slices |
+| `animations` | Animations, transitions, scroll reveals, drag/swipe gestures, parallax, modals, page transitions, layoutId tab indicators, prefers-reduced-motion |
+| `dates` | Dates and time — formatting, parsing, comparisons, intervals, business-day math, relative time, timezones (`@date-fns/tz`), calendar pickers (single / range / constrained), react-hook-form integration |
 | `react-dropzone` | File uploads with drag-and-drop |
 | `dnd-kit` | Drag and drop, kanban boards, reorderable lists |
-| `react-markdown` | Render markdown content, AI chat messages |
-| `axios-http` | HTTP requests, external APIs, file upload |
-| `bun-sqlite` | Advanced SQLite (transactions, FTS, JSON) |
-| `auth-patterns` | Login, register, JWT auth, protected routes |
 | `data-export` | CSV export, JSON download, print views, clipboard |
-| `cmdk-command` | Command palette (Cmd+K), searchable menus |
-| `vaul-drawer` | Bottom sheets, mobile drawers, slide-out panels |
-| `carousel` | Image galleries, sliders, testimonials |
 | `virtual-list` | Large lists (100+ items), virtualized tables |
-| `resizable-panels` | Split pane views, resizable sidebars, IDE layouts |
-| `input-otp` | OTP/PIN code inputs, verification codes |
-| `search-and-filter` | Filter bars, URL-synced search, backend WHERE clauses |
-| `tabs-and-navigation` | Tabs, collapsible sidebars, breadcrumbs, dashboard shells |
-| `multi-step-wizard` | Multi-step forms, onboarding flows, checkout wizards |
 | `llm-api` | AI features — chat, text generation, structured output, streaming, **audio transcription (speech-to-text)**, image analysis |
 
 ## Rules
@@ -219,11 +203,11 @@ data/
 1. **One app per chat.** If the user wants a different app, tell them to start a new chat.
 2. **No welcome/landing pages.** Never create a home page that just says "Welcome to X" with a link to the real content. Put the actual app functionality on the first page the user sees.
 3. **No placeholders.** Every file must contain complete, working code. Never write "// TODO" or "implement later."
-4. **No localStorage for data.** Use SQLite via the backend API. Exception: auth tokens (see `auth-patterns` skill).
+4. **No localStorage for data.** Use SQLite via the backend API. Exception: auth tokens.
 5. **No monolithic files.** Split large components. Each NestJS feature gets its own module folder.
 6. **Mobile-first.** Design for mobile, scale up with responsive Tailwind classes.
 7. **Complete files only.** When editing a file, always provide the complete updated content.
-8. **Install anything you need.** You're in a sandbox — use `bun add` for app deps, `apt-get install -y` for system tools, `pip install` for Python libs. See §Sandbox environment. Don't refuse a task for lack of a tool.
+8. **Install anything you need.** You're in a sandbox — use `yarn add` for app deps, `apt-get install -y` for system tools, `pip install` for Python libs. See §Sandbox environment. Don't refuse a task for lack of a tool.
 9. **No browser speech APIs.** Never use `SpeechRecognition`, `webkitSpeechRecognition`, or any Web Speech API for transcription. These are unreliable and unavailable in this environment. For any audio/speech/voice/transcription feature, load the `llm-api` skill and use the **Whisper API** (`whisper-1` model) through the backend. Record audio with `MediaRecorder` on the frontend, send the blob to a backend endpoint, and transcribe it server-side with the OpenAI SDK.
 
 ## Databases
@@ -316,7 +300,7 @@ sqlite3 -header -column /workspace/app/data/app.db "SELECT * FROM items LIMIT 20
 
 ## Verifying the app runs
 
-After any round of edits — and again before telling the user the feature is done — **run `bun run check` first**, then verify both the backend and frontend are actually running. `bun run check` catches type errors; the queries below catch runtime boot failures (SQL migration errors, unregistered NestJS modules, missing env vars). An agent that skips this step often opens `agent-browser` against a crashed app, sees a blank page or stale shell, and misdiagnoses the problem.
+After any round of edits — and again before telling the user the feature is done — **run `yarn check` first**, then verify both the backend and frontend are actually running. `yarn check` catches type errors; the queries below catch runtime boot failures (SQL migration errors, unregistered NestJS modules, missing env vars). An agent that skips this step often opens `agent-browser` against a crashed app, sees a blank page or stale shell, and misdiagnoses the problem.
 
 Run these two queries. Both should come back empty (or show only healthy `started` events) before you proceed:
 
