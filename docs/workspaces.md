@@ -8,36 +8,35 @@ Named groupings of projects inside a tenant, with per-user visibility and drag-a
 
 Opsiforce used to be flat: every project in a tenant was visible to every user with access to that tenant. This worked for small teams but broke down quickly once a single tenant housed projects for multiple customers or internal groups.
 
-Workspaces let admins segment projects inside a tenant, and control which users can see which segment. A single "acme" tenant might now contain:
-
-- **Customer apps** (visible to customer-success + engineering)
-- **Internal tools** (visible to ops only)
-- **Unassigned** (admin-only scratch space)
-
-A user who isn't a member of a workspace doesn't see the workspace, and doesn't see any of its projects. Projects are never orphaned — they live in exactly one workspace, or in the admin-only Unassigned bucket.
+Workspaces let users segment projects inside a tenant. Each user gets one **private** workspace of their own that nobody else can see, plus visibility into any **shared** workspaces they've been added to, plus the tenant-wide **Public** bucket.
 
 ---
 
-## The hierarchy
+## The three kinds of grouping
 
 ```
 Tenant
   │
-  ├─ Workspace A ── members: alice, bob
+  ├─ Personal       (Alice's private workspace — only Alice sees this)
   │    ├─ project-1
   │    └─ project-2
   │
-  ├─ Workspace B ── members: alice, carol
+  ├─ Personal       (Bob's private workspace — only Bob sees this)
   │    └─ project-3
   │
-  └─ Unassigned (admin-only)
-       └─ legacy-project
+  ├─ Customer apps  (shared workspace — Alice + Bob are members)
+  │    └─ project-4
+  │
+  ├─ Internal tools (shared workspace — Bob only)
+  │    └─ project-5
+  │
+  └─ Public         (every project that lives at the tenant root)
+       └─ project-6
 ```
 
-- **Workspaces** live inside exactly one tenant.
-- **Projects** live inside exactly one workspace, or in Unassigned.
-- **Membership** is a flat list — no roles within a workspace. Either you're in, or you aren't.
-- **Unassigned** isn't a real workspace. It's what shows in the sidebar for admins to see projects that haven't been filed anywhere.
+- **Private workspace** — exactly one per (user, tenant). Created automatically the first time a user authenticates into a tenant; backfilled by migration `0023_add-private-workspaces` for everyone who already existed. Owned by the user, not visible to anyone else (admins included). Can't be renamed, deleted, or have members added — it's an immutable bucket the system maintains.
+- **Shared workspace** — what "workspace" meant before this change. Created and managed by admins via the sidebar settings gear or `/settings/workspaces` page. Has an explicit member list; only members see it.
+- **Public** — projects with no workspace (`projects.workspace_id IS NULL`). Visible to everyone in the tenant. Admin-only creation. This is the same surface previously labelled "Unassigned" — same data, new name.
 
 ---
 
@@ -45,110 +44,100 @@ Tenant
 
 Three levels of access, granted via Keycloak groups:
 
-**Admin** — can create, rename, and delete workspaces. Manages the member list of any workspace. Sees Unassigned. Can move projects to or from Unassigned.
+**Admin** — can create, rename, and delete shared workspaces. Manages the member list of any shared workspace. Creates projects in Public. Can see and use every shared workspace and every Public project in the tenant. Does **not** see other users' private workspaces — that line is hard.
 
-**Power user** — can drag a project from one workspace to another, as long as they're a member of both. Can't manage workspaces themselves, can't see Unassigned.
+**Power user** — can drag a project between shared workspaces they're a member of. Can't create shared workspaces; can't manage members; can't create projects in Public (admin-only creation), but can see and use existing Public projects.
 
-**Member** — can see and use projects in workspaces they belong to. Can create new projects inside those workspaces. Can't move projects out.
-
-A given user is usually just one tier, but the tiers stack — an admin implicitly has power-user and member abilities too.
+**Member** — can see and use projects in shared workspaces they belong to plus their own private workspace and the Public bucket. Can create new projects inside any workspace they have access to, including their own private one.
 
 ---
 
 ## Visibility rules
 
-Everything is enforced on the server. The interface mirrors the same rules, but the backend is the source of truth.
+Everything is enforced on the server. The UI mirrors the same rules, but the backend is the source of truth.
 
-| Viewer type | Workspaces they belong to | Workspaces they don't | Unassigned |
-|---|---|---|---|
-| Admin | Visible | Visible | Visible |
-| Power user / member | Visible | Invisible | Invisible |
+| Viewer | Their own private | Other users' private | Shared they belong to | Shared they don't | Public |
+|---|---|---|---|---|---|
+| Admin | Visible | **Invisible** | Visible | Visible | Visible |
+| Power user / member | Visible | Invisible | Visible | Invisible | Visible |
 
-"Invisible" means a workspace and its projects don't appear in listings at all, and any attempt to open one by direct link behaves as if it doesn't exist. This is intentional — we don't want to leak even the existence of workspaces a user can't access.
+"Invisible" means a workspace and its projects don't appear in listings at all, and any attempt to open one by direct link returns 404. We don't leak even the existence of workspaces a user can't access — including across the admin boundary for private workspaces.
 
-Project listings are pre-filtered the same way: non-admins only ever see projects that belong to a workspace they're a member of.
+---
+
+## Creation flows
+
+There are **three** entry points for new projects, each tuned to a different intent:
+
+**Top "+" in the sidebar** — opens a dropdown menu (Google-Drive-style):
+- "New workspace" (admin only) — opens the create-workspace dialog.
+- "New project ▶ \<agent\>" — submenu listing every row from the `agents` table. Clicking an agent creates a project in **the user's private workspace** with that agent. This is the primary creation path for everyone.
+
+**Per-workspace "+"** on shared workspace rows — creates a project inside that workspace with the default agent. No agent picker; if you need a specific agent, use the top "+".
+
+**Public group "+"** — admin only, creates a project in Public with the default agent.
+
+The home page's "Apply" CTA always creates a project in the caller's private workspace with the default agent — same destination as the top "+" with the default agent. There's no longer any smart-pick logic; everyone has a deterministic default.
+
+---
+
+## Project moves
+
+Drag a project row in the sidebar to move it between groups. Permission rules:
+
+- **Move into or out of your own private workspace** — free, no extra permission required. Filing work into your private space and sharing it back into a shared workspace are both basic actions.
+- **Move between two shared workspaces** — requires the `move-projects-between-workspaces` permission, and you must be a member of the target.
+- **Move into or out of Public** — admin only (`manage-workspaces`).
+- **Move into another user's private workspace** — impossible. The target workspace simply doesn't exist from your point of view, so the drop returns 404.
+
+If a user doesn't have permission to move projects in a given direction, the row remains draggable but the drop is rejected server-side and the UI surfaces the error.
 
 ---
 
 ## Settings UI
 
-Workspace management happens in two places, both gated to admins:
+Workspace management happens in two places, both gated to admins, and **only for shared workspaces**:
 
-**Sidebar gear icon** (hover-visible next to each workspace) — opens a settings dialog directly. This is the fast path for day-to-day use.
+**Sidebar gear icon** — hover-visible next to each shared workspace. Opens the settings dialog directly. Hidden on private workspaces entirely.
 
-**`/settings/workspaces` route** — a full list view with a "New workspace" button. Useful for onboarding and bulk review. Each row has a "Configure" button that opens the same dialog.
+**`/settings/workspaces` route** — full list view with a "New workspace" button. Each row has a "Configure" button. Private workspaces are filtered out of this list too (admins manage their own private workspace by simply using it — there's nothing to configure).
 
-The dialog has three tabs:
-
-- **General** — name, description, and a "Delete workspace" action.
-- **Members** — add or remove users. Users appear in the picker only after they've logged in at least once.
-- **Projects** — add existing (Unassigned) projects to this workspace, or remove them back to Unassigned.
+The dialog has three tabs: General (name, description, delete), Members (add/remove users), Projects (move projects in or out of this workspace).
 
 ---
 
 ## Sidebar behavior
 
-Workspaces render as collapsible groups. Each group shows its name, a count of projects, and — on hover — a gear icon (admin only) plus a "+" button.
+Workspaces render as collapsible groups in the order the user prefers (drag the grab handle to reorder). The private workspace is just another workspace row in the list — fully draggable, included in `user_workspace_preferences.workspace_order` like any other, so a user who wants their Personal at the top puts it there. The system doesn't pin it.
 
-**Fold state is per-user, per-device.** If an admin collapses "Internal tools" on their laptop, it stays collapsed across reloads, but doesn't affect their phone or anyone else's view.
+**Fold state is per-user, per-device.** Local to the browser, not synced.
 
-**Workspace order is per-user, synced.** If a user drags "Customer apps" to the top, that order sticks on every device they log in from. Two users can see the same workspaces in different orders.
+**Workspace order is per-user, synced.** Same user logs in on a different device, same order.
 
-When a user searches, any workspace containing a matching project auto-expands for the duration of the search.
-
----
-
-## Drag and drop
-
-The sidebar supports two kinds of drag:
-
-**Reorder workspaces.** A grab-dots handle appears on hover at the left of each workspace row. Dragging it up or down reorders workspaces for the current user (nobody else sees the change). The reorder is intentionally locked behind a handle — clicking the row itself folds/unfolds, which is the much more frequent action, and we don't want accidental drags when users toggle quickly.
-
-**Move projects.** Project rows are whole-row draggable. A short activation distance keeps single-click navigation working normally, but holding and moving triggers a drag. Projects can be dropped:
-
-- Onto another workspace → project moves into it.
-- Onto Unassigned (admin only) → project becomes unassigned.
-- From Unassigned onto a workspace (admin only) → project gains a home.
-
-If a user doesn't have permission to move projects, the rows simply aren't draggable — no grab cursor, no drag response. The backend also rejects forged attempts.
-
----
-
-## Project creation flows
-
-Two distinct "+" buttons, each with clear semantics:
-
-**Top "+" (sidebar header, home-page form)** — admin-only. Creates an **unassigned** project. Non-admins never see this button because they can't see unassigned projects, so giving them a button that creates invisible work would be confusing.
-
-**"+" on each workspace row** — visible to any member of that workspace. Creates a project **inside** that workspace. This is the primary creation path for non-admin users.
-
-The home page's "Apply" button smart-picks the right flow:
-
-- Admin → creates unassigned (matching the top "+").
-- Non-admin with exactly one workspace → creates inside it automatically.
-- Non-admin with multiple workspaces → the button disables with a tooltip directing them to the sidebar, because it can't guess which workspace they meant.
+When a user types in the sidebar search, any workspace containing a matching project auto-expands for the duration of the search.
 
 ---
 
 ## User directory
 
-The member picker lists users from the current tenant. A user only appears once they've logged in to opsiforce at least once — we don't pre-populate the directory from Keycloak.
-
-**Implication**: an admin adding a brand-new hire to a workspace on the hire's first day may not find them in the picker until the hire has loaded the app. The member tab surfaces this with an info tooltip, but it's worth knowing when onboarding.
+The member picker (in shared-workspace settings) lists users from the current tenant. A user only appears once they've logged in to opsiforce at least once — first-login creates the `users` row and provisions their private workspace. The directory isn't pre-populated from Keycloak.
 
 ---
 
-## What happens when things get deleted
+## What happens on deletes
 
-**Delete a workspace** → its member list is cleared. Its projects stay in the tenant, but their workspace association is removed, so they fall into Unassigned (admin-only-visible). Nothing is hard-deleted beyond the workspace itself.
+**Delete a shared workspace** → its member list is cleared. Its projects fall out into Public (`projects.workspace_id` set to NULL). Nothing is hard-deleted beyond the workspace itself.
 
-**Remove a user from a workspace** → that user immediately loses visibility of the workspace and its projects. No grace period, no delay. If they had a tab open, their next action there returns a "not found" response.
+**Try to delete a private workspace** → rejected. Private workspaces are immutable through the API; the only path that removes one is `ON DELETE CASCADE` triggered by deleting the owner user (via Keycloak sync or direct DB op).
 
-**Delete a user** (Keycloak-side) → all their memberships and per-user preferences vanish. Any workspace order they had configured is gone; other users are unaffected.
+**Remove a user from a shared workspace** → that user immediately loses visibility of the workspace and its projects.
+
+**Delete a user** (Postgres CASCADE chain from `users`) → their private workspace cascades out via `workspaces.owner_id → users.id`. Projects inside fall to Public (workspace_id set NULL by the existing FK on projects). Per-user preferences are removed.
 
 ---
 
 ## Related docs
 
-- [Permissions](./permissions.md) — full detail on Keycloak groups and the two workspace-related permissions.
+- [Permissions](./permissions.md) — full detail on Keycloak groups and the workspace-related permissions.
 - [Overview](./overview.md) — high-level opsiforce architecture.
+- [Agents](./agents.md) — per-project agent association and pod startup.

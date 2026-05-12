@@ -17,7 +17,7 @@ yarn run port-forward-all
 yarn run dev-opsiforce-only
 ```
 
-`tunnel-traefik` keeps the minikube LoadBalancer reachable for `*.opsiforce.traefik.me`.
+`tunnel-traefik` keeps the minikube LoadBalancer reachable for `*.opsiforce.localtest.me`.
 
 What `dev-opsiforce-only` starts:
 - **Backend workspace:** setup minikube storage → build agent image → deploy infra chart → create DBs → migrate DB → install Bifrost → start Drizzle Studio, Mailgun mock, and Tilt
@@ -80,12 +80,12 @@ curl http://localhost:3001/api/health                 # Health check
 
 | Service | URL / Port | Notes |
 |---------|------------|-------|
-| Opsiforce app | `https://opsiforce.traefik.me` | Browser entrypoint through local Traefik |
-| Project app previews | `https://{project}.apps.opsiforce.traefik.me` | Routed through runtime app proxy |
-| VS Code | `https://{project}.code.opsiforce.traefik.me` | Routed through runtime VS Code proxy |
-| DB viewer | `https://{project}.db.opsiforce.traefik.me` | Routed through runtime DB proxy |
-| Bifrost dashboard | `https://bifrost.opsiforce.traefik.me` | Local Bifrost dashboard |
-| Tilt UI | `https://tilt.opsiforce.traefik.me` | Requires `tilt up --host=0.0.0.0`, handled by backend script |
+| Opsiforce app | `https://opsiforce.localtest.me` | Browser entrypoint through local Traefik |
+| Project app previews | `https://{project}.apps.opsiforce.localtest.me` | Routed through runtime app proxy |
+| VS Code | `https://{project}.code.opsiforce.localtest.me` | Routed through runtime VS Code proxy |
+| DB viewer | `https://{project}.db.opsiforce.localtest.me` | Routed through runtime DB proxy |
+| Bifrost dashboard | `https://bifrost.opsiforce.localtest.me` | Local Bifrost dashboard |
+| Tilt UI | `https://tilt.opsiforce.localtest.me` | Requires `tilt up --host=0.0.0.0`, handled by backend script |
 | NestJS backend | `localhost:3001` | Tilt port-forward for direct API calls |
 | Node debug | `localhost:9229` | Tilt port-forward |
 | Solid.js frontend | `localhost:8084` | Vite HMR on host |
@@ -102,7 +102,7 @@ curl http://localhost:3001/api/health                 # Health check
 - `backend/local-envs.sh` has local backend and Bifrost bootstrap vars
 - `frontend/local-envs.sh` has local app, preview, VS Code, and DB viewer domains
 - `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` are optional locally; when omitted, Bifrost provider secrets are created with empty values
-- Vite config must allow `host.minikube.internal` and `.opsiforce.traefik.me` because local Traefik reaches the host Vite server from inside minikube
+- Vite config must allow `host.minikube.internal` and `.opsiforce.localtest.me` because local Traefik reaches the host Vite server from inside minikube
 - Local dev uses `AGENT_CONTAINER_IMAGE_PULL_POLICY=Never` (image built into minikube), prod uses `Always`
 - Local dev uses in-cluster backend/proxies via Tilt and host Vite via Traefik
 - See [API Reference](api-reference.md) for full env var list

@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/solid-router"
-import { createSignal, For } from "solid-js"
+import { createMemo, createSignal, For } from "solid-js"
 import { toast } from "solid-sonner"
 import { type Project } from "~/api/client"
-import { useCreateUnassignedProject } from "~/api/projects"
+import { useCurrentUser } from "~/api/user"
+import { useCreateProjectInWorkspace, useWorkspaces } from "~/api/workspaces"
 import { EXAMPLES, type Example } from "~/data/examples"
 import { ArrowUp, LoaderCircle } from "~/components/icons"
 import { cn } from "~/lib/cn"
@@ -39,9 +40,19 @@ function ExampleCard(props: { example: Example; onClick: () => void }) {
 
 function HomePage() {
   const navigate = useNavigate()
-  const createUnassigned = useCreateUnassignedProject()
+  const currentUser = useCurrentUser()
+  const workspaces = useWorkspaces()
+  const createInWorkspace = useCreateProjectInWorkspace()
   const [prompt, setPrompt] = createSignal("")
   const [focused, setFocused] = createSignal(false)
+
+  const privateWorkspace = createMemo(() => {
+    const uid = currentUser.data?.id
+    if (!uid) return undefined
+    return (workspaces.data ?? []).find(
+      (w) => w.type === "private" && w.ownerId === uid,
+    )
+  })
 
   const goToProject = (project: Project) => {
     const text = prompt().trim()
@@ -52,17 +63,25 @@ function HomePage() {
     })
   }
 
-  const isSubmitting = () => createUnassigned.isPending
+  const isSubmitting = () => createInWorkspace.isPending
 
   const handleSubmit = () => {
     if (isSubmitting()) return
-    createUnassigned.mutate(undefined, {
-      onSuccess: (project) => {
-        toast.success("Project created")
-        goToProject(project)
+    const ws = privateWorkspace()
+    if (!ws) {
+      toast.error("Your private workspace isn't ready yet")
+      return
+    }
+    createInWorkspace.mutate(
+      { workspaceId: ws.id },
+      {
+        onSuccess: (project) => {
+          toast.success("Project created")
+          goToProject(project)
+        },
+        onError: () => toast.error("Failed to create project"),
       },
-      onError: () => toast.error("Failed to create project"),
-    })
+    )
   }
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -128,7 +147,7 @@ function HomePage() {
               </span>
               <button
                 onClick={handleSubmit}
-                disabled={isSubmitting()}
+                disabled={isSubmitting() || !privateWorkspace()}
                 class={cn(
                   "flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium",
                   "bg-foreground text-background",

@@ -5,7 +5,7 @@ import { toast } from "solid-sonner"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
 import { api, type Project } from "~/api/client"
-import { UNASSIGNED_LABEL, useMoveProject, useWorkspaces } from "~/api/workspaces"
+import { PUBLIC_LABEL, useMoveProject, useWorkspaces } from "~/api/workspaces"
 import {
   ArrowRightLeft,
   Ban,
@@ -15,7 +15,7 @@ import {
   Copy,
   EllipsisVertical,
   FolderKanban,
-  Inbox,
+  Globe,
   Pencil,
   RotateCcw,
   Settings,
@@ -71,7 +71,7 @@ export default function ProjectActionsMenu(props: {
   const moveTargets = createMemo(() => (workspaces.data ?? []).filter((w) => w.id !== props.workspaceId))
 
   const currentWorkspaceName = createMemo(() => {
-    if (props.workspaceId === null) return UNASSIGNED_LABEL
+    if (props.workspaceId === null) return PUBLIC_LABEL
     return (workspaces.data ?? []).find((w) => w.id === props.workspaceId)?.name ?? "workspace"
   })
 
@@ -186,9 +186,9 @@ export default function ProjectActionsMenu(props: {
                   <Show when={moveTargets().length > 0}>
                     <DropdownMenuSeparator />
                   </Show>
-                  <DropdownMenuItem onSelect={() => handleMove(null, UNASSIGNED_LABEL)}>
-                    <Inbox class="w-3.5 h-3.5 text-muted-foreground" />
-                    {UNASSIGNED_LABEL}
+                  <DropdownMenuItem onSelect={() => handleMove(null, PUBLIC_LABEL)}>
+                    <Globe class="w-3.5 h-3.5 text-muted-foreground" />
+                    {PUBLIC_LABEL}
                   </DropdownMenuItem>
                 </Show>
               </DropdownMenuSubContent>

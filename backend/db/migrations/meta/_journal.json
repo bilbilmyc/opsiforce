@@ -162,6 +162,34 @@
       "when": 1777988800000,
       "tag": "0022_simplify-agent-updates",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1778584079352,
+      "tag": "0023_add-private-workspaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1778590051640,
+      "tag": "0024_add-projects-agent-id-nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1778590081790,
+      "tag": "0025_projects-agent-id-not-null",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1778594241074,
+      "tag": "0026_add-agents-display-name",
+      "breakpoints": true
     }
   ]
 }

@@ -51,13 +51,13 @@ export class WorkspaceController {
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ): Promise<WorkspaceResponse[]> {
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     if (scope === "all") {
       if (!readPerms(req).canManageWorkspaces) {
         throw new ForbiddenException(`Missing permission: ${Perms.manageWorkspaces}`)
       }
-      return this.workspaceService.findAllForAdmin(tenant.tenantId)
+      return this.workspaceService.findAllForAdmin(tenant.tenantId, dbUser.id)
     }
-    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
     return this.workspaceService.findAll({
       userId: dbUser.id,
       tenantId: tenant.tenantId,

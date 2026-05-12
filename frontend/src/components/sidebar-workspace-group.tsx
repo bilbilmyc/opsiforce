@@ -7,6 +7,7 @@ import {
   ChevronRight,
   FolderKanban,
   GripVertical,
+  Lock,
   Plus,
   Settings,
 } from "~/components/icons"
@@ -63,7 +64,12 @@ export default function SidebarWorkspaceGroup(props: {
             <ChevronRight class="w-3 h-3" />
           )}
         </span>
-        <FolderKanban class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <Show
+          when={props.workspace.type === "private"}
+          fallback={<FolderKanban class="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+        >
+          <Lock class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        </Show>
         <span class="flex-1 min-w-0 text-sm font-medium truncate text-foreground">
           {props.workspace.name}
         </span>

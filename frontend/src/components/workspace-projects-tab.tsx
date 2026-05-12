@@ -1,7 +1,7 @@
 import { For, Show, createMemo, createSignal } from "solid-js"
 import { type Project } from "~/api/client"
 import { useProjects } from "~/api/projects"
-import { UNASSIGNED_LABEL, useMoveProject } from "~/api/workspaces"
+import { PUBLIC_LABEL, useMoveProject } from "~/api/workspaces"
 import { projectDisplayTitle } from "~/lib/project-display"
 import { Button } from "~/components/ui/button"
 import {
@@ -32,7 +32,7 @@ export default function WorkspaceProjectsTab(props: {
         projectId,
         fromWorkspaceId: null,
         toWorkspaceId: props.workspaceId,
-        fromName: UNASSIGNED_LABEL,
+        fromName: PUBLIC_LABEL,
         toName: props.workspaceName,
       },
       { onSuccess: () => setPickerOpen(false) },
@@ -45,7 +45,7 @@ export default function WorkspaceProjectsTab(props: {
       fromWorkspaceId: props.workspaceId,
       toWorkspaceId: null,
       fromName: props.workspaceName,
-      toName: UNASSIGNED_LABEL,
+      toName: PUBLIC_LABEL,
     })
   }
 
@@ -99,7 +99,7 @@ export default function WorkspaceProjectsTab(props: {
                 when={allProjects.isLoading}
                 fallback={
                   <div class="px-2 py-6 text-xs text-center text-muted-foreground">
-                    No unassigned projects.
+                    No public projects available.
                   </div>
                 }
               >

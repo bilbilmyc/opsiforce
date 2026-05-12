@@ -13,6 +13,7 @@ export interface CreateProjectDto {
   title?: string
   description?: string
   timezone?: string
+  agentId?: string
 }
 
 export interface UpdateProjectDto {

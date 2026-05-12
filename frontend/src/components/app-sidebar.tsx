@@ -1,10 +1,11 @@
-import { Show, createSignal } from "solid-js";
+import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
 import { toast } from "solid-sonner";
 import { useNavigate } from "@tanstack/solid-router";
-import { type Project } from "~/api/client";
+import { type Agent, type Project } from "~/api/client";
+import { useAgents } from "~/api/agents";
 import { usePermissions } from "~/api/permissions";
-import { useCreateUnassignedProject } from "~/api/projects";
 import { useCurrentUser, useUserInfo } from "~/api/user";
+import { useCreateProjectInWorkspace, useWorkspaces } from "~/api/workspaces";
 import { Permission } from "~/constants/permissions";
 import {
   Sidebar,
@@ -24,21 +25,29 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from "~/components/ui/dropdown-menu";
 import { Button } from "~/components/ui/button";
 import TenantSelector from "~/components/tenant-selector";
 import ProjectSidebar from "~/components/project-sidebar";
+import CreateWorkspaceDialog from "~/components/create-workspace-dialog";
 import {
+  AppWindow,
+  Bot,
+  Calendar,
+  ChevronsUpDown,
+  ChevronRight,
+  FolderKanban,
+  FolderPlus,
   LogOut,
   Plus,
-  FolderKanban,
-  Wallet,
-  ChevronsUpDown,
   Search,
-  X,
-  Calendar,
-  SlidersHorizontal,
   Settings,
+  SlidersHorizontal,
+  Wallet,
+  X,
 } from "~/components/icons";
 
 export default function AppSidebar() {
@@ -46,25 +55,47 @@ export default function AppSidebar() {
   const { toggleSidebar } = useSidebar();
   const { hasPermission } = usePermissions();
   const userInfo = useUserInfo();
-  useCurrentUser();
+  const currentUser = useCurrentUser();
+  const workspaces = useWorkspaces();
+  const agents = useAgents();
+  const createInWorkspace = useCreateProjectInWorkspace();
 
   const [search, setSearch] = createSignal("");
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = createSignal(false);
   let searchRef: HTMLInputElement | undefined;
 
-  const createUnassigned = useCreateUnassignedProject();
+  const privateWorkspace = createMemo(() => {
+    const uid = currentUser.data?.id;
+    if (!uid) return undefined;
+    return (workspaces.data ?? []).find(
+      (w) => w.type === "private" && w.ownerId === uid,
+    );
+  });
 
-  const handleCreate = () =>
-    createUnassigned.mutate(undefined, {
-      onSuccess: (project: Project) => {
-        toast.success("Project created");
-        navigate({
-          to: "/projects/$projectId",
-          params: { projectId: project.id },
-          search: { prompt: undefined },
-        });
+  const plusDisabled = () =>
+    createInWorkspace.isPending || !privateWorkspace();
+
+  const handleCreateProject = (agentId: string) => {
+    const ws = privateWorkspace();
+    if (!ws) {
+      toast.error("Your private workspace isn't ready yet");
+      return;
+    }
+    createInWorkspace.mutate(
+      { workspaceId: ws.id, dto: { agentId } },
+      {
+        onSuccess: (project: Project) => {
+          toast.success("Project created");
+          navigate({
+            to: "/projects/$projectId",
+            params: { projectId: project.id },
+            search: { prompt: undefined },
+          });
+        },
+        onError: () => toast.error("Failed to create project"),
       },
-      onError: () => toast.error("Failed to create project"),
-    });
+    );
+  };
 
   const userName = () => userInfo.data?.preferredUsername ?? "";
   const userInitial = () => {
@@ -133,26 +164,44 @@ export default function AppSidebar() {
               </button>
             </Show>
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            class="h-8 w-8 shrink-0"
-            onClick={handleCreate}
-            disabled={createUnassigned.isPending}
-            title="New project"
-          >
-            <Plus class="w-4 h-4" />
-          </Button>
+          <TopPlusMenu
+            disabled={plusDisabled()}
+            canCreateWorkspace={hasPermission(Permission.manageWorkspaces)}
+            agents={agents.data}
+            onCreateProject={handleCreateProject}
+            onOpenCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+            trigger={(triggerProps) => (
+              <Button
+                {...triggerProps}
+                variant="outline"
+                size="icon"
+                class="h-8 w-8 shrink-0"
+                disabled={plusDisabled()}
+                title="Create"
+              >
+                <Plus class="w-4 h-4" />
+              </Button>
+            )}
+          />
         </div>
         <div class="hidden group-data-[collapsible=icon]/sidebar:flex justify-center pb-2">
-          <button
-            class="w-7 h-7 rounded-md flex items-center justify-center text-sidebar-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-            onClick={handleCreate}
-            disabled={createUnassigned.isPending}
-            title="New project"
-          >
-            <Plus class="w-4 h-4" />
-          </button>
+          <TopPlusMenu
+            disabled={plusDisabled()}
+            canCreateWorkspace={hasPermission(Permission.manageWorkspaces)}
+            agents={agents.data}
+            onCreateProject={handleCreateProject}
+            onOpenCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+            trigger={(triggerProps) => (
+              <button
+                {...triggerProps}
+                class="w-7 h-7 rounded-md flex items-center justify-center text-sidebar-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                disabled={plusDisabled()}
+                title="Create"
+              >
+                <Plus class="w-4 h-4" />
+              </button>
+            )}
+          />
         </div>
       </SidebarHeader>
 
@@ -252,6 +301,64 @@ export default function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+
+      <CreateWorkspaceDialog
+        open={createWorkspaceOpen()}
+        onOpenChange={setCreateWorkspaceOpen}
+      />
     </Sidebar>
+  );
+}
+
+function TopPlusMenu(props: {
+  disabled: boolean;
+  canCreateWorkspace: boolean;
+  agents: Agent[] | undefined;
+  onCreateProject: (agentId: string) => void;
+  onOpenCreateWorkspace: () => void;
+  trigger: (triggerProps: Record<string, unknown>) => JSX.Element;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger as={props.trigger} />
+      <DropdownMenuContent class="min-w-48">
+        <Show when={props.canCreateWorkspace}>
+          <DropdownMenuItem onSelect={props.onOpenCreateWorkspace}>
+            <FolderPlus class="w-4 h-4 text-muted-foreground" />
+            New workspace
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+        </Show>
+        <DropdownMenuSub overlap>
+          <DropdownMenuSubTrigger>
+            <AppWindow class="w-4 h-4 text-muted-foreground" />
+            <span class="flex-1">New project</span>
+            <ChevronRight class="w-3.5 h-3.5 text-muted-foreground" />
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <Show
+              when={(props.agents ?? []).length > 0}
+              fallback={
+                <div class="px-2 py-1.5 text-xs text-muted-foreground italic">
+                  No agents available
+                </div>
+              }
+            >
+              <For each={props.agents}>
+                {(agent) => (
+                  <DropdownMenuItem
+                    disabled={props.disabled}
+                    onSelect={() => props.onCreateProject(agent.id)}
+                  >
+                    <Bot class="w-4 h-4 text-muted-foreground" />
+                    {agent.displayName ?? agent.name}
+                  </DropdownMenuItem>
+                )}
+              </For>
+            </Show>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

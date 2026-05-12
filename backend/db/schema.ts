@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm"
 import {
   pgTable,
   text,
@@ -8,6 +9,7 @@ import {
   jsonb,
   integer,
   index,
+  uniqueIndex,
   unique,
   primaryKey,
 } from "drizzle-orm/pg-core"
@@ -36,6 +38,8 @@ export const agentUpdateStatusEnum = pgEnum("agent_update_status", [
   "failed",
 ])
 
+export const workspaceTypeEnum = pgEnum("workspace_type", ["private", "shared"])
+
 export const tenants = pgTable("tenants", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
@@ -47,6 +51,7 @@ export const tenants = pgTable("tenants", {
 export const agents = pgTable("agents", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
+  displayName: text("display_name"),
 })
 
 const tenantIdField = text("tenant_id")
@@ -61,14 +66,24 @@ export const userWorkspacePreferences = pgTable("user_workspace_preferences", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
 
-export const workspaces = pgTable("workspaces", {
-  id: text("id").primaryKey(),
-  tenantId: tenantIdField,
-  name: text("name").notNull(),
-  description: text("description"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-})
+export const workspaces = pgTable(
+  "workspaces",
+  {
+    id: text("id").primaryKey(),
+    tenantId: tenantIdField,
+    type: workspaceTypeEnum("type").notNull().default("shared"),
+    ownerId: text("owner_id").references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("workspaces_one_private_per_user_per_tenant")
+      .on(t.tenantId, t.ownerId)
+      .where(sql`${t.ownerId} is not null`),
+  ],
+)
 
 export const workspaceMembers = pgTable(
   "workspace_members",
@@ -92,6 +107,9 @@ export const projects = pgTable("projects", {
   workspaceId: text("workspace_id").references(() => workspaces.id, {
     onDelete: "set null",
   }),
+  agentId: text("agent_id")
+    .references(() => agents.id)
+    .notNull(),
   title: text("title"),
   description: text("description"),
   directory: text("directory").notNull(),

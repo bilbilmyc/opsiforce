@@ -28,6 +28,7 @@ export interface PodTemplateOptions {
 
 export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
   const isAssigned = !!options.projectId
+  const resolvedAgentName = options.agentName || "app-builder"
 
   const volumeMounts: k8s.V1VolumeMount[] = [
     {
@@ -66,6 +67,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
           name: "init-config",
           image: options.agentContainerImage,
           imagePullPolicy: options.imagePullPolicy,
+          env: [{ name: "AGENT_NAME", value: resolvedAgentName }],
           command: [
             "sh",
             "-c",
@@ -101,7 +103,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             { name: "XDG_CONFIG_HOME", value: "/workspace/.xdg/config" },
             { name: "XDG_CACHE_HOME", value: "/workspace/.xdg/cache" },
             { name: "XDG_STATE_HOME", value: "/workspace/.xdg/state" },
-            { name: "AGENT_NAME", value: options.agentName || "app-builder" },
+            { name: "AGENT_NAME", value: resolvedAgentName },
             ...(options.bifrostApiKey && options.bifrostProxyUrl
               ? [
                   { name: "OPENAI_API_KEY", value: options.bifrostApiKey },

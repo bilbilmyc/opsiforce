@@ -11,6 +11,7 @@ export interface TenantPodOptions {
   gatewayApiKey?: string
   gatewayUrl?: string
   agentModel?: string
+  agentName?: string
 }
 
 @Injectable()

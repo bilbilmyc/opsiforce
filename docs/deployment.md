@@ -27,7 +27,7 @@ After running the local dev commands, you'll have:
 
 | What | URL / Port | How to access |
 |------|-----------|---------------|
-| **App (entry point)** | https://opsiforce.traefik.me | Open in browser — Traefik routes to in-cluster services |
+| **App (entry point)** | https://opsiforce.localtest.me | Open in browser — Traefik routes to in-cluster services |
 | **Solid.js frontend** | http://localhost:8084 | Vite HMR on host; reached through Traefik |
 | **NestJS backend** | In `local` namespace via Tilt | Tilt port-forwards `localhost:3001` for direct calls; debug on `:9229` |
 | **Go runtime proxies** | In `local` namespace via Tilt, services `proxy-{agent,app,vscode,db}` (4 deployments, one per mode) | Reached cluster-internally; Traefik routes agent/app/vscode/db through them |
@@ -38,7 +38,7 @@ After running the local dev commands, you'll have:
 
 ### How to access the full app
 
-**For local dev, open https://opsiforce.traefik.me** — Traefik routes through the in-cluster
+**For local dev, open https://opsiforce.localtest.me** — Traefik routes through the in-cluster
 opsiforce-proxy (oauth2-proxy + nginx), which fans out to backend, frontend (host Vite via the
 Traefik IngressRoute), and the runtime proxies.
 

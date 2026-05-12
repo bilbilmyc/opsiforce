@@ -55,7 +55,7 @@ The proxy strips `X-Frame-Options`, `Content-Security-Policy`, and `Content-Enco
 
 ### Local dev
 
-In local dev, the Go DB proxy runs inside minikube via Tilt, so it reaches agent pod IPs directly on the pod network. Browser traffic enters through Traefik at `{projectId}.db.opsiforce.traefik.me`, then flows through the in-cluster opsiforce proxy to the runtime DB proxy.
+In local dev, the Go DB proxy runs inside minikube via Tilt, so it reaches agent pod IPs directly on the pod network. Browser traffic enters through Traefik at `{projectId}.db.opsiforce.localtest.me`, then flows through the in-cluster opsiforce proxy to the runtime DB proxy.
 
 ---
 

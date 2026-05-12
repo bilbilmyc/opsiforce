@@ -46,6 +46,10 @@ export default function WorkspaceSettings(props: {
   createEffect(() => {
     const w = workspace.data
     if (w) {
+      if (w.type === "private") {
+        props.onOpenChange(false)
+        return
+      }
       setName(w.name)
       setDescription(w.description ?? "")
       setDirty(false)
@@ -201,7 +205,7 @@ export default function WorkspaceSettings(props: {
         open={confirmDeleteOpen()}
         onOpenChange={setConfirmDeleteOpen}
         title={`Delete "${workspace.data?.name ?? "workspace"}"?`}
-        description="Projects stay in the tenant as unassigned — visible to everyone."
+        description="Projects move to the Public bucket — visible to everyone in the tenant."
         confirmLabel="Delete"
         variant="destructive"
         onConfirm={handleDelete}

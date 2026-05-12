@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common"
-import { and, asc, eq, inArray, sql } from "drizzle-orm"
+import { and, asc, eq, inArray, or, sql } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
 import {
@@ -27,20 +27,17 @@ import type {
 const workspaceBaseFields = {
   id: workspaces.id,
   tenantId: workspaces.tenantId,
+  type: workspaces.type,
+  ownerId: workspaces.ownerId,
   name: workspaces.name,
   description: workspaces.description,
   createdAt: workspaces.createdAt,
   updatedAt: workspaces.updatedAt,
 }
 
-type WorkspaceBaseRow = {
-  id: string
-  tenantId: string
-  name: string
-  description: string | null
-  createdAt: Date
-  updatedAt: Date
-}
+type WorkspaceBaseRow = typeof workspaces.$inferSelect
+
+const PRIVATE_WORKSPACE_NAME = "Personal"
 
 @Injectable()
 export class WorkspaceService {
@@ -79,14 +76,21 @@ export class WorkspaceService {
   }
 
   /**
-   * Returns every workspace in the tenant — for the admin-overview settings
-   * page. Caller must have can_manage_workspaces (enforced at controller).
+   * Returns every shared workspace in the tenant plus the admin's own private
+   * workspace — for the admin-overview settings page. Caller must have
+   * can_manage_workspaces (enforced at controller). Other users' private
+   * workspaces are intentionally invisible to admins.
    */
-  async findAllForAdmin(tenantId: string): Promise<WorkspaceResponse[]> {
+  async findAllForAdmin(tenantId: string, adminUserId: string): Promise<WorkspaceResponse[]> {
     const rows = await db
       .select(workspaceBaseFields)
       .from(workspaces)
-      .where(eq(workspaces.tenantId, tenantId))
+      .where(
+        and(
+          eq(workspaces.tenantId, tenantId),
+          or(eq(workspaces.type, "shared"), eq(workspaces.ownerId, adminUserId)),
+        ),
+      )
       .orderBy(asc(workspaces.createdAt))
     return this.attachCounts(rows)
   }
@@ -99,7 +103,10 @@ export class WorkspaceService {
   }): Promise<WorkspaceResponse> {
     const { workspaceId, userId, tenantId, canManageWorkspaces } = params
     const base = await this.findOneBase(workspaceId, tenantId)
-    if (!canManageWorkspaces && !(await this.isMember(workspaceId, userId))) {
+    // Admin bypass applies only to shared workspaces. Private workspaces are
+    // visible exclusively to their owner; admins do not get a back door.
+    const adminBypass = canManageWorkspaces && base.type === "shared"
+    if (!adminBypass && !(await this.isMember(workspaceId, userId))) {
       throw new NotFoundException(`Workspace ${workspaceId} not found`)
     }
     const [withCounts] = await this.attachCounts([base])
@@ -131,6 +138,7 @@ export class WorkspaceService {
       await tx.insert(workspaces).values({
         id,
         tenantId,
+        type: "shared",
         name,
         description: dto.description ?? null,
       })
@@ -140,6 +148,8 @@ export class WorkspaceService {
     return {
       id,
       tenantId,
+      type: "shared",
+      ownerId: null,
       name,
       description: dto.description ?? null,
       createdAt: now,
@@ -149,11 +159,62 @@ export class WorkspaceService {
     }
   }
 
+  /**
+   * Idempotent provisioning of a user's private workspace in a tenant.
+   * Called on every `getOrCreateUser` so the invariant "every (user, tenant)
+   * has exactly one private workspace" self-heals. The partial unique index
+   * on (tenant_id, owner_id) WHERE owner_id IS NOT NULL guarantees at most
+   * one row will ever exist for the pair, even under concurrent requests.
+   */
+  async ensurePrivateWorkspace(userId: string, tenantId: string): Promise<void> {
+    const id = crypto.randomUUID()
+
+    await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(workspaces)
+        .values({
+          id,
+          tenantId,
+          type: "private",
+          ownerId: userId,
+          name: PRIVATE_WORKSPACE_NAME,
+        })
+        .onConflictDoNothing({
+          target: [workspaces.tenantId, workspaces.ownerId],
+          where: sql`${workspaces.ownerId} is not null`,
+        })
+        .returning({ id: workspaces.id })
+
+      if (inserted.length === 0) return
+
+      await tx
+        .insert(workspaceMembers)
+        .values({ workspaceId: inserted[0].id, userId })
+        .onConflictDoNothing()
+    })
+  }
+
+  /**
+   * Private workspaces are not mutable through the workspace API — they
+   * cannot be renamed, deleted, or have members added/removed. The owner
+   * relationship is fixed at creation; cleanup happens via user-level
+   * CASCADE deletes. UI hides these controls; this guard is the server-side
+   * backstop.
+   */
+  private assertMutable(workspace: WorkspaceBaseRow): void {
+    if (workspace.type === "private") {
+      throw new BadRequestException("Private workspace cannot be modified")
+    }
+  }
+
   async update(
     workspaceId: string,
     dto: UpdateWorkspaceDto,
     tenantId: string,
   ): Promise<WorkspaceResponse> {
+    const base = await this.findOneBase(workspaceId, tenantId)
+    this.assertMutable(base)
+
     const updates: Partial<typeof workspaces.$inferInsert> = {}
     if (dto.name !== undefined) {
       const name = dto.name.trim()
@@ -165,30 +226,24 @@ export class WorkspaceService {
     if (Object.keys(updates).length > 0) {
       updates.updatedAt = new Date()
 
-      const result = await db
+      await db
         .update(workspaces)
         .set(updates)
         .where(and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId)))
-        .returning({ id: workspaces.id })
-
-      if (result.length === 0) {
-        throw new NotFoundException(`Workspace ${workspaceId} not found`)
-      }
     }
 
-    const base = await this.findOneBase(workspaceId, tenantId)
-    const [withCounts] = await this.attachCounts([base])
+    const refreshed = await this.findOneBase(workspaceId, tenantId)
+    const [withCounts] = await this.attachCounts([refreshed])
     return withCounts
   }
 
   async remove(workspaceId: string, tenantId: string): Promise<void> {
-    const result = await db
+    const base = await this.findOneBase(workspaceId, tenantId)
+    this.assertMutable(base)
+
+    await db
       .delete(workspaces)
       .where(and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId)))
-      .returning({ id: workspaces.id })
-    if (result.length === 0) {
-      throw new NotFoundException(`Workspace ${workspaceId} not found`)
-    }
   }
 
   async listMembers(params: {
@@ -208,14 +263,11 @@ export class WorkspaceService {
   }
 
   async addMember(workspaceId: string, userId: string, tenantId: string): Promise<void> {
-    const [[ws], [u]] = await Promise.all([
-      db
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId))),
+    const [base, [u]] = await Promise.all([
+      this.findOneBase(workspaceId, tenantId),
       db.select({ id: users.id }).from(users).where(eq(users.id, userId)),
     ])
-    if (!ws) throw new NotFoundException(`Workspace ${workspaceId} not found`)
+    this.assertMutable(base)
     if (!u) throw new NotFoundException(`User ${userId} not found`)
 
     await db
@@ -225,11 +277,8 @@ export class WorkspaceService {
   }
 
   async removeMember(workspaceId: string, userId: string, tenantId: string): Promise<void> {
-    const [ws] = await db
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId)))
-    if (!ws) throw new NotFoundException(`Workspace ${workspaceId} not found`)
+    const base = await this.findOneBase(workspaceId, tenantId)
+    this.assertMutable(base)
 
     await db
       .delete(workspaceMembers)
@@ -260,7 +309,12 @@ export class WorkspaceService {
 
   /**
    * Idempotent project assign. `workspaceId: null` = unassign (admin-only).
-   * Non-null target needs either manage OR (move-between perm AND target membership).
+   *
+   * Move-permission rules:
+   * - Unassign (target=null): always admin-only.
+   * - Assign to a workspace the caller owns (their own private workspace): free.
+   * - Move out of a workspace the caller owns into a workspace they belong to: free.
+   * - All other moves: require `manageWorkspaces` or `moveProjectsBetweenWorkspaces`.
    */
   async assignProject(params: {
     workspaceId: string | null
@@ -283,30 +337,34 @@ export class WorkspaceService {
       throw new ForbiddenException(`Missing permission: ${Perms.manageWorkspaces}`)
     }
 
-    if (workspaceId !== null) {
-      if (!canManageWorkspaces && !canMoveProjectsBetweenWorkspaces) {
-        throw new ForbiddenException(
-          `Missing permission: ${Perms.moveProjectsBetweenWorkspaces}`,
-        )
-      }
-
-      if (!canManageWorkspaces && !(await this.isMember(workspaceId, userId))) {
-        throw new NotFoundException(`Workspace ${workspaceId} not found`)
-      }
-
-      const [ws] = await db
-        .select({ id: workspaces.id })
-        .from(workspaces)
-        .where(and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId)))
-      if (!ws) throw new NotFoundException(`Workspace ${workspaceId} not found`)
-    }
-
     const project = await this.projectService.findOneForUser({
       projectId,
       tenantId,
       userId,
       canManageWorkspaces,
     })
+
+    if (workspaceId !== null) {
+      const target = await this.findOneBase(workspaceId, tenantId)
+
+      const sourceOwnedByCaller = await this.isOwnedByUser(project.workspaceId, userId)
+      const targetOwnedByCaller = target.ownerId === userId
+
+      const movePermWaived = sourceOwnedByCaller || targetOwnedByCaller
+
+      if (!canManageWorkspaces && !movePermWaived && !canMoveProjectsBetweenWorkspaces) {
+        throw new ForbiddenException(
+          `Missing permission: ${Perms.moveProjectsBetweenWorkspaces}`,
+        )
+      }
+
+      // Visibility/membership check on target. Admins bypass for shared
+      // targets; private targets always require ownership.
+      const targetVisible = targetOwnedByCaller || (canManageWorkspaces && target.type === "shared")
+      if (!targetVisible && !(await this.isMember(workspaceId, userId))) {
+        throw new NotFoundException(`Workspace ${workspaceId} not found`)
+      }
+    }
 
     const now = new Date()
     await db
@@ -315,6 +373,15 @@ export class WorkspaceService {
       .where(and(eq(projects.id, project.id), eq(projects.tenantId, tenantId)))
 
     return { ...project, workspaceId, updatedAt: now }
+  }
+
+  private async isOwnedByUser(workspaceId: string | null, userId: string): Promise<boolean> {
+    if (!workspaceId) return false
+    const [row] = await db
+      .select({ ownerId: workspaces.ownerId })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+    return row?.ownerId === userId
   }
 
   async createProjectInWorkspace(params: {

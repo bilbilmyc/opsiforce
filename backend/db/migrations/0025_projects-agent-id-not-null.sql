@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ALTER COLUMN "agent_id" SET NOT NULL;

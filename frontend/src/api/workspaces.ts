@@ -110,7 +110,7 @@ export function useCreateProjectInWorkspace() {
   return createMutation(() => ({
     mutationFn: (params: {
       workspaceId: string
-      dto?: { title?: string; description?: string }
+      dto?: { title?: string; description?: string; agentId?: string }
     }) => api.post<Project>(`/workspaces/${params.workspaceId}/projects`, params.dto ?? {}),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["projects"] })
@@ -164,4 +164,4 @@ export function useMoveProject() {
   }))
 }
 
-export const UNASSIGNED_LABEL = "Unassigned"
+export const PUBLIC_LABEL = "Public"

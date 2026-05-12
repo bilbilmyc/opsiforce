@@ -9,7 +9,7 @@ export const DndType = {
 export type DndType = (typeof DndType)[keyof typeof DndType]
 
 /**
- * Sentinel id for the "Unassigned" bucket. Used both as a DnD group name and
- * (in the drag-end handler) to translate group → workspaceId (null).
+ * Sentinel id for the "Public" bucket (workspaceId is NULL on the project).
+ * Used as a DnD group name and to translate group → workspaceId (null).
  */
-export const UNASSIGNED_ID = "unassigned"
+export const PUBLIC_ID = "public"

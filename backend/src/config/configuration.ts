@@ -72,7 +72,7 @@ export default () => {
   mailgunDomain: process.env.MAILGUN_DOMAIN || "",
   mailgunSender: process.env.MAILGUN_SENDER || "",
   mailgunUrl: process.env.MAILGUN_URL || "",
-  appsHostname: process.env.APPS_HOSTNAME || "apps.opsiforce.traefik.me",
+  appsHostname: process.env.APPS_HOSTNAME || "apps.opsiforce.localtest.me",
   webappServiceName: process.env.WEBAPP_SERVICE_NAME || "proxy-app",
   webappServiceNamespace: process.env.WEBAPP_SERVICE_NAMESPACE || "local",
   webappServicePort: parseInt(process.env.WEBAPP_SERVICE_PORT || "3002", 10),

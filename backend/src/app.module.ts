@@ -21,6 +21,7 @@ import { ScheduleModule } from "./schedule/schedule.module"
 import { UserModule } from "./user/user.module"
 import { DefaultsModule } from "./defaults/defaults.module"
 import { WorkspaceModule } from "./workspace/workspace.module"
+import { AgentModule } from "./agent/agent.module"
 import { AgentUpdateModule } from "./agent-update/agent-update.module"
 
 function parseRedisUrl(url: string) {
@@ -54,6 +55,7 @@ function parseRedisUrl(url: string) {
     PodModule,
     ProjectModule,
     WorkspaceModule,
+    AgentModule,
     TimeoutModule,
     ProxyModule,
     UploadModule,

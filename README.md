@@ -41,7 +41,7 @@ Opsiforce local development uses the shared Sima minikube stack:
 - The frontend runs on the host through Vite HMR.
 - The backend, runtime proxies, Bifrost, opsiforce proxy, and project pods run inside minikube.
 - Tilt builds the backend and runtime proxy dev images, deploys them into the `local` namespace, and live-updates backend/proxy source changes.
-- Traefik exposes the browser entrypoints under `*.opsiforce.traefik.me`.
+- Traefik exposes the browser entrypoints under `*.opsiforce.localtest.me`.
 
 Before running local scripts, make sure your Kubernetes context points at minikube, not a shared cluster:
 
@@ -76,7 +76,7 @@ yarn run port-forward-all
 yarn run dev-opsiforce-only
 ```
 
-`tunnel-traefik` keeps the minikube LoadBalancer reachable from the host. It may ask for sudo and must stay running while using `https://opsiforce.traefik.me`.
+`tunnel-traefik` keeps the minikube LoadBalancer reachable from the host. It may ask for sudo and must stay running while using `https://opsiforce.localtest.me`.
 
 `port-forward-all` keeps PostgreSQL, Redis, Keycloak, and Keycloak configuration available to local processes.
 
@@ -117,13 +117,13 @@ Use this only when the shared infrastructure is already up and you do not need t
 
 | Service | URL |
 |---|---|
-| Opsiforce app | `https://opsiforce.traefik.me` |
-| Project app previews | `https://{project}.apps.opsiforce.traefik.me` |
-| Project preview snapshots | `https://{project}.preview.apps.opsiforce.traefik.me` |
-| VS Code | `https://{project}.code.opsiforce.traefik.me` |
-| DB viewer | `https://{project}.db.opsiforce.traefik.me` |
-| Bifrost dashboard | `https://bifrost.opsiforce.traefik.me` |
-| Tilt UI | `https://tilt.opsiforce.traefik.me` |
+| Opsiforce app | `https://opsiforce.localtest.me` |
+| Project app previews | `https://{project}.apps.opsiforce.localtest.me` |
+| Project preview snapshots | `https://{project}.preview.apps.opsiforce.localtest.me` |
+| VS Code | `https://{project}.code.opsiforce.localtest.me` |
+| DB viewer | `https://{project}.db.opsiforce.localtest.me` |
+| Bifrost dashboard | `https://bifrost.opsiforce.localtest.me` |
+| Tilt UI | `https://tilt.opsiforce.localtest.me` |
 | Backend direct port-forward | `http://localhost:3001` |
 | Frontend Vite server | `http://localhost:8084` |
 | Drizzle Studio | `http://localhost:4983` |

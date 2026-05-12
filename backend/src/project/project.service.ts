@@ -19,6 +19,7 @@ import {
   pods,
   deletedProjects,
   workspaceMembers,
+  workspaces,
   tenants,
   projectDuplicateJobs,
 } from "../../db/schema"
@@ -30,6 +31,7 @@ import { assertPositiveMs } from "../common/validation"
 import { DefaultsService } from "../defaults/defaults.service"
 import { GatewayKeyService } from "../gateway/gateway-key.service"
 import { ScheduleService } from "../schedule/schedule.service"
+import { AgentService } from "../agent/agent.service"
 import {
   CreateProjectDto,
   UpdateProjectDto,
@@ -69,6 +71,7 @@ const projectSelectFields = {
   id: projects.id,
   tenantId: projects.tenantId,
   workspaceId: projects.workspaceId,
+  agentId: projects.agentId,
   title: projects.title,
   description: projects.description,
   directory: projects.directory,
@@ -107,6 +110,7 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly projectEventsService: ProjectEventsService,
     @Inject(forwardRef(() => AppService))
     private readonly appService: AppService,
+    private readonly agentService: AgentService,
     @InjectQueue(PROJECT_DUPLICATE_QUEUE)
     private readonly duplicateQueue: Queue<ProjectDuplicateJobData>,
   ) {}
@@ -125,6 +129,7 @@ export class ProjectService implements OnApplicationBootstrap {
     const directory = `projects/${tenantId}/${id}`
     const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
     const podName = this.podService.assignedPodName(id)
+    const agentId = dto?.agentId ?? (await this.agentService.getDefaultAgentId())
     const { defaultTimeoutIdle: timeoutIdle, defaultAppTimeoutIdle: appTimeoutIdle } =
       await this.defaultsService.getTenantTimeouts(tenantId)
 
@@ -132,6 +137,7 @@ export class ProjectService implements OnApplicationBootstrap {
       await tx.insert(projects).values({
         id,
         tenantId,
+        agentId,
         title: dto?.title ?? null,
         description: dto?.description ?? null,
         directory,
@@ -171,6 +177,7 @@ export class ProjectService implements OnApplicationBootstrap {
         id,
         tenantId,
         workspaceId: source.workspaceId,
+        agentId: source.agentId,
         title,
         description: source.description,
         directory,
@@ -223,7 +230,26 @@ export class ProjectService implements OnApplicationBootstrap {
     canManageWorkspaces: boolean
   }): Promise<ProjectResponse[]> {
     const { tenantId, userId, canManageWorkspaces } = params
-    if (canManageWorkspaces) return this.findAll(tenantId)
+
+    if (canManageWorkspaces) {
+      // Admin sees every project EXCEPT projects in other users' private workspaces.
+      return db
+        .select(projectSelectFields)
+        .from(projects)
+        .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+        .leftJoin(workspaces, eq(workspaces.id, projects.workspaceId))
+        .where(
+          and(
+            eq(projects.tenantId, tenantId),
+            or(
+              isNull(projects.workspaceId),
+              ne(workspaces.type, "private"),
+              eq(workspaces.ownerId, userId),
+            ),
+          ),
+        )
+        .orderBy(...projectOrderBy())
+    }
 
     return db
       .select(projectSelectFields)
@@ -776,13 +802,15 @@ export class ProjectService implements OnApplicationBootstrap {
       const current = await this.findOneById(projectId).catch(() => null)
       if (!current || current.status !== ProjectStatus.Starting) return
 
-      const [bifrostOptions, agentDefaults, gatewayApiKey] = await Promise.all([
+      const [bifrostOptions, agentDefaults, gatewayApiKey, agentName] = await Promise.all([
         this.bifrostService.getProjectPodOptions(projectId),
         this.defaultsService.getTenantAgent(current.tenantId),
         this.gatewayKeyService.getProjectToken(projectId),
+        this.agentService.resolveName(current.agentId),
       ])
       const tenantOptions = {
         ...(bifrostOptions ?? {}),
+        agentName,
         agentModel: agentDefaults.defaultModel,
         gatewayApiKey: gatewayApiKey ?? undefined,
         gatewayUrl: this.configService.get<string>("gatewayUrl", ""),

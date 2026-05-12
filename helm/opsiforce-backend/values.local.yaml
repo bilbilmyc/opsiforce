@@ -55,7 +55,7 @@ config:
   mailgunDomain: "sima"
   mailgunSender: "local@sima-local"
   mailgunUrl: "http://host.minikube.internal:8089"
-  appsHostname: "apps.opsiforce.traefik.me"
+  appsHostname: "apps.opsiforce.localtest.me"
   webappServiceName: "proxy-app"
   webappServiceNamespace: "local"
   webappServicePort: "3002"

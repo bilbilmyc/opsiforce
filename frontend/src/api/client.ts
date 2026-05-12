@@ -60,6 +60,7 @@ export interface Project {
   id: string
   tenantId: string
   workspaceId: string | null
+  agentId: string
   title: string | null
   description: string | null
   status: ProjectStatus
@@ -120,15 +121,25 @@ export interface UpdateProjectAuthDto {
   bypassAuthPaths?: string[]
 }
 
+export type WorkspaceType = "private" | "shared"
+
 export interface Workspace {
   id: string
   tenantId: string
+  type: WorkspaceType
+  ownerId: string | null
   name: string
   description: string | null
   createdAt: string
   updatedAt: string
   memberCount: number
   projectCount: number
+}
+
+export interface Agent {
+  id: string
+  name: string
+  displayName: string | null
 }
 
 export interface WorkspacePreferences {

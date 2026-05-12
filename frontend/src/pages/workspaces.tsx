@@ -96,7 +96,7 @@ export default function WorkspacesPage() {
               }
             >
               <div class="rounded-xl border border-border bg-card divide-y divide-border">
-                <For each={data()}>
+                <For each={data().filter((w) => w.type !== "private")}>
                   {(ws) => (
                     <div class="flex items-center gap-3 p-4">
                       <FolderKanban class="w-4 h-4 text-muted-foreground shrink-0" />

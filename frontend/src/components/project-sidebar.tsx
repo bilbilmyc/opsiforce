@@ -7,24 +7,24 @@ import { type Project } from "~/api/client"
 import { usePermissions } from "~/api/permissions"
 import { useCreateUnassignedProject, useProjects, useRenameProject } from "~/api/projects"
 import {
-  UNASSIGNED_LABEL,
+  PUBLIC_LABEL,
   useCreateProjectInWorkspace,
   useMoveProject,
   useWorkspaces,
 } from "~/api/workspaces"
 import { useUpdateWorkspacePreferences } from "~/api/users"
 import { createPersistedSignal } from "~/lib/persisted-signal"
-import { DndType, UNASSIGNED_ID } from "~/lib/sidebar-dnd"
+import { DndType, PUBLIC_ID } from "~/lib/sidebar-dnd"
 import { Permission } from "~/constants/permissions"
 import { FolderOpen } from "~/components/icons"
 import Spinner from "~/components/ui/spinner"
 import ProjectSettings from "./project-settings"
 import WorkspaceSettings from "./workspace-settings"
 import SidebarWorkspaceGroup from "./sidebar-workspace-group"
-import SidebarUnassignedGroup from "./sidebar-unassigned-group"
+import SidebarPublicGroup from "./sidebar-public-group"
 
 const FOLDED_KEY = "opsiforce:workspace:folded"
-const UNASSIGNED_FOLDED_KEY = "opsiforce:workspace:unassigned-folded"
+const PUBLIC_FOLDED_KEY = "opsiforce:workspace:public-folded"
 
 export default function ProjectSidebar(props: { search: string }) {
   const navigate = useNavigate()
@@ -50,35 +50,35 @@ export default function ProjectSidebar(props: { search: string }) {
   const renameProject = useRenameProject()
 
   const [folded, setFolded] = createPersistedSignal<Record<string, boolean>>(FOLDED_KEY, {})
-  const [unassignedFolded, setUnassignedFolded] = createPersistedSignal<boolean>(
-    UNASSIGNED_FOLDED_KEY,
+  const [publicFolded, setPublicFolded] = createPersistedSignal<boolean>(
+    PUBLIC_FOLDED_KEY,
     false,
   )
 
   const toggleFold = (id: string) => {
-    if (id === UNASSIGNED_ID) {
-      setUnassignedFolded(!unassignedFolded())
+    if (id === PUBLIC_ID) {
+      setPublicFolded(!publicFolded())
       return
     }
     setFolded((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
   const isFolded = (id: string) =>
-    id === UNASSIGNED_ID ? unassignedFolded() : !!folded()[id]
+    id === PUBLIC_ID ? publicFolded() : !!folded()[id]
 
   const groupedProjects = createMemo(() => {
     const byWs = new Map<string, Project[]>()
-    const unassigned: Project[] = []
+    const publicProjects: Project[] = []
     for (const p of projects.data ?? []) {
       if (p.workspaceId) {
         const arr = byWs.get(p.workspaceId) ?? []
         arr.push(p)
         byWs.set(p.workspaceId, arr)
       } else {
-        unassigned.push(p)
+        publicProjects.push(p)
       }
     }
-    return { byWs, unassigned }
+    return { byWs, publicProjects }
   })
 
   const searchQuery = () => props.search.toLowerCase().trim()
@@ -97,7 +97,7 @@ export default function ProjectSidebar(props: { search: string }) {
   }
 
   const workspaceLabel = (id: string | null): string => {
-    if (id === null) return UNASSIGNED_LABEL
+    if (id === null) return PUBLIC_LABEL
     return (workspaces.data ?? []).find((w) => w.id === id)?.name ?? "workspace"
   }
 
@@ -167,8 +167,8 @@ export default function ProjectSidebar(props: { search: string }) {
               if (initialGroup === group) return
               const projectId = (source.data as { projectId: string }).projectId
               const fromWorkspaceId =
-                initialGroup === UNASSIGNED_ID ? null : (initialGroup ?? null)
-              const toWorkspaceId = group === UNASSIGNED_ID ? null : (group ?? null)
+                initialGroup === PUBLIC_ID ? null : (initialGroup ?? null)
+              const toWorkspaceId = group === PUBLIC_ID ? null : (group ?? null)
               moveProject.mutate({
                 projectId,
                 fromWorkspaceId,
@@ -192,7 +192,9 @@ export default function ProjectSidebar(props: { search: string }) {
                   creating={createInWs.isPending}
                   onToggleFold={() => toggleFold(ws.id)}
                   onOpenSettings={
-                    canManageWorkspaces() ? () => setSettingsWorkspaceId(ws.id) : undefined
+                    ws.type !== "private" && canManageWorkspaces()
+                      ? () => setSettingsWorkspaceId(ws.id)
+                      : undefined
                   }
                   onCreate={() => handleCreateInWorkspace(ws.id)}
                   onSelectProject={navigateToProject}
@@ -206,12 +208,13 @@ export default function ProjectSidebar(props: { search: string }) {
               )}
             </For>
 
-            <SidebarUnassignedGroup
-              expanded={!isFolded(UNASSIGNED_ID)}
-              projects={filterByQuery(groupedProjects().unassigned)}
+            <SidebarPublicGroup
+              expanded={!isFolded(PUBLIC_ID)}
+              projects={filterByQuery(groupedProjects().publicProjects)}
               activeProjectId={activeProjectId()}
               creating={createUnassigned.isPending}
-              onToggleFold={() => toggleFold(UNASSIGNED_ID)}
+              canCreate={canManageWorkspaces()}
+              onToggleFold={() => toggleFold(PUBLIC_ID)}
               onCreate={handleCreateUnassigned}
               onSelectProject={navigateToProject}
               onRenameProject={(id, title) => renameProject.mutate({ id, title })}

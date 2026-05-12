@@ -1,15 +1,16 @@
 import { For, Show } from "solid-js"
 import { type Project } from "~/api/client"
-import { UNASSIGNED_ID } from "~/lib/sidebar-dnd"
-import { ChevronDown, ChevronRight, Inbox, Plus } from "~/components/icons"
+import { PUBLIC_ID } from "~/lib/sidebar-dnd"
+import { ChevronDown, ChevronRight, Globe, Plus } from "~/components/icons"
 import SidebarDraggableProjectRow from "./sidebar-draggable-project-row"
 
-/** Bucket for projects with no workspace — visible to everyone. */
-export default function SidebarUnassignedGroup(props: {
+/** Bucket for projects with no workspace — visible to everyone in the tenant. */
+export default function SidebarPublicGroup(props: {
   expanded: boolean
   projects: Project[]
   activeProjectId: string | undefined
   creating: boolean
+  canCreate: boolean
   onToggleFold: () => void
   onCreate: () => void
   onSelectProject: (id: string) => void
@@ -31,21 +32,23 @@ export default function SidebarUnassignedGroup(props: {
             <ChevronRight class="w-3 h-3" />
           )}
         </span>
-        <Inbox class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+        <Globe class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <span class="flex-1 min-w-0 text-sm font-medium truncate text-muted-foreground">
-          Unassigned
+          Public
         </span>
-        <button
-          class="opacity-0 group-hover/wsrow:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-1 rounded-sm hover:bg-accent"
-          onClick={(e) => {
-            e.stopPropagation()
-            props.onCreate()
-          }}
-          disabled={props.creating}
-          title="New unassigned project"
-        >
-          <Plus class="w-3.5 h-3.5" />
-        </button>
+        <Show when={props.canCreate}>
+          <button
+            class="opacity-0 group-hover/wsrow:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-1 rounded-sm hover:bg-accent"
+            onClick={(e) => {
+              e.stopPropagation()
+              props.onCreate()
+            }}
+            disabled={props.creating}
+            title="New public project"
+          >
+            <Plus class="w-3.5 h-3.5" />
+          </button>
+        </Show>
       </div>
 
       <Show when={props.expanded}>
@@ -55,7 +58,7 @@ export default function SidebarUnassignedGroup(props: {
               <SidebarDraggableProjectRow
                 project={project}
                 index={idx()}
-                groupId={UNASSIGNED_ID}
+                groupId={PUBLIC_ID}
                 isActive={project.id === props.activeProjectId}
                 draggable={true}
                 onSelect={() => props.onSelectProject(project.id)}

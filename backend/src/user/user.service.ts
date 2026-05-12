@@ -1,8 +1,9 @@
-import { Injectable, Logger, NotFoundException } from "@nestjs/common"
+import { Inject, Injectable, Logger, NotFoundException, forwardRef } from "@nestjs/common"
 import { eq, sql } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
 import { users, userTenants, userWorkspacePreferences } from "../../db/schema"
+import { WorkspaceService } from "../workspace/workspace.service"
 
 export interface UserIdentity {
   keycloakId: string
@@ -33,6 +34,11 @@ export class UserService {
   private readonly logger = new Logger(UserService.name)
   private readonly pendingUsers = new Map<string, Promise<UserRecord>>()
 
+  constructor(
+    @Inject(forwardRef(() => WorkspaceService))
+    private readonly workspaceService: WorkspaceService,
+  ) {}
+
   async getOrCreateUser(identity: UserIdentity, tenantId?: string): Promise<UserRecord> {
     const cacheKey = tenantId ? `${identity.keycloakId}:${tenantId}` : identity.keycloakId
     const pending = this.pendingUsers.get(cacheKey)
@@ -59,7 +65,10 @@ export class UserService {
           .set({ email: newEmail, displayName: newDisplayName, updatedAt: new Date() })
           .where(eq(users.keycloakId, identity.keycloakId))
       }
-      if (tenantId) await this.ensureUserTenant(existing.id, tenantId)
+      if (tenantId) {
+        await this.ensureUserTenant(existing.id, tenantId)
+        await this.workspaceService.ensurePrivateWorkspace(existing.id, tenantId)
+      }
       return { ...existing, email: newEmail ?? existing.email, displayName: newDisplayName ?? existing.displayName }
     }
 
@@ -76,7 +85,10 @@ export class UserService {
 
     const user = created ?? (await db.select().from(users).where(eq(users.keycloakId, identity.keycloakId)))[0]
 
-    if (tenantId) await this.ensureUserTenant(user.id, tenantId)
+    if (tenantId) {
+      await this.ensureUserTenant(user.id, tenantId)
+      await this.workspaceService.ensurePrivateWorkspace(user.id, tenantId)
+    }
 
     if (created) this.logger.log(`Created user ${user.email ?? user.keycloakId}`)
     return user

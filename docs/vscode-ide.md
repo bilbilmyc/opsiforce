@@ -44,7 +44,7 @@ Browser → http://{projectId}.code.dev.opsima.com/
 
 ### Local dev
 
-In local dev, the Go VS Code proxy runs inside minikube via Tilt, so it reaches agent pod IPs directly on the pod network. Browser traffic enters through Traefik at `{projectId}.code.opsiforce.traefik.me`, then flows through the in-cluster opsiforce proxy to the runtime VS Code proxy.
+In local dev, the Go VS Code proxy runs inside minikube via Tilt, so it reaches agent pod IPs directly on the pod network. Browser traffic enters through Traefik at `{projectId}.code.opsiforce.localtest.me`, then flows through the in-cluster opsiforce proxy to the runtime VS Code proxy.
 
 ### WebSocket
 

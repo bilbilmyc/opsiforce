@@ -100,7 +100,7 @@ k8s_resource(
 )
 
 # ───────────────────────── Tilt UI exposed via Traefik ─────────────────────────
-# Routes https://tilt.opsiforce.traefik.me to the host's `tilt up` web UI on
+# Routes https://tilt.opsiforce.localtest.me to the host's `tilt up` web UI on
 # :10350 via an ExternalName service. Requires `tilt up --host=0.0.0.0` so the
 # UI is reachable from inside the cluster.
 k8s_yaml(blob("""
@@ -124,7 +124,7 @@ metadata:
 spec:
   entryPoints: [websecure]
   routes:
-    - match: Host(`tilt.opsiforce.traefik.me`)
+    - match: Host(`tilt.opsiforce.localtest.me`)
       kind: Rule
       services:
         - name: tilt-ui
