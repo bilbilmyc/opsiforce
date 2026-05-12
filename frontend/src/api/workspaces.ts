@@ -1,6 +1,7 @@
 import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
 import { toast } from "solid-sonner"
 import { api, type Project, type User, type Workspace } from "./client"
+import { detectTimezone } from "~/lib/timezone"
 
 export const workspaceKeys = {
   all: ["workspaces"] as const,
@@ -110,8 +111,12 @@ export function useCreateProjectInWorkspace() {
   return createMutation(() => ({
     mutationFn: (params: {
       workspaceId: string
-      dto?: { title?: string; description?: string; agentId?: string }
-    }) => api.post<Project>(`/workspaces/${params.workspaceId}/projects`, params.dto ?? {}),
+      dto?: { title?: string; description?: string; agentId?: string; timezone?: string }
+    }) =>
+      api.post<Project>(`/workspaces/${params.workspaceId}/projects`, {
+        timezone: detectTimezone(),
+        ...(params.dto ?? {}),
+      }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["projects"] })
       qc.invalidateQueries({ queryKey: workspaceKeys.projects(vars.workspaceId) })

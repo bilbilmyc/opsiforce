@@ -1,6 +1,7 @@
 import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
 import { createEffect, createSignal, onCleanup } from "solid-js"
 import { ApiError, api, type Project, type ProjectState } from "./client"
+import { detectTimezone } from "~/lib/timezone"
 
 export const projectKeys = {
   all: ["projects"] as const,
@@ -103,14 +104,6 @@ export function useRenameProject() {
     mutationFn: (params: { id: string; title: string }) => api.patch<Project>(`/projects/${params.id}`, { title: params.title }),
     onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
   }))
-}
-
-function detectTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone
-  } catch {
-    return "UTC"
-  }
 }
 
 export function useCreateUnassignedProject() {
