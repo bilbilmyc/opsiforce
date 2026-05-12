@@ -58,13 +58,11 @@ export class ProjectController {
   async findAll(
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
   ) {
     const dbUserId = await this.resolveUserId(user, tenant.tenantId)
     return this.projectService.findAllForUser({
       tenantId: tenant.tenantId,
       userId: dbUserId,
-      canManageWorkspaces: canManageWorkspaces(req),
     })
   }
 

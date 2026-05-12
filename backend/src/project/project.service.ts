@@ -227,29 +227,8 @@ export class ProjectService implements OnApplicationBootstrap {
   async findAllForUser(params: {
     tenantId: string
     userId: string
-    canManageWorkspaces: boolean
   }): Promise<ProjectResponse[]> {
-    const { tenantId, userId, canManageWorkspaces } = params
-
-    if (canManageWorkspaces) {
-      // Admin sees every project EXCEPT projects in other users' private workspaces.
-      return db
-        .select(projectSelectFields)
-        .from(projects)
-        .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
-        .leftJoin(workspaces, eq(workspaces.id, projects.workspaceId))
-        .where(
-          and(
-            eq(projects.tenantId, tenantId),
-            or(
-              isNull(projects.workspaceId),
-              ne(workspaces.type, "private"),
-              eq(workspaces.ownerId, userId),
-            ),
-          ),
-        )
-        .orderBy(...projectOrderBy())
-    }
+    const { tenantId, userId } = params
 
     return db
       .select(projectSelectFields)
