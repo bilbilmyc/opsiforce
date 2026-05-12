@@ -291,10 +291,7 @@ export class ProjectService implements OnApplicationBootstrap {
     return project
   }
 
-  /**
-   * User-scoped project lookup. Returns 404 (not 403) for invisible projects
-   * so existence of workspace-scoped projects isn't leaked to non-members.
-   */
+  
   async findOneForUser(params: {
     projectId: string
     tenantId: string
@@ -303,19 +300,49 @@ export class ProjectService implements OnApplicationBootstrap {
   }): Promise<ProjectResponse> {
     const { projectId, tenantId, userId, canManageWorkspaces } = params
     const project = await this.findOne(projectId, tenantId)
+    await this.assertProjectVisibleToUser(
+      project.id,
+      project.workspaceId,
+      userId,
+      canManageWorkspaces,
+    )
+    return project
+  }
 
-    if (canManageWorkspaces) return project
-    if (!project.workspaceId) return project
+
+  private async assertProjectVisibleToUser(
+    projectId: string,
+    workspaceId: string | null,
+    userId: string,
+    canManageWorkspaces: boolean,
+  ): Promise<void> {
+    if (!workspaceId) return
+
+    const [ws] = await db
+      .select({ type: workspaces.type, ownerId: workspaces.ownerId })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+
+    if (!ws) return
+
+    if (ws.type === "private") {
+      if (ws.ownerId !== userId) {
+        throw new NotFoundException(`Project ${projectId} not found`)
+      }
+      return
+    }
+
+    if (canManageWorkspaces) return
 
     const [member] = await db
       .select({ userId: workspaceMembers.userId })
       .from(workspaceMembers)
-      .where(and(eq(workspaceMembers.workspaceId, project.workspaceId), eq(workspaceMembers.userId, userId)))
+      .where(
+        and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)),
+      )
     if (!member) {
       throw new NotFoundException(`Project ${projectId} not found`)
     }
-
-    return project
   }
 
   async getState(params: {
@@ -337,13 +364,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (!row) throw new NotFoundException(`Project ${projectId} not found`)
 
-    if (!canManageWorkspaces && row.workspaceId) {
-      const [member] = await db
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(and(eq(workspaceMembers.workspaceId, row.workspaceId), eq(workspaceMembers.userId, userId)))
-      if (!member) throw new NotFoundException(`Project ${projectId} not found`)
-    }
+    await this.assertProjectVisibleToUser(row.id, row.workspaceId, userId, canManageWorkspaces)
 
     const status = row.status as ProjectStatus
     const operation = await this.findDuplicateOperation(row.id)

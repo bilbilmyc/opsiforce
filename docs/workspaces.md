@@ -46,7 +46,7 @@ Three levels of access, granted via Keycloak groups:
 
 **Admin** — can create, rename, and delete shared workspaces. Manages the member list of any shared workspace. Creates projects in Public. Can see and use every shared workspace and every Public project in the tenant. Does **not** see other users' private workspaces — that line is hard.
 
-**Power user** — can drag a project between shared workspaces they're a member of. Can't create shared workspaces; can't manage members; can't create projects in Public (admin-only creation), but can see and use existing Public projects.
+**Power user** — can drag a project between shared workspaces they're a member of, and can pull an existing Public project into a shared workspace they belong to. Can't create shared workspaces; can't manage members; can't create projects directly in Public and can't push a project back into Public (those are admin-only); but can see and use existing Public projects.
 
 **Member** — can see and use projects in shared workspaces they belong to plus their own private workspace and the Public bucket. Can create new projects inside any workspace they have access to, including their own private one.
 
@@ -87,7 +87,8 @@ Drag a project row in the sidebar to move it between groups. Permission rules:
 
 - **Move into or out of your own private workspace** — free, no extra permission required. Filing work into your private space and sharing it back into a shared workspace are both basic actions.
 - **Move between two shared workspaces** — requires the `move-projects-between-workspaces` permission, and you must be a member of the target.
-- **Move into or out of Public** — admin only (`manage-workspaces`).
+- **Move OUT of Public** into a shared workspace — requires `move-projects-between-workspaces` + membership in the target. Anyone in the tenant can already see Public projects, so "promoting" a Public project into a team workspace is a normal-user action, not an admin-only one. Moving a Public project into your own private workspace is also free (covered by the first bullet).
+- **Move INTO Public** — admin only (`manage-workspaces`). Pushing a project back into the tenant-wide bucket exposes it to everyone, which is intentionally gated.
 - **Move into another user's private workspace** — impossible. The target workspace simply doesn't exist from your point of view, so the drop returns 404.
 
 If a user doesn't have permission to move projects in a given direction, the row remains draggable but the drop is rejected server-side and the UI surfaces the error.
