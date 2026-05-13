@@ -281,16 +281,10 @@ export class ProjectService implements OnApplicationBootstrap {
     projectId: string
     tenantId: string
     userId: string
-    canManageWorkspaces: boolean
   }): Promise<ProjectResponse> {
-    const { projectId, tenantId, userId, canManageWorkspaces } = params
+    const { projectId, tenantId, userId } = params
     const project = await this.findOne(projectId, tenantId)
-    await this.assertProjectVisibleToUser(
-      project.id,
-      project.workspaceId,
-      userId,
-      canManageWorkspaces,
-    )
+    await this.assertProjectVisibleToUser(project.id, project.workspaceId, userId)
     return project
   }
 
@@ -299,7 +293,6 @@ export class ProjectService implements OnApplicationBootstrap {
     projectId: string,
     workspaceId: string | null,
     userId: string,
-    canManageWorkspaces: boolean,
   ): Promise<void> {
     if (!workspaceId) return
 
@@ -317,8 +310,6 @@ export class ProjectService implements OnApplicationBootstrap {
       return
     }
 
-    if (canManageWorkspaces) return
-
     const [member] = await db
       .select({ userId: workspaceMembers.userId })
       .from(workspaceMembers)
@@ -334,9 +325,8 @@ export class ProjectService implements OnApplicationBootstrap {
     projectId: string
     tenantId: string
     userId: string
-    canManageWorkspaces: boolean
   }): Promise<ProjectState> {
-    const { projectId, tenantId, userId, canManageWorkspaces } = params
+    const { projectId, tenantId, userId } = params
 
     const [row] = await db
       .select({
@@ -349,7 +339,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (!row) throw new NotFoundException(`Project ${projectId} not found`)
 
-    await this.assertProjectVisibleToUser(row.id, row.workspaceId, userId, canManageWorkspaces)
+    await this.assertProjectVisibleToUser(row.id, row.workspaceId, userId)
 
     const status = row.status as ProjectStatus
     const operation = await this.findDuplicateOperation(row.id)

@@ -337,12 +337,9 @@ export class WorkspaceService {
       throw new ForbiddenException(`Missing permission: ${Perms.manageWorkspaces}`)
     }
 
-    const project = await this.projectService.findOneForUser({
-      projectId,
-      tenantId,
-      userId,
-      canManageWorkspaces,
-    })
+    const project = canManageWorkspaces
+      ? await this.projectService.findOne(projectId, tenantId)
+      : await this.projectService.findOneForUser({ projectId, tenantId, userId })
 
     if (workspaceId !== null) {
       const target = await this.findOneBase(workspaceId, tenantId)

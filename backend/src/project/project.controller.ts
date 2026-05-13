@@ -26,13 +26,8 @@ import { CurrentUser, type UserContext } from "../user/user.decorator"
 import { UserService } from "../user/user.service"
 import { RequirePermission } from "../permission/permission.guard"
 import { Perms } from "../permission/permission.constants"
-import { getGroupsHeader, hasPermission } from "../permission/permission.utils"
 import { ProjectEventsService } from "./project-events.service"
 import { AppService } from "./app.service"
-
-function canManageWorkspaces(req: FastifyRequest): boolean {
-  return hasPermission(getGroupsHeader(req), Perms.manageWorkspaces)
-}
 
 @Controller("projects")
 export class ProjectController {
@@ -80,7 +75,6 @@ export class ProjectController {
         projectId: id,
         tenantId: tenant.tenantId,
         userId: dbUserId,
-        canManageWorkspaces: canManageWorkspaces(req),
       })
 
     reply.raw.writeHead(200, {
@@ -150,14 +144,12 @@ export class ProjectController {
     @Param("id") id: string,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
   ) {
     const dbUserId = await this.resolveUserId(user, tenant.tenantId)
     return this.projectService.findOneForUser({
       projectId: id,
       tenantId: tenant.tenantId,
       userId: dbUserId,
-      canManageWorkspaces: canManageWorkspaces(req),
     })
   }
 
@@ -167,9 +159,8 @@ export class ProjectController {
     @Body() dto: UpdateProjectDto,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
   ) {
-    await this.gate(id, tenant, user, req)
+    await this.gate(id, tenant, user)
     return this.projectService.update(id, dto, tenant.tenantId)
   }
 
@@ -178,9 +169,8 @@ export class ProjectController {
     @Param("id") id: string,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
   ) {
-    await this.gate(id, tenant, user, req)
+    await this.gate(id, tenant, user)
     return this.projectService.getAuth(id, tenant.tenantId)
   }
 
@@ -190,9 +180,8 @@ export class ProjectController {
     @Body() dto: UpdateProjectAuthDto,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
   ) {
-    await this.gate(id, tenant, user, req)
+    await this.gate(id, tenant, user)
     return this.projectService.updateAuth(id, dto, tenant.tenantId)
   }
 
@@ -201,9 +190,8 @@ export class ProjectController {
     @Param("id") id: string,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
   ) {
-    await this.gate(id, tenant, user, req)
+    await this.gate(id, tenant, user)
     return this.projectService.remove(id, tenant.tenantId)
   }
 
@@ -214,9 +202,8 @@ export class ProjectController {
     @Body() dto: DuplicateProjectDto | undefined,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
   ) {
-    await this.gate(id, tenant, user, req)
+    await this.gate(id, tenant, user)
     return this.projectService.duplicate(id, tenant.tenantId, dto)
   }
 
@@ -226,9 +213,8 @@ export class ProjectController {
     @Param("id") id: string,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
   ) {
-    await this.gate(id, tenant, user, req)
+    await this.gate(id, tenant, user)
     return this.projectService.disable(id, tenant.tenantId)
   }
 
@@ -238,9 +224,8 @@ export class ProjectController {
     @Param("id") id: string,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
   ) {
-    await this.gate(id, tenant, user, req)
+    await this.gate(id, tenant, user)
     return this.projectService.enable(id, tenant.tenantId)
   }
 
@@ -250,9 +235,8 @@ export class ProjectController {
     @Param("id") id: string,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
-    @Req() req: FastifyRequest,
   ) {
-    await this.gate(id, tenant, user, req)
+    await this.gate(id, tenant, user)
     return this.projectService.restart(id, tenant.tenantId)
   }
 
@@ -261,14 +245,12 @@ export class ProjectController {
     projectId: string,
     tenant: TenantContext,
     user: UserContext,
-    req: FastifyRequest,
   ): Promise<void> {
     const dbUserId = await this.resolveUserId(user, tenant.tenantId)
     await this.projectService.findOneForUser({
       projectId,
       tenantId: tenant.tenantId,
       userId: dbUserId,
-      canManageWorkspaces: canManageWorkspaces(req),
     })
   }
 
