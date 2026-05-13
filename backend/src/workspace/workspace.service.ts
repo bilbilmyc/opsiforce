@@ -16,7 +16,7 @@ import {
 } from "../../db/schema"
 import { Perms } from "../permission/permission.constants"
 import { ProjectService } from "../project/project.service"
-import type { ProjectResponse } from "../project/project.types"
+import type { CreateProjectDto, ProjectResponse } from "../project/project.types"
 import type { UserRecord } from "../user/user.service"
 import type {
   CreateWorkspaceDto,
@@ -389,20 +389,13 @@ export class WorkspaceService {
     tenantId: string
     userId: string
     canManageWorkspaces: boolean
-    dto?: { title?: string; description?: string }
+    dto?: CreateProjectDto
   }): Promise<ProjectResponse> {
     const { workspaceId, tenantId, userId, canManageWorkspaces, dto } = params
 
     await this.findOne({ workspaceId, userId, tenantId, canManageWorkspaces })
 
-    const project = await this.projectService.create(dto, tenantId)
-    const now = new Date()
-    await db
-      .update(projects)
-      .set({ workspaceId, updatedAt: now })
-      .where(and(eq(projects.id, project.id), eq(projects.tenantId, tenantId)))
-
-    return { ...project, workspaceId, updatedAt: now }
+    return this.projectService.create(dto, tenantId, workspaceId)
   }
 
   /**

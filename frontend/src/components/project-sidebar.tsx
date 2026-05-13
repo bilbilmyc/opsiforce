@@ -31,9 +31,6 @@ export default function ProjectSidebar(props: { search: string }) {
   const { hasPermission } = usePermissions()
 
   const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces)
-  const canMoveProjects = () =>
-    hasPermission(Permission.manageWorkspaces) ||
-    hasPermission(Permission.moveProjectsBetweenWorkspaces)
 
   const projectMatch = useMatch({ from: "/projects/$projectId", shouldThrow: false })
   const activeProjectId = () => projectMatch()?.params.projectId
@@ -188,7 +185,7 @@ export default function ProjectSidebar(props: { search: string }) {
                   expanded={shouldShowExpanded(ws.id)}
                   projects={filterByQuery(groupedProjects().byWs.get(ws.id) ?? [])}
                   activeProjectId={activeProjectId()}
-                  projectsDraggable={canMoveProjects()}
+                  projectsDraggable={true}
                   creating={createInWs.isPending}
                   onToggleFold={() => toggleFold(ws.id)}
                   onOpenSettings={

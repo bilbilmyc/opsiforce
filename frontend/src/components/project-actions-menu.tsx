@@ -58,8 +58,6 @@ export default function ProjectActionsMenu(props: {
   const canRestart = () => hasPermission(Permission.restartProject)
   const canDuplicate = () => hasPermission(Permission.duplicateProject)
   const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces)
-  const canMoveBetweenWorkspaces = () =>
-    canManageWorkspaces() || hasPermission(Permission.moveProjectsBetweenWorkspaces)
   const isDisabled = () => props.status === "disabled"
 
   const [settingsOpen, setSettingsOpen] = createSignal(false)
@@ -76,7 +74,7 @@ export default function ProjectActionsMenu(props: {
   })
 
   const showMove = () =>
-    canMoveBetweenWorkspaces() && (moveTargets().length > 0 || (canManageWorkspaces() && props.workspaceId !== null))
+    moveTargets().length > 0 || (canManageWorkspaces() && props.workspaceId !== null)
 
   const handleMove = (toWorkspaceId: string | null, toName: string) => {
     move.mutate({

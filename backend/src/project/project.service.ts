@@ -124,7 +124,12 @@ export class ProjectService implements OnApplicationBootstrap {
     })
   }
 
-  async create(dto: CreateProjectDto | undefined, tenantId: string): Promise<ProjectResponse> {
+
+  async create(
+    dto: CreateProjectDto | undefined,
+    tenantId: string,
+    workspaceId: string | null = null,
+  ): Promise<ProjectResponse> {
     const id = crypto.randomUUID()
     const directory = `projects/${tenantId}/${id}`
     const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
@@ -137,6 +142,7 @@ export class ProjectService implements OnApplicationBootstrap {
       await tx.insert(projects).values({
         id,
         tenantId,
+        workspaceId,
         agentId,
         title: dto?.title ?? null,
         description: dto?.description ?? null,
