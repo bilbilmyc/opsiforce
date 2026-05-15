@@ -58,8 +58,8 @@ The frontend integrates OpenCode at the source level — OpenCode's Solid.js com
 
 | Service | Image | Port | What it does |
 |---------|-------|------|-------------|
-| **opsiforce-proxy** | `nginx:alpine` + oauth2-proxy sidecar | 80 | Routes traffic between services. OAuth2 Proxy for auth. |
-| **opsiforce-frontend** | `nginx:alpine` (static) | 80 | Solid.js app — projects sidebar + OpenCode UI embedded via source-level imports (Vite resolver plugin). Single SPA, no iframe. |
+| **opsiforce-proxy** | `nginx:1.30.1` + oauth2-proxy sidecar | 80 | Routes traffic between services. OAuth2 Proxy for auth. |
+| **opsiforce-frontend** | `node:24.14-alpine` (static) | 80 | Solid.js app — projects sidebar + OpenCode UI embedded via source-level imports (Vite resolver plugin). Single SPA, no iframe. |
 | **opsiforce-backend** | `node:24-alpine` | 3001 | NestJS + Fastify. Manages K8s pods, tracks timeouts, exposes internal proxy control APIs, and handles the service gateway. |
 | **opsiforce-runtime-proxies-agent** | Go | 3005 | Path-based OpenCode agent proxy (`/api/proxy/:projectId/*`). |
 | **opsiforce-runtime-proxies-app** | Go | 3002 | App preview subdomain proxy with request logging into project SQLite. |
@@ -117,7 +117,7 @@ packages/opsiforce/
 ├── docker/
 │   ├── Dockerfile.agent         node:24-slim + bun + opencode + app template + agent-browser
 │   ├── Dockerfile.backend       NestJS (multi-stage, Yarn PnP)
-│   ├── Dockerfile.frontend      Solid.js app (multi-stage → nginx)
+│   ├── Dockerfile.frontend      Solid.js app served by serve
 │   └── Dockerfile.runtime-proxy Go runtime proxy image
 │
 └── helm/
