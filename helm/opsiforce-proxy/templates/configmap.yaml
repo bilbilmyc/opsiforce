@@ -28,7 +28,7 @@ data:
             proxy_set_header Connection "upgrade";
             proxy_set_header Host $host;
             proxy_read_timeout 86400s;
-            proxy_pass http://{{ .Values.appProxy.backendService }}:3002;
+            proxy_pass http://{{ .Values.appProxy.backendService }}:{{ .Values.appProxy.backendPort }};
           }
       }
       {{- end }}

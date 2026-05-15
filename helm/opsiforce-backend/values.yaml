@@ -50,7 +50,6 @@ config:
   mailgunSender: ""
   appsHostname: ""
   webappServiceName: ""
-  webappServiceNamespace: ""
   webappServicePort: "3002"
   oidcPluginSecret: ""
   makaraOidcClientId: ""
