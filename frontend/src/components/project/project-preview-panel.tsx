@@ -5,11 +5,18 @@ import {
   LoaderCircle,
   PanelRightClose,
   PanelRightOpen,
+  Pin,
+  PinOff,
   RefreshCw,
 } from "~/components/icons"
 import { ToolbarButton } from "~/components/ui/toolbar-button"
 import { ResizeHandle } from "~/components/ui/resize-handle"
 import { createResizablePanel } from "~/lib/create-resizable-panel"
+import { usePermissions } from "~/api/permissions"
+import { Permission } from "~/constants/permissions"
+import { useProjects } from "~/api/projects"
+import PinBadge from "./pin-badge"
+import PinAppDialogs, { type PinDialogAction } from "./pin-app-dialogs"
 
 export interface ProjectPreviewPanelProps {
   projectId: string
@@ -21,6 +28,13 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
   const [open, setOpen] = createSignal(true)
   const [iframeLoading, setIframeLoading] = createSignal(true)
   const [copied, setCopied] = createSignal(false)
+  const [pinAction, setPinAction] = createSignal<PinDialogAction>(null)
+
+  const { hasPermission } = usePermissions()
+  const canPinApps = () => hasPermission(Permission.pinApps)
+  const projects = useProjects({ enabled: canPinApps })
+  const project = () => projects.data?.find((p) => p.id === props.projectId)
+  const isPinned = () => project()?.isPinned === true
 
   const panel = createResizablePanel({
     storageKey: "opsiforce:preview-width",
@@ -80,11 +94,28 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             <span class="text-xs font-medium text-muted-foreground truncate">
               {props.appName || "Preview"}
             </span>
+            <Show when={canPinApps()}>
+              <PinBadge isPinned={isPinned()} compact />
+            </Show>
             <Show when={iframeLoading()}>
               <LoaderCircle class="w-3 h-3 text-muted-foreground animate-spin shrink-0" />
             </Show>
           </div>
           <div class="flex items-center">
+            <Show when={canPinApps()}>
+              <Show
+                when={isPinned()}
+                fallback={
+                  <ToolbarButton onClick={() => setPinAction("pin")} tooltip="Pin to Makara">
+                    <Pin class="w-3.5 h-3.5" />
+                  </ToolbarButton>
+                }
+              >
+                <ToolbarButton onClick={() => setPinAction("unpin")} tooltip="Unpin from Makara">
+                  <PinOff class="w-3.5 h-3.5" />
+                </ToolbarButton>
+              </Show>
+            </Show>
             <ToolbarButton onClick={copyUrl} tooltip={copied() ? "Copied!" : "Copy URL"}>
               {copied() ? (
                 <Check class="w-3.5 h-3.5 text-green-500" />
@@ -107,6 +138,12 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             onError={() => setIframeLoading(false)}
           />
         </div>
+        <PinAppDialogs
+          projectId={props.projectId}
+          authMode={project()?.authMode}
+          action={pinAction()}
+          onActionChange={setPinAction}
+        />
       </div>
     </Show>
   )

@@ -240,6 +240,29 @@ export class ProjectController {
     return this.projectService.restart(id, tenant.tenantId)
   }
 
+  @Post(":id/pin")
+  @RequirePermission(Perms.pinApps)
+  async pin(
+    @Param("id") id: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    const dbUserId = await this.resolveUserId(user, tenant.tenantId)
+    return this.projectService.pinApp(id, tenant.tenantId, dbUserId)
+  }
+
+  @Post(":id/unpin")
+  @RequirePermission(Perms.pinApps)
+  async unpin(
+    @Param("id") id: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    return this.projectService.unpinApp(id, tenant.tenantId)
+  }
+
   /** 404 if the caller can't see this project (avoids existence leak). */
   private async gate(
     projectId: string,

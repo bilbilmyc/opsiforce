@@ -1,4 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleDestroy, forwardRef } from "@nestjs/common"
+import { eq } from "drizzle-orm"
+import { db } from "../../db"
+import { projectApps } from "../../db/schema"
 import { ProxyService } from "../proxy/proxy.service"
 import { ProjectEventsService } from "./project-events.service"
 import { ProjectService } from "./project.service"
@@ -6,20 +9,14 @@ import { ProjectStatus, type ProjectAppMeta } from "./project.types"
 
 const FETCH_TIMEOUT_MS = 5000
 const POLL_INTERVAL_MS = 3000
-const READY_TTL_MS = 30000
 const MAX_CONSECUTIVE_FAILURES = 60
-
-interface CacheEntry {
-  value: ProjectAppMeta
-  fetchedAt: number
-}
 
 @Injectable()
 export class AppService implements OnModuleDestroy {
   private readonly logger = new Logger(AppService.name)
-  private readonly cache = new Map<string, CacheEntry>()
   private readonly pollers = new Map<string, NodeJS.Timeout>()
   private readonly failureCounts = new Map<string, number>()
+  private readonly lastByProject = new Map<string, ProjectAppMeta>()
 
   constructor(
     @Inject(forwardRef(() => ProjectService))
@@ -33,18 +30,17 @@ export class AppService implements OnModuleDestroy {
     this.pollers.clear()
   }
 
-  get(projectId: string): ProjectAppMeta | null {
-    const entry = this.cache.get(projectId)
-    if (!entry) return null
-    if (entry.value.exists && Date.now() - entry.fetchedAt > READY_TTL_MS) {
-      this.cache.delete(projectId)
-      return null
-    }
-    return entry.value
+  async get(projectId: string): Promise<ProjectAppMeta | null> {
+    const [row] = await db
+      .select({ name: projectApps.name, description: projectApps.description })
+      .from(projectApps)
+      .where(eq(projectApps.projectId, projectId))
+    if (!row) return null
+    return { exists: true, name: row.name, description: row.description }
   }
 
   invalidate(projectId: string): void {
-    this.cache.delete(projectId)
+    this.lastByProject.delete(projectId)
     this.failureCounts.delete(projectId)
   }
 
@@ -66,8 +62,8 @@ export class AppService implements OnModuleDestroy {
   }
 
   private async refresh(projectId: string): Promise<void> {
-    const cached = this.cache.get(projectId)
-    if (cached?.value.exists) {
+    const last = this.lastByProject.get(projectId)
+    if (last?.exists) {
       this.stopPolling(projectId)
       return
     }
@@ -98,14 +94,36 @@ export class AppService implements OnModuleDestroy {
     }
 
     this.failureCounts.delete(projectId)
-    const previous = cached?.value
-    this.cache.set(projectId, { value: next, fetchedAt: Date.now() })
+    const changed = !last || !appMetaEquals(last, next)
+    this.lastByProject.set(projectId, next)
 
-    if (!previous || !appMetaEquals(previous, next)) {
+    if (next.exists) {
+      await this.upsertProjectApp(projectId, next)
+    }
+
+    if (changed) {
       await this.projectEventsService.publish(projectId)
     }
 
     if (next.exists) this.stopPolling(projectId)
+  }
+
+  private async upsertProjectApp(projectId: string, meta: ProjectAppMeta): Promise<void> {
+    await db
+      .insert(projectApps)
+      .values({
+        projectId,
+        name: meta.name,
+        description: meta.description,
+      })
+      .onConflictDoUpdate({
+        target: projectApps.projectId,
+        set: {
+          name: meta.name,
+          description: meta.description,
+          updatedAt: new Date(),
+        },
+      })
   }
 
   private async fetchAppMeta(project: {

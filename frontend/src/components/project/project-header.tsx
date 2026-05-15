@@ -1,6 +1,7 @@
 import { Show } from "solid-js"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
+import { useProjects } from "~/api/projects"
 import { Code as CodeIcon, Database, MessageSquare } from "~/components/icons"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import ProjectActionsMenu from "~/components/project-actions-menu"
@@ -24,6 +25,8 @@ export default function ProjectHeader(props: ProjectHeaderProps) {
   const canViewCode = () => hasPermission(Permission.viewCodeTab)
   const canViewDb = () => hasPermission(Permission.viewDbTab)
   const hasExtraTabs = () => canViewCode() || canViewDb()
+  const projects = useProjects()
+  const project = () => projects.data?.find((p) => p.id === props.projectId)
 
   return (
     <div class="flex items-center justify-between px-3 py-2 bg-background border-b border-border shrink-0">
@@ -59,6 +62,7 @@ export default function ProjectHeader(props: ProjectHeaderProps) {
         projectId={props.projectId}
         status={props.status}
         workspaceId={props.workspaceId}
+        project={project()}
         onDeleted={props.onDeleted}
         onDuplicated={props.onDuplicated}
       />

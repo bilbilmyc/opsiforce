@@ -134,6 +134,26 @@ export const projectSettings = pgTable("project_settings", {
   authMode: projectAuthModeEnum("auth_mode").notNull().default("public"),
 })
 
+export const projectApps = pgTable(
+  "project_app",
+  {
+    projectId: text("project_id")
+      .primaryKey()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    name: text("name"),
+    description: text("description"),
+    iconUrl: text("icon_url"),
+    isPinned: boolean("is_pinned").notNull().default(false),
+    pinnedById: text("pinned_by_id").references(() => users.id, { onDelete: "set null" }),
+    pinnedAt: timestamp("pinned_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_project_app_pinned").on(table.isPinned, table.pinnedAt),
+  ],
+)
+
 export const projectAgentUpdates = pgTable(
   "project_agent_updates",
   {

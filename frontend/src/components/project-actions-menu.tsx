@@ -17,6 +17,8 @@ import {
   FolderKanban,
   Globe,
   Pencil,
+  Pin,
+  PinOff,
   RotateCcw,
   Settings,
   Trash2,
@@ -33,11 +35,13 @@ import {
 } from "~/components/ui/dropdown-menu"
 import ProjectSettings from "./project-settings"
 import ConfirmDialog from "./ui/confirm-dialog"
+import PinAppDialogs, { type PinDialogAction } from "./project/pin-app-dialogs"
 
 export default function ProjectActionsMenu(props: {
   projectId: string
   status: Project["status"]
   workspaceId: string | null
+  project?: Project
   showRename?: boolean
   onRename?: () => void
   onSettings?: () => void
@@ -58,10 +62,16 @@ export default function ProjectActionsMenu(props: {
   const canRestart = () => hasPermission(Permission.restartProject)
   const canDuplicate = () => hasPermission(Permission.duplicateProject)
   const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces)
+  const canPinApps = () => hasPermission(Permission.pinApps)
   const isDisabled = () => props.status === "disabled"
+  const isPinned = () => props.project?.isPinned === true
+  const showPinAction = () => canPinApps() && props.project?.hasApp === true
 
   const [settingsOpen, setSettingsOpen] = createSignal(false)
-  const [confirmAction, setConfirmAction] = createSignal<"delete" | "duplicate" | "disable" | "restart" | null>(null)
+  const [confirmAction, setConfirmAction] = createSignal<
+    "delete" | "duplicate" | "disable" | "restart" | null
+  >(null)
+  const [pinAction, setPinAction] = createSignal<PinDialogAction>(null)
 
   const workspaces = useWorkspaces()
   const move = useMoveProject()
@@ -220,6 +230,22 @@ export default function ProjectActionsMenu(props: {
               </DropdownMenuItem>
             </Show>
           </Show>
+          <Show when={showPinAction()}>
+            <Show
+              when={isPinned()}
+              fallback={
+                <DropdownMenuItem onSelect={() => setPinAction("pin")}>
+                  <Pin class="w-3.5 h-3.5 text-muted-foreground" />
+                  Pin to Makara
+                </DropdownMenuItem>
+              }
+            >
+              <DropdownMenuItem onSelect={() => setPinAction("unpin")}>
+                <PinOff class="w-3.5 h-3.5 text-muted-foreground" />
+                Unpin from Makara
+              </DropdownMenuItem>
+            </Show>
+          </Show>
           <DropdownMenuSeparator />
           <DropdownMenuItem
             class="text-destructive data-[highlighted]:text-destructive"
@@ -280,6 +306,13 @@ export default function ProjectActionsMenu(props: {
         confirmLabel="Restart"
         variant="destructive"
         onConfirm={() => restartProject.mutate(undefined as never)}
+      />
+
+      <PinAppDialogs
+        projectId={props.projectId}
+        authMode={props.project?.authMode}
+        action={pinAction()}
+        onActionChange={setPinAction}
       />
     </>
   )

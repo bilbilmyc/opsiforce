@@ -194,7 +194,10 @@ export class ProjectAuthService {
     };
   }
 
-  private buildIngressRoute(projectId: string) {
+  private buildIngressRoute(
+    projectId: string,
+    middlewares: Array<{ name: string; namespace: string }>,
+  ) {
     const serviceRef: {
       name: string;
       namespace: string;
@@ -219,14 +222,16 @@ export class ProjectAuthService {
             kind: "Rule",
             match: `Host(\`${this.projectHost(projectId)}\`)`,
             priority: 100,
-            middlewares: [
-              { name: middlewareName(projectId), namespace: this.namespace },
-            ],
+            middlewares,
             services: [serviceRef],
           },
         ],
       },
     };
+  }
+
+  private oidcMiddlewareRef(projectId: string) {
+    return { name: middlewareName(projectId), namespace: this.namespace };
   }
 
   async getConfig(
@@ -282,7 +287,9 @@ export class ProjectAuthService {
       bypassAuthPaths,
     };
     const mw = this.buildMiddleware(projectId, effectiveConfig, extras);
-    const ir = this.buildIngressRoute(projectId);
+    const ir = this.buildIngressRoute(projectId, [
+      this.oidcMiddlewareRef(projectId),
+    ]);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
   }
@@ -308,7 +315,8 @@ export class ProjectAuthService {
       bypassAuthPaths,
     };
     const mw = this.buildMiddleware(projectId, config, extras);
-    const ir = this.buildIngressRoute(projectId);
+    const middlewares = [this.oidcMiddlewareRef(projectId)];
+    const ir = this.buildIngressRoute(projectId, middlewares);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
   }
