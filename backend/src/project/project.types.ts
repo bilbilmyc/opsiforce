@@ -1,4 +1,4 @@
-import { projectSettings, projects } from "../../db/schema"
+import { projectApps, projectSettings, projects } from "../../db/schema"
 
 export const ProjectStatus = {
   Starting: "starting",
@@ -30,12 +30,16 @@ export interface DuplicateProjectDto {
 
 type ProjectRow = typeof projects.$inferSelect
 type ProjectSettingsRow = typeof projectSettings.$inferSelect
+type ProjectAppRow = typeof projectApps.$inferSelect
 
 export interface ProjectResponse extends ProjectRow {
   timeoutIdle: ProjectSettingsRow["timeoutIdle"]
   appTimeoutIdle: ProjectSettingsRow["appTimeoutIdle"]
   timezone: ProjectSettingsRow["timezone"]
   authMode: ProjectSettingsRow["authMode"]
+  isPinned: boolean
+  pinnedAt: ProjectAppRow["pinnedAt"]
+  hasApp: boolean
 }
 
 export interface ProjectState {

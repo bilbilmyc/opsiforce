@@ -15,6 +15,8 @@ Backend endpoints, proxy behavior, and runtime configuration.
 | GET | `/api/projects/:id` | Get project details |
 | PATCH | `/api/projects/:id` | Update title, description, or timeout settings |
 | DELETE | `/api/projects/:id` | Delete project, pod, timeout keys, and project data references |
+| POST | `/api/projects/:id/pin` | Pin the project's app so it appears in Makara's side panel (requires `can_pin_apps` + project on `public`/`makara` auth mode). |
+| POST | `/api/projects/:id/unpin` | Unpin the project's app (requires `can_pin_apps`) |
 
 Project status values returned by the API:
 
@@ -38,6 +40,12 @@ Available only when Bifrost is configured.
 | GET | `/api/usage/projects/:id` | Usage for one project |
 | GET | `/api/usage/projects/:id/budgets` | Budget config for project keys |
 | PUT | `/api/usage/projects/:id/budgets` | Update budget for one key type |
+
+### Internal (service-to-service)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/internal/apps/pinned` | List pinned apps for a tenant. Requires a service-account JWT with the `can_list_pinned_apps_internal` realm role and the `X-Tenant-Name` header. Used by Makara's `/api/apps` endpoint. |
 
 ### Health
 

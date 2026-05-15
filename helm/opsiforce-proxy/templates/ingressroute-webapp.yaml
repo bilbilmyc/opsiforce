@@ -16,7 +16,7 @@ spec:
       kind: Rule
       services:
         - name: {{ .Values.appProxy.backendService }}
-          port: 3002
+          port: {{ .Values.appProxy.backendPort }}
     {{- if .Values.appProxy.previewAppsHostname }}
     - match: HostRegexp(`[a-f0-9-]+\.{{ .Values.appProxy.previewAppsHostname | replace "." "\\." }}`)
       kind: Rule

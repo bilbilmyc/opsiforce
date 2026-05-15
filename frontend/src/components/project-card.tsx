@@ -1,7 +1,10 @@
 import { Show, createSignal } from "solid-js"
 import type { Project } from "~/api/client"
+import { usePermissions } from "~/api/permissions"
+import { Permission } from "~/constants/permissions"
 import { cn } from "~/lib/cn"
 import { projectDisplayTitle } from "~/lib/project-display"
+import PinBadge from "./project/pin-badge"
 import ProjectActionsMenu from "./project-actions-menu"
 
 export default function ProjectCard(props: {
@@ -13,6 +16,8 @@ export default function ProjectCard(props: {
   onDeleted?: () => void
   onDuplicated?: (project: Project) => void
 }) {
+  const { hasPermission } = usePermissions()
+  const canPinApps = () => hasPermission(Permission.pinApps)
   const isDisabled = () => props.project.status === "disabled"
 
   const [editing, setEditing] = createSignal(false)
@@ -66,7 +71,12 @@ export default function ProjectCard(props: {
               />
             }
           >
-            <span class={cn("block text-xs font-medium truncate leading-tight", isDisabled() ? "text-sidebar-muted-foreground" : "text-sidebar-foreground")}>{title()}</span>
+            <div class="flex items-center gap-1 min-w-0">
+              <span class={cn("block text-xs font-medium truncate leading-tight flex-1 min-w-0", isDisabled() ? "text-sidebar-muted-foreground" : "text-sidebar-foreground")}>{title()}</span>
+              <Show when={canPinApps()}>
+                <PinBadge isPinned={props.project.isPinned} compact />
+              </Show>
+            </div>
           </Show>
           <Show when={isDisabled() && !editing()}>
             <span class="block text-xs text-sidebar-muted-foreground mt-0.5">Disabled</span>
@@ -78,6 +88,7 @@ export default function ProjectCard(props: {
             projectId={props.project.id}
             status={props.project.status}
             workspaceId={props.project.workspaceId}
+            project={props.project}
             showRename
             onRename={startRename}
             onSettings={props.onSettings}

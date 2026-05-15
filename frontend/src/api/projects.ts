@@ -120,3 +120,19 @@ export function useCreateUnassignedProject() {
     },
   }))
 }
+
+export function usePinApp() {
+  const qc = useQueryClient()
+  return createMutation(() => ({
+    mutationFn: (projectId: string) => api.post<Project>(`/projects/${projectId}/pin`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
+  }))
+}
+
+export function useUnpinApp() {
+  const qc = useQueryClient()
+  return createMutation(() => ({
+    mutationFn: (projectId: string) => api.post<Project>(`/projects/${projectId}/unpin`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
+  }))
+}

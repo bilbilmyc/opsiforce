@@ -13,4 +13,6 @@ export const Perms = {
   duplicateProject: "can_duplicate_project",
   manageWorkspaces: "can_manage_workspaces",
   moveProjectsBetweenWorkspaces: "can_move_projects_between_workspaces",
+  pinApps: "can_pin_apps",
+  listPinnedAppsInternal: "can_list_pinned_apps_internal",
 } as const

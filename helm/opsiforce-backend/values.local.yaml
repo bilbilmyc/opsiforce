@@ -57,7 +57,6 @@ config:
   mailgunUrl: "http://host.minikube.internal:8089"
   appsHostname: "apps.opsiforce.localtest.me"
   webappServiceName: "proxy-app"
-  webappServiceNamespace: "local"
   webappServicePort: "3002"
   oidcPluginSecret: "1198c2e7c224237098895d53543b074c"
   makaraOidcClientId: "opsiforce-apps"

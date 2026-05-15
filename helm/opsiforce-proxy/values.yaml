@@ -54,6 +54,7 @@ ingressRoute:
 
 appProxy:
   backendService: ""
+  backendPort: "3002"
   appsHostname: apps.dev.opsima.com
   previewAppsHostname: preview.apps.dev.opsima.com
 

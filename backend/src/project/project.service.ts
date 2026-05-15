@@ -16,6 +16,7 @@ import { db, pgClient } from "../../db"
 import {
   projectSettings,
   projects,
+  projectApps,
   pods,
   deletedProjects,
   workspaceMembers,
@@ -85,6 +86,9 @@ const projectSelectFields = {
   appTimeoutIdle: projectSettings.appTimeoutIdle,
   timezone: projectSettings.timezone,
   authMode: projectSettings.authMode,
+  isPinned: sql<boolean>`coalesce(${projectApps.isPinned}, false)`.as("is_pinned"),
+  pinnedAt: projectApps.pinnedAt,
+  hasApp: sql<boolean>`${projectApps.projectId} is not null`.as("has_app"),
   lastActiveAt: projects.lastActiveAt,
   createdAt: projects.createdAt,
   updatedAt: projects.updatedAt,
@@ -240,6 +244,7 @@ export class ProjectService implements OnApplicationBootstrap {
       .select(projectSelectFields)
       .from(projects)
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+      .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
       .leftJoin(
         workspaceMembers,
         and(eq(workspaceMembers.workspaceId, projects.workspaceId), eq(workspaceMembers.userId, userId)),
@@ -262,6 +267,7 @@ export class ProjectService implements OnApplicationBootstrap {
       .select(projectSelectFields)
       .from(projects)
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+      .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
       .where(where)
       .orderBy(...projectOrderBy())
   }
@@ -271,6 +277,7 @@ export class ProjectService implements OnApplicationBootstrap {
       .select(projectSelectFields)
       .from(projects)
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+      .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
       .where(and(eq(projects.id, id), eq(projects.tenantId, tenantId)))
     if (!project) throw new NotFoundException(`Project ${id} not found`)
     return project
@@ -343,7 +350,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
     const status = row.status as ProjectStatus
     const operation = await this.findDuplicateOperation(row.id)
-    const app = status === ProjectStatus.Active ? this.appService.get(row.id) : null
+    const app = status === ProjectStatus.Active ? await this.appService.get(row.id) : null
     return {
       id: row.id,
       status,
@@ -358,6 +365,7 @@ export class ProjectService implements OnApplicationBootstrap {
       .select(projectSelectFields)
       .from(projects)
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+      .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
       .where(eq(projects.id, id))
 
     if (!project) throw new NotFoundException(`Project ${id} not found`)
@@ -421,9 +429,8 @@ export class ProjectService implements OnApplicationBootstrap {
     if (dto.mode === "manual") {
       await this.projectAuthService.apply(project.id, dto.config ?? {}, dto.bypassAuthPaths)
     } else if (dto.mode === "makara") {
-      const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId))
-      if (!tenant) throw new BadRequestException(`Tenant ${tenantId} not found`)
-      await this.projectAuthService.applyMakara(project.id, tenant.name, dto.bypassAuthPaths)
+      const tenantName = await this.findTenantName(tenantId)
+      await this.projectAuthService.applyMakara(project.id, tenantName, dto.bypassAuthPaths)
     } else {
       await this.projectAuthService.remove(project.id)
     }
@@ -454,6 +461,8 @@ export class ProjectService implements OnApplicationBootstrap {
       this.logger.warn(`Failed to remove schedules for project ${id}: ${(err as Error).message}`)
     })
     await this.timeoutService.clear(id)
+    this.appService.stopPolling(id)
+    this.appService.invalidate(id)
     await db.delete(projects).where(eq(projects.id, id))
     this.startupTasks.delete(id)
     await this.podPoolService.replenish().catch((err) => {
@@ -537,6 +546,54 @@ export class ProjectService implements OnApplicationBootstrap {
 
     await this.requestProjectStartup(project, { deleteExistingPod: true })
     return this.findOne(id, tenantId)
+  }
+
+  async pinApp(id: string, tenantId: string, userId: string): Promise<ProjectResponse> {
+    const project = await this.findOne(id, tenantId)
+    if (project.authMode !== "public" && project.authMode !== "makara") {
+      throw new BadRequestException(
+        `AUTH_MODE_NOT_COMPATIBLE: project auth mode must be "public" or "makara" to pin (current: "${project.authMode}"). Change the auth mode in project settings before pinning.`,
+      )
+    }
+    if (!project.hasApp) {
+      throw new BadRequestException(
+        "APP_NOT_DETECTED: this project has no detectable app yet. Make sure the project's web server is running and serves /api/app-meta before pinning.",
+      )
+    }
+
+    await db
+      .update(projectApps)
+      .set({
+        isPinned: true,
+        pinnedById: userId,
+        pinnedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(projectApps.projectId, id))
+
+    return this.findOne(id, tenantId)
+  }
+
+  async unpinApp(id: string, tenantId: string): Promise<ProjectResponse> {
+    const project = await this.findOne(id, tenantId)
+    if (project.hasApp) {
+      await db
+        .update(projectApps)
+        .set({
+          isPinned: false,
+          pinnedById: null,
+          pinnedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(projectApps.projectId, id))
+    }
+    return this.findOne(id, tenantId)
+  }
+
+  private async findTenantName(tenantId: string): Promise<string> {
+    const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId))
+    if (!tenant) throw new BadRequestException(`Tenant ${tenantId} not found`)
+    return tenant.name
   }
 
   async reassignPodById(id: string): Promise<void> {
@@ -988,6 +1045,7 @@ export class ProjectService implements OnApplicationBootstrap {
       .select(projectSelectFields)
       .from(projects)
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+      .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
       .where(inArray(projects.status, [ProjectStatus.Starting, ProjectStatus.Active]))
 
     await Promise.allSettled(candidateProjects.map((project) => this.reconcileProject(project)))

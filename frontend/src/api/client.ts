@@ -69,6 +69,9 @@ export interface Project {
   appTimeoutIdle: number
   timezone: string
   authMode: ProjectAuthMode
+  isPinned: boolean
+  pinnedAt: string | null
+  hasApp: boolean
   lastActiveAt: string | null
   createdAt: string
 }
