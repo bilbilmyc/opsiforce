@@ -18,6 +18,7 @@ proxy:
 
 appProxy:
   backendService: "proxy-app"
+  backendPort: "3002"
   appsHostname: apps.opsiforce.localtest.me
   previewAppsHostname: preview.apps.opsiforce.localtest.me
 

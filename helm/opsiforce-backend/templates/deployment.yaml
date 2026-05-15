@@ -38,10 +38,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "opsiforce-backend.fullname" . }}-config
-            {{- if or .Values.config.openaiApiKey .Values.config.bifrostAdminUsername .Values.config.bifrostAdminPassword .Values.config.mailgunApiKey .Values.config.proxyControlToken .Values.config.oidcPluginSecret }}
             - secretRef:
                 name: {{ include "opsiforce-backend.fullname" . }}-secret
-            {{- end }}
           volumeMounts:
             - name: workspace-data
               mountPath: {{ .Values.config.storageMountPath | default "/workspace-data" }}
