@@ -161,7 +161,7 @@ Images are distinguished by tag prefix:
 | Image | Dockerfile | Base | What it produces |
 |-------|-----------|------|-----------------|
 | **backend** | `docker/Dockerfile.backend` | `node:24-alpine` (multi-stage) | Yarn PnP production build of NestJS. CMD: `yarn run start` |
-| **frontend** | `docker/Dockerfile.frontend` | `node:24-alpine` → `nginx:alpine` (multi-stage) | Static Solid.js build served by nginx. Includes OpenCode source (at `frontend/opencode/`) resolved at build time by Vite plugin. |
+| **frontend** | `docker/Dockerfile.frontend` | `node:24.14-alpine` | Static Solid.js build served by `serve`. Includes OpenCode source (at `frontend/opencode/`) resolved at build time by Vite plugin. |
 | **agent** | `docker/Dockerfile.agent` | `node:24-slim` + bun | Installs opencode-ai, agent-browser, chromium. Stages agent profiles to `/opt/agents/`, shared config to `/opt/opencode/`. Entrypoint runs opencode serve + app dev server via guard scripts. |
 | **runtime-proxies** | `docker/Dockerfile.runtime-proxy` | `golang:1.26.2` → `alpine` | Single Go binary that runs in one of four modes: agent, app, vscode, db. |
 
@@ -236,7 +236,7 @@ helm upgrade --install opsiforce-backend-{env} ./helm/opsiforce-backend \
   --set config.bifrostAdminUsername=opsiforce-admin \
   --set config.bifrostAdminPassword={BIFROST_ADMIN_PASSWORD}
 
-# 4. Frontend (nginx serving static Solid.js build)
+# 4. Frontend (static Solid.js build)
 helm upgrade --install opsiforce-frontend-{env} ./helm/opsiforce-frontend \
   --set frontend.image.repository=ghcr.io/simadevelopment/opsiforce \
   --set frontend.image.tag=frontend-{env}-{sha7}
@@ -300,7 +300,7 @@ The current runtime is pinned to `v1.4.20`, so the backend sends the v1.4-compat
 
 | Template | What it creates |
 |----------|----------------|
-| `deployment.yaml` | nginx:alpine serving static Solid.js build. Health: `/`. preStop: 30s sleep. |
+| `deployment.yaml` | Frontend image serving static Solid.js build. Health: `/`. preStop: 30s sleep. |
 | `service.yaml` | ClusterIP:80 |
 
 #### 5. `opsiforce-proxy`
