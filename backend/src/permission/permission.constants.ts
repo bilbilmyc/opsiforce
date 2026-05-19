@@ -16,4 +16,5 @@ export const Perms = {
   pinApps: "can_pin_apps",
   editAppDetails: "can_edit_app_details",
   listPinnedAppsInternal: "can_list_pinned_apps_internal",
+  manageMakaraIntegration: "can_manage_makara_integration",
 } as const

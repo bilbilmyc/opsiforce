@@ -1,5 +1,6 @@
 import { toast } from "solid-sonner"
 import { useSetAppPin } from "~/api/projects"
+import { useTenantSettings } from "~/api/tenant-settings"
 import type { Project } from "~/api/client"
 import ConfirmDialog from "~/components/ui/confirm-dialog"
 
@@ -14,9 +15,15 @@ export interface PinAppDialogsProps {
 
 export default function PinAppDialogs(props: PinAppDialogsProps) {
   const setAppPin = useSetAppPin()
+  const tenantSettings = useTenantSettings()
   const hasCompatibleAuthMode = () => props.authMode === "public" || props.authMode === "makara"
 
   const close = () => props.onActionChange(null)
+
+  const makaraTenantLabel = () => {
+    const name = tenantSettings.data?.makaraTenantName
+    return name ? `Makara tenant ${name}` : "your mapped Makara tenant"
+  }
 
   return (
     <>
@@ -28,7 +35,7 @@ export default function PinAppDialogs(props: PinAppDialogsProps) {
         title="Pin to Makara"
         description={
           hasCompatibleAuthMode()
-            ? "This will make this app visible to all users in your tenant who have the Apps permission in Makara. Continue?"
+            ? `This will make this app visible to all users in ${makaraTenantLabel()} who have the Apps permission in Makara. Continue?`
             : "This project's auth mode must be 'public' or 'makara' before it can be pinned. Open project Settings → Auth to change the mode first."
         }
         confirmLabel="Pin"
@@ -52,7 +59,7 @@ export default function PinAppDialogs(props: PinAppDialogsProps) {
           if (!open) close()
         }}
         title="Unpin from Makara"
-        description="This will remove the app from Makara's side panel for everyone in your tenant. Continue?"
+        description={`This will remove the app from Makara's side panel for everyone in ${makaraTenantLabel()}. Continue?`}
         confirmLabel="Unpin"
         variant="destructive"
         onConfirm={() =>

@@ -33,6 +33,7 @@ import { Button } from "~/components/ui/button";
 import TenantSelector from "~/components/tenant-selector";
 import ProjectSidebar from "~/components/project-sidebar";
 import CreateWorkspaceDialog from "~/components/create-workspace-dialog";
+import TenantSettings from "~/components/tenant-settings";
 import {
   AppWindow,
   Bot,
@@ -42,6 +43,7 @@ import {
   FolderKanban,
   FolderPlus,
   LogOut,
+  Plug,
   Plus,
   Search,
   Settings,
@@ -62,6 +64,7 @@ export default function AppSidebar() {
 
   const [search, setSearch] = createSignal("");
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = createSignal(false);
+  const [tenantSettingsOpen, setTenantSettingsOpen] = createSignal(false);
   let searchRef: HTMLInputElement | undefined;
 
   const privateWorkspace = createMemo(() => {
@@ -288,6 +291,12 @@ export default function AppSidebar() {
                     Defaults
                   </DropdownMenuItem>
                 </Show>
+                <Show when={hasPermission(Permission.manageMakaraIntegration)}>
+                  <DropdownMenuItem onSelect={() => setTenantSettingsOpen(true)}>
+                    <Plug class="w-4 h-4 text-muted-foreground" />
+                    Tenant Settings
+                  </DropdownMenuItem>
+                </Show>
                 <DropdownMenuItem
                   onSelect={() => {
                     window.location.href = "/oauth2/sign_out";
@@ -305,6 +314,10 @@ export default function AppSidebar() {
       <CreateWorkspaceDialog
         open={createWorkspaceOpen()}
         onOpenChange={setCreateWorkspaceOpen}
+      />
+      <TenantSettings
+        open={tenantSettingsOpen()}
+        onOpenChange={setTenantSettingsOpen}
       />
     </Sidebar>
   );

@@ -48,6 +48,13 @@ export const tenants = pgTable("tenants", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 
+export const tenantSettings = pgTable("tenant_settings", {
+  tenantId: text("tenant_id")
+    .primaryKey()
+    .references(() => tenants.id, { onDelete: "cascade" }),
+  makaraTenantName: text("makara_tenant_name").notNull().unique(),
+})
+
 export const agents = pgTable("agents", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),

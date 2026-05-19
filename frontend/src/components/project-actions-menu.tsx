@@ -23,6 +23,7 @@ import {
   PinOff,
   RotateCcw,
   Settings,
+  ShieldCheck,
   Trash2,
 } from "~/components/icons"
 import {
@@ -36,6 +37,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import ProjectSettings from "./project-settings"
+import ProjectAuthDialog from "./project-auth-dialog"
 import ConfirmDialog from "./ui/confirm-dialog"
 import PinAppDialogs, { type PinDialogAction } from "./project/pin-app-dialogs"
 import EditAppDialog from "./project/edit-app-dialog"
@@ -59,8 +61,8 @@ export default function ProjectActionsMenu(props: {
 
   const canSeeSettings = () =>
     hasPermission(Permission.manageProjectBudgetSettings) ||
-    hasPermission(Permission.manageProjectTimeoutSettings) ||
-    hasPermission(Permission.manageProjectAuthSettings)
+    hasPermission(Permission.manageProjectTimeoutSettings)
+  const canManageAuth = () => hasPermission(Permission.manageProjectAuthSettings)
   const canDisable = () => hasPermission(Permission.disableProject)
   const canRestart = () => hasPermission(Permission.restartProject)
   const canDuplicate = () => hasPermission(Permission.duplicateProject)
@@ -70,7 +72,7 @@ export default function ProjectActionsMenu(props: {
   const isDisabled = () => props.status === "disabled"
   const isPinned = () => props.project?.isPinned === true
   const hasApp = () => props.project?.hasApp === true
-  const showAppSubmenu = () => hasApp() && (canPinApps() || canEditAppDetails())
+  const showAppSubmenu = () => hasApp()
 
   const [settingsOpen, setSettingsOpen] = createSignal(false)
   const [confirmAction, setConfirmAction] = createSignal<
@@ -78,6 +80,7 @@ export default function ProjectActionsMenu(props: {
   >(null)
   const [pinAction, setPinAction] = createSignal<PinDialogAction>(null)
   const [editAppOpen, setEditAppOpen] = createSignal(false)
+  const [authOpen, setAuthOpen] = createSignal(false)
 
   const workspaces = useWorkspaces()
   const move = useMoveProject()
@@ -193,6 +196,17 @@ export default function ProjectActionsMenu(props: {
                   </DropdownMenuItem>
                 </Show>
               </Show>
+              <Show when={canSeeSettings()}>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    if (props.onSettings) props.onSettings()
+                    else setSettingsOpen(true)
+                  }}
+                >
+                  <Settings class="w-3.5 h-3.5 text-muted-foreground" />
+                  Settings
+                </DropdownMenuItem>
+              </Show>
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 class="text-destructive data-[highlighted]:text-destructive"
@@ -233,6 +247,26 @@ export default function ProjectActionsMenu(props: {
                     Edit
                   </DropdownMenuItem>
                 </Show>
+                <Show when={canManageAuth()}>
+                  <DropdownMenuItem onSelect={() => setAuthOpen(true)}>
+                    <ShieldCheck class="w-3.5 h-3.5 text-muted-foreground" />
+                    Auth
+                  </DropdownMenuItem>
+                </Show>
+                <Show when={canPinApps() || canEditAppDetails() || canManageAuth()}>
+                  <DropdownMenuSeparator />
+                </Show>
+                <DropdownMenuItem
+                  onSelect={() =>
+                    navigate({
+                      to: "/schedules",
+                      search: { project: props.projectId },
+                    })
+                  }
+                >
+                  <Calendar class="w-3.5 h-3.5 text-muted-foreground" />
+                  Schedules
+                </DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           </Show>
@@ -264,28 +298,6 @@ export default function ProjectActionsMenu(props: {
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           </Show>
-          <Show when={canSeeSettings()}>
-            <DropdownMenuItem
-              onSelect={() => {
-                if (props.onSettings) props.onSettings()
-                else setSettingsOpen(true)
-              }}
-            >
-              <Settings class="w-3.5 h-3.5 text-muted-foreground" />
-              Settings
-            </DropdownMenuItem>
-          </Show>
-          <DropdownMenuItem
-            onSelect={() =>
-              navigate({
-                to: "/schedules",
-                search: { project: props.projectId },
-              })
-            }
-          >
-            <Calendar class="w-3.5 h-3.5 text-muted-foreground" />
-            Schedules
-          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -353,6 +365,12 @@ export default function ProjectActionsMenu(props: {
         onOpenChange={setEditAppOpen}
         initialName={props.project?.appName ?? null}
         initialDescription={props.project?.appDescription ?? null}
+      />
+
+      <ProjectAuthDialog
+        projectId={props.projectId}
+        open={authOpen()}
+        onOpenChange={setAuthOpen}
       />
     </>
   )

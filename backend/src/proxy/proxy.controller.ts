@@ -13,7 +13,7 @@ import {
 import { ConfigService } from "@nestjs/config"
 import { ProjectService, type EnsureProjectResult } from "../project/project.service"
 import { ProjectResponse } from "../project/project.types"
-import { TenantService } from "../tenant/tenant.service"
+import { OPSIFORCE_TENANT_GROUP_PREFIX, TenantService } from "../tenant/tenant.service"
 import { Public } from "../tenant/tenant.decorator"
 import { AgentUpdateService } from "../agent-update/agent-update.service"
 import { ProxyService } from "./proxy.service"
@@ -119,7 +119,7 @@ export class ProxyController {
   ): Promise<void> {
     if (!groupsHeader) throw new ForbiddenException("No tenant groups found")
 
-    const tenantNames = this.tenantService.parseTenantGroups(groupsHeader)
+    const tenantNames = this.tenantService.parseGroupsByPrefix(groupsHeader, OPSIFORCE_TENANT_GROUP_PREFIX)
     if (tenantNames.length === 0) throw new ForbiddenException("No opsiforce tenants assigned")
 
     const tenant = await this.tenantService.getTenantById(tenantId)

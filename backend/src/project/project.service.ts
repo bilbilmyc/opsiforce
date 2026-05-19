@@ -24,6 +24,7 @@ import {
   workspaceMembers,
   workspaces,
   tenants,
+  tenantSettings,
   projectDuplicateJobs,
 } from "../../db/schema"
 import { PodService } from "../pod/pod.service"
@@ -484,8 +485,8 @@ export class ProjectService implements OnApplicationBootstrap {
     if (dto.mode === "manual") {
       await this.projectAuthService.apply(project.id, dto.config ?? {}, dto.bypassAuthPaths)
     } else if (dto.mode === "makara") {
-      const tenantName = await this.findTenantName(tenantId)
-      await this.projectAuthService.applyMakara(project.id, tenantName, dto.bypassAuthPaths)
+      const makaraTenantName = await this.findMakaraTenantName(tenantId)
+      await this.projectAuthService.applyMakara(project.id, makaraTenantName, dto.bypassAuthPaths)
     } else {
       await this.projectAuthService.remove(project.id)
     }
@@ -684,10 +685,17 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId)
   }
 
-  private async findTenantName(tenantId: string): Promise<string> {
-    const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId))
-    if (!tenant) throw new BadRequestException(`Tenant ${tenantId} not found`)
-    return tenant.name
+  private async findMakaraTenantName(tenantId: string): Promise<string> {
+    const [row] = await db
+      .select({
+        makaraTenantName: tenantSettings.makaraTenantName,
+        tenantName: tenants.name,
+      })
+      .from(tenants)
+      .leftJoin(tenantSettings, eq(tenantSettings.tenantId, tenants.id))
+      .where(eq(tenants.id, tenantId))
+    if (!row) throw new BadRequestException(`Tenant ${tenantId} not found`)
+    return row.makaraTenantName ?? row.tenantName
   }
 
   async reassignPodById(id: string): Promise<void> {

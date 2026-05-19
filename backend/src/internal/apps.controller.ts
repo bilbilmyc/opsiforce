@@ -2,10 +2,11 @@ import { BadRequestException, Controller, Get, Headers, NotFoundException } from
 import { ConfigService } from "@nestjs/config"
 import { and, desc, eq } from "drizzle-orm"
 import { db } from "../../db"
-import { projectApps, projects, tenants } from "../../db/schema"
+import { projectApps, projects } from "../../db/schema"
 import { RequirePermission } from "../permission/permission.guard"
 import { Perms } from "../permission/permission.constants"
 import { Public } from "../tenant/tenant.decorator"
+import { TenantService } from "../tenant/tenant.service"
 import { ProjectStatus } from "../project/project.types"
 
 interface PinnedAppResponse {
@@ -19,7 +20,10 @@ interface PinnedAppResponse {
 @Public()
 @Controller("internal/apps")
 export class InternalAppsController {
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly tenantService: TenantService,
+  ) {}
 
   @Get("pinned")
   @RequirePermission(Perms.listPinnedAppsInternal)
@@ -31,7 +35,7 @@ export class InternalAppsController {
       throw new BadRequestException("X-Tenant-Name header is required")
     }
 
-    const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.name, tenantName))
+    const tenant = await this.tenantService.getTenantByMakaraName(tenantName)
     if (!tenant) throw new NotFoundException(`Tenant ${tenantName} not found`)
 
     const rows = await db

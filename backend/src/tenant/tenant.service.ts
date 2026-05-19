@@ -2,11 +2,12 @@ import { Injectable, Logger } from "@nestjs/common"
 import { eq } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
-import { tenants } from "../../db/schema"
+import { tenantSettings, tenants } from "../../db/schema"
 import { BifrostService } from "../bifrost/bifrost.service"
 import { DefaultsService } from "../defaults/defaults.service"
 
-const TENANT_GROUP_PREFIX = "role:opsiforce_tenant_name_"
+export const OPSIFORCE_TENANT_GROUP_PREFIX = "role:opsiforce_tenant_name_"
+export const MAKARA_TENANT_GROUP_PREFIX = "role:makara_tenant_name_"
 
 @Injectable()
 export class TenantService {
@@ -17,12 +18,12 @@ export class TenantService {
     private readonly defaultsService: DefaultsService,
   ) {}
 
-  parseTenantGroups(groupsHeader: string): string[] {
+  parseGroupsByPrefix(groupsHeader: string, prefix: string): string[] {
     return groupsHeader
       .split(",")
       .map((g) => g.trim())
-      .filter((g) => g.startsWith(TENANT_GROUP_PREFIX))
-      .map((g) => g.replace(TENANT_GROUP_PREFIX, ""))
+      .filter((g) => g.startsWith(prefix))
+      .map((g) => g.slice(prefix.length))
   }
 
   private async ensureBifrostCustomer(tenant: typeof tenants.$inferSelect) {
@@ -58,11 +59,19 @@ export class TenantService {
       return this.ensureBifrostCustomer(existing)
     }
 
-    const [created] = await db
-      .insert(tenants)
-      .values({ id: crypto.randomUUID(), name, displayName: name })
-      .onConflictDoNothing()
-      .returning()
+    const created = await db.transaction(async (tx) => {
+      const [inserted] = await tx
+        .insert(tenants)
+        .values({ id: crypto.randomUUID(), name, displayName: name })
+        .onConflictDoNothing()
+        .returning()
+      if (!inserted) return undefined
+      await tx
+        .insert(tenantSettings)
+        .values({ tenantId: inserted.id, makaraTenantName: name })
+        .onConflictDoNothing()
+      return inserted
+    })
 
     const tenant = created ?? (await db.select().from(tenants).where(eq(tenants.name, name)))[0]
     if (created) {
@@ -80,5 +89,20 @@ export class TenantService {
   async getTenantById(id: string) {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id))
     return tenant ?? null
+  }
+
+  async getTenantByMakaraName(makaraTenantName: string) {
+    const [row] = await db
+      .select({
+        id: tenants.id,
+        name: tenants.name,
+        displayName: tenants.displayName,
+        bifrostTenantId: tenants.bifrostTenantId,
+        createdAt: tenants.createdAt,
+      })
+      .from(tenantSettings)
+      .innerJoin(tenants, eq(tenants.id, tenantSettings.tenantId))
+      .where(eq(tenantSettings.makaraTenantName, makaraTenantName))
+    return row ?? null
   }
 }
