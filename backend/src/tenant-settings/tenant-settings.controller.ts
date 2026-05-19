@@ -10,7 +10,6 @@ export class TenantSettingsController {
   constructor(private readonly service: TenantSettingsService) {}
 
   @Get()
-  @RequirePermission(Perms.manageMakaraIntegration)
   get(@CurrentTenant() tenant: TenantContext): Promise<TenantSettingsResponse> {
     return this.service.get(tenant.tenantId)
   }

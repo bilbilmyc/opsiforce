@@ -45,8 +45,12 @@ are logged and don't block siblings.
 
 ## Who can use it
 
-Gated by the `can_manage_makara_integration` Keycloak role. Users without the
-role still see the existing pinned-apps and project Makara auth flows working
+Reading the mapping is available to any tenant member — the value is not
+sensitive (it already appears as a public role assertion in the Traefik
+middleware) and the pin-app dialog uses it to label the destination tenant
+for everyone. Changing the mapping is gated by the
+`can_manage_makara_integration` Keycloak role. Users without the role still
+see the existing pinned-apps and project Makara auth flows working
 correctly — they just can't change the mapping.
 
 ## Lifecycle
