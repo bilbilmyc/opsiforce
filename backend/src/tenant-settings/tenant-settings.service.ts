@@ -80,7 +80,11 @@ export class TenantSettingsService {
       rows.map((row) => ({
         name: "reapply",
         data: { projectId: row.projectId, makaraTenantName },
-        opts: { jobId: `tenant:${tenantId}:proj:${row.projectId}:makara-reapply` },
+        opts: {
+          jobId: `tenant:${tenantId}:proj:${row.projectId}:makara-reapply`,
+          removeOnComplete: 100,
+          removeOnFail: 1000,
+        },
       })),
     )
     this.logger.log(
