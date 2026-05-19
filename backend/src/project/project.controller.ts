@@ -168,6 +168,7 @@ export class ProjectController {
   }
 
   @Get(":id/auth")
+  @RequirePermission(Perms.manageProjectAuthSettings)
   async getAuth(
     @Param("id") id: string,
     @CurrentTenant() tenant: TenantContext,
@@ -178,6 +179,7 @@ export class ProjectController {
   }
 
   @Put(":id/auth")
+  @RequirePermission(Perms.manageProjectAuthSettings)
   async updateAuth(
     @Param("id") id: string,
     @Body() dto: UpdateProjectAuthDto,

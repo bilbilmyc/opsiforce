@@ -49,9 +49,6 @@ export class TenantSettingsService {
       )
     }
 
-    const current = await this.get(tenantId)
-    const changed = current.makaraTenantName !== submitted
-
     await db
       .insert(tenantSettings)
       .values({ tenantId, makaraTenantName: submitted })
@@ -60,9 +57,7 @@ export class TenantSettingsService {
         set: { makaraTenantName: submitted },
       })
 
-    if (changed) {
-      await this.enqueueReapplies(tenantId, submitted)
-    }
+    await this.enqueueReapplies(tenantId, submitted)
 
     return { makaraTenantName: submitted }
   }

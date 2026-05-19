@@ -5,6 +5,7 @@
 export const Perms = {
   manageProjectBudgetSettings: "can_manage_project_budget_settings",
   manageProjectTimeoutSettings: "can_manage_project_timeout_settings",
+  manageProjectAuthSettings: "can_manage_project_auth_settings",
   manageTenantBudget: "can_manage_tenant_budget",
   viewCodeTab: "can_view_code_tab",
   viewDbTab: "can_view_db_tab",
