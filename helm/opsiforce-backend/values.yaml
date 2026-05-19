@@ -36,7 +36,12 @@ config:
   agentName: "app-builder"
   agentWorkspaceUpdateOnStartup: "true"
   agentUpdateJobTimeoutMs: "1800000"
-  agentResources: {}
+  agentResources:
+    requests:
+      cpu: "500m"
+      memory: 2Gi
+    limits:
+      memory: 4Gi
   agentNodeSelector: {}
   agentTolerations: []
   openaiApiKey: ""

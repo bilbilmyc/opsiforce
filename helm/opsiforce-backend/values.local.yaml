@@ -42,7 +42,12 @@ config:
   agentName: "app-builder"
   agentWorkspaceUpdateOnStartup: "true"
   agentUpdateJobTimeoutMs: "1800000"
-  agentResources: ~
+  agentResources:
+    requests:
+      cpu: "200m"
+      memory: 1312Mi
+    limits:
+      memory: 2Gi
   agentNodeSelector: ~
   agentTolerations: ~
   agentAffinity: ~
