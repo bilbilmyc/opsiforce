@@ -1,6 +1,6 @@
 import { Controller, Get, Req } from "@nestjs/common"
 import { FastifyRequest } from "fastify"
-import { TenantService } from "./tenant.service"
+import { OPSIFORCE_TENANT_GROUP_PREFIX, TenantService } from "./tenant.service"
 
 @Controller("tenants")
 export class TenantController {
@@ -9,7 +9,7 @@ export class TenantController {
   @Get()
   async findAll(@Req() req: FastifyRequest) {
     const groupsHeader = req.headers["x-forwarded-groups"] as string ?? ""
-    const tenantNames = this.tenantService.parseTenantGroups(groupsHeader)
+    const tenantNames = this.tenantService.parseGroupsByPrefix(groupsHeader, OPSIFORCE_TENANT_GROUP_PREFIX)
     return this.tenantService.getOrCreateTenants(tenantNames)
   }
 }

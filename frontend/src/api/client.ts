@@ -72,6 +72,8 @@ export interface Project {
   isPinned: boolean
   pinnedAt: string | null
   hasApp: boolean
+  appName: string | null
+  appDescription: string | null
   lastActiveAt: string | null
   createdAt: string
 }

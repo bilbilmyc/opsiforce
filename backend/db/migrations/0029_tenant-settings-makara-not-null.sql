@@ -1,0 +1,1 @@
+ALTER TABLE "tenant_settings" ALTER COLUMN "makara_tenant_name" SET NOT NULL;

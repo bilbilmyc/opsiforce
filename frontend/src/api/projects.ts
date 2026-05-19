@@ -121,18 +121,25 @@ export function useCreateUnassignedProject() {
   }))
 }
 
-export function usePinApp() {
+export function useSetAppPin() {
   const qc = useQueryClient()
   return createMutation(() => ({
-    mutationFn: (projectId: string) => api.post<Project>(`/projects/${projectId}/pin`),
+    mutationFn: (params: { projectId: string; isPinned: boolean }) =>
+      api.patch<Project>(`/projects/${params.projectId}/app/pin`, { isPinned: params.isPinned }),
     onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
   }))
 }
 
-export function useUnpinApp() {
+export interface UpdateAppPayload {
+  name?: string
+  description?: string | null
+}
+
+export function useUpdateApp() {
   const qc = useQueryClient()
   return createMutation(() => ({
-    mutationFn: (projectId: string) => api.post<Project>(`/projects/${projectId}/unpin`),
+    mutationFn: (params: { projectId: string; payload: UpdateAppPayload }) =>
+      api.patch<Project>(`/projects/${params.projectId}/app`, params.payload),
     onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
   }))
 }

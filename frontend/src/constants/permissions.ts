@@ -13,4 +13,6 @@ export const Permission = {
   manageWorkspaces: "can_manage_workspaces",
   moveProjectsBetweenWorkspaces: "can_move_projects_between_workspaces",
   pinApps: "can_pin_apps",
+  editAppDetails: "can_edit_app_details",
+  manageMakaraIntegration: "can_manage_makara_integration",
 } as const;

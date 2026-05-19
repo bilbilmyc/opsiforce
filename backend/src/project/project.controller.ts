@@ -9,6 +9,7 @@ import {
   Param,
   Req,
   Res,
+  BadRequestException,
   ForbiddenException,
   NotFoundException,
 } from "@nestjs/common"
@@ -20,6 +21,8 @@ import {
   DuplicateProjectDto,
   UpdateProjectAuthDto,
   ProjectStatus,
+  SetAppPinDto,
+  UpdateAppDto,
 } from "./project.types"
 import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
 import { CurrentUser, type UserContext } from "../user/user.decorator"
@@ -165,6 +168,7 @@ export class ProjectController {
   }
 
   @Get(":id/auth")
+  @RequirePermission(Perms.manageProjectAuthSettings)
   async getAuth(
     @Param("id") id: string,
     @CurrentTenant() tenant: TenantContext,
@@ -175,6 +179,7 @@ export class ProjectController {
   }
 
   @Put(":id/auth")
+  @RequirePermission(Perms.manageProjectAuthSettings)
   async updateAuth(
     @Param("id") id: string,
     @Body() dto: UpdateProjectAuthDto,
@@ -240,27 +245,32 @@ export class ProjectController {
     return this.projectService.restart(id, tenant.tenantId)
   }
 
-  @Post(":id/pin")
+  @Patch(":id/app/pin")
   @RequirePermission(Perms.pinApps)
-  async pin(
+  async setAppPin(
     @Param("id") id: string,
+    @Body() dto: SetAppPinDto,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ) {
     await this.gate(id, tenant, user)
+    if (typeof dto?.isPinned !== "boolean") {
+      throw new BadRequestException("isPinned must be a boolean")
+    }
     const dbUserId = await this.resolveUserId(user, tenant.tenantId)
-    return this.projectService.pinApp(id, tenant.tenantId, dbUserId)
+    return this.projectService.setAppPin(id, tenant.tenantId, dbUserId, dto.isPinned)
   }
 
-  @Post(":id/unpin")
-  @RequirePermission(Perms.pinApps)
-  async unpin(
+  @Patch(":id/app")
+  @RequirePermission(Perms.editAppDetails)
+  async updateApp(
     @Param("id") id: string,
+    @Body() dto: UpdateAppDto,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ) {
     await this.gate(id, tenant, user)
-    return this.projectService.unpinApp(id, tenant.tenantId)
+    return this.projectService.updateApp(id, tenant.tenantId, dto ?? {})
   }
 
   /** 404 if the caller can't see this project (avoids existence leak). */

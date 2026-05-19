@@ -197,6 +197,20 @@
       "when": 1778680641074,
       "tag": "0027_add-project-app-table",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1779188060216,
+      "tag": "0028_add-tenant-settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1779188091014,
+      "tag": "0029_tenant-settings-makara-not-null",
+      "breakpoints": true
     }
   ]
 }

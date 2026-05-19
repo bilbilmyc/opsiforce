@@ -40,6 +40,8 @@ export interface ProjectResponse extends ProjectRow {
   isPinned: boolean
   pinnedAt: ProjectAppRow["pinnedAt"]
   hasApp: boolean
+  appName: ProjectAppRow["name"]
+  appDescription: ProjectAppRow["description"]
 }
 
 export interface ProjectState {
@@ -86,4 +88,13 @@ export interface UpdateProjectAuthDto {
   mode: ProjectAuthMode
   config?: ProjectAuthOidcConfig
   bypassAuthPaths?: string[]
+}
+
+export interface SetAppPinDto {
+  isPinned: boolean
+}
+
+export interface UpdateAppDto {
+  name?: string
+  description?: string | null
 }

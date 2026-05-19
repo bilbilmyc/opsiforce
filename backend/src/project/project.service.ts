@@ -12,6 +12,8 @@ import { ConfigService } from "@nestjs/config"
 import { eq, and, desc, asc, inArray, isNull, or, ne, sql, type SQL } from "drizzle-orm"
 import { Queue } from "bullmq"
 import crypto from "crypto"
+import path from "path"
+import { rename, writeFile } from "fs/promises"
 import { db, pgClient } from "../../db"
 import {
   projectSettings,
@@ -22,6 +24,7 @@ import {
   workspaceMembers,
   workspaces,
   tenants,
+  tenantSettings,
   projectDuplicateJobs,
 } from "../../db/schema"
 import { PodService } from "../pod/pod.service"
@@ -43,7 +46,58 @@ import {
   ProjectAuthResponse,
   UpdateProjectAuthDto,
   ProjectDuplicateOperation,
+  UpdateAppDto,
 } from "./project.types"
+
+// TODO: replace these hand-rolled validators with zod schemas once zod is introduced.
+const APP_NAME_MIN_LENGTH = 1
+const APP_NAME_MAX_LENGTH = 80
+const APP_DESCRIPTION_MAX_LENGTH = 500
+
+interface AppMetaPatch {
+  name?: string
+  description?: string | null
+}
+
+function validateUpdateAppDto(body: UpdateAppDto): AppMetaPatch {
+  const patch: AppMetaPatch = {}
+
+  if ("name" in body) patch.name = validateAppName(body.name)
+  if ("description" in body) patch.description = validateAppDescription(body.description)
+
+  if (!("name" in patch) && !("description" in patch)) {
+    throw new BadRequestException("At least one of 'name' or 'description' must be provided")
+  }
+
+  return patch
+}
+
+function validateAppName(value: unknown): string {
+  if (typeof value !== "string") {
+    throw new BadRequestException("'name' must be a string")
+  }
+  const trimmed = value.trim()
+  if (trimmed.length < APP_NAME_MIN_LENGTH || trimmed.length > APP_NAME_MAX_LENGTH) {
+    throw new BadRequestException(
+      `'name' must be ${APP_NAME_MIN_LENGTH}-${APP_NAME_MAX_LENGTH} characters after trimming`,
+    )
+  }
+  return trimmed
+}
+
+function validateAppDescription(value: unknown): string | null {
+  if (value === null || value === undefined) return null
+  if (typeof value !== "string") {
+    throw new BadRequestException("'description' must be a string or null")
+  }
+  const trimmed = value.trim()
+  if (trimmed.length > APP_DESCRIPTION_MAX_LENGTH) {
+    throw new BadRequestException(
+      `'description' must be at most ${APP_DESCRIPTION_MAX_LENGTH} characters after trimming`,
+    )
+  }
+  return trimmed.length === 0 ? null : trimmed
+}
 import { ProjectAuthService } from "./project-auth.service"
 import { ProjectEventsService } from "./project-events.service"
 import { AppService } from "./app.service"
@@ -89,6 +143,8 @@ const projectSelectFields = {
   isPinned: sql<boolean>`coalesce(${projectApps.isPinned}, false)`.as("is_pinned"),
   pinnedAt: projectApps.pinnedAt,
   hasApp: sql<boolean>`${projectApps.projectId} is not null`.as("has_app"),
+  appName: projectApps.name,
+  appDescription: projectApps.description,
   lastActiveAt: projects.lastActiveAt,
   createdAt: projects.createdAt,
   updatedAt: projects.updatedAt,
@@ -429,8 +485,8 @@ export class ProjectService implements OnApplicationBootstrap {
     if (dto.mode === "manual") {
       await this.projectAuthService.apply(project.id, dto.config ?? {}, dto.bypassAuthPaths)
     } else if (dto.mode === "makara") {
-      const tenantName = await this.findTenantName(tenantId)
-      await this.projectAuthService.applyMakara(project.id, tenantName, dto.bypassAuthPaths)
+      const makaraTenantName = await this.findMakaraTenantName(tenantId)
+      await this.projectAuthService.applyMakara(project.id, makaraTenantName, dto.bypassAuthPaths)
     } else {
       await this.projectAuthService.remove(project.id)
     }
@@ -548,35 +604,73 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId)
   }
 
-  async pinApp(id: string, tenantId: string, userId: string): Promise<ProjectResponse> {
+  async updateApp(id: string, tenantId: string, body: UpdateAppDto): Promise<ProjectResponse> {
     const project = await this.findOne(id, tenantId)
-    if (project.authMode !== "public" && project.authMode !== "makara") {
-      throw new BadRequestException(
-        `AUTH_MODE_NOT_COMPATIBLE: project auth mode must be "public" or "makara" to pin (current: "${project.authMode}"). Change the auth mode in project settings before pinning.`,
-      )
-    }
     if (!project.hasApp) {
       throw new BadRequestException(
-        "APP_NOT_DETECTED: this project has no detectable app yet. Make sure the project's web server is running and serves /api/app-meta before pinning.",
+        "APP_NOT_DETECTED: this project has no detectable app yet. Make sure the project's web server is running and serves /api/app-meta before editing app details.",
       )
     }
 
+    const patch = validateUpdateAppDto(body)
+    const current = (await this.appService.get(id)) ?? { name: null, description: null }
+    const name = patch.name ?? current.name
+    const description = "description" in patch ? patch.description ?? null : current.description
+
+    if (!name) {
+      throw new BadRequestException("'name' is required and cannot be empty")
+    }
+
+    await this.writeAppMetaFile(project.directory, { name, description })
     await db
       .update(projectApps)
-      .set({
-        isPinned: true,
-        pinnedById: userId,
-        pinnedAt: new Date(),
-        updatedAt: new Date(),
-      })
+      .set({ name, description, updatedAt: new Date() })
       .where(eq(projectApps.projectId, id))
+
+    this.appService.invalidate(id)
+    await this.projectEventsService.publish(id)
 
     return this.findOne(id, tenantId)
   }
 
-  async unpinApp(id: string, tenantId: string): Promise<ProjectResponse> {
+  private async writeAppMetaFile(
+    projectDirectory: string,
+    meta: { name: string; description: string | null },
+  ): Promise<void> {
+    const storageMountPath = this.configService.getOrThrow<string>("storageMountPath")
+    const appDir = path.join(storageMountPath, projectDirectory, "app")
+    const target = path.join(appDir, "app.meta.json")
+    const tmp = path.join(appDir, `.app.meta.json.${crypto.randomUUID()}.tmp`)
+    const content: { name: string; description?: string } = { name: meta.name }
+    if (meta.description !== null) content.description = meta.description
+    await writeFile(tmp, JSON.stringify(content, null, 2), "utf8")
+    await rename(tmp, target)
+  }
+
+  async setAppPin(id: string, tenantId: string, userId: string, isPinned: boolean): Promise<ProjectResponse> {
     const project = await this.findOne(id, tenantId)
-    if (project.hasApp) {
+
+    if (isPinned) {
+      if (project.authMode !== "public" && project.authMode !== "makara") {
+        throw new BadRequestException(
+          `AUTH_MODE_NOT_COMPATIBLE: project auth mode must be "public" or "makara" to pin (current: "${project.authMode}"). Change the auth mode in project settings before pinning.`,
+        )
+      }
+      if (!project.hasApp) {
+        throw new BadRequestException(
+          "APP_NOT_DETECTED: this project has no detectable app yet. Make sure the project's web server is running and serves /api/app-meta before pinning.",
+        )
+      }
+      await db
+        .update(projectApps)
+        .set({
+          isPinned: true,
+          pinnedById: userId,
+          pinnedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(projectApps.projectId, id))
+    } else if (project.hasApp) {
       await db
         .update(projectApps)
         .set({
@@ -587,13 +681,21 @@ export class ProjectService implements OnApplicationBootstrap {
         })
         .where(eq(projectApps.projectId, id))
     }
+
     return this.findOne(id, tenantId)
   }
 
-  private async findTenantName(tenantId: string): Promise<string> {
-    const [tenant] = await db.select({ name: tenants.name }).from(tenants).where(eq(tenants.id, tenantId))
-    if (!tenant) throw new BadRequestException(`Tenant ${tenantId} not found`)
-    return tenant.name
+  private async findMakaraTenantName(tenantId: string): Promise<string> {
+    const [row] = await db
+      .select({
+        makaraTenantName: tenantSettings.makaraTenantName,
+        tenantName: tenants.name,
+      })
+      .from(tenants)
+      .leftJoin(tenantSettings, eq(tenantSettings.tenantId, tenants.id))
+      .where(eq(tenants.id, tenantId))
+    if (!row) throw new BadRequestException(`Tenant ${tenantId} not found`)
+    return row.makaraTenantName ?? row.tenantName
   }
 
   async reassignPodById(id: string): Promise<void> {

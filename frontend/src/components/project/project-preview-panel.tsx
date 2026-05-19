@@ -5,6 +5,7 @@ import {
   LoaderCircle,
   PanelRightClose,
   PanelRightOpen,
+  Pencil,
   Pin,
   PinOff,
   RefreshCw,
@@ -17,6 +18,7 @@ import { Permission } from "~/constants/permissions"
 import { useProjects } from "~/api/projects"
 import PinBadge from "./pin-badge"
 import PinAppDialogs, { type PinDialogAction } from "./pin-app-dialogs"
+import EditAppDialog from "./edit-app-dialog"
 
 export interface ProjectPreviewPanelProps {
   projectId: string
@@ -29,12 +31,17 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
   const [iframeLoading, setIframeLoading] = createSignal(true)
   const [copied, setCopied] = createSignal(false)
   const [pinAction, setPinAction] = createSignal<PinDialogAction>(null)
+  const [editAppOpen, setEditAppOpen] = createSignal(false)
 
   const { hasPermission } = usePermissions()
   const canPinApps = () => hasPermission(Permission.pinApps)
-  const projects = useProjects({ enabled: canPinApps })
+  const canEditAppDetails = () => hasPermission(Permission.editAppDetails)
+  const projectsEnabled = () => canPinApps() || canEditAppDetails()
+  const projects = useProjects({ enabled: projectsEnabled })
   const project = () => projects.data?.find((p) => p.id === props.projectId)
   const isPinned = () => project()?.isPinned === true
+  const hasApp = () => project()?.hasApp === true
+  const showEditAction = () => canEditAppDetails() && hasApp()
 
   const panel = createResizablePanel({
     storageKey: "opsiforce:preview-width",
@@ -97,6 +104,11 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             <Show when={canPinApps()}>
               <PinBadge isPinned={isPinned()} compact />
             </Show>
+            <Show when={showEditAction()}>
+              <ToolbarButton onClick={() => setEditAppOpen(true)} tooltip="Edit app details">
+                <Pencil class="w-3 h-3" />
+              </ToolbarButton>
+            </Show>
             <Show when={iframeLoading()}>
               <LoaderCircle class="w-3 h-3 text-muted-foreground animate-spin shrink-0" />
             </Show>
@@ -143,6 +155,13 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
           authMode={project()?.authMode}
           action={pinAction()}
           onActionChange={setPinAction}
+        />
+        <EditAppDialog
+          projectId={props.projectId}
+          open={editAppOpen()}
+          onOpenChange={setEditAppOpen}
+          initialName={project()?.appName ?? props.appName ?? null}
+          initialDescription={project()?.appDescription ?? null}
         />
       </div>
     </Show>

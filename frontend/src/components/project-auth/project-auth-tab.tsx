@@ -1,6 +1,7 @@
 import { Show, createEffect, createMemo, createSignal } from "solid-js"
 import { toast } from "solid-sonner"
 import { Button } from "~/components/ui/button"
+import ConfirmDialog from "~/components/ui/confirm-dialog"
 import Spinner from "~/components/ui/spinner"
 import type { ProjectAuthMode, ProjectAuthOidcConfig } from "~/api/client"
 import { AuthModeSelector } from "./auth-mode-selector"
@@ -56,6 +57,7 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
   const [draftConfig, setDraftConfig] = createSignal<ProjectAuthOidcConfig>(EMPTY_CONFIG)
   const [draftBypassPaths, setDraftBypassPaths] = createSignal<string[]>([])
   const [saveAttempted, setSaveAttempted] = createSignal(false)
+  const [confirmOpen, setConfirmOpen] = createSignal(false)
 
   createEffect(() => {
     const data = query.data
@@ -82,13 +84,17 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
     validationError(draftMode(), draftConfig(), serverHasExistingConfig()),
   )
 
-  const save = () => {
+  const requestSave = () => {
     setSaveAttempted(true)
     const err = error()
     if (err) {
       toast.error(err)
       return
     }
+    setConfirmOpen(true)
+  }
+
+  const confirmSave = () => {
     const mode = draftMode()
     mutation.mutate(
       {
@@ -102,6 +108,20 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
       },
     )
   }
+
+  const confirmDescription = createMemo(() => {
+    const from = serverMode()
+    const to = draftMode()
+    const transition = from === to ? `auth mode "${to}"` : `auth mode from "${from}" to "${to}"`
+    switch (to) {
+      case "public":
+        return `You're about to update ${transition}. The app will be accessible to anyone without signing in.`
+      case "makara":
+        return `You're about to update ${transition}. Visitors will be required to sign in with Makara before the app loads.`
+      case "manual":
+        return `You're about to update ${transition}. Visitors will be required to sign in via the configured OIDC provider before the app loads.`
+    }
+  })
 
   const reset = () => {
     setDraftMode(serverMode())
@@ -163,7 +183,7 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
           </Show>
           <Button
             size="sm"
-            onClick={save}
+            onClick={requestSave}
             disabled={props.disabled || !dirty()}
             loading={mutation.isPending}
           >
@@ -171,6 +191,15 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
           </Button>
         </div>
       </Show>
+
+      <ConfirmDialog
+        open={confirmOpen()}
+        onOpenChange={setConfirmOpen}
+        title="Save auth settings?"
+        description={confirmDescription() ?? ""}
+        confirmLabel="Save"
+        onConfirm={confirmSave}
+      />
     </div>
   )
 }
