@@ -1,5 +1,5 @@
 import { toast } from "solid-sonner"
-import { usePinApp, useUnpinApp } from "~/api/projects"
+import { useSetAppPin } from "~/api/projects"
 import type { Project } from "~/api/client"
 import ConfirmDialog from "~/components/ui/confirm-dialog"
 
@@ -13,8 +13,7 @@ export interface PinAppDialogsProps {
 }
 
 export default function PinAppDialogs(props: PinAppDialogsProps) {
-  const pinApp = usePinApp()
-  const unpinApp = useUnpinApp()
+  const setAppPin = useSetAppPin()
   const hasCompatibleAuthMode = () => props.authMode === "public" || props.authMode === "makara"
 
   const close = () => props.onActionChange(null)
@@ -38,10 +37,13 @@ export default function PinAppDialogs(props: PinAppDialogsProps) {
             toast.error("Set auth mode to public or makara before pinning")
             return
           }
-          pinApp.mutate(props.projectId, {
-            onSuccess: () => toast.success("App pinned to Makara"),
-            onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to pin"),
-          })
+          setAppPin.mutate(
+            { projectId: props.projectId, isPinned: true },
+            {
+              onSuccess: () => toast.success("App pinned to Makara"),
+              onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to pin"),
+            },
+          )
         }}
       />
       <ConfirmDialog
@@ -54,10 +56,13 @@ export default function PinAppDialogs(props: PinAppDialogsProps) {
         confirmLabel="Unpin"
         variant="destructive"
         onConfirm={() =>
-          unpinApp.mutate(props.projectId, {
-            onSuccess: () => toast.success("App unpinned from Makara"),
-            onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to unpin"),
-          })
+          setAppPin.mutate(
+            { projectId: props.projectId, isPinned: false },
+            {
+              onSuccess: () => toast.success("App unpinned from Makara"),
+              onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to unpin"),
+            },
+          )
         }
       />
     </>

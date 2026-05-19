@@ -7,8 +7,10 @@ import { Permission } from "~/constants/permissions"
 import { api, type Project } from "~/api/client"
 import { PUBLIC_LABEL, useMoveProject, useWorkspaces } from "~/api/workspaces"
 import {
+  AppWindow,
   ArrowRightLeft,
   Ban,
+  Box,
   Calendar,
   ChevronRight,
   CirclePlay,
@@ -36,6 +38,7 @@ import {
 import ProjectSettings from "./project-settings"
 import ConfirmDialog from "./ui/confirm-dialog"
 import PinAppDialogs, { type PinDialogAction } from "./project/pin-app-dialogs"
+import EditAppDialog from "./project/edit-app-dialog"
 
 export default function ProjectActionsMenu(props: {
   projectId: string
@@ -63,15 +66,18 @@ export default function ProjectActionsMenu(props: {
   const canDuplicate = () => hasPermission(Permission.duplicateProject)
   const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces)
   const canPinApps = () => hasPermission(Permission.pinApps)
+  const canEditAppDetails = () => hasPermission(Permission.editAppDetails)
   const isDisabled = () => props.status === "disabled"
   const isPinned = () => props.project?.isPinned === true
-  const showPinAction = () => canPinApps() && props.project?.hasApp === true
+  const hasApp = () => props.project?.hasApp === true
+  const showAppSubmenu = () => hasApp() && (canPinApps() || canEditAppDetails())
 
   const [settingsOpen, setSettingsOpen] = createSignal(false)
   const [confirmAction, setConfirmAction] = createSignal<
     "delete" | "duplicate" | "disable" | "restart" | null
   >(null)
   const [pinAction, setPinAction] = createSignal<PinDialogAction>(null)
+  const [editAppOpen, setEditAppOpen] = createSignal(false)
 
   const workspaces = useWorkspaces()
   const move = useMoveProject()
@@ -146,34 +152,90 @@ export default function ProjectActionsMenu(props: {
           <EllipsisVertical class="w-4 h-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent onClick={(e: MouseEvent) => e.stopPropagation()}>
-          <Show when={props.showRename && props.onRename}>
-            <DropdownMenuItem onSelect={() => props.onRename?.()}>
-              <Pencil class="w-3.5 h-3.5 text-muted-foreground" />
-              Rename
-            </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Box class="w-3.5 h-3.5 text-muted-foreground" />
+              Project
+              <ChevronRight class="ml-auto w-3.5 h-3.5 text-muted-foreground" />
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <Show when={props.showRename && props.onRename}>
+                <DropdownMenuItem onSelect={() => props.onRename?.()}>
+                  <Pencil class="w-3.5 h-3.5 text-muted-foreground" />
+                  Rename
+                </DropdownMenuItem>
+              </Show>
+              <Show when={canDuplicate()}>
+                <DropdownMenuItem onSelect={() => setConfirmAction("duplicate")}>
+                  <Copy class="w-3.5 h-3.5 text-muted-foreground" />
+                  Duplicate
+                </DropdownMenuItem>
+              </Show>
+              <Show when={canRestart() && !isDisabled()}>
+                <DropdownMenuItem onSelect={() => setConfirmAction("restart")}>
+                  <RotateCcw class="w-3.5 h-3.5 text-muted-foreground" />
+                  Restart
+                </DropdownMenuItem>
+              </Show>
+              <Show when={canDisable()}>
+                <Show
+                  when={isDisabled()}
+                  fallback={
+                    <DropdownMenuItem onSelect={() => setConfirmAction("disable")}>
+                      <Ban class="w-3.5 h-3.5 text-muted-foreground" />
+                      Disable
+                    </DropdownMenuItem>
+                  }
+                >
+                  <DropdownMenuItem onSelect={() => enableProject.mutate(undefined as never)}>
+                    <CirclePlay class="w-3.5 h-3.5 text-muted-foreground" />
+                    Enable
+                  </DropdownMenuItem>
+                </Show>
+              </Show>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                class="text-destructive data-[highlighted]:text-destructive"
+                onSelect={() => setConfirmAction("delete")}
+              >
+                <Trash2 class="w-3.5 h-3.5" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <Show when={showAppSubmenu()}>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <AppWindow class="w-3.5 h-3.5 text-muted-foreground" />
+                App
+                <ChevronRight class="ml-auto w-3.5 h-3.5 text-muted-foreground" />
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <Show when={canPinApps()}>
+                  <Show
+                    when={isPinned()}
+                    fallback={
+                      <DropdownMenuItem onSelect={() => setPinAction("pin")}>
+                        <Pin class="w-3.5 h-3.5 text-muted-foreground" />
+                        Pin to Makara
+                      </DropdownMenuItem>
+                    }
+                  >
+                    <DropdownMenuItem onSelect={() => setPinAction("unpin")}>
+                      <PinOff class="w-3.5 h-3.5 text-muted-foreground" />
+                      Unpin from Makara
+                    </DropdownMenuItem>
+                  </Show>
+                </Show>
+                <Show when={canEditAppDetails()}>
+                  <DropdownMenuItem onSelect={() => setEditAppOpen(true)}>
+                    <Pencil class="w-3.5 h-3.5 text-muted-foreground" />
+                    Edit
+                  </DropdownMenuItem>
+                </Show>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </Show>
-          <Show when={canSeeSettings()}>
-            <DropdownMenuItem
-              onSelect={() => {
-                if (props.onSettings) props.onSettings()
-                else setSettingsOpen(true)
-              }}
-            >
-              <Settings class="w-3.5 h-3.5 text-muted-foreground" />
-              Settings
-            </DropdownMenuItem>
-          </Show>
-          <DropdownMenuItem
-            onSelect={() =>
-              navigate({
-                to: "/schedules",
-                search: { project: props.projectId },
-              })
-            }
-          >
-            <Calendar class="w-3.5 h-3.5 text-muted-foreground" />
-            Schedules
-          </DropdownMenuItem>
           <Show when={showMove()}>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
@@ -202,57 +264,27 @@ export default function ProjectActionsMenu(props: {
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           </Show>
-          <Show when={canDuplicate()}>
-            <DropdownMenuItem onSelect={() => setConfirmAction("duplicate")}>
-              <Copy class="w-3.5 h-3.5 text-muted-foreground" />
-              Duplicate
+          <Show when={canSeeSettings()}>
+            <DropdownMenuItem
+              onSelect={() => {
+                if (props.onSettings) props.onSettings()
+                else setSettingsOpen(true)
+              }}
+            >
+              <Settings class="w-3.5 h-3.5 text-muted-foreground" />
+              Settings
             </DropdownMenuItem>
           </Show>
-          <Show when={canRestart() && !isDisabled()}>
-            <DropdownMenuItem onSelect={() => setConfirmAction("restart")}>
-              <RotateCcw class="w-3.5 h-3.5 text-muted-foreground" />
-              Restart
-            </DropdownMenuItem>
-          </Show>
-          <Show when={canDisable()}>
-            <Show
-              when={isDisabled()}
-              fallback={
-                <DropdownMenuItem onSelect={() => setConfirmAction("disable")}>
-                  <Ban class="w-3.5 h-3.5 text-muted-foreground" />
-                  Disable
-                </DropdownMenuItem>
-              }
-            >
-              <DropdownMenuItem onSelect={() => enableProject.mutate(undefined as never)}>
-                <CirclePlay class="w-3.5 h-3.5 text-muted-foreground" />
-                Enable
-              </DropdownMenuItem>
-            </Show>
-          </Show>
-          <Show when={showPinAction()}>
-            <Show
-              when={isPinned()}
-              fallback={
-                <DropdownMenuItem onSelect={() => setPinAction("pin")}>
-                  <Pin class="w-3.5 h-3.5 text-muted-foreground" />
-                  Pin to Makara
-                </DropdownMenuItem>
-              }
-            >
-              <DropdownMenuItem onSelect={() => setPinAction("unpin")}>
-                <PinOff class="w-3.5 h-3.5 text-muted-foreground" />
-                Unpin from Makara
-              </DropdownMenuItem>
-            </Show>
-          </Show>
-          <DropdownMenuSeparator />
           <DropdownMenuItem
-            class="text-destructive data-[highlighted]:text-destructive"
-            onSelect={() => setConfirmAction("delete")}
+            onSelect={() =>
+              navigate({
+                to: "/schedules",
+                search: { project: props.projectId },
+              })
+            }
           >
-            <Trash2 class="w-3.5 h-3.5" />
-            Delete
+            <Calendar class="w-3.5 h-3.5 text-muted-foreground" />
+            Schedules
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -313,6 +345,14 @@ export default function ProjectActionsMenu(props: {
         authMode={props.project?.authMode}
         action={pinAction()}
         onActionChange={setPinAction}
+      />
+
+      <EditAppDialog
+        projectId={props.projectId}
+        open={editAppOpen()}
+        onOpenChange={setEditAppOpen}
+        initialName={props.project?.appName ?? null}
+        initialDescription={props.project?.appDescription ?? null}
       />
     </>
   )
