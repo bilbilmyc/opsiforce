@@ -32,6 +32,24 @@ interface UploadResult {
 
 type StreamingRequestInit = RequestInit & { duplex: "half" }
 
+const CANCELLED = "cancelled"
+
+const supportsRequestStreams: boolean = (() => {
+  let duplexAccessed = false
+  let hasContentType = false
+  try {
+    hasContentType = new Request("", {
+      body: new ReadableStream(),
+      method: "POST",
+      get duplex(): "half" {
+        duplexAccessed = true
+        return "half"
+      },
+    } as StreamingRequestInit).headers.has("Content-Type")
+  } catch {}
+  return duplexAccessed && !hasContentType
+})()
+
 function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
@@ -132,6 +150,25 @@ function topLevelEntriesOf(files: FileList | File[]): string[] {
   return entries
 }
 
+function buildUploadFormData(files: FileList | File[]): FormData {
+  const form = new FormData()
+  for (let i = 0; i < files.length; i++) {
+    const file = getUploadFile(files, i)
+    form.append(relativePathOf(file), file, file.name)
+  }
+  return form
+}
+
+function parseUploadErrorMessage(status: number, text: string): string {
+  const fallback = `Upload failed (${status})`
+  try {
+    const body = JSON.parse(text) as { error?: string; message?: string }
+    return body.error || body.message || fallback
+  } catch {
+    return fallback
+  }
+}
+
 function injectUploadSummary(entries: string[]) {
   if (entries.length === 0) return
   const editor = document.querySelector<HTMLDivElement>(
@@ -194,7 +231,7 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
   const [sentBytes, setSentBytes] = createSignal(0)
   const [currentName, setCurrentName] = createSignal("")
 
-  let activeAbortController: AbortController | undefined
+  let cancelHandle: (() => void) | undefined
   let cancelRequested = false
   let fileInputRef: HTMLInputElement | undefined
   let folderInputRef: HTMLInputElement | undefined
@@ -209,6 +246,18 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
     const value = Math.floor((visibleBytes() / total) * 100)
     return Math.min(100, value)
   })
+
+  function makeProgressReporter(totalData: number): (bytes: number) => void {
+    let lastProgressAt = 0
+    return (bytes) => {
+      const now = Date.now()
+      if (now - lastProgressAt < 50 && bytes < totalData) return
+      lastProgressAt = now
+      const sent = Math.min(totalData, bytes)
+      setSentBytes(sent)
+      setCurrentName(sent >= totalData ? "Finishing upload" : "Sending files")
+    }
+  }
 
   async function uploadFiles(
     files: FileList | File[],
@@ -231,7 +280,7 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
     try {
       let totalData = 0
       for (let i = 0; i < files.length; i++) {
-        if (cancelRequested) throw new Error("cancelled")
+        if (cancelRequested) throw new Error(CANCELLED)
         const file = getUploadFile(files, i)
         totalData += file.size
 
@@ -249,24 +298,23 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
       if (result.uploaded > 0) injectUploadSummary(topLevelEntries)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (msg === "cancelled") toast.info("Upload cancelled")
+      if (msg === CANCELLED) toast.info("Upload cancelled")
       else toast.error(msg)
     } finally {
-      activeAbortController = undefined
+      cancelHandle = undefined
       setUploading(false)
       resetInput?.()
     }
   }
 
-  function sendUpload(
+  function sendUploadStreaming(
     files: FileList | File[],
     totalData: number,
   ): Promise<UploadResult> {
     const tenant = localStorage.getItem("tenant")
     const boundary = multipartBoundary()
     const controller = new AbortController()
-    activeAbortController = controller
-    let lastProgressAt = 0
+    cancelHandle = () => controller.abort()
     const headers: Record<string, string> = {
       "Content-Type": `multipart/form-data; boundary=${boundary}`,
       "x-upload-events": "summary",
@@ -277,14 +325,7 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
       files,
       boundary,
       controller.signal,
-      (bytes) => {
-        const now = Date.now()
-        if (now - lastProgressAt < 50 && bytes < totalData) return
-        lastProgressAt = now
-        const sent = Math.min(totalData, bytes)
-        setSentBytes(sent)
-        setCurrentName(sent >= totalData ? "Finishing upload" : "Sending files")
-      },
+      makeProgressReporter(totalData),
     )
 
     return fetch(`/api/projects/${props.projectId}/upload`, {
@@ -296,29 +337,65 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
     } as StreamingRequestInit)
       .then(async (response) => {
         const text = await response.text()
-        activeAbortController = undefined
         if (!response.ok) {
-          let message = `Upload failed (${response.status})`
-          try {
-            const body = JSON.parse(text) as {
-              error?: string
-              message?: string
-            }
-            message = body.error || body.message || message
-          } catch {}
-          throw new Error(message)
+          throw new Error(parseUploadErrorMessage(response.status, text))
         }
         setSentBytes(totalData)
         setCurrentName("Finishing upload")
         return parseUploadEvents(text)
       })
       .catch((err) => {
-        activeAbortController = undefined
         if (err instanceof DOMException && err.name === "AbortError") {
-          throw new Error("cancelled")
+          throw new Error(CANCELLED)
         }
         throw err
       })
+  }
+
+  function sendUploadXhr(
+    files: FileList | File[],
+    totalData: number,
+  ): Promise<UploadResult> {
+    return new Promise((resolve, reject) => {
+      const tenant = localStorage.getItem("tenant")
+      const xhr = new XMLHttpRequest()
+      const reportProgress = makeProgressReporter(totalData)
+      cancelHandle = () => xhr.abort()
+
+      xhr.upload.onprogress = (ev) => {
+        if (!ev.lengthComputable) return
+        reportProgress(ev.loaded)
+      }
+      xhr.upload.onloadend = () => reportProgress(totalData)
+      xhr.onload = () => {
+        if (xhr.status < 200 || xhr.status >= 300) {
+          reject(new Error(parseUploadErrorMessage(xhr.status, xhr.responseText)))
+          return
+        }
+        try {
+          resolve(parseUploadEvents(xhr.responseText))
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error(String(err)))
+        }
+      }
+      xhr.onabort = () => reject(new Error(CANCELLED))
+      xhr.onerror = () => reject(new Error("Network error during upload"))
+      xhr.ontimeout = () => reject(new Error("Upload timed out"))
+
+      xhr.open("POST", `/api/projects/${props.projectId}/upload`)
+      xhr.setRequestHeader("x-upload-events", "summary")
+      if (tenant) xhr.setRequestHeader("x-tenant-name", tenant)
+      xhr.send(buildUploadFormData(files))
+    })
+  }
+
+  function sendUpload(
+    files: FileList | File[],
+    totalData: number,
+  ): Promise<UploadResult> {
+    return supportsRequestStreams
+      ? sendUploadStreaming(files, totalData)
+      : sendUploadXhr(files, totalData)
   }
 
   function parseUploadEvents(text: string): UploadResult {
@@ -381,7 +458,8 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
 
   function cancelUpload() {
     cancelRequested = true
-    activeAbortController?.abort()
+    cancelHandle?.()
+    cancelHandle = undefined
   }
 
   return (
