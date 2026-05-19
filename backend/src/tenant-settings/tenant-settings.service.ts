@@ -76,7 +76,7 @@ export class TenantSettingsService {
         name: "reapply",
         data: { projectId: row.projectId, makaraTenantName },
         opts: {
-          jobId: `tenant:${tenantId}:proj:${row.projectId}:makara-reapply`,
+          jobId: `tenant__${tenantId}__project__${row.projectId}__makara-reapply`,
           removeOnComplete: 100,
           removeOnFail: 1000,
         },
