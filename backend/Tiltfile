@@ -37,7 +37,7 @@ k8s_yaml(helm(
 k8s_resource(
     'opsiforce-backend',
     port_forwards=[
-        '3001:3001',
+        '3010:3001',
         '9229:9229',
     ],
 )

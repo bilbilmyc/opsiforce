@@ -29,7 +29,7 @@ After running the local dev commands, you'll have:
 |------|-----------|---------------|
 | **App (entry point)** | https://opsiforce.localtest.me | Open in browser — Traefik routes to in-cluster services |
 | **Solid.js frontend** | http://localhost:8084 | Vite HMR on host; reached through Traefik |
-| **NestJS backend** | In `local` namespace via Tilt | Tilt port-forwards `localhost:3001` for direct calls; debug on `:9229` |
+| **NestJS backend** | In `local` namespace via Tilt | Tilt port-forwards `localhost:3010` for direct calls; debug on `:9229` |
 | **Go runtime proxies** | In `local` namespace via Tilt, services `proxy-{agent,app,vscode,db}` (4 deployments, one per mode) | Reached cluster-internally; Traefik routes agent/app/vscode/db through them |
 | **Drizzle Studio** | http://localhost:4983 | DB browser (opens automatically via `db:studio`) |
 | **PostgreSQL** | localhost:5435 | Via port-forward (shared with makara/adam) |
@@ -67,7 +67,7 @@ yarn run dev-opsiforce-only
   │
   ├── tilt up (in packages/opsiforce/backend):
   │     Builds backend and runtime proxy dev images, deploys them via Helm,
-  │     syncs source edits into pods, and port-forwards 3001 + 9229.
+  │     syncs source edits into pods, and port-forwards 3010 (→pod 3001) + 9229.
   │
   └── @opsiforce/frontend minikube-dev:
         1. Starts Vite dev server on :8084 (HMR)
@@ -78,19 +78,19 @@ yarn run dev-opsiforce-only
 
 ```bash
 # List projects
-curl http://localhost:3001/api/projects
+curl http://localhost:3010/api/projects
 
 # Create a project
-curl -X POST http://localhost:3001/api/projects
+curl -X POST http://localhost:3010/api/projects
 
 # Get a specific project
-curl http://localhost:3001/api/projects/{project-id}
+curl http://localhost:3010/api/projects/{project-id}
 
 # Delete a project (kills pod, removes from DB)
-curl -X DELETE http://localhost:3001/api/projects/{project-id}
+curl -X DELETE http://localhost:3010/api/projects/{project-id}
 
 # Health check
-curl http://localhost:3001/api/health
+curl http://localhost:3010/api/health
 ```
 
 ### Individual Commands

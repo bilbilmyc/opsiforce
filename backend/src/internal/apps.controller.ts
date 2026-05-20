@@ -13,7 +13,7 @@ interface PinnedAppResponse {
   projectId: string
   name: string | null
   description: string | null
-  appUrl: string
+  url: string
   pinnedAt: string | null
 }
 
@@ -58,11 +58,12 @@ export class InternalAppsController {
       .orderBy(desc(projectApps.pinnedAt))
 
     const appsHostname = this.configService.getOrThrow<string>("appsHostname")
+    const embedAppsHostname = this.configService.get<string>("embedAppsHostname")
     return rows.map((row) => ({
       projectId: row.projectId,
       name: row.name ?? row.projectTitle,
       description: row.description,
-      appUrl: `https://${row.projectId}.${appsHostname}/`,
+      url: `https://${row.projectId}.${embedAppsHostname || appsHostname}/`,
       pinnedAt: row.pinnedAt ? row.pinnedAt.toISOString() : null,
     }))
   }

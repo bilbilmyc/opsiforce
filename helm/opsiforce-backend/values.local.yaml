@@ -61,6 +61,7 @@ config:
   mailgunSender: "local@sima-local"
   mailgunUrl: "http://host.minikube.internal:8089"
   appsHostname: "apps.opsiforce.localtest.me"
+  embedAppsHostname: "embed.opsiforce.localtest.me"
   webappServiceName: "proxy-app"
   webappServicePort: "3002"
   oidcPluginSecret: "1198c2e7c224237098895d53543b074c"
