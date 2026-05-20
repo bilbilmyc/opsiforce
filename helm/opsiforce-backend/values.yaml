@@ -54,7 +54,6 @@ config:
   mailgunDomain: ""
   mailgunSender: ""
   appsHostname: ""
-  embedAppsHostname: ""
   webappServiceName: ""
   webappServicePort: "3002"
   oidcPluginSecret: ""

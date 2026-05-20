@@ -59,9 +59,6 @@ data:
   {{- if .Values.config.appsHostname }}
   APPS_HOSTNAME: {{ .Values.config.appsHostname | quote }}
   {{- end }}
-  {{- if .Values.config.embedAppsHostname }}
-  EMBED_APPS_HOSTNAME: {{ .Values.config.embedAppsHostname | quote }}
-  {{- end }}
   {{- if .Values.config.webappServiceName }}
   WEBAPP_SERVICE_NAME: {{ .Values.config.webappServiceName | quote }}
   {{- end }}

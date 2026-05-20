@@ -32,7 +32,6 @@ export class TenantSettingsService {
 
   async update(
     tenantId: string,
-    tenantName: string,
     dto: UpdateTenantSettingsDto,
     groupsHeader: string | undefined,
   ): Promise<TenantSettingsResponse> {
@@ -41,15 +40,13 @@ export class TenantSettingsService {
       throw new ForbiddenException("makaraTenantName is required")
     }
 
-    if (submitted !== tenantName) {
-      const allowed = groupsHeader
-        ? this.tenantService.parseGroupsByPrefix(groupsHeader, MAKARA_TENANT_GROUP_PREFIX)
-        : []
-      if (!allowed.includes(submitted)) {
-        throw new ForbiddenException(
-          "Selected Makara tenant is not in your Makara tenants",
-        )
-      }
+    const allowed = groupsHeader
+      ? this.tenantService.parseGroupsByPrefix(groupsHeader, MAKARA_TENANT_GROUP_PREFIX)
+      : []
+    if (!allowed.includes(submitted)) {
+      throw new ForbiddenException(
+        "Selected Makara tenant is not in your Makara tenants",
+      )
     }
 
     await db
