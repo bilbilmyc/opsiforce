@@ -4,7 +4,6 @@ import { usePermissions } from "~/api/permissions"
 import { useTenantSettings, useUpdateTenantSettings } from "~/api/tenant-settings"
 import { parseMakaraTenants, useUserInfo } from "~/api/user"
 import { Permission } from "~/constants/permissions"
-import { createTenantState } from "~/lib/tenant-state"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog"
 import { Button } from "~/components/ui/button"
 import {
@@ -27,21 +26,14 @@ export default function TenantSettings(props: {
   const settings = useTenantSettings()
   const userInfo = useUserInfo()
   const update = useUpdateTenantSettings()
-  const [currentTenantName] = createTenantState()
 
+  const availableMakaraTenants = createMemo(() => parseMakaraTenants(userInfo.data?.groups ?? []))
   const savedMakaraTenantName = () => settings.data?.makaraTenantName ?? null
-
-  const dropdownOptions = createMemo(() => {
-    const groups = parseMakaraTenants(userInfo.data?.groups ?? [])
-    const own = currentTenantName()
-    if (!own) return groups
-    return groups.includes(own) ? groups : [own, ...groups]
-  })
 
   const savedIsInList = createMemo(() => {
     const saved = savedMakaraTenantName()
     if (!saved) return false
-    return dropdownOptions().includes(saved)
+    return availableMakaraTenants().includes(saved)
   })
 
   const [selected, setSelected] = createSignal<string | null>(null)
@@ -49,11 +41,11 @@ export default function TenantSettings(props: {
 
   createEffect(() => {
     const saved = savedMakaraTenantName()
-    setSelected(saved && dropdownOptions().includes(saved) ? saved : null)
+    setSelected(saved && availableMakaraTenants().includes(saved) ? saved : null)
     setDirty(false)
   })
 
-  const canSave = () => dirty() && !!selected() && dropdownOptions().includes(selected() ?? "")
+  const canSave = () => dirty() && !!selected() && availableMakaraTenants().includes(selected() ?? "")
 
   const handleSave = async () => {
     const value = selected()
@@ -107,7 +99,7 @@ export default function TenantSettings(props: {
                 fallback={<Skeleton class="h-8 w-full" />}
               >
                 <Show
-                  when={dropdownOptions().length > 0}
+                  when={availableMakaraTenants().length > 0}
                   fallback={
                     <div class="rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
                       You are not a member of any Makara tenants.
@@ -115,7 +107,7 @@ export default function TenantSettings(props: {
                   }
                 >
                   <Select
-                    options={dropdownOptions()}
+                    options={availableMakaraTenants()}
                     placeholder={
                       <span class="text-muted-foreground">Select a Makara tenant</span>
                     }
