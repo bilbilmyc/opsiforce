@@ -124,7 +124,7 @@ Use this only when the shared infrastructure is already up and you do not need t
 | DB viewer | `https://{project}.db.opsiforce.localtest.me` |
 | Bifrost dashboard | `https://bifrost.opsiforce.localtest.me` |
 | Tilt UI | `https://tilt.opsiforce.localtest.me` |
-| Backend direct port-forward | `http://localhost:3001` |
+| Backend direct port-forward | `http://localhost:3010` |
 | Frontend Vite server | `http://localhost:8084` |
 | Drizzle Studio | `http://localhost:4983` |
 

@@ -153,7 +153,7 @@ export default defineConfig(({ mode }) => ({
     allowedHosts: ["host.minikube.internal", ".opsiforce.localtest.me"],
     proxy: {
       "/api": {
-        target: "http://localhost:3001",
+        target: "http://localhost:3010",
         changeOrigin: true,
         ws: true,
       },

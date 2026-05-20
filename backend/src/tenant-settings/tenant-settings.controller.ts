@@ -21,6 +21,6 @@ export class TenantSettingsController {
     @Body() body: UpdateTenantSettingsDto,
     @Headers("x-forwarded-groups") groupsHeader: string | undefined,
   ): Promise<TenantSettingsResponse> {
-    return this.service.update(tenant.tenantId, body, groupsHeader)
+    return this.service.update(tenant.tenantId, tenant.tenantName, body, groupsHeader)
   }
 }

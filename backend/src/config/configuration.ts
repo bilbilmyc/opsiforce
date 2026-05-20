@@ -106,6 +106,7 @@ export default () => {
     mailgunSender: process.env.MAILGUN_SENDER || "",
     mailgunUrl: process.env.MAILGUN_URL || "",
     appsHostname: process.env.APPS_HOSTNAME || "apps.opsiforce.localtest.me",
+    embedAppsHostname: process.env.EMBED_APPS_HOSTNAME || "",
     webappServiceName: process.env.WEBAPP_SERVICE_NAME || "proxy-app",
     webappServicePort: parseInt(process.env.WEBAPP_SERVICE_PORT || "3002", 10),
     oidcPluginSecret:

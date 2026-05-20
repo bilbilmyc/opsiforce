@@ -67,11 +67,11 @@ yarn workspace @opsiforce/backend run db:generate --name update
 ## Testing the API
 
 ```bash
-curl http://localhost:3001/api/projects              # List projects
-curl -X POST http://localhost:3001/api/projects      # Create project
-curl http://localhost:3001/api/projects/{id}          # Get project
-curl -X DELETE http://localhost:3001/api/projects/{id} # Delete project
-curl http://localhost:3001/api/health                 # Health check
+curl http://localhost:3010/api/projects              # List projects
+curl -X POST http://localhost:3010/api/projects      # Create project
+curl http://localhost:3010/api/projects/{id}          # Get project
+curl -X DELETE http://localhost:3010/api/projects/{id} # Delete project
+curl http://localhost:3010/api/health                 # Health check
 ```
 
 ---
@@ -86,7 +86,7 @@ curl http://localhost:3001/api/health                 # Health check
 | DB viewer | `https://{project}.db.opsiforce.localtest.me` | Routed through runtime DB proxy |
 | Bifrost dashboard | `https://bifrost.opsiforce.localtest.me` | Local Bifrost dashboard |
 | Tilt UI | `https://tilt.opsiforce.localtest.me` | Requires `tilt up --host=0.0.0.0`, handled by backend script |
-| NestJS backend | `localhost:3001` | Tilt port-forward for direct API calls |
+| NestJS backend | `localhost:3010` | Tilt port-forward for direct API calls |
 | Node debug | `localhost:9229` | Tilt port-forward |
 | Solid.js frontend | `localhost:8084` | Vite HMR on host |
 | PostgreSQL | `localhost:5435` | Minikube port-forward |
