@@ -17,6 +17,7 @@ import { createDirectoryRouter } from "./platform"
 export interface OpenCodeConnectionOptions {
   projectId: string
   status: Accessor<ProjectStatus | undefined>
+  currentTitle: Accessor<string | null | undefined>
   initialPrompt?: string
 }
 
@@ -31,6 +32,7 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
   function syncTitle(title: string | undefined) {
     if (titleSynced || !title) return
     titleSynced = true
+    if (options.currentTitle()) return
     api
       .patch(`/projects/${options.projectId}`, { title })
       .then(() => qc.invalidateQueries({ queryKey: projectKeys.all }))
