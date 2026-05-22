@@ -694,14 +694,14 @@ export class ProjectService implements OnApplicationBootstrap {
     const project = await this.findOne(id, tenantId)
 
     if (isPinned) {
-      if (project.authMode !== "public" && project.authMode !== "makara") {
+      if (project.authMode !== "public") {
         throw new BadRequestException(
-          `AUTH_MODE_NOT_COMPATIBLE: project auth mode must be "public" or "makara" to pin (current: "${project.authMode}"). Change the auth mode in project settings before pinning.`,
+          "Only apps with public auth can be pinned to Makara. Change the project's auth mode to public in Settings before pinning.",
         )
       }
       if (!project.hasApp) {
         throw new BadRequestException(
-          "APP_NOT_DETECTED: this project has no detectable app yet. Make sure the project's web server is running and serves /api/app-meta before pinning.",
+          "This project has no detectable app yet. Make sure the project's web server is running before pinning.",
         )
       }
       await db

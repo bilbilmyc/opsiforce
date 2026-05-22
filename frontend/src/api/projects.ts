@@ -48,7 +48,8 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
       if (typeof data === "string" && data.length > 0) {
         try {
           const payload = JSON.parse(data) as ProjectStatusErrorPayload
-          setError(new ApiError(statusForCode(payload.code)))
+          const status = statusForCode(payload.code)
+          setError(new ApiError(status, payload.message ?? `Error: ${status}`))
           closed = true
           events.close()
           return
