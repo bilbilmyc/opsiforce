@@ -39,25 +39,32 @@ export function createResizablePanel(
 
   function startResize(event: PointerEvent) {
     event.preventDefault()
+    const target = event.currentTarget as HTMLElement | null
+    const pointerId = event.pointerId
+    target?.setPointerCapture?.(pointerId)
     setResizing(true)
     const startX = event.clientX
     const startWidth = width()
 
     const onMove = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return
       const delta =
         options.direction === "left"
           ? startX - e.clientX
           : e.clientX - startX
       setWidth(clamp(startWidth + delta))
     }
-    const onUp = () => {
+    const finish = (e: PointerEvent) => {
+      if (e.pointerId !== pointerId) return
       setResizing(false)
       window.removeEventListener("pointermove", onMove)
-      window.removeEventListener("pointerup", onUp)
+      window.removeEventListener("pointerup", finish)
+      window.removeEventListener("pointercancel", finish)
       window.localStorage.setItem(options.storageKey, String(width()))
     }
     window.addEventListener("pointermove", onMove)
-    window.addEventListener("pointerup", onUp)
+    window.addEventListener("pointerup", finish)
+    window.addEventListener("pointercancel", finish)
   }
 
   const onWindowResize = () => setWidth((w) => clamp(w))
