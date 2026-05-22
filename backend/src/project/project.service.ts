@@ -444,6 +444,7 @@ export class ProjectService implements OnApplicationBootstrap {
         id: projects.id,
         status: projects.status,
         workspaceId: projects.workspaceId,
+        title: projects.title,
       })
       .from(projects)
       .where(and(eq(projects.id, projectId), eq(projects.tenantId, tenantId)))
@@ -459,6 +460,7 @@ export class ProjectService implements OnApplicationBootstrap {
       id: row.id,
       status,
       workspaceId: row.workspaceId,
+      title: row.title,
       operation: operation ?? null,
       app,
     }

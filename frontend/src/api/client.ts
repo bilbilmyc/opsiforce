@@ -99,6 +99,7 @@ export interface ProjectState {
   id: string
   status: ProjectStatus
   workspaceId: string | null
+  title: string | null
   operation: ProjectOperation | null
   app: ProjectAppMeta | null
 }
