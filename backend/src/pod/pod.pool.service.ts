@@ -1,129 +1,127 @@
 import { Injectable, Logger, OnModuleInit } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
-import { eq } from "drizzle-orm"
-import { db, pgClient } from "../../db"
-import { pods, projects } from "../../db/schema"
-import { PodService } from "./pod.service"
 import crypto from "crypto"
+import { PodService } from "./pod.service"
+import { PodCacheService } from "./pod.cache.service"
 
-type ClaimedWarmPod = typeof pods.$inferSelect
+const WARM_POOL_LABEL_SELECTOR = "app=opsiforce-agent,opsiforce.io/pool=warm"
+const STALE_WARM_POD_MS = 5 * 60 * 1000
 
 @Injectable()
 export class PodPoolService implements OnModuleInit {
   private readonly logger = new Logger(PodPoolService.name)
   private readonly warmPoolSize: number
+  private replenishing = false
+  private replenishQueued = false
 
   constructor(
     private readonly podService: PodService,
+    private readonly podCache: PodCacheService,
     private readonly configService: ConfigService,
   ) {
     this.warmPoolSize = this.configService.getOrThrow<number>("warmPoolSize")
+    this.podCache.onDelete((_name, pod) => {
+      if (pod.metadata?.labels?.["opsiforce.io/pool"] === "warm") {
+        void this.replenish().catch((err) => {
+          this.logger.warn(`Replenish on warm pod delete event failed: ${(err as Error).message}`)
+        })
+      }
+    })
   }
 
   async onModuleInit() {
-    await this.cleanupOrphanedPods()
-    await this.initialize()
+    await this.replenish()
   }
 
-  async initialize(): Promise<void> {
-    const warmPods = await db
-      .select()
-      .from(pods)
-      .where(eq(pods.status, "warm"))
-
-    const deficit = this.warmPoolSize - warmPods.length
-    if (deficit > 0) {
-      await this.replenish(deficit)
+  async replenish(): Promise<void> {
+    if (this.replenishing) {
+      this.replenishQueued = true
+      return
+    }
+    this.replenishing = true
+    try {
+      do {
+        this.replenishQueued = false
+        await this.runReplenish()
+      } while (this.replenishQueued)
+    } finally {
+      this.replenishing = false
     }
   }
 
-  async replenish(count?: number): Promise<void> {
-    const warmPods = await db
-      .select()
-      .from(pods)
-      .where(eq(pods.status, "warm"))
+  private async runReplenish(): Promise<void> {
+    const warmPods = await this.podService.listPods(WARM_POOL_LABEL_SELECTOR)
+    const now = Date.now()
 
-    const toCreate = count ?? this.warmPoolSize - warmPods.length
-    if (toCreate <= 0) return
+    let viable = 0
+    const cleanup: Promise<void>[] = []
 
-    const promises = Array.from({ length: toCreate }, () => this.createWarmPod())
-    await Promise.allSettled(promises)
+    warmPods.forEach((pod) => {
+      const name = pod.metadata?.name
+      if (!name) return
+
+      const ageMs = this.podService.podAgeMs(pod, now)
+      const ready = this.podService.isPodReady(pod)
+      const failure = this.podService.inspectFailureReason(pod)
+      const deleting = !!pod.metadata?.deletionTimestamp
+
+      if (deleting) return
+
+      if (failure === "ImagePullBackOff" || (!ready && ageMs > STALE_WARM_POD_MS)) {
+        this.logger.warn(`Cleaning up stuck warm pod ${name} (ready=${ready}, ageMs=${ageMs}, failure=${failure})`)
+        cleanup.push(
+          this.podService.deletePod(name).catch((err) => {
+            this.logger.warn(`Failed to delete stuck warm pod ${name}: ${(err as Error).message}`)
+          }),
+        )
+        return
+      }
+
+      viable++
+    })
+
+    await Promise.allSettled(cleanup)
+
+    const deficit = this.warmPoolSize - viable
+    if (deficit <= 0) return
+
+    const creations = Array.from({ length: deficit }, () => this.createWarmPod())
+    await Promise.allSettled(creations)
   }
 
-  async claimWarmPod(): Promise<typeof pods.$inferSelect | null> {
-    const claimed = await pgClient.begin(async (tx) => {
-      const rows = await tx.unsafe<ClaimedWarmPod[]>(`
-        delete from pods
-        where id = (
-          select id
-          from pods
-          where status = 'warm'
-          order by created_at
-          for update skip locked
-          limit 1
-        )
-        returning
-          id,
-          pod_name as "podName",
-          status,
-          project_id as "projectId",
-          pod_ip as "podIp",
-          created_at as "createdAt",
-          updated_at as "updatedAt"
-      `)
+  async claimWarmPod(): Promise<string | null> {
+    const warmPods = await this.podService.listPods(WARM_POOL_LABEL_SELECTOR)
 
-      return rows[0] ?? null
-    })
+    const candidates = warmPods
+      .filter((pod) => !pod.metadata?.deletionTimestamp && this.podService.isPodReady(pod))
+      .sort((a, b) => this.podService.podAgeMs(b) - this.podService.podAgeMs(a))
 
-    if (!claimed) return null
+    for (const pod of candidates) {
+      const name = pod.metadata?.name
+      const resourceVersion = pod.metadata?.resourceVersion
+      if (!name || !resourceVersion) continue
 
-    void this.replenish().catch((err) => {
-      this.logger.warn(`Failed to replenish warm pool after claim: ${err.message}`)
-    })
+      const claimed = await this.podService.deletePodIfMatches(name, resourceVersion)
+      if (claimed) {
+        void this.replenish().catch((err) => {
+          this.logger.warn(`Failed to replenish warm pool after claim: ${err.message}`)
+        })
+        return name
+      }
+    }
 
-    return claimed
+    return null
   }
 
   private async createWarmPod(): Promise<void> {
     const id = crypto.randomUUID()
     const podName = `opsiforce-agent-${id.slice(0, 8)}`
 
-    await this.podService.createWarmPod(podName)
-
-    const podIp = await this.waitForPodIp(podName)
-
-    await db.insert(pods).values({
-      id,
-      podName,
-      status: "warm",
-      podIp,
-    })
-  }
-
-  private async waitForPodIp(podName: string, maxAttempts = 30): Promise<string | undefined> {
-    for (let i = 0; i < maxAttempts; i++) {
-      const ip = await this.podService.getPodIp(podName)
-      if (ip) return ip
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-    }
-    return undefined
-  }
-
-  private async cleanupOrphanedPods(): Promise<void> {
-    const k8sPods = await this.podService.listPods("app=opsiforce-agent")
-    const dbPodRows = await db.select({ podName: pods.podName }).from(pods)
-    const dbProjectRows = await db.select({ podName: projects.podName }).from(projects)
-
-    const knownNames = new Set([
-      ...dbPodRows.map((p) => p.podName),
-      ...dbProjectRows.map((p) => p.podName).filter(Boolean),
-    ])
-
-    for (const k8sPod of k8sPods) {
-      const name = k8sPod.metadata?.name
-      if (!name || knownNames.has(name)) continue
-      this.logger.warn(`Deleting orphaned K8s pod: ${name}`)
-      await this.podService.deletePod(name).catch(() => {})
+    try {
+      await this.podService.createWarmPod(podName)
+      this.logger.log(`Created warm pod ${podName}`)
+    } catch (err) {
+      this.logger.warn(`Failed to create warm pod ${podName}: ${(err as Error).message}`)
     }
   }
 }

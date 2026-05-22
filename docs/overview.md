@@ -85,7 +85,7 @@ packages/opsiforce/
 │   │   ├── gateway/             Service gateway — per-project tokens for external APIs (email, SMS, etc.)
 │   │   └── timeout/             Redis TTL tracking + keyspace notification listener
 │   └── db/
-│       ├── schema.ts            Drizzle schema (projects + pods tables)
+│       ├── schema.ts            Drizzle schema (projects, settings, tenants, jobs)
 │       ├── index.ts             Database connection
 │       └── migrations/          Drizzle Kit generated SQL
 │

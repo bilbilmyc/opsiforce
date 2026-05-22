@@ -108,7 +108,7 @@ export class ProxyController {
     return {
       state: ensured.state,
       upstream,
-      podName: project.podName,
+      podName: this.proxyService.getAssignedPodName(project.id),
       directory: project.directory,
     }
   }

@@ -185,10 +185,10 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
   }
 
   private needsDeferredReload(
-    project: { podName: string | null; podIp: string | null },
+    project: { podIp: string | null },
     summary: AgentWorkspaceMigrationSummary,
   ): boolean {
-    if (!project.podName && !project.podIp) return false
+    if (!project.podIp) return false
     return summary.requiresOpenCodeReload || summary.requiresPodRecreate
   }
 

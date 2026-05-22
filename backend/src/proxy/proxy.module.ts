@@ -4,9 +4,10 @@ import { ProxyController } from "./proxy.controller"
 import { ProjectModule } from "../project/project.module"
 import { TenantModule } from "../tenant/tenant.module"
 import { AgentUpdateModule } from "../agent-update/agent-update.module"
+import { PodModule } from "../pod/pod.module"
 
 @Module({
-  imports: [ProjectModule, TenantModule, AgentUpdateModule],
+  imports: [ProjectModule, TenantModule, AgentUpdateModule, PodModule],
   providers: [ProxyService],
   controllers: [ProxyController],
   exports: [ProxyService],

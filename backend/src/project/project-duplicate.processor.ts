@@ -80,7 +80,7 @@ export class ProjectDuplicateProcessor extends WorkerHost {
       await rm(targetPath, { recursive: true, force: true })
       await rename(tempPath, targetPath)
       await this.markStarting(duplicateJobId, targetProjectId)
-      this.projectService.queueProjectStartup(targetProjectId)
+      await this.projectService.requestStartupForId(targetProjectId)
       this.logger.log(`Duplicated project ${sourceProjectId} to ${targetProjectId} in ${Date.now() - started}ms`)
     } catch (err) {
       if (tempPath) await rm(tempPath, { recursive: true, force: true }).catch(() => {})

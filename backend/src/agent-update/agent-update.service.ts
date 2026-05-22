@@ -8,6 +8,7 @@ import { join } from "node:path"
 import { db } from "../../db"
 import { agents, projectAgentUpdates } from "../../db/schema"
 import { ProjectService } from "../project/project.service"
+import { ProjectStatus } from "../project/project.types"
 import {
   AGENT_WORKSPACE_UPDATE_QUEUE,
   AgentUpdateStatus,
@@ -205,7 +206,11 @@ export class AgentUpdateService implements OnApplicationBootstrap {
     if (!update.requiresOpenCodeReload && !update.requiresPodRecreate) {
       return this.applyReload(update.id, "skipped:not-required")
     }
-    if (!project.podName && !project.podIp) {
+    if (
+      project.status === ProjectStatus.Suspended ||
+      project.status === ProjectStatus.Disabled ||
+      project.status === ProjectStatus.Failed
+    ) {
       return this.applyReload(update.id, "skipped:no-active-pod")
     }
     if (!project.podIp) {
@@ -217,7 +222,6 @@ export class AgentUpdateService implements OnApplicationBootstrap {
     if (session.busy) return this.deferReload(update.id, "pending:active-session")
 
     if (update.requiresPodRecreate) {
-      if (!project.podName) return this.deferReload(update.id, "pending:no-pod-name")
       try {
         await this.projectService.reassignPodById(project.id)
         return this.applyReload(update.id, "pod-recreate-requested", { podRecreated: true })

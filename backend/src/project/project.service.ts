@@ -9,17 +9,16 @@ import {
 } from "@nestjs/common"
 import { InjectQueue } from "@nestjs/bullmq"
 import { ConfigService } from "@nestjs/config"
-import { eq, and, desc, asc, inArray, isNull, or, ne, sql, type SQL } from "drizzle-orm"
+import { eq, and, desc, asc, inArray, isNull, or, sql, type SQL } from "drizzle-orm"
 import { Queue } from "bullmq"
 import crypto from "crypto"
 import path from "path"
 import { rename, writeFile } from "fs/promises"
-import { db, pgClient } from "../../db"
+import { db } from "../../db"
 import {
   projectSettings,
   projects,
   projectApps,
-  pods,
   deletedProjects,
   workspaceMembers,
   workspaces,
@@ -27,7 +26,7 @@ import {
   tenantSettings,
   projectDuplicateJobs,
 } from "../../db/schema"
-import { PodService } from "../pod/pod.service"
+import { PodService, PodStartupFailedError } from "../pod/pod.service"
 import { PodPoolService } from "../pod/pod.pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
 import { BifrostService } from "../bifrost/bifrost.service"
@@ -53,6 +52,9 @@ import {
 const APP_NAME_MIN_LENGTH = 1
 const APP_NAME_MAX_LENGTH = 80
 const APP_DESCRIPTION_MAX_LENGTH = 500
+const CRASH_LOOP_RECREATE_AGE_MS = 60 * 1000
+const STARTUP_RETRY_BASE_MS = 5 * 1000
+const STARTUP_RETRY_MAX_MS = 5 * 60 * 1000
 
 interface AppMetaPatch {
   name?: string
@@ -110,7 +112,7 @@ import {
 type ProjectActivityKind = "agent" | "app"
 
 export interface EnsureProjectResult {
-  state: "ready" | "starting" | "disabled"
+  state: "ready" | "starting" | "disabled" | "failed"
   project: ProjectResponse
 }
 
@@ -131,7 +133,6 @@ const projectSelectFields = {
   description: projects.description,
   directory: projects.directory,
   status: projects.status,
-  podName: projects.podName,
   podIp: projects.podIp,
   sessionId: projects.sessionId,
   platformVersion: projects.platformVersion,
@@ -154,6 +155,8 @@ const projectSelectFields = {
 export class ProjectService implements OnApplicationBootstrap {
   private readonly logger = new Logger(ProjectService.name)
   private readonly startupTasks = new Map<string, Promise<void>>()
+  private readonly startupRetries = new Map<string, number>()
+  private readonly recreateRequests = new Set<string>()
 
   constructor(
     private readonly podService: PodService,
@@ -176,12 +179,61 @@ export class ProjectService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    await this.reconcileProjects().catch((err) => {
-      this.logger.warn(`Failed to reconcile projects on startup: ${err.message}`)
+    await this.cleanupOrphanedAssignedPods().catch((err) => {
+      this.logger.warn(`Failed to clean up orphaned assigned pods: ${err.message}`)
     })
     await this.recoverDuplicateJobs().catch((err) => {
       this.logger.warn(`Failed to recover duplicate jobs on startup: ${err.message}`)
     })
+    await this.resumeStartingProjects().catch((err) => {
+      this.logger.warn(`Failed to resume starting projects: ${err.message}`)
+    })
+  }
+
+  private async resumeStartingProjects(): Promise<void> {
+    const rows = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.status, ProjectStatus.Starting))
+
+    for (const { id } of rows) {
+      this.spawnStartupWorker(id)
+    }
+
+    if (rows.length > 0) {
+      this.logger.log(`Resumed startup workers for ${rows.length} project(s) in 'starting' state`)
+    }
+  }
+
+  private async cleanupOrphanedAssignedPods(): Promise<void> {
+    const assignedPods = await this.podService.listPods("app=opsiforce-agent,opsiforce.io/pool=assigned")
+    const podRefs = assignedPods
+      .map((pod) => ({
+        name: pod.metadata?.name ?? null,
+        projectId: pod.metadata?.labels?.["opsiforce.io/project-id"] ?? null,
+      }))
+      .filter((pod): pod is { name: string; projectId: string } => !!pod.name && !!pod.projectId)
+
+    if (podRefs.length === 0) return
+
+    const projectIds = Array.from(new Set(podRefs.map((pod) => pod.projectId)))
+    const existingRows = await db
+      .select({ id: projects.id, status: projects.status })
+      .from(projects)
+      .where(inArray(projects.id, projectIds))
+    const projectsExpectingPod = new Set(
+      existingRows
+        .filter((row) => row.status === ProjectStatus.Starting || row.status === ProjectStatus.Active)
+        .map((row) => row.id),
+    )
+    const orphanedPods = podRefs.filter((pod) => !projectsExpectingPod.has(pod.projectId))
+
+    await Promise.allSettled(
+      orphanedPods.map((pod) => {
+        this.logger.warn(`Deleting orphaned assigned pod ${pod.name} for missing project ${pod.projectId}`)
+        return this.safeDeletePod(pod.name, `orphaned project ${pod.projectId}`)
+      }),
+    )
   }
 
 
@@ -193,7 +245,6 @@ export class ProjectService implements OnApplicationBootstrap {
     const id = crypto.randomUUID()
     const directory = `projects/${tenantId}/${id}`
     const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
-    const podName = this.podService.assignedPodName(id)
     const agentId = dto?.agentId ?? (await this.agentService.getDefaultAgentId())
     const { defaultTimeoutIdle: timeoutIdle, defaultAppTimeoutIdle: appTimeoutIdle } =
       await this.defaultsService.getTenantTimeouts(tenantId)
@@ -208,7 +259,6 @@ export class ProjectService implements OnApplicationBootstrap {
         description: dto?.description ?? null,
         directory,
         status: ProjectStatus.Starting,
-        podName,
         podIp: null,
         platformVersion,
       })
@@ -223,7 +273,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
     await this.createBifrostResources(id, tenantId)
     await this.createGatewayKey(id, tenantId)
-    this.queueProjectStartup(id)
+    this.spawnStartupWorker(id)
 
     return this.findOne(id, tenantId)
   }
@@ -235,7 +285,6 @@ export class ProjectService implements OnApplicationBootstrap {
     const duplicateJobId = crypto.randomUUID()
     const directory = `projects/${tenantId}/${id}`
     const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
-    const podName = this.podService.assignedPodName(id)
     const title = dto?.title ?? (source.title ? `${source.title} (copy)` : null)
 
     await db.transaction(async (tx) => {
@@ -248,7 +297,6 @@ export class ProjectService implements OnApplicationBootstrap {
         description: source.description,
         directory,
         status: ProjectStatus.Starting,
-        podName,
         podIp: null,
         platformVersion,
       })
@@ -339,7 +387,7 @@ export class ProjectService implements OnApplicationBootstrap {
     return project
   }
 
-  
+
   async findOneForUser(params: {
     projectId: string
     tenantId: string
@@ -498,32 +546,28 @@ export class ProjectService implements OnApplicationBootstrap {
 
   async remove(id: string, tenantId: string): Promise<void> {
     const project = await this.findOne(id, tenantId)
-    const podName = project.podName ?? this.podService.assignedPodName(id)
+    const podName = this.podService.assignedPodName(id)
 
-    await this.podService.deletePod(podName).catch(() => {})
-    await this.deleteProjectPods(id, podName)
-
-    if (this.bifrostService.isEnabled()) {
-      await this.bifrostService.revokeProjectKeys(id).catch((err) => {
-        this.logger.warn(`Failed to revoke Bifrost keys for project ${id}: ${(err as Error).message}`)
-      })
-    }
-
-    await this.gatewayKeyService.revokeKeys(id).catch((err) => {
-      this.logger.warn(`Failed to revoke gateway keys for project ${id}: ${(err as Error).message}`)
-    })
-
-    await this.scheduleService.removeAllForProject(id).catch((err) => {
-      this.logger.warn(`Failed to remove schedules for project ${id}: ${(err as Error).message}`)
-    })
-    await this.timeoutService.clear(id)
     this.appService.stopPolling(id)
     this.appService.invalidate(id)
+
+    await Promise.allSettled([
+      this.safeDeletePod(podName, `removing project ${id}`),
+      this.bifrostService.isEnabled()
+        ? this.bifrostService.revokeProjectKeys(id).catch((err) => {
+            this.logger.warn(`Failed to revoke Bifrost keys for project ${id}: ${(err as Error).message}`)
+          })
+        : Promise.resolve(),
+      this.gatewayKeyService.revokeKeys(id).catch((err) => {
+        this.logger.warn(`Failed to revoke gateway keys for project ${id}: ${(err as Error).message}`)
+      }),
+      this.scheduleService.removeAllForProject(id).catch((err) => {
+        this.logger.warn(`Failed to remove schedules for project ${id}: ${(err as Error).message}`)
+      }),
+      this.timeoutService.clear(id),
+    ])
+
     await db.delete(projects).where(eq(projects.id, id))
-    this.startupTasks.delete(id)
-    await this.podPoolService.replenish().catch((err) => {
-      this.logger.warn(`Failed to replenish warm pool after deleting project ${id}: ${err.message}`)
-    })
     await db
       .insert(deletedProjects)
       .values({
@@ -532,6 +576,9 @@ export class ProjectService implements OnApplicationBootstrap {
         directory: project.directory,
       })
       .onConflictDoNothing()
+    await this.podPoolService.replenish().catch((err) => {
+      this.logger.warn(`Failed to replenish warm pool after deleting project ${id}: ${err.message}`)
+    })
   }
 
   async disable(id: string, tenantId: string): Promise<ProjectResponse> {
@@ -540,19 +587,17 @@ export class ProjectService implements OnApplicationBootstrap {
       throw new BadRequestException("Project is already disabled")
     }
 
-    if (project.podName) {
-      await this.podService.deletePod(project.podName).catch(() => {})
-      await this.deleteProjectPods(id, project.podName)
-    }
+    const podName = this.podService.assignedPodName(id)
 
-    await this.timeoutService.clear(id)
-    this.startupTasks.delete(id)
+    await Promise.allSettled([
+      this.safeDeletePod(podName, `disabling project ${id}`),
+      this.timeoutService.clear(id),
+    ])
 
     await db
       .update(projects)
       .set({
         status: ProjectStatus.Disabled,
-        podName: null,
         podIp: null,
         updatedAt: new Date(),
       })
@@ -573,18 +618,16 @@ export class ProjectService implements OnApplicationBootstrap {
       throw new BadRequestException("Project is not disabled")
     }
 
-    const podName = this.podService.assignedPodName(id)
     await db
       .update(projects)
       .set({
         status: ProjectStatus.Starting,
-        podName,
         podIp: null,
         updatedAt: new Date(),
       })
       .where(eq(projects.id, id))
 
-    this.queueProjectStartup(id)
+    this.spawnStartupWorker(id)
     await this.projectEventsService.publish(id)
     return this.findOne(id, tenantId)
   }
@@ -703,6 +746,11 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.requestProjectStartup(project, { deleteExistingPod: true })
   }
 
+  async requestStartupForId(id: string): Promise<void> {
+    const project = await this.findOneById(id)
+    await this.requestProjectStartup(project, { deleteExistingPod: false })
+  }
+
   async touchActivity(projectId: string): Promise<void> {
     await this.timeoutService.touch(projectId)
     await db.update(projects).set({ lastActiveAt: new Date(), updatedAt: new Date() }).where(eq(projects.id, projectId))
@@ -718,40 +766,25 @@ export class ProjectService implements OnApplicationBootstrap {
       return { state: "disabled", project }
     }
 
+    if (project.status === ProjectStatus.Failed) {
+      return { state: "failed", project }
+    }
+
     this.recordActivity(project.id, activity)
 
+    if (project.status === ProjectStatus.Suspended) {
+      return this.wakeSuspendedProject(project)
+    }
+
     if (project.status === ProjectStatus.Starting) {
-      this.queueProjectStartup(project.id)
-      return { state: "starting", project }
+      return this.handleStartingProject(project)
     }
 
-    if (project.status === ProjectStatus.Active && project.podName) {
-      if (project.podIp) {
-        return { state: "ready", project }
-      }
-
-      const pod = await this.podService.getPod(project.podName).catch(() => null)
-      if (pod && this.podService.isPodReady(pod)) {
-        const podIp = pod.status?.podIP ?? null
-        if (podIp) {
-          await Promise.all([
-            this.ensureAssignedPodRow(project.id, project.podName, podIp),
-            db.update(projects).set({ podIp, updatedAt: new Date() }).where(eq(projects.id, project.id)),
-          ])
-          return { state: "ready", project: { ...project, podIp } }
-        }
-      }
-
-      const startingProject = await this.requestProjectStartup(project, {
-        deleteExistingPod: !!pod,
-      })
-      return { state: "starting", project: startingProject }
+    if (project.podIp) {
+      return this.verifyCachedActiveProject(project)
     }
 
-    const startingProject = await this.requestProjectStartup(project, {
-      deleteExistingPod: false,
-    })
-    return { state: "starting", project: startingProject }
+    return this.verifyActiveProject(project)
   }
 
   async handleProxyFailure(projectId: string, tenantId: string): Promise<boolean> {
@@ -764,24 +797,167 @@ export class ProjectService implements OnApplicationBootstrap {
 
   private async handleProxyFailureForProject(project: ProjectResponse): Promise<boolean> {
     if (project.status === ProjectStatus.Disabled) return false
+    if (project.status === ProjectStatus.Failed) return false
 
     if (project.status === ProjectStatus.Starting) {
-      this.queueProjectStartup(project.id)
+      this.spawnStartupWorker(project.id)
       return true
     }
 
-    if (project.status !== ProjectStatus.Active || !project.podName) {
-      await this.requestProjectStartup(project, { deleteExistingPod: false })
-      return true
-    }
-
-    const pod = await this.podService.getPod(project.podName).catch(() => null)
+    const podName = this.podService.assignedPodName(project.id)
+    const pod = await this.readPodOrNull(podName)
     if (!pod || !this.podService.isPodReady(pod)) {
       await this.requestProjectStartup(project, { deleteExistingPod: !!pod })
       return true
     }
 
+    const livePodIp = pod.status?.podIP ?? null
+    if (livePodIp && livePodIp !== project.podIp) {
+      await db
+        .update(projects)
+        .set({ podIp: livePodIp, updatedAt: new Date() })
+        .where(and(eq(projects.id, project.id), eq(projects.status, ProjectStatus.Active)))
+      this.logger.warn(`Repaired stale pod_ip for project ${project.id}: ${project.podIp} -> ${livePodIp}`)
+    }
+
     return false
+  }
+
+  private async wakeSuspendedProject(project: ProjectResponse): Promise<EnsureProjectResult> {
+    const [updated] = await db
+      .update(projects)
+      .set({ status: ProjectStatus.Starting, podIp: null, updatedAt: new Date() })
+      .where(and(eq(projects.id, project.id), eq(projects.status, ProjectStatus.Suspended)))
+      .returning()
+
+    if (updated) {
+      await this.projectEventsService.publish(project.id)
+    }
+
+    this.spawnStartupWorker(project.id)
+    return {
+      state: "starting",
+      project: { ...project, status: ProjectStatus.Starting, podIp: null },
+    }
+  }
+
+  private async handleStartingProject(project: ProjectResponse): Promise<EnsureProjectResult> {
+    const podName = this.podService.assignedPodName(project.id)
+    const pod = await this.readPodOrNull(podName)
+
+    if (!pod) {
+      this.spawnStartupWorker(project.id)
+      return { state: "starting", project }
+    }
+
+    const podIp = pod.status?.podIP ?? null
+    if (this.podService.isPodReady(pod) && podIp) {
+      await this.markProjectActive(project.id, podIp, podName)
+      return {
+        state: "ready",
+        project: { ...project, status: ProjectStatus.Active, podIp },
+      }
+    }
+
+    const failure = this.podService.inspectFailureReason(pod)
+    if (failure === "ImagePullBackOff") {
+      await this.handleStartupFailure(project.id, podName, new PodStartupFailedError(podName, failure))
+      return {
+        state: "failed",
+        project: { ...project, status: ProjectStatus.Failed, podIp: null },
+      }
+    }
+
+    if (failure === "CrashLoopBackOff") {
+      const ageMs = this.podService.podAgeMs(pod)
+      if (ageMs > CRASH_LOOP_RECREATE_AGE_MS) {
+        this.logger.warn(`Pod ${podName} stuck in CrashLoopBackOff (age=${ageMs}ms); recreating`)
+        await this.safeDeletePod(podName, `CrashLoopBackOff recreate for project ${project.id}`)
+        this.spawnStartupWorker(project.id)
+      }
+    }
+
+    return { state: "starting", project }
+  }
+
+  private async verifyActiveProject(project: ProjectResponse): Promise<EnsureProjectResult> {
+    const podName = this.podService.assignedPodName(project.id)
+    const pod = await this.readPodOrNull(podName)
+    const podIp = pod?.status?.podIP ?? null
+
+    if (pod && this.podService.isPodReady(pod) && podIp) {
+      if (podIp !== project.podIp) {
+        await db
+          .update(projects)
+          .set({ podIp, updatedAt: new Date() })
+          .where(and(eq(projects.id, project.id), eq(projects.status, ProjectStatus.Active)))
+      }
+      return { state: "ready", project: { ...project, podIp } }
+    }
+
+    const startingProject = await this.requestProjectStartup(project, { deleteExistingPod: !!pod })
+    return { state: "starting", project: startingProject }
+  }
+
+  private async verifyCachedActiveProject(project: ProjectResponse): Promise<EnsureProjectResult> {
+    const podName = this.podService.assignedPodName(project.id)
+    const snapshot = this.podService.getCachedPodSnapshot(podName)
+    if (!snapshot.synced) return { state: "ready", project }
+
+    const pod = snapshot.pod
+    const podIp = pod?.status?.podIP ?? null
+    if (pod && this.podService.isPodReady(pod) && podIp) {
+      if (podIp !== project.podIp) {
+        await db
+          .update(projects)
+          .set({ podIp, updatedAt: new Date() })
+          .where(and(eq(projects.id, project.id), eq(projects.status, ProjectStatus.Active)))
+      }
+      return { state: "ready", project: { ...project, podIp } }
+    }
+
+    const startingProject = await this.requestProjectStartup(project, { deleteExistingPod: !!pod })
+    return { state: "starting", project: startingProject }
+  }
+
+  private async markProjectActive(projectId: string, podIp: string, podName: string): Promise<void> {
+    const [updated] = await db
+      .update(projects)
+      .set({
+        status: ProjectStatus.Active,
+        podIp,
+        lastActiveAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(projects.id, projectId), eq(projects.status, ProjectStatus.Starting)))
+      .returning()
+
+    if (!updated) {
+      this.startupRetries.delete(projectId)
+      await this.safeDeletePod(podName, `orphan after disable/delete race for project ${projectId}`)
+      return
+    }
+
+    this.startupRetries.delete(projectId)
+
+    await Promise.allSettled([
+      this.timeoutService.touch(projectId).catch((err) => {
+        this.logger.warn(`Failed to touch timeout for project ${projectId}: ${(err as Error).message}`)
+      }),
+      db
+        .update(projectDuplicateJobs)
+        .set({ status: ProjectDuplicateStatus.Completed, updatedAt: new Date() })
+        .where(
+          and(
+            eq(projectDuplicateJobs.targetProjectId, projectId),
+            eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting),
+          ),
+        ),
+      this.projectEventsService.publish(projectId).catch((err) => {
+        this.logger.warn(`Failed to publish project active event for ${projectId}: ${(err as Error).message}`)
+      }),
+    ])
+    this.logger.log(`Project ${projectId} active on pod ${podName} (${podIp})`)
   }
 
   private async createBifrostResources(projectId: string, tenantId: string): Promise<void> {
@@ -824,7 +1000,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
     for (const job of activeJobs) {
       if (job.status === ProjectDuplicateStatus.Starting) {
-        this.queueProjectStartup(job.targetProjectId)
+        this.spawnStartupWorker(job.targetProjectId)
         continue
       }
 
@@ -897,211 +1073,199 @@ export class ProjectService implements OnApplicationBootstrap {
     options: { deleteExistingPod: boolean },
   ): Promise<ProjectResponse> {
     if (project.status === ProjectStatus.Starting) {
-      this.queueProjectStartup(project.id)
+      if (options.deleteExistingPod) {
+        const podName = this.podService.assignedPodName(project.id)
+        this.recreateRequests.add(project.id)
+        await this.safeDeletePod(podName, `restart for project ${project.id}`)
+      }
+      this.spawnStartupWorker(project.id)
       return project
     }
 
-    const podName = this.podService.assignedPodName(project.id)
     const [updated] = await db
       .update(projects)
       .set({
         status: ProjectStatus.Starting,
-        podName,
         podIp: null,
         updatedAt: new Date(),
       })
       .where(
-        and(eq(projects.id, project.id), inArray(projects.status, [ProjectStatus.Active, ProjectStatus.Suspended])),
+        and(
+          eq(projects.id, project.id),
+          inArray(projects.status, [ProjectStatus.Active, ProjectStatus.Suspended, ProjectStatus.Failed]),
+        ),
       )
       .returning()
 
     if (!updated) {
       const current = await this.findOneById(project.id)
       if (current.status === ProjectStatus.Starting) {
-        this.queueProjectStartup(current.id)
+        this.spawnStartupWorker(current.id)
       }
       return current
     }
 
     if (options.deleteExistingPod) {
-      const podNames = Array.from(new Set([project.podName, podName].filter((name): name is string => !!name)))
-      await Promise.all(podNames.map((name) => this.podService.deletePod(name).catch(() => {})))
+      const podName = this.podService.assignedPodName(project.id)
+      this.recreateRequests.add(project.id)
+      await this.safeDeletePod(podName, `restart for project ${project.id}`)
     }
 
-    await this.deleteProjectPods(project.id, podName)
-    this.queueProjectStartup(project.id)
+    this.spawnStartupWorker(project.id)
     this.appService.invalidate(project.id)
     await this.projectEventsService.publish(project.id)
 
     return this.findOneById(project.id)
   }
 
-  queueProjectStartup(projectId: string) {
+  private spawnStartupWorker(projectId: string): void {
     if (this.startupTasks.has(projectId)) return
-
-    const task = this.startProject(projectId)
+    const task = this.runStartup(projectId)
       .catch((err) => {
-        this.logger.warn(`Failed to start project ${projectId}: ${err.message}`)
+        this.logger.warn(`Startup worker for project ${projectId} crashed: ${(err as Error).message}`)
       })
       .finally(() => {
         this.startupTasks.delete(projectId)
       })
-
     this.startupTasks.set(projectId, task)
   }
 
-  private async startProject(projectId: string): Promise<void> {
-    await this.withProjectStartupLock(projectId, async () => {
-      if (await this.hasBlockingDuplicateOperation(projectId)) return
+  private async runStartup(projectId: string): Promise<void> {
+    if (await this.hasBlockingDuplicateOperation(projectId)) return
 
-      const current = await this.findOneById(projectId).catch(() => null)
-      if (!current || current.status !== ProjectStatus.Starting) return
+    const current = await this.findOneById(projectId).catch(() => null)
+    if (!current || current.status !== ProjectStatus.Starting) return
 
-      const [bifrostOptions, agentDefaults, gatewayApiKey, agentName] = await Promise.all([
-        this.bifrostService.getProjectPodOptions(projectId),
-        this.defaultsService.getTenantAgent(current.tenantId),
-        this.gatewayKeyService.getProjectToken(projectId),
-        this.agentService.resolveName(current.agentId),
-      ])
-      const tenantOptions = {
-        ...(bifrostOptions ?? {}),
-        agentName,
-        agentModel: agentDefaults.defaultModel,
-        gatewayApiKey: gatewayApiKey ?? undefined,
-        gatewayUrl: this.configService.get<string>("gatewayUrl", ""),
-      }
-      const claimedPod = await this.podPoolService.claimWarmPod()
-      const podName = current.podName ?? this.podService.assignedPodName(projectId)
-
-      try {
-        await Promise.all([
-          this.podService.deletePod(podName).catch(() => {}),
-          claimedPod ? this.podService.deletePod(claimedPod.podName).catch(() => {}) : Promise.resolve(),
-        ])
-
-        if (current.podName !== podName || current.podIp !== null) {
-          await db
-            .update(projects)
-            .set({ podName, podIp: null, updatedAt: new Date() })
-            .where(eq(projects.id, projectId))
+    const podName = this.podService.assignedPodName(projectId)
+    const recreateRequested = this.recreateRequests.delete(projectId)
+    const existingPod = await this.readPodOrNull(podName)
+    if (existingPod && !existingPod.metadata?.deletionTimestamp) {
+      if (recreateRequested) {
+        try {
+          await this.podService.deletePod(podName)
+        } catch (err) {
+          await this.handleStartupFailure(projectId, podName, err)
+          return
+        }
+      } else {
+        const existingPodIp = existingPod.status?.podIP ?? null
+        if (this.podService.isPodReady(existingPod) && existingPodIp) {
+          await this.markProjectActive(projectId, existingPodIp, podName)
+          return
         }
 
-        await this.deleteProjectPods(projectId, podName)
-        await this.podService.createAssignedPod(projectId, current.directory, tenantOptions)
-        await this.ensureAssignedPodRow(projectId, podName, null)
+        const failure = this.podService.inspectFailureReason(existingPod)
+        if (failure === "ImagePullBackOff") {
+          await this.handleStartupFailure(projectId, podName, new PodStartupFailedError(podName, failure))
+          return
+        }
 
-        const podIp = await this.podService.waitForReady(podName)
-        await this.setProjectActive(projectId, podName, podIp)
-      } catch (err) {
-        await this.handleStartupFailure(projectId, podName, err)
-        throw err
+        if (failure !== "CrashLoopBackOff" || this.podService.podAgeMs(existingPod) <= CRASH_LOOP_RECREATE_AGE_MS) {
+          try {
+            const podIp = await this.podService.waitForReady(podName)
+            await this.markProjectActive(projectId, podIp, podName)
+          } catch (err) {
+            await this.handleStartupFailure(projectId, podName, err)
+          }
+          return
+        }
+
+        await this.safeDeletePod(podName, `CrashLoopBackOff recreate for project ${projectId}`)
       }
-    })
+    }
+
+    const [bifrostOptions, agentDefaults, gatewayApiKey, agentName] = await Promise.all([
+      this.bifrostService.getProjectPodOptions(projectId),
+      this.defaultsService.getTenantAgent(current.tenantId),
+      this.gatewayKeyService.getProjectToken(projectId),
+      this.agentService.resolveName(current.agentId),
+    ])
+    const tenantOptions = {
+      ...(bifrostOptions ?? {}),
+      agentName,
+      agentModel: agentDefaults.defaultModel,
+      gatewayApiKey: gatewayApiKey ?? undefined,
+      gatewayUrl: this.configService.get<string>("gatewayUrl", ""),
+    }
+
+    try {
+      const assignedPod = await this.podService.createAssignedPod(projectId, current.directory, tenantOptions)
+      if (assignedPod.created) {
+        await this.podPoolService.claimWarmPod().catch((err) => {
+          this.logger.warn(`Failed to claim warm pod for project ${projectId}: ${(err as Error).message}`)
+        })
+      }
+      const podIp = await this.podService.waitForReady(podName)
+      await this.markProjectActive(projectId, podIp, podName)
+    } catch (err) {
+      await this.handleStartupFailure(projectId, podName, err)
+    }
   }
 
-  private async setProjectActive(projectId: string, podName: string, podIp: string): Promise<void> {
-    const [project] = await db
-      .update(projects)
-      .set({
-        status: ProjectStatus.Active,
-        podName,
-        podIp,
-        lastActiveAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(projects.id, projectId))
-      .returning()
+  private async handleStartupFailure(projectId: string, podName: string, err: unknown): Promise<void> {
+    const message = err instanceof Error ? err.message : "Project pod failed to start"
+    const isPermanentImageFailure = err instanceof PodStartupFailedError && err.reason === "ImagePullBackOff"
 
-    if (!project) throw new NotFoundException(`Project ${projectId} not found`)
+    this.logger.warn(`Startup failed for project ${projectId}: ${message}`)
 
-    await this.ensureAssignedPodRow(projectId, podName, podIp)
-    await this.timeoutService.touch(projectId)
-    await db
-      .update(projectDuplicateJobs)
-      .set({
-        status: ProjectDuplicateStatus.Completed,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(projectDuplicateJobs.targetProjectId, projectId),
-          eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting),
-        ),
-      )
-    await this.projectEventsService.publish(projectId)
-    this.logger.log(`Project ${projectId} active on pod ${podName} (${podIp})`)
-  }
-
-  private async handleStartupFailure(projectId: string, podName: string, error: unknown): Promise<void> {
-    await this.podService.deletePod(podName).catch(() => {})
-    await this.deleteProjectPods(projectId, podName)
-
-    const [project] = await db.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId))
-
-    if (!project) return
-
-    const now = new Date()
-    const message = error instanceof Error ? error.message : "Project pod failed to start"
-
-    await db.transaction(async (tx) => {
-      await tx
-        .update(projects)
-        .set({
-          status: ProjectStatus.Suspended,
-          podName: null,
-          podIp: null,
-          updatedAt: now,
-        })
-        .where(eq(projects.id, projectId))
-
-      await tx
-        .update(projectDuplicateJobs)
-        .set({
-          status: ProjectDuplicateStatus.Failed,
-          error: message,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(projectDuplicateJobs.targetProjectId, projectId),
-            eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting),
-          ),
-        )
-    })
     this.appService.invalidate(projectId)
-    await this.projectEventsService.publish(projectId)
-  }
 
-  private async ensureAssignedPodRow(projectId: string, podName: string, podIp: string | null): Promise<void> {
-    await db.delete(pods).where(and(eq(pods.projectId, projectId), ne(pods.podName, podName)))
+    const duplicateFailUpdate = isPermanentImageFailure
+      ? db
+          .update(projectDuplicateJobs)
+          .set({ status: ProjectDuplicateStatus.Failed, error: message, updatedAt: new Date() })
+          .where(
+            and(
+              eq(projectDuplicateJobs.targetProjectId, projectId),
+              eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting),
+            ),
+          )
+      : Promise.resolve()
 
-    await db
-      .insert(pods)
-      .values({
-        id: crypto.randomUUID(),
-        podName,
-        status: "assigned",
-        projectId,
-        podIp,
-      })
-      .onConflictDoUpdate({
-        target: pods.podName,
-        set: {
-          status: "assigned",
-          projectId,
-          podIp,
-          updatedAt: new Date(),
-        },
-      })
-  }
+    await Promise.allSettled([
+      isPermanentImageFailure
+        ? Promise.resolve()
+        : this.safeDeletePod(podName, `startup failure for project ${projectId}`),
+      duplicateFailUpdate,
+      this.projectEventsService.publish(projectId).catch((publishErr) => {
+        this.logger.warn(
+          `Failed to publish startup failure event for ${projectId}: ${(publishErr as Error).message}`,
+        )
+      }),
+    ])
 
-  private async deleteProjectPods(projectId: string, podName?: string): Promise<void> {
-    if (podName) {
-      await db.delete(pods).where(or(eq(pods.projectId, projectId), eq(pods.podName, podName)))
+    if (isPermanentImageFailure) {
+      this.startupRetries.delete(projectId)
+      await db
+        .update(projects)
+        .set({ status: ProjectStatus.Failed, podIp: null, updatedAt: new Date() })
+        .where(and(eq(projects.id, projectId), eq(projects.status, ProjectStatus.Starting)))
+      await this.projectEventsService.publish(projectId).catch(() => {})
       return
     }
 
-    await db.delete(pods).where(eq(pods.projectId, projectId))
+    const attempts = (this.startupRetries.get(projectId) ?? 0) + 1
+    this.startupRetries.set(projectId, attempts)
+    const delay = Math.min(STARTUP_RETRY_BASE_MS * Math.pow(2, attempts - 1), STARTUP_RETRY_MAX_MS)
+    this.logger.warn(`Scheduling retry ${attempts} for project ${projectId} in ${delay}ms`)
+    setTimeout(() => {
+      this.spawnStartupWorker(projectId)
+    }, delay)
+  }
+
+  private async safeDeletePod(podName: string, context: string): Promise<void> {
+    await this.podService.deletePod(podName).catch((err) => {
+      this.logger.warn(`Failed to delete pod ${podName} (${context}): ${(err as Error).message}`)
+    })
+  }
+
+  private async readPodOrNull(podName: string) {
+    try {
+      return await this.podService.getPod(podName)
+    } catch (err) {
+      if (this.podService.isNotFound(err)) return null
+      throw err
+    }
   }
 
   private recordActivity(projectId: string, activity: ProjectActivityKind) {
@@ -1110,93 +1274,5 @@ export class ProjectService implements OnApplicationBootstrap {
     void touch.catch((err) => {
       this.logger.warn(`Failed to touch ${activity} activity for project ${projectId}: ${err.message}`)
     })
-  }
-
-  private async withProjectStartupLock(projectId: string, run: () => Promise<void>): Promise<void> {
-    const connection = await pgClient.reserve()
-    let locked = false
-
-    try {
-      const [result] = await connection.unsafe<Array<{ locked: boolean }>>(
-        "select pg_try_advisory_lock(hashtext($1), hashtext($2)) as locked",
-        ["opsiforce-project-startup", projectId],
-      )
-      locked = result?.locked ?? false
-
-      if (!locked) {
-        this.logger.debug(`Startup already in progress for project ${projectId}`)
-        return
-      }
-
-      await run()
-    } finally {
-      if (locked) {
-        await connection
-          .unsafe("select pg_advisory_unlock(hashtext($1), hashtext($2))", ["opsiforce-project-startup", projectId])
-          .catch((err) => {
-            this.logger.warn(`Failed to release startup lock for project ${projectId}: ${err.message}`)
-          })
-      }
-
-      connection.release()
-    }
-  }
-
-  private async reconcileProjects(): Promise<void> {
-    const candidateProjects = await db
-      .select(projectSelectFields)
-      .from(projects)
-      .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
-      .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
-      .where(inArray(projects.status, [ProjectStatus.Starting, ProjectStatus.Active]))
-
-    await Promise.allSettled(candidateProjects.map((project) => this.reconcileProject(project)))
-  }
-
-  private async reconcileProject(project: ProjectResponse): Promise<void> {
-    if (project.status === ProjectStatus.Starting) {
-      if (!project.podName) {
-        this.queueProjectStartup(project.id)
-        return
-      }
-
-      const pod = await this.podService.getPod(project.podName).catch(() => null)
-      if (!pod) {
-        this.queueProjectStartup(project.id)
-        return
-      }
-
-      const podIp = pod.status?.podIP ?? null
-      await this.ensureAssignedPodRow(project.id, project.podName, podIp)
-
-      if (podIp && this.podService.isPodReady(pod)) {
-        await this.setProjectActive(project.id, project.podName, podIp)
-      }
-
-      return
-    }
-
-    if (!project.podName) {
-      await this.requestProjectStartup(project, { deleteExistingPod: false })
-      return
-    }
-
-    const pod = await this.podService.getPod(project.podName).catch(() => null)
-    if (!pod) {
-      await this.requestProjectStartup(project, { deleteExistingPod: false })
-      return
-    }
-
-    if (!this.podService.isPodReady(pod)) {
-      await this.requestProjectStartup(project, { deleteExistingPod: true })
-      return
-    }
-
-    const podIp = pod.status?.podIP ?? null
-    await this.ensureAssignedPodRow(project.id, project.podName, podIp)
-
-    if (podIp && podIp !== project.podIp) {
-      await db.update(projects).set({ podIp, updatedAt: new Date() }).where(eq(projects.id, project.id))
-    }
   }
 }

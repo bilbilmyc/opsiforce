@@ -47,17 +47,17 @@ The Node backend is no longer the byte-streaming proxy for chat traffic. It is n
    a. Creates a PostgreSQL project row with status = starting
    b. Creates a PostgreSQL project_settings row
    c. Sets directory = projects/{tenantId}/{projectId}
-   d. Sets deterministic podName = opsiforce-agent-{projectId[:8]}
+   d. Pod name is not persisted — derived as opsiforce-agent-{projectId[:8]} on demand
    e. Sets timeoutIdle = 1800000 and appTimeoutIdle = 604800000
-   f. Queues async startup
-4. Startup worker acquires a PostgreSQL advisory lock for the project
-5. Backend claims one warm pod row with FOR UPDATE SKIP LOCKED, deletes that warm pod, and replenishes the pool in the background
-6. Backend creates a new assigned pod with subPath = projects/{tenantId}/{projectId}
-7. Backend waits for the pod Ready condition and pod IP
-8. Backend writes/repairs the assigned pods row, sets project status = active, stores podIp
-9. Frontend listens to GET /api/projects/:id/events (SSE: status, duplicate operation, app readiness) until status becomes active
-10. ProjectView fetches /api/proxy/{projectId}/path and /api/proxy/{projectId}/session
-11. Frontend restores the latest updated root session, or opens a new session if none exist
+   f. Spawns an async startup worker
+4. Startup worker claims a warm pod via label-selector + delete-with-resourceVersion, or skips if pool empty
+5. Worker creates a new assigned pod with subPath = projects/{tenantId}/{projectId}
+   Kubernetes 409 AlreadyExists is treated as success (concurrent backends converge)
+6. Worker waits for pod Ready + podIP via informer events, falling back to polling if needed (ImagePullBackOff fails fast)
+7. Conditional UPDATE: status = active WHERE status = starting; caches podIp
+8. Frontend listens to GET /api/projects/:id/events (SSE: status, duplicate operation, app readiness) until status becomes active
+9. ProjectView fetches /api/proxy/{projectId}/path and /api/proxy/{projectId}/session
+10. Frontend restores the latest updated root session, or opens a new session if none exist
 ```
 
 ---
@@ -97,21 +97,30 @@ All four runtime entrypoints use the same backend-managed lifecycle gate before 
 2. Touch the correct Redis TTL key:
    - agent traffic -> opsiforce:timeout:{projectId}
    - app preview / VS Code -> opsiforce:app-timeout:{projectId}
-3. If status = starting:
+3. If status = disabled:
+   - return disabled
+4. If status = suspended:
+   - atomically UPDATE status = starting WHERE status = suspended
+   - spawn the startup worker
    - return 503 {"error":"Pod is restarting, please retry"}
-4. If status = active and podIp is already stored in DB:
-   - return ready immediately (skip K8s pod check)
-5. If status = active but podIp is not stored:
-   - check the K8s pod
-   - if pod is Ready: store podIp, repair assigned pod row, return ready
-   - if pod is not Ready or missing: move to starting, queue startup, return 503
-6. If status = suspended:
-   - atomically move the project to starting
-   - queue startup once
-   - return the same temporary 503 response
+5. If status = starting:
+   - read the K8s pod (deterministic name from projectId)
+   - if pod is Ready + has podIP: UPDATE status = active WHERE status = starting; return ready
+   - if pod is in CrashLoopBackOff for >60s: delete pod, spawn startup worker, return 503
+   - if pod is in ImagePullBackOff: mark failed and return failed
+   - if pod is missing: spawn startup worker, return 503
+   - otherwise (Pending, ContainerCreating, ...): return 503
+6. If status = active and podIp is cached:
+   - return ready immediately (fast path; no K8s call)
+7. If status = active and podIp is null:
+   - read the K8s pod
+   - if pod is Ready + has podIP: cache podIp, return ready
+   - if pod is missing or not Ready: UPDATE status = starting, spawn startup worker, return 503
 ```
 
-The backend startup map dedupes retries inside one backend instance. A PostgreSQL advisory lock dedupes startup across multiple backend instances. The runtime proxies add short-lived in-memory caching on top so they do not re-run the full ensure flow on every request.
+The backend keeps an in-process startup map only to avoid duplicate local work. Correctness does not depend on it: deterministic pod names make `createNamespacedPod` idempotent (409 AlreadyExists is treated as success), and conditional `UPDATE ... WHERE status = ...` statements prevent two writers from stomping each other. There is no PostgreSQL advisory lock.
+
+The runtime proxies add short-lived in-memory caching on top so they do not re-run the full ensure flow on every request.
 
 Inside one runtime proxy process, concurrent requests for the same cache key share one in-flight ensure call. The cache key is:
 
@@ -212,13 +221,13 @@ The project is suspended only when both keys are expired.
 4. If either key is still alive:
    - do nothing
 5. If both are expired:
-   - mark the assigned pod row as terminating
-   - delete the K8s pod
-   - delete pod rows for that pod
-   - set project status = suspended
-   - clear podName / podIp
+   - UPDATE projects SET status = suspended, pod_ip = null WHERE id = ? AND status = active
+     (if 0 rows updated, an in-flight startup raced the suspension — bail safely)
+   - delete the K8s pod (idempotent; 404 ignored)
    - replenish the warm pool
 ```
+
+The conditional UPDATE is the safeguard against the timeout listener stomping an in-progress startup. If the project moved to `starting` between TTL expiry and the listener firing, the update affects zero rows and the listener exits without touching Kubernetes.
 
 ### Startup sweep
 
@@ -230,24 +239,18 @@ Redis pub/sub can miss events while the backend is down. On subscriber startup, 
 
 ---
 
-## Backend restart reconciliation
+## Backend restart recovery
 
-`ProjectService` reconciles project state on backend boot.
+Backend boot does lightweight recovery, then request-time reconciliation handles the rest:
 
-```
-1. Load projects in starting or active (runs in parallel across all projects)
-2. starting:
-   - if pod exists and is Ready -> repair DB and mark active immediately
-   - if pod exists but is not Ready -> repair assigned pod row, leave in starting;
-     first user access will queue startup which deletes the pod and recreates it
-   - if pod does not exist -> queue startup
-3. active:
-   - if pod exists and is Ready -> repair podIp / assigned row
-   - if pod exists but is not Ready -> move to starting, delete pod, queue startup
-   - if pod does not exist -> move to starting and queue startup
-```
+- Assigned pods whose `opsiforce.io/project-id` no longer exists are deleted.
+- Projects in `status = starting` get startup workers resumed.
+- A project in `status = active` with a cached `podIp` uses the informer cache to verify the pod identity when the informer is synced; if the informer is reconnecting, the cached IP remains the fast path until a proxy failure forces a direct K8s read.
+- A project in `status = active` with a null `podIp` reads Kubernetes on the next request and repairs the cache.
+- A project in `status = starting` reads Kubernetes on the next request; if the pod is Ready, the status flips to `active`; if missing, a startup worker is spawned.
+- A project in `status = suspended` stays suspended until the next user access; then it transitions to `starting` and the warm-pool flow runs.
 
-This makes backend restarts deterministic whether the pod survived or not.
+The trade-off: full active-project reconciliation is still lazy. Operators who need to force a specific project can call the restart endpoint or delete the project.
 
 ---
 
@@ -255,14 +258,14 @@ This makes backend restarts deterministic whether the pod survived or not.
 
 ```
 1. Project enters starting
-2. Assigned pod creation or readiness fails
-3. Backend deletes the failed pod if it exists
-4. Backend deletes stale pod rows
-5. Backend marks the project suspended
-6. The next access request retries startup through the normal ensure flow
+2. Assigned pod creation or readiness fails (e.g., ImagePullBackOff, K8s create error, network blip)
+3. Worker logs the failure reason
+4. For non-permanent failures, worker deletes the failed pod so the next attempt is clean
+5. Transient failures keep the project at starting and retry with exponential backoff
+6. Permanent image-pull failures move the project to failed
 ```
 
-Projects do not remain stuck in `starting` after a failed startup attempt.
+The previous `handleStartupFailure` flow that suspended projects on any error is gone, because suspended-on-failure ambiguously meant either "idle" or "broken" with no way to distinguish. Transient failures remain recoverable; permanent image failures become visible and require an explicit retry after the deployment is fixed.
 
 ---
 
@@ -285,13 +288,12 @@ The project filesystem persists because the replacement pod mounts the same `sub
 
 ```
 1. Frontend DELETE /api/projects/{projectId}
-2. Backend deletes the assigned pod
-3. Backend deletes pod rows
-4. Backend clears timeout keys
-5. Backend revokes Bifrost keys if enabled
-6. Backend deletes the project row
-7. Backend inserts tombstone into deleted_projects
-8. Backend replenishes the warm pool
+2. Backend deletes the assigned pod (idempotent; 404 ignored)
+3. Backend clears timeout keys
+4. Backend revokes Bifrost keys if enabled
+5. Backend deletes the project row
+6. Backend inserts tombstone into deleted_projects
+7. Backend replenishes the warm pool
 ```
 
 Deleting a project removes it from the lifecycle entirely. The workspace directory on storage is retained for 7 days via the `deleted_projects` tombstone table, then cleaned up by a daily BullMQ job (see [Persistence — Workspace cleanup](persistence.md#workspace-cleanup)).

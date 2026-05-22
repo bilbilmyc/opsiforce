@@ -1,60 +1,98 @@
 # Pod Management
 
-Warm pool behavior, assigned pod lifecycle, and pod-level runtime details.
+How project pods are named, claimed, watched for failures, and replaced. Kubernetes is the single source of truth for everything pod-related; the backend treats local state as a cache that gets verified against the cluster on any sign of trouble.
+
+---
+
+## Authority model
+
+The backend used to keep a `pods` table that mirrored Kubernetes pod state. That created a dual-writer problem: whenever the database and the cluster disagreed (pod evicted, network blip, crashed backend mid-write), projects could get stuck "starting" forever.
+
+Now the cluster is authoritative:
+
+- **Pod existence and identity** — looked up by deterministic name (`opsiforce-agent-{projectId.slice(0,8)}`)
+- **Pod readiness, IP, failure reasons** — read from `pod.status` and `pod.status.containerStatuses[*].state.waiting.reason`
+- **Warm pool membership** — encoded in pod labels (`opsiforce.io/pool=warm`)
+- **"When did we last try"** — read from `pod.metadata.creationTimestamp`
+- **Atomic warm-pod claim** — `deleteNamespacedPod` with a `resourceVersion` precondition
+
+`projects.pod_ip` is kept as a fast-path cache, but it's never trusted as the source of truth. Every divergence (proxy 5xx, missing pod, IP mismatch) triggers a re-read against Kubernetes and the cache is repaired.
 
 ---
 
 ## Pod lifecycle
 
-The backend keeps `WARM_POOL_SIZE` warm pods available. Warm pods do not mount a project `subPath`.
+Warm pods are pre-created (no project subPath). When a project needs one, the warm pod is claimed by deletion and replaced by a fresh assigned pod with the project's subPath. Volume mounts are immutable after pod creation, so the warm pod cannot be re-purposed in place.
 
 ```
-WARM -> claimed -> warm row deleted atomically -> warm pod deleted (in parallel with assigned pod deletion below)
-     -> any existing assigned pod deleted
-     -> new assigned pod created with project subPath -> ACTIVE
+project access on suspended ─► status = starting ─► claim warm pod (delete with
+                                                     resourceVersion precondition)
+                                                  ─► create assigned pod with subPath
+                                                  ─► wait for Ready + podIP
+                                                  ─► status = active
 
-ACTIVE -> both TTL keys expire -> pod deleted -> SUSPENDED
-ACTIVE -> pod deleted externally -> next access triggers recreate -> ACTIVE
-ACTIVE -> project deleted -> pod deleted -> project removed
+active + both TTL keys expire ─► (timeout listener) conditional UPDATE to suspended
+                                  if status is still 'active' ─► delete pod ─► done
+
+active + pod deleted externally ─► next access ─► sees pod missing in K8s
+                                              ─► status = starting
+                                              ─► new pod is created
 ```
-
-If no warm pod is available, the backend skips the warm pod step and creates the assigned pod directly (after deleting any existing one).
-
-Assigned pod creation is serialized per project with a PostgreSQL advisory lock. Warm-pod claiming is serialized with `FOR UPDATE SKIP LOCKED`.
 
 ---
 
 ## Naming
 
-- Warm pods: `opsiforce-agent-{uuid[:8]}`
-- Assigned pods: `opsiforce-agent-{projectId[:8]}`
+Pod names are deterministic:
 
-Assigned names are deterministic so a restarted backend can reconcile an already-running project pod.
+- Warm pods: `opsiforce-agent-{uuid[:8]}` (UUID generated when the warm pod is created)
+- Assigned pods: `opsiforce-agent-{projectId[:8]}` — pure function of the project id
 
----
-
-## Why warm pods are recreated
-
-Warm pods do not know the target `subPath` ahead of time. Kubernetes volume mounts are immutable after pod creation, so assignment works like this:
-
-1. Claim a warm pod row
-2. Delete the warm pod
-3. Create a fresh assigned pod with the correct `subPath`
-
-Opsiforce never patches a live pod to switch `subPath`.
+Determinism is the basis for both `createAssignedPod` idempotency (Kubernetes 409 `AlreadyExists` is treated as success — the pod already exists, proceed) and on-demand reconciliation (any backend can look up a project's pod by id).
 
 ---
 
-## Warm pool replenishment
+## Warm pool
 
-The pool is replenished when:
+`WARM_POOL_SIZE` warm pods are kept available at all times. The pool is queried via:
 
-- backend starts
-- a warm pod is claimed
-- a project pod is suspended and deleted
-- a project is deleted
+```
+listPods(labelSelector = "app=opsiforce-agent,opsiforce.io/pool=warm")
+```
 
-`PodPoolService.cleanupOrphanedPods()` removes K8s pods that are not linked to any `pods` row or `projects.pod_name`.
+Replenishment fires:
+
+- on backend startup
+- after a warm pod is claimed (during project startup)
+- after a project pod is suspended or its project is deleted
+
+During replenish, stuck warm pods are recycled: a warm pod older than 5 minutes that is not Ready, or any warm pod in `ImagePullBackOff`, is deleted. The pool is then topped up to `WARM_POOL_SIZE`.
+
+### Claiming
+
+```
+1. listPods(labelSelector) returns current warm pods
+2. Filter to pods that are Ready and not already being deleted
+3. Sort by creationTimestamp (oldest first)
+4. For each candidate:
+     deleteNamespacedPod(name, preconditions: { resourceVersion })
+   - 200 OK: we own the slot; proceed to create the assigned pod
+   - 409 Conflict: another backend got it first; try the next candidate
+   - 404 Not Found: pod was already deleted; try the next candidate
+5. Replenish runs in the background to refill the pool
+```
+
+The `resourceVersion` precondition is Kubernetes' compare-and-set primitive. It replaces `FOR UPDATE SKIP LOCKED` from the previous DB-based design.
+
+If no warm pod is claimable, project startup creates the assigned pod directly. Slightly slower; functionally equivalent.
+
+### Orphan cleanup
+
+On backend boot, assigned pods whose `opsiforce.io/project-id` label no longer matches a project row are deleted. Operators can still clean manually if needed:
+
+```
+kubectl delete pods -l app=opsiforce-agent,opsiforce.io/pool=assigned --field-selector status.phase=Failed
+```
 
 ---
 
@@ -75,16 +113,39 @@ readinessProbe:
   httpGet:
     path: /global/health
     port: 4096
-  initialDelaySeconds: 3
+  initialDelaySeconds: 5
   periodSeconds: 5
 ```
 
-The backend waits for:
+During project startup the backend waits on informer events for two conditions, with direct polling as a fallback when the informer is unavailable:
 
-- pod `Ready` condition = `True`
-- `podIP` present
+- `pod.status.conditions[?(@.type == "Ready")].status == "True"`
+- `pod.status.podIP` is set
 
-`PodService.waitForReady()` polls every 2 seconds with a 60-second timeout.
+If `containerStatuses[*].state.waiting.reason` is `ImagePullBackOff` or `ErrImagePull`, the wait fails fast — recreating the pod will not help; the image is broken.
+
+`CrashLoopBackOff` is handled differently: on the next project access, a pod that has been in CrashLoopBackOff for more than 60 seconds is deleted so the startup flow creates a fresh one. This catches transient init failures while avoiding tight recreate loops.
+
+---
+
+## Status mapping
+
+Project status (`starting`, `active`, `suspended`, `disabled`, `failed`) is derived from the project row plus the K8s pod state:
+
+| Project status | Pod state in K8s | Behavior on next access |
+|---|---|---|
+| disabled | (any) | reject immediately; admin must `enable` |
+| active | pod Ready + podIP cached | fast path: return cached IP |
+| active | cache miss or pod missing | re-read K8s, repair cache, or restart |
+| starting | pod Ready + podIP | conditional UPDATE → active, return ready |
+| starting | pod exists, not Ready | return 503; let it cook |
+| starting | pod missing | spawn startup worker, return 503 |
+| starting | pod CrashLoopBackOff (>60s old) | delete pod, spawn startup worker |
+| starting | pod ImagePullBackOff | mark failed; show retry action |
+| failed | (any) | wait for explicit retry/restart |
+| suspended | (no pod expected) | atomic UPDATE → starting, spawn startup worker |
+
+Status writes use `UPDATE … WHERE status = '<expected>'` patterns so concurrent transitions never stomp each other.
 
 ---
 
@@ -92,7 +153,7 @@ The backend waits for:
 
 `restartPolicy: Always`
 
-If the agent container crashes inside an existing pod, Kubernetes restarts the container in place. If the pod itself disappears, Opsiforce recreates it on the next access.
+If the agent container crashes inside an existing pod, Kubernetes restarts the container in place. If the pod itself disappears, the next user request triggers `createAssignedPod` again — same deterministic name, same subPath, same workspace.
 
 ---
 

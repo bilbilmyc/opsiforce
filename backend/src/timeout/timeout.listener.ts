@@ -1,8 +1,8 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from "@nestjs/common"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import Redis from "ioredis"
 import { db } from "../../db"
-import { projects, pods } from "../../db/schema"
+import { projects } from "../../db/schema"
 import { ProjectStatus } from "../project/project.types"
 import { TimeoutService } from "./timeout.service"
 import { PodService } from "../pod/pod.service"
@@ -59,39 +59,31 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
   }
 
   private async suspendProject(projectId: string): Promise<void> {
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId))
-
-    if (!project || project.status !== ProjectStatus.Active) return
-
-    if (project.podName) {
-      await db
-        .update(pods)
-        .set({ status: "terminating", updatedAt: new Date() })
-        .where(eq(pods.podName, project.podName))
-
-      await this.podService.deletePod(project.podName).catch((err) => {
-        this.logger.warn(`Failed to delete pod ${project.podName}: ${err.message}`)
-      })
-
-      await db.delete(pods).where(eq(pods.podName, project.podName))
-    }
-
-    await db
+    const [updated] = await db
       .update(projects)
       .set({
         status: ProjectStatus.Suspended,
-        podName: null,
         podIp: null,
         updatedAt: new Date(),
       })
-      .where(eq(projects.id, projectId))
+      .where(and(eq(projects.id, projectId), eq(projects.status, ProjectStatus.Active)))
+      .returning()
+
+    if (!updated) {
+      this.logger.debug(`Skipping suspend for project ${projectId}: status changed concurrently`)
+      return
+    }
+
+    const podName = this.podService.assignedPodName(projectId)
+    await this.podService.deletePod(podName).catch((err) => {
+      this.logger.warn(`Failed to delete pod ${podName}: ${err.message}`)
+    })
 
     this.logger.log(`Project ${projectId} suspended due to idle timeout`)
     await this.projectEventsService.publish(projectId)
-    await this.podPoolService.replenish()
+    await this.podPoolService.replenish().catch((err) => {
+      this.logger.warn(`Failed to replenish warm pool: ${err.message}`)
+    })
   }
 
   private async sweepExpiredProjects(): Promise<void> {

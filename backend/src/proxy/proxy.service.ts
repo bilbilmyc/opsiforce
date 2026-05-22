@@ -3,6 +3,12 @@ import { ConfigService } from "@nestjs/config"
 import { eq, and, like } from "drizzle-orm"
 import { db } from "../../db"
 import { projects } from "../../db/schema"
+import { PodService } from "../pod/pod.service"
+
+interface ProjectUpstreamRef {
+  id: string
+  podIp: string | null
+}
 
 @Injectable()
 export class ProxyService {
@@ -11,7 +17,10 @@ export class ProxyService {
   private readonly vscodePort: number
   private readonly dbViewerPort: number
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly podService: PodService,
+  ) {
     this.agentPort = this.configService.getOrThrow<number>("agentPort")
     this.appPort = this.configService.getOrThrow<number>("appPort")
     this.vscodePort = this.configService.getOrThrow<number>("vscodePort")
@@ -22,7 +31,7 @@ export class ProxyService {
     return this.resolveUpstreamForPort(projectId, tenantId, this.agentPort)
   }
 
-  resolveUpstreamForProject(project: { podName: string | null; podIp: string | null; id: string }): string {
+  resolveUpstreamForProject(project: ProjectUpstreamRef): string {
     return this.upstreamFromProject(project, this.agentPort)
   }
 
@@ -30,7 +39,7 @@ export class ProxyService {
     return this.resolveUpstreamForPort(projectId, tenantId, this.appPort)
   }
 
-  resolveAppUpstreamForProject(project: { podName: string | null; podIp: string | null; id: string }): string {
+  resolveAppUpstreamForProject(project: ProjectUpstreamRef): string {
     return this.upstreamFromProject(project, this.appPort)
   }
 
@@ -38,7 +47,7 @@ export class ProxyService {
     return this.resolveUpstreamForPort(projectId, tenantId, this.vscodePort)
   }
 
-  resolveVscodeUpstreamForProject(project: { podName: string | null; podIp: string | null; id: string }): string {
+  resolveVscodeUpstreamForProject(project: ProjectUpstreamRef): string {
     return this.upstreamFromProject(project, this.vscodePort)
   }
 
@@ -57,7 +66,7 @@ export class ProxyService {
     return this.resolveUpstreamForPort(projectId, tenantId, this.dbViewerPort)
   }
 
-  resolveDbUpstreamForProject(project: { podName: string | null; podIp: string | null; id: string }): string {
+  resolveDbUpstreamForProject(project: ProjectUpstreamRef): string {
     return this.upstreamFromProject(project, this.dbViewerPort)
   }
 
@@ -72,15 +81,8 @@ export class ProxyService {
     return this.upstreamFromProject(project, this.dbViewerPort)
   }
 
-  async getPodNameByProjectId(projectId: string): Promise<string> {
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId))
-
-    if (!project?.podName) throw new NotFoundException(`Project ${projectId} has no pod`)
-
-    return project.podName
+  getAssignedPodName(projectId: string): string {
+    return this.podService.assignedPodName(projectId)
   }
 
   async resolveAppUpstreamByProjectId(projectId: string): Promise<string> {
@@ -105,7 +107,7 @@ export class ProxyService {
     return this.upstreamFromProject(project, this.appPort)
   }
 
-  private upstreamFromProject(project: { podName: string | null; podIp: string | null; id: string }, port: number): string {
+  private upstreamFromProject(project: ProjectUpstreamRef, port: number): string {
     if (project.podIp) {
       return `http://${project.podIp}:${port}`
     }
