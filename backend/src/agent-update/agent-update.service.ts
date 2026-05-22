@@ -206,7 +206,11 @@ export class AgentUpdateService implements OnApplicationBootstrap {
     if (!update.requiresOpenCodeReload && !update.requiresPodRecreate) {
       return this.applyReload(update.id, "skipped:not-required")
     }
-    if (project.status === ProjectStatus.Suspended || project.status === ProjectStatus.Disabled) {
+    if (
+      project.status === ProjectStatus.Suspended ||
+      project.status === ProjectStatus.Disabled ||
+      project.status === ProjectStatus.Failed
+    ) {
       return this.applyReload(update.id, "skipped:no-active-pod")
     }
     if (!project.podIp) {
