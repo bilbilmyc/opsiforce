@@ -7,6 +7,7 @@ import { ScheduleWorker } from "./schedule.worker"
 import { ScheduleAgentController } from "./schedule.controller.agent"
 import { ScheduleAdminController } from "./schedule.controller.admin"
 import { GatewayModule } from "../gateway/gateway.module"
+import { PodModule } from "../pod/pod.module"
 import { ProjectModule } from "../project/project.module"
 import { ProxyService } from "../proxy/proxy.service"
 import { SCHEDULE_QUEUE_NAME } from "./schedule.types"
@@ -16,6 +17,7 @@ import { SCHEDULE_QUEUE_NAME } from "./schedule.types"
     BullModule.registerQueue({ name: SCHEDULE_QUEUE_NAME }),
     BullBoardModule.forFeature({ name: SCHEDULE_QUEUE_NAME, adapter: BullMQAdapter }),
     GatewayModule,
+    PodModule,
     forwardRef(() => ProjectModule),
   ],
   controllers: [ScheduleAgentController, ScheduleAdminController],

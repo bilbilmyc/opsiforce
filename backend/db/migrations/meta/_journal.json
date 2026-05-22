@@ -211,6 +211,20 @@
       "when": 1779188091014,
       "tag": "0029_tenant-settings-makara-not-null",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1779364279995,
+      "tag": "0030_drop-pods-table-k8s-authority",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1779375745300,
+      "tag": "0031_add-failed-project-status",
+      "breakpoints": true
     }
   ]
 }

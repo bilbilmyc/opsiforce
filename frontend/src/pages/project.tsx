@@ -11,6 +11,7 @@ import ProjectCodeTab from "~/components/project/project-code-tab"
 import ProjectDbTab from "~/components/project/project-db-tab"
 import ProjectPreviewPanel from "~/components/project/project-preview-panel"
 import ProjectDisabled from "~/components/project/project-disabled"
+import ProjectFailed from "~/components/project/project-failed"
 import ProjectDuplicateProgress from "~/components/project/project-duplicate-progress"
 import { useOpenCodeConnection } from "~/components/project/use-opencode-connection"
 
@@ -76,21 +77,23 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
           style={{ display: activeTab() === "chat" ? "flex" : "none" }}
         >
           <Show when={status() !== "disabled"} fallback={<ProjectDisabled projectId={props.projectId} />}>
-            <Show
-              when={duplicateOperation()}
-              fallback={
-                <Show when={connection.router()} fallback={<Spinner label="Connecting..." />}>
-                  {(router) => (
-                    <ProjectChatTab
-                      projectId={props.projectId}
-                      router={router()}
-                      onPreviewReload={() => reloadPreview()}
-                    />
-                  )}
-                </Show>
-              }
-            >
-              {(operation) => <ProjectDuplicateProgress operation={operation()} />}
+            <Show when={status() !== "failed"} fallback={<ProjectFailed projectId={props.projectId} />}>
+              <Show
+                when={duplicateOperation()}
+                fallback={
+                  <Show when={connection.router()} fallback={<Spinner label="Connecting..." />}>
+                    {(router) => (
+                      <ProjectChatTab
+                        projectId={props.projectId}
+                        router={router()}
+                        onPreviewReload={() => reloadPreview()}
+                      />
+                    )}
+                  </Show>
+                }
+              >
+                {(operation) => <ProjectDuplicateProgress operation={operation()} />}
+              </Show>
             </Show>
           </Show>
         </div>

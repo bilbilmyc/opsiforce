@@ -54,7 +54,7 @@ export interface Tenant {
   displayName: string
 }
 
-export type ProjectStatus = "starting" | "active" | "suspended" | "disabled"
+export type ProjectStatus = "starting" | "active" | "suspended" | "disabled" | "failed"
 
 export interface Project {
   id: string

@@ -128,7 +128,6 @@ export class AppService implements OnModuleDestroy {
 
   private async fetchAppMeta(project: {
     id: string
-    podName: string | null
     podIp: string | null
   }): Promise<ProjectAppMeta | null> {
     const upstream = this.proxyService.resolveAppUpstreamForProject(project)

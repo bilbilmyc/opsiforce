@@ -15,14 +15,15 @@ Database state, persistent storage, and how projects survive pod replacement.
 | `title` | text | Optional user title |
 | `description` | text | Optional user description |
 | `directory` | text | Persistent workspace subPath: `projects/{tenantId}/{projectId}` |
-| `status` | enum | `starting`, `active`, `suspended` |
-| `pod_name` | text | Current assigned pod name, null when suspended |
-| `pod_ip` | text | Current pod IP when routing directly |
+| `status` | enum | `starting`, `active`, `suspended`, `disabled`, `failed` |
+| `pod_ip` | text | Cached pod IP for routing. Verified against the informer on the active fast path and against Kubernetes on proxy failure; the cluster is authoritative. |
 | `session_id` | text | Reserved column, not used for resume in the current flow |
 | `platform_version` | text | Agent platform version recorded at create time |
 | `last_active_at` | timestamp | Last observed user activity |
 | `created_at` | timestamp | Creation time |
 | `updated_at` | timestamp | Last update |
+
+The assigned pod's name is **not** persisted — it is derived as `opsiforce-agent-{projectId.slice(0,8)}` whenever needed. Pod lifecycle state (warm pool, container readiness, restart counts) is read directly from Kubernetes via labels and pod status. See [Pod Management](pod-management.md) for the rationale.
 
 ### `project_settings`
 
@@ -31,18 +32,6 @@ Database state, persistent storage, and how projects survive pod replacement.
 | `project_id` | text PK/FK | Owning project |
 | `timeout_idle` | bigint | Agent TTL stored in milliseconds |
 | `app_timeout_idle` | bigint | App/VS Code TTL stored in milliseconds |
-
-### `pods`
-
-| Column | Type | Description |
-|--------|------|-------------|
-| `id` | text PK | Pod row UUID |
-| `pod_name` | text UNIQUE | Kubernetes pod name |
-| `status` | enum | `warm`, `assigned`, `terminating` |
-| `project_id` | text FK | Owning project for assigned pods |
-| `pod_ip` | text | Last known pod IP |
-| `created_at` | timestamp | Creation time |
-| `updated_at` | timestamp | Last update |
 
 ### `deleted_projects`
 
@@ -125,9 +114,9 @@ When a project pod is replaced:
 ```
 1. Old pod disappears
 2. The persistent project subPath stays intact
-3. Opsiforce creates a new assigned pod with the same subPath
+3. Opsiforce creates a new assigned pod with the same deterministic name and subPath
 4. OpenCode starts against the persisted workspace and XDG directories
-5. Backend updates podName / podIp and marks the project active
+5. Backend caches the new pod IP and flips the project to active
 6. Frontend reconnects to the latest updated root session
 ```
 

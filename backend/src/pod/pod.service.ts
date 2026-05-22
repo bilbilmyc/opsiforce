@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config"
 import * as k8s from "@kubernetes/client-node"
 import { loadKubeConfig } from "../common/k8s-client"
 import { buildPodSpec, PodTemplateOptions } from "./pod.template"
+import { PodCacheService } from "./pod.cache.service"
 
 export interface TenantPodOptions {
   bifrostApiKey?: string
@@ -14,13 +15,25 @@ export interface TenantPodOptions {
   agentName?: string
 }
 
+export type PodFailureReason = "ImagePullBackOff" | "CrashLoopBackOff"
+
+export class PodStartupFailedError extends Error {
+  constructor(public readonly podName: string, public readonly reason: PodFailureReason) {
+    super(`Pod ${podName} failed: ${reason}`)
+    this.name = "PodStartupFailedError"
+  }
+}
+
 @Injectable()
 export class PodService {
   private readonly coreApi: k8s.CoreV1Api
   private readonly logger = new Logger(PodService.name)
   private readonly namespace: string
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly podCache: PodCacheService,
+  ) {
     const kc = loadKubeConfig()
     this.coreApi = kc.makeApiClient(k8s.CoreV1Api)
     this.namespace = this.configService.getOrThrow<string>("k8sNamespace")
@@ -50,20 +63,27 @@ export class PodService {
   }
 
   async createWarmPod(podName: string): Promise<k8s.V1Pod> {
-    const options = this.baseOptions(podName)
-
-    const spec = buildPodSpec(options)
-    const response = await this.coreApi.createNamespacedPod({
+    const spec = buildPodSpec(this.baseOptions(podName))
+    return this.coreApi.createNamespacedPod({
       namespace: this.namespace,
       body: spec,
     })
-    return response
   }
 
-  async createAssignedPod(projectId: string, directory: string, tenantOptions?: TenantPodOptions): Promise<{ podName: string }> {
+  async createAssignedPod(
+    projectId: string,
+    directory: string,
+    tenantOptions?: TenantPodOptions,
+  ): Promise<{ podName: string; created: boolean }> {
     const podName = this.assignedPodName(projectId)
+    const existing = await this.readPodIfExists(podName)
 
-    await this.waitForPodDeletion(podName)
+    if (existing) {
+      if (!existing.metadata?.deletionTimestamp) {
+        return { podName, created: false }
+      }
+      await this.waitForPodDeletion(podName)
+    }
 
     const options: PodTemplateOptions = {
       ...this.baseOptions(podName),
@@ -73,52 +93,153 @@ export class PodService {
     }
 
     const spec = buildPodSpec(options)
-    await this.coreApi.createNamespacedPod({
-      namespace: this.namespace,
-      body: spec,
-    })
-
-    this.logger.log(`Created assigned pod ${podName} for project ${projectId}`)
-    return { podName }
-  }
-
-  private async waitForPodDeletion(podName: string, timeoutMs = 30000): Promise<void> {
-    const start = Date.now()
-    while (Date.now() - start < timeoutMs) {
-      try {
-        await this.getPod(podName)
-        await new Promise((r) => setTimeout(r, 1000))
-      } catch {
-        return
+    try {
+      await this.coreApi.createNamespacedPod({
+        namespace: this.namespace,
+        body: spec,
+      })
+      this.logger.log(`Created assigned pod ${podName} for project ${projectId}`)
+    } catch (err) {
+      if (this.isConflict(err)) {
+        this.logger.debug(`Assigned pod ${podName} already exists (concurrent create)`)
+        return { podName, created: false }
+      } else {
+        throw err
       }
     }
 
-    throw new Error(`Pod ${podName} was not deleted after ${timeoutMs}ms`)
+    return { podName, created: true }
   }
 
-  async deletePod(podName: string): Promise<void> {
-    await this.coreApi.deleteNamespacedPod({
-      name: podName,
-      namespace: this.namespace,
+  private async waitForPodDeletion(podName: string, timeoutMs = 90000): Promise<void> {
+    const synced = await this.podCache.waitForSyncWithTimeout(5000)
+    if (synced && !this.podCache.getPod(podName)) return
+    if (!synced) {
+      return this.waitForPodDeletionByPolling(podName, timeoutMs)
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      let settled = false
+      const timer = setTimeout(() => {
+        finish(new Error(`Pod ${podName} was not deleted after ${timeoutMs}ms`))
+      }, timeoutMs)
+
+      const offDelete = this.podCache.onDelete((deletedName, _pod) => {
+        if (deletedName !== podName) return
+        finish()
+      })
+
+      const finish = (err?: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        offDelete()
+        if (err) reject(err)
+        else resolve()
+      }
+
+      if (!this.podCache.getPod(podName)) finish()
     })
   }
 
-  async waitForReady(podName: string, timeoutMs = 180 * 1000): Promise<string> {
-    const start = Date.now()
-    while (Date.now() - start < timeoutMs) {
-      try {
-        const pod = await this.getPod(podName)
-        const ready = pod.status?.conditions?.find((c) => c.type === "Ready" && c.status === "True")
-        if (ready && pod.status?.podIP) {
-          return pod.status.podIP
-        }
-      } catch {}
-      await new Promise((r) => setTimeout(r, 2000))
+  async deletePod(podName: string): Promise<void> {
+    try {
+      await this.coreApi.deleteNamespacedPod({
+        name: podName,
+        namespace: this.namespace,
+      })
+    } catch (err) {
+      if (this.isNotFound(err)) return
+      throw err
     }
-    throw new Error(`Pod ${podName} not ready after ${timeoutMs}ms`)
+  }
+
+  async deletePodIfMatches(podName: string, resourceVersion: string): Promise<boolean> {
+    const body: k8s.V1DeleteOptions = {
+      preconditions: { resourceVersion },
+    }
+    try {
+      await this.coreApi.deleteNamespacedPod({
+        name: podName,
+        namespace: this.namespace,
+        body,
+      })
+      return true
+    } catch (err) {
+      if (this.isNotFound(err) || this.isConflict(err)) return false
+      throw err
+    }
+  }
+
+  async waitForReady(podName: string, timeoutMs = 180 * 1000): Promise<string> {
+    const synced = await this.podCache.waitForSyncWithTimeout(5000)
+    if (!synced) {
+      return this.waitForReadyByPolling(podName, timeoutMs)
+    }
+
+    if (synced) {
+      const initial = this.podCache.getPod(podName)
+      if (initial) {
+        const failure = this.inspectFailureReason(initial)
+        if (failure === "ImagePullBackOff") {
+          throw new PodStartupFailedError(podName, failure)
+        }
+        const podIp = initial.status?.podIP
+        if (this.isPodReady(initial) && podIp) {
+          return podIp
+        }
+      }
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      let settled = false
+      const timer = setTimeout(() => {
+        finish(undefined, new Error(`Pod ${podName} not ready after ${timeoutMs}ms`))
+      }, timeoutMs)
+
+      const inspect = (pod: k8s.V1Pod) => {
+        if (pod.metadata?.name !== podName) return
+        const failure = this.inspectFailureReason(pod)
+        if (failure === "ImagePullBackOff") {
+          finish(undefined, new PodStartupFailedError(podName, failure))
+          return
+        }
+        const podIp = pod.status?.podIP
+        if (this.isPodReady(pod) && podIp) {
+          finish(podIp)
+        }
+      }
+
+      const offAdd = this.podCache.onAdd(inspect)
+      const offUpdate = this.podCache.onUpdate(inspect)
+      const offDelete = this.podCache.onDelete((deletedName) => {
+        if (deletedName !== podName) return
+        finish(undefined, new Error(`Pod ${podName} was deleted before becoming ready`))
+      })
+
+      const finish = (podIp?: string, err?: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        offAdd()
+        offUpdate()
+        offDelete()
+        if (err) reject(err)
+        else if (podIp) resolve(podIp)
+      }
+
+      const current = this.podCache.getPod(podName)
+      if (current) inspect(current)
+    })
   }
 
   async listPods(labelSelector?: string): Promise<k8s.V1Pod[]> {
+    const synced = await this.podCache.waitForSyncWithTimeout(2000)
+    if (synced) {
+      const all = this.podCache.listPods()
+      if (!labelSelector) return all
+      return all.filter((pod) => matchesLabelSelector(pod, labelSelector))
+    }
     const response = await this.coreApi.listNamespacedPod({
       namespace: this.namespace,
       labelSelector,
@@ -127,18 +248,119 @@ export class PodService {
   }
 
   async getPod(podName: string): Promise<k8s.V1Pod> {
+    const synced = await this.podCache.waitForSyncWithTimeout(2000)
+    if (synced) {
+      const cached = this.podCache.getPod(podName)
+      if (cached) return cached
+    }
     return this.coreApi.readNamespacedPod({
       name: podName,
       namespace: this.namespace,
     })
   }
 
-  async getPodIp(podName: string): Promise<string | undefined> {
-    const pod = await this.getPod(podName)
-    return pod.status?.podIP
+  getCachedPodSnapshot(podName: string): { synced: boolean; pod?: k8s.V1Pod } {
+    return {
+      synced: this.podCache.isSynced(),
+      pod: this.podCache.getPod(podName),
+    }
   }
 
   isPodReady(pod: k8s.V1Pod): boolean {
     return !!pod.status?.conditions?.find((condition) => condition.type === "Ready" && condition.status === "True")
   }
+
+  podAgeMs(pod: k8s.V1Pod, now = Date.now()): number {
+    const created = pod.metadata?.creationTimestamp
+    return created ? now - new Date(created).getTime() : 0
+  }
+
+  inspectFailureReason(pod: k8s.V1Pod): PodFailureReason | null {
+    const allStatuses = [
+      ...(pod.status?.containerStatuses ?? []),
+      ...(pod.status?.initContainerStatuses ?? []),
+    ]
+    for (const cs of allStatuses) {
+      const reason = cs.state?.waiting?.reason
+      if (reason === "ImagePullBackOff" || reason === "ErrImagePull") return "ImagePullBackOff"
+      if (reason === "CrashLoopBackOff") return "CrashLoopBackOff"
+    }
+    return null
+  }
+
+  isNotFound(err: unknown): boolean {
+    return this.statusCode(err) === 404
+  }
+
+  private isConflict(err: unknown): boolean {
+    return this.statusCode(err) === 409
+  }
+
+  private statusCode(err: unknown): number | undefined {
+    if (typeof err !== "object" || err === null) return undefined
+    const candidate = err as { code?: unknown; statusCode?: unknown; response?: { statusCode?: unknown }; body?: { code?: unknown } }
+    if (typeof candidate.code === "number") return candidate.code
+    if (typeof candidate.statusCode === "number") return candidate.statusCode
+    if (candidate.response && typeof candidate.response.statusCode === "number") {
+      return candidate.response.statusCode
+    }
+    if (candidate.body && typeof candidate.body.code === "number") return candidate.body.code
+    return undefined
+  }
+
+  private async readPodIfExists(podName: string): Promise<k8s.V1Pod | null> {
+    try {
+      return await this.coreApi.readNamespacedPod({ name: podName, namespace: this.namespace })
+    } catch (err) {
+      if (this.isNotFound(err)) return null
+      throw err
+    }
+  }
+
+  private async waitForPodDeletionByPolling(podName: string, timeoutMs: number): Promise<void> {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      const pod = await this.readPodIfExists(podName)
+      if (!pod) return
+      await sleep(1000)
+    }
+    throw new Error(`Pod ${podName} was not deleted after ${timeoutMs}ms`)
+  }
+
+  private async waitForReadyByPolling(podName: string, timeoutMs: number): Promise<string> {
+    const deadline = Date.now() + timeoutMs
+    let seen = false
+    while (Date.now() < deadline) {
+      const pod = await this.readPodIfExists(podName)
+      if (pod) {
+        seen = true
+        const failure = this.inspectFailureReason(pod)
+        if (failure === "ImagePullBackOff") {
+          throw new PodStartupFailedError(podName, failure)
+        }
+        const podIp = pod.status?.podIP
+        if (this.isPodReady(pod) && podIp) return podIp
+      } else if (seen) {
+        throw new Error(`Pod ${podName} was deleted before becoming ready`)
+      }
+      await sleep(2000)
+    }
+    throw new Error(`Pod ${podName} not ready after ${timeoutMs}ms`)
+  }
+}
+
+function matchesLabelSelector(pod: k8s.V1Pod, selector: string): boolean {
+  const labels = pod.metadata?.labels ?? {}
+  for (const clause of selector.split(",")) {
+    const eq = clause.indexOf("=")
+    if (eq === -1) continue
+    const key = clause.slice(0, eq).trim()
+    const value = clause.slice(eq + 1).trim()
+    if (labels[key] !== value) return false
+  }
+  return true
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
