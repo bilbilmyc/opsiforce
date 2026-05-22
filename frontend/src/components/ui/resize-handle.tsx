@@ -8,22 +8,22 @@ export function ResizeHandle(props: {
   class?: string
 }): JSX.Element {
   return (
-    <>
-      <div
-        onPointerDown={props.onPointerDown}
-        class={cn(
-          "absolute top-0 h-full cursor-col-resize z-10 hover:bg-primary/40 active:bg-primary/60 transition-colors",
-          props.position === "left"
-            ? "left-0 w-1 -translate-x-1/2"
-            : "right-0 w-1.5",
-          props.resizing && "bg-primary/60",
-          props.class,
-        )}
-        title="Drag to resize"
-      />
-      {props.resizing && (
-        <div class="fixed inset-0 z-50 cursor-col-resize" />
+    <div
+      onPointerDown={props.onPointerDown}
+      class={cn(
+        "group absolute top-0 h-full w-2 cursor-col-resize touch-none select-none z-10",
+        props.position === "left" ? "left-0" : "right-0",
+        props.class,
       )}
-    </>
+      title="Drag to resize"
+    >
+      <div
+        class={cn(
+          "absolute inset-y-0 w-px transition-colors group-hover:bg-primary/60 group-active:bg-primary",
+          props.position === "left" ? "left-0" : "right-0",
+          props.resizing && "bg-primary",
+        )}
+      />
+    </div>
   )
 }
