@@ -152,7 +152,6 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
         </div>
         <PinAppDialogs
           projectId={props.projectId}
-          authMode={project()?.authMode}
           action={pinAction()}
           onActionChange={setPinAction}
         />

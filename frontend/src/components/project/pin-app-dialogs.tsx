@@ -1,14 +1,12 @@
 import { toast } from "solid-sonner"
 import { useSetAppPin } from "~/api/projects"
 import { useTenantSettings } from "~/api/tenant-settings"
-import type { Project } from "~/api/client"
 import ConfirmDialog from "~/components/ui/confirm-dialog"
 
 export type PinDialogAction = "pin" | "unpin" | null
 
 export interface PinAppDialogsProps {
   projectId: string
-  authMode: Project["authMode"] | undefined
   action: PinDialogAction
   onActionChange: (action: PinDialogAction) => void
 }
@@ -16,7 +14,6 @@ export interface PinAppDialogsProps {
 export default function PinAppDialogs(props: PinAppDialogsProps) {
   const setAppPin = useSetAppPin()
   const tenantSettings = useTenantSettings()
-  const hasCompatibleAuthMode = () => props.authMode === "public" || props.authMode === "makara"
 
   const close = () => props.onActionChange(null)
 
@@ -33,17 +30,9 @@ export default function PinAppDialogs(props: PinAppDialogsProps) {
           if (!open) close()
         }}
         title="Pin to Makara"
-        description={
-          hasCompatibleAuthMode()
-            ? `This will make this app visible to all users in ${makaraTenantLabel()} who have the Apps permission in Makara. Continue?`
-            : "This project's auth mode must be 'public' or 'makara' before it can be pinned. Open project Settings → Auth to change the mode first."
-        }
+        description={`This will make this app visible to all users in ${makaraTenantLabel()} who have the Apps permission in Makara. Continue?`}
         confirmLabel="Pin"
-        onConfirm={() => {
-          if (!hasCompatibleAuthMode()) {
-            toast.error("Set auth mode to public or makara before pinning")
-            return
-          }
+        onConfirm={() =>
           setAppPin.mutate(
             { projectId: props.projectId, isPinned: true },
             {
@@ -51,7 +40,7 @@ export default function PinAppDialogs(props: PinAppDialogsProps) {
               onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to pin"),
             },
           )
-        }}
+        }
       />
       <ConfirmDialog
         open={props.action === "unpin"}

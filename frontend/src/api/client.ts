@@ -1,8 +1,24 @@
 const API_BASE = "/api"
 
 export class ApiError extends Error {
-  constructor(public readonly status: number) {
-    super(`API error: ${status}`)
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message)
+  }
+}
+
+async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const text = await res.text()
+    if (!text) return fallback
+    const body: { message?: string | string[] } = JSON.parse(text)
+    if (Array.isArray(body.message)) return body.message.join(", ")
+    if (typeof body.message === "string" && body.message.length > 0) return body.message
+    return fallback
+  } catch {
+    return fallback
   }
 }
 
@@ -30,7 +46,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       window.location.href = "/permission-denied"
       throw new Error("Forbidden")
     }
-    throw new ApiError(res.status)
+    const message = await extractErrorMessage(res, `Error: ${res.status}`)
+    throw new ApiError(res.status, message)
   }
   const text = await res.text()
   return text ? JSON.parse(text) : (undefined as T)

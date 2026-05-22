@@ -354,7 +354,6 @@ export default function ProjectActionsMenu(props: {
 
       <PinAppDialogs
         projectId={props.projectId}
-        authMode={props.project?.authMode}
         action={pinAction()}
         onActionChange={setPinAction}
       />

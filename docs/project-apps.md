@@ -8,7 +8,7 @@ Each project's agent template ships with a small backend route at `/api/app-meta
 
 ## Pinning
 
-Pinning is how a project's app graduates from "internal preview surface" to "shared with the tenant in Makara." A pinned app appears in Makara's app side panel for everyone in the tenant who has the corresponding Makara permission. The pin operation is gated behind the `can_pin_apps` Opsiforce permission, requires the project's auth mode to be either `public` or `makara` (so Makara's iframe load won't bounce on an OIDC redirect), and only works once an app has been detected. Unpinning is symmetric and unconditional.
+Pinning is how a project's app graduates from "internal preview surface" to "shared with the tenant in Makara." A pinned app appears in Makara's app side panel for everyone in the tenant who has the corresponding Makara permission. The pin operation is gated behind the `can_pin_apps` Opsiforce permission, requires the project's auth mode to be `public` (so any Makara user can load the iframe without an additional auth dance), and only works once an app has been detected. Unpinning is symmetric and unconditional. All preconditions are enforced on the backend (`setAppPin` in `project.service.ts`); the frontend just confirms intent and surfaces the backend's rejection message in a toast if a precondition fails.
 
 Internally, the pin state is a single boolean on the `projectApps` row, plus two audit fields (`pinnedById`, `pinnedAt`) that record who pinned it and when. Makara discovers pinned apps via an internal endpoint scoped by tenant.
 
