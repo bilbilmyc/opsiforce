@@ -793,6 +793,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
   private async handleProxyFailureForProject(project: ProjectResponse): Promise<boolean> {
     if (project.status === ProjectStatus.Disabled) return false
+    if (project.status === ProjectStatus.Failed) return false
 
     if (project.status === ProjectStatus.Starting) {
       this.spawnStartupWorker(project.id)
@@ -1201,19 +1202,23 @@ export class ProjectService implements OnApplicationBootstrap {
 
     this.appService.invalidate(projectId)
 
+    const duplicateFailUpdate = isPermanentImageFailure
+      ? db
+          .update(projectDuplicateJobs)
+          .set({ status: ProjectDuplicateStatus.Failed, error: message, updatedAt: new Date() })
+          .where(
+            and(
+              eq(projectDuplicateJobs.targetProjectId, projectId),
+              eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting),
+            ),
+          )
+      : Promise.resolve()
+
     await Promise.allSettled([
       isPermanentImageFailure
         ? Promise.resolve()
         : this.safeDeletePod(podName, `startup failure for project ${projectId}`),
-      db
-        .update(projectDuplicateJobs)
-        .set({ status: ProjectDuplicateStatus.Failed, error: message, updatedAt: new Date() })
-        .where(
-          and(
-            eq(projectDuplicateJobs.targetProjectId, projectId),
-            eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting),
-          ),
-        ),
+      duplicateFailUpdate,
       this.projectEventsService.publish(projectId).catch((publishErr) => {
         this.logger.warn(
           `Failed to publish startup failure event for ${projectId}: ${(publishErr as Error).message}`,
@@ -1251,8 +1256,7 @@ export class ProjectService implements OnApplicationBootstrap {
       return await this.podService.getPod(podName)
     } catch (err) {
       if (this.podService.isNotFound(err)) return null
-      this.logger.warn(`Failed to read pod ${podName}: ${(err as Error).message}`)
-      return null
+      throw err
     }
   }
 
