@@ -62,13 +62,13 @@ export class ScheduleWorker extends WorkerHost {
       "app",
     );
 
-    if (ensured.state === "disabled") {
+    if (ensured.state === "disabled" || ensured.state === "failed") {
       await this.scheduleService.recordExecution(
         scheduleId,
         trigger,
         null,
         null,
-        "project disabled",
+        ensured.state === "failed" ? "project failed" : "project disabled",
       );
       return;
     }
@@ -153,7 +153,7 @@ export class ScheduleWorker extends WorkerHost {
           "app",
         );
         if (ensured.state === "ready") return true;
-        if (ensured.state === "disabled") return false;
+        if (ensured.state === "disabled" || ensured.state === "failed") return false;
       } catch {
         continue;
       }

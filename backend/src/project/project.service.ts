@@ -932,7 +932,11 @@ export class ProjectService implements OnApplicationBootstrap {
       .where(and(eq(projects.id, projectId), eq(projects.status, ProjectStatus.Starting)))
       .returning()
 
-    if (!updated) return
+    if (!updated) {
+      this.startupRetries.delete(projectId)
+      await this.safeDeletePod(podName, `orphan after disable/delete race for project ${projectId}`)
+      return
+    }
 
     this.startupRetries.delete(projectId)
 
