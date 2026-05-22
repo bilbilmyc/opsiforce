@@ -218,11 +218,15 @@ export class ProjectService implements OnApplicationBootstrap {
 
     const projectIds = Array.from(new Set(podRefs.map((pod) => pod.projectId)))
     const existingRows = await db
-      .select({ id: projects.id })
+      .select({ id: projects.id, status: projects.status })
       .from(projects)
       .where(inArray(projects.id, projectIds))
-    const existingIds = new Set(existingRows.map((project) => project.id))
-    const orphanedPods = podRefs.filter((pod) => !existingIds.has(pod.projectId))
+    const projectsExpectingPod = new Set(
+      existingRows
+        .filter((row) => row.status === ProjectStatus.Starting || row.status === ProjectStatus.Active)
+        .map((row) => row.id),
+    )
+    const orphanedPods = podRefs.filter((pod) => !projectsExpectingPod.has(pod.projectId))
 
     await Promise.allSettled(
       orphanedPods.map((pod) => {
@@ -766,6 +770,8 @@ export class ProjectService implements OnApplicationBootstrap {
       return { state: "failed", project }
     }
 
+    this.recordActivity(project.id, activity)
+
     if (project.status === ProjectStatus.Suspended) {
       return this.wakeSuspendedProject(project)
     }
@@ -773,8 +779,6 @@ export class ProjectService implements OnApplicationBootstrap {
     if (project.status === ProjectStatus.Starting) {
       return this.handleStartingProject(project)
     }
-
-    this.recordActivity(project.id, activity)
 
     if (project.podIp) {
       return this.verifyCachedActiveProject(project)
