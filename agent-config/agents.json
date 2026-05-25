@@ -5,7 +5,7 @@
       "description": "Build web apps with React, Tailwind, shadcn/ui, and NestJS",
       "default": true,
       "port": 3000,
-      "version": "0.1.0"
+      "version": "0.1.1"
     }
   }
 }

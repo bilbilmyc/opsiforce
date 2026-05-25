@@ -10,6 +10,7 @@ import { db } from "../../db"
 import { projects } from "../../db/schema"
 
 export const REQUEST_LOG_CLEANUP_QUEUE = "request-log-cleanup"
+type LogTable = "app_requests" | "process_logs" | "process_events"
 
 @Processor(REQUEST_LOG_CLEANUP_QUEUE)
 export class RequestLogCleanupProcessor extends WorkerHost {
@@ -61,13 +62,29 @@ export class RequestLogCleanupProcessor extends WorkerHost {
     const connection = await open({ filename: dbPath, driver: sqlite3.Database })
     try {
       await connection.exec("PRAGMA busy_timeout = 5000")
-      const result = await connection.run(
-        `DELETE FROM app_requests WHERE created_at < datetime('now', ?)`,
-        `-${this.retentionDays} days`,
-      )
-      return result.changes ?? 0
+      let deleted = 0
+      deleted += await this.cleanupTable(connection, "app_requests")
+      deleted += await this.cleanupTable(connection, "process_logs")
+      deleted += await this.cleanupTable(connection, "process_events")
+      return deleted
     } finally {
       await connection.close().catch(() => {})
     }
+  }
+
+  private async cleanupTable(
+    connection: Awaited<ReturnType<typeof open>>,
+    table: LogTable,
+  ): Promise<number> {
+    const row = await connection.get<{ count: number }>(
+      "SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'table' AND name = ?",
+      table,
+    )
+    if (!row || row.count === 0) return 0
+    const result = await connection.run(
+      `DELETE FROM ${table} WHERE created_at < datetime('now', ?)`,
+      `-${this.retentionDays} days`,
+    )
+    return result.changes ?? 0
   }
 }
