@@ -1,0 +1,15 @@
+{
+  "id": "20260525_remove_inner_yarn",
+  "requiresPodRecreate": true,
+  "operations": [
+    {
+      "type": "command",
+      "command": "node",
+      "args": [
+        "${MIGRATION_DIR}/migrate.mjs"
+      ],
+      "cwd": ".",
+      "timeoutSeconds": 60
+    }
+  ]
+}

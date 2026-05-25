@@ -1,0 +1,280 @@
+package main
+
+import (
+	"bufio"
+	"database/sql"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"time"
+
+	_ "modernc.org/sqlite"
+)
+
+const (
+	defaultDBPath = "/workspace/data/database.db"
+	batchSize     = 100
+	flushInterval = 500 * time.Millisecond
+	maxLineLength = 10 * 1024
+)
+
+type stringFlag struct {
+	value string
+	set   bool
+}
+
+func (f *stringFlag) Set(value string) error {
+	f.value = value
+	f.set = true
+	return nil
+}
+
+func (f *stringFlag) String() string {
+	return f.value
+}
+
+type logWriter struct {
+	db         *sql.DB
+	name       string
+	insertStmt *sql.Stmt
+	eventStmt  *sql.Stmt
+	batch      []string
+}
+
+func main() {
+	var nameFlag stringFlag
+	var lineFlag stringFlag
+	var eventFlag stringFlag
+	var exitCodeFlag stringFlag
+	var uptimeFlag stringFlag
+	var restartFlag stringFlag
+
+	flag.Var(&nameFlag, "name", "")
+	flag.Var(&lineFlag, "line", "")
+	flag.Var(&eventFlag, "event", "")
+	flag.Var(&exitCodeFlag, "exit-code", "")
+	flag.Var(&uptimeFlag, "uptime", "")
+	flag.Var(&restartFlag, "restart", "")
+	flag.Parse()
+
+	name := nameFlag.value
+	if name == "" {
+		name = "unknown"
+	}
+
+	writer, err := newLogWriter(name)
+	if eventFlag.set {
+		if err == nil {
+			writer.insertEvent(eventFlag.value, parseOptionalInt(exitCodeFlag), parseOptionalInt(uptimeFlag), parseOptionalInt(restartFlag))
+			writer.close()
+		}
+		return
+	}
+
+	if lineFlag.set {
+		if err == nil {
+			writer.addLine(lineFlag.value)
+			writer.flush()
+			writer.close()
+		}
+		return
+	}
+
+	if err != nil {
+		passthrough()
+		return
+	}
+
+	defer writer.close()
+	stream(writer)
+}
+
+func newLogWriter(name string) (*logWriter, error) {
+	dbPath := os.Getenv("PROCESS_LOG_DB_PATH")
+	if dbPath == "" {
+		dbPath = defaultDBPath
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		return nil, err
+	}
+
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return nil, err
+	}
+
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+
+	for _, statement := range []string{
+		"PRAGMA busy_timeout = 5000",
+		"PRAGMA journal_mode = TRUNCATE",
+		"PRAGMA synchronous = FULL",
+		`CREATE TABLE IF NOT EXISTS process_logs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			process_name TEXT NOT NULL,
+			line TEXT NOT NULL,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		`CREATE TABLE IF NOT EXISTS process_events (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			process_name TEXT NOT NULL,
+			event TEXT NOT NULL,
+			exit_code INTEGER,
+			uptime_seconds INTEGER,
+			restart_count INTEGER,
+			created_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`,
+		"CREATE INDEX IF NOT EXISTS idx_process_logs_process_name ON process_logs(process_name)",
+		"CREATE INDEX IF NOT EXISTS idx_process_logs_created_at ON process_logs(created_at)",
+		"CREATE INDEX IF NOT EXISTS idx_process_events_process_name ON process_events(process_name)",
+	} {
+		if _, err := db.Exec(statement); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+	}
+
+	insertStmt, err := db.Prepare("INSERT INTO process_logs (process_name, line) VALUES (?, ?)")
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	eventStmt, err := db.Prepare("INSERT INTO process_events (process_name, event, exit_code, uptime_seconds, restart_count) VALUES (?, ?, ?, ?, ?)")
+	if err != nil {
+		_ = insertStmt.Close()
+		_ = db.Close()
+		return nil, err
+	}
+
+	return &logWriter{
+		db:         db,
+		name:       name,
+		insertStmt: insertStmt,
+		eventStmt:  eventStmt,
+		batch:      make([]string, 0, batchSize),
+	}, nil
+}
+
+func (w *logWriter) close() {
+	if w.insertStmt != nil {
+		_ = w.insertStmt.Close()
+	}
+	if w.eventStmt != nil {
+		_ = w.eventStmt.Close()
+	}
+	if w.db != nil {
+		_ = w.db.Close()
+	}
+}
+
+func (w *logWriter) addLine(line string) {
+	w.batch = append(w.batch, line)
+	if len(w.batch) >= batchSize {
+		w.flush()
+	}
+}
+
+func (w *logWriter) flush() {
+	if len(w.batch) == 0 || w.db == nil || w.insertStmt == nil {
+		return
+	}
+
+	tx, err := w.db.Begin()
+	if err != nil {
+		w.batch = w.batch[:0]
+		return
+	}
+
+	stmt := tx.Stmt(w.insertStmt)
+	defer stmt.Close()
+	for _, line := range w.batch {
+		if _, err := stmt.Exec(w.name, truncateLine(line)); err != nil {
+			_ = tx.Rollback()
+			w.batch = w.batch[:0]
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		w.batch = w.batch[:0]
+		return
+	}
+
+	w.batch = w.batch[:0]
+}
+
+func (w *logWriter) insertEvent(event string, exitCode any, uptime any, restart any) {
+	if w.db == nil || w.eventStmt == nil {
+		return
+	}
+	_, _ = w.eventStmt.Exec(w.name, event, exitCode, uptime, restart)
+}
+
+func stream(writer *logWriter) {
+	lines := make(chan string)
+	go readLines(os.Stdin, lines)
+
+	ticker := time.NewTicker(flushInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case line, ok := <-lines:
+			if !ok {
+				writer.flush()
+				return
+			}
+			_, _ = fmt.Fprintln(os.Stdout, line)
+			writer.addLine(line)
+		case <-ticker.C:
+			writer.flush()
+		}
+	}
+}
+
+func passthrough() {
+	_, _ = io.Copy(os.Stdout, os.Stdin)
+}
+
+func readLines(input io.Reader, lines chan<- string) {
+	defer close(lines)
+	reader := bufio.NewReader(input)
+	for {
+		text, err := reader.ReadString('\n')
+		if len(text) > 0 {
+			lines <- strings.TrimSuffix(text, "\n")
+		}
+		if errors.Is(err, io.EOF) {
+			return
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+func parseOptionalInt(value stringFlag) any {
+	if !value.set || value.value == "" {
+		return nil
+	}
+	parsed, err := strconv.Atoi(value.value)
+	if err != nil {
+		return nil
+	}
+	return parsed
+}
+
+func truncateLine(line string) string {
+	if len(line) <= maxLineLength {
+		return line
+	}
+	return line[:maxLineLength]
+}

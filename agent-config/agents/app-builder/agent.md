@@ -45,7 +45,7 @@ Files the user uploads through the platform land in `/workspace/user_uploaded_fi
 The dev servers are **already running** when you start — the container entrypoint launches them automatically.
 
 - **Frontend** (Vite): `http://localhost:3000` — hot-reloads on file save
-- **Backend** (NestJS): `http://localhost:3100` — auto-restarts on file change (`tsx watch`)
+- **Backend** (NestJS): `http://localhost:3100` — auto-restarts on file change
 - Vite proxies `/api/*` requests to the backend automatically
 - A process supervisor restarts crashed services automatically
 

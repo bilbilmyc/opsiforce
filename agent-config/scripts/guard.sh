@@ -5,31 +5,22 @@
 NAME="$1"
 shift
 
-LOG_WRITER="/usr/local/bin/log-writer.ts"
+LOG_WRITER="/usr/local/bin/log-writer"
 MAX_RESTARTS=50
 INITIAL_DELAY=2
 MAX_DELAY=60
 STABLE_THRESHOLD=30
 
-USE_LOG_WRITER=false
-if [ -x "$LOG_WRITER" ] && command -v node >/dev/null 2>&1; then
-  USE_LOG_WRITER=true
-fi
-
 guard_log() {
   echo "$1"
-  if $USE_LOG_WRITER; then
-    "$LOG_WRITER" --name "$NAME" --line "$1" 2>/dev/null || true
-  fi
+  "$LOG_WRITER" --name "$NAME" --line "$1" 2>/dev/null || true
 }
 
 guard_event() {
-  if $USE_LOG_WRITER; then
-    "$LOG_WRITER" --name "$NAME" --event "$1" \
-      ${2:+--exit-code "$2"} \
-      ${3:+--uptime "$3"} \
-      ${4:+--restart "$4"} 2>/dev/null || true
-  fi
+  "$LOG_WRITER" --name "$NAME" --event "$1" \
+    ${2:+--exit-code "$2"} \
+    ${3:+--uptime "$3"} \
+    ${4:+--restart "$4"} 2>/dev/null || true
 }
 
 SHOULD_EXIT=false
@@ -43,13 +34,8 @@ while true; do
   guard_event "started" "" "" "$restart_count"
   start_time=$SECONDS
 
-  if $USE_LOG_WRITER; then
-    "$@" 2>&1 | "$LOG_WRITER" --name "$NAME"
-    EXIT_CODE=${PIPESTATUS[0]}
-  else
-    "$@"
-    EXIT_CODE=$?
-  fi
+  "$@" 2>&1 | "$LOG_WRITER" --name "$NAME"
+  EXIT_CODE=${PIPESTATUS[0]}
 
   elapsed=$(( SECONDS - start_time ))
 
