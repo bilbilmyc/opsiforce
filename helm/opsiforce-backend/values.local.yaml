@@ -16,13 +16,7 @@ backend:
 
 imagePullSecrets: []
 
-rbac:
-  create: true
-serviceAccount:
-  create: true
-  automount: true
-  name: opsiforce-backend
-serviceAccountName: opsiforce-backend
+serviceAccountName: opsiforce-agent
 
 config:
   databaseUrl: "postgres://admin:dbpass1@local-pg-postgresql:5432/opsiforce"
