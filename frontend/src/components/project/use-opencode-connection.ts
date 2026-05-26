@@ -49,7 +49,7 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
     }
   }
 
-  async function resolveLatestSessionId(): Promise<string | undefined> {
+  async function resolveOriginalSessionId(): Promise<string | undefined> {
     try {
       const sessions = await api.get<OpenCodeSession[]>(
         `/proxy/${options.projectId}/session`,
@@ -57,7 +57,7 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
       if (!Array.isArray(sessions) || sessions.length === 0) return undefined
       const sorted = sessions
         .filter((s) => !s.parentID)
-        .sort((a, b) => (b.time?.updated ?? 0) - (a.time?.updated ?? 0))
+        .sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
       const head = sorted[0]
       if (!head) return undefined
       syncTitle(head.title)
@@ -90,7 +90,7 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
       connecting = false
       return
     }
-    const existingSessionId = await resolveLatestSessionId()
+    const existingSessionId = await resolveOriginalSessionId()
     const sessionId = existingSessionId ?? (await startFromInitialPrompt())
     setRouter(() => createDirectoryRouter(directory, sessionId))
   }
