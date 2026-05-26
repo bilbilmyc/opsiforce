@@ -213,7 +213,8 @@ SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as count FROM items GROU
 
 ## Performance
 
-- `PRAGMA journal_mode = WAL` — already set (concurrent reads)
+- `PRAGMA journal_mode = TRUNCATE` — already set for CephFS compatibility
+- `PRAGMA synchronous = FULL` — already set for durability; avoid long write transactions
 - `CREATE INDEX idx_items_status ON items(status)` — always index columns used in WHERE/ORDER BY
 - `EXPLAIN QUERY PLAN SELECT ...` — run to debug slow queries
 - Wrap batch inserts in BEGIN/COMMIT (10-100x faster than individual inserts)
