@@ -1,9 +1,8 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"database/sql"
-	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -21,6 +20,7 @@ const (
 	batchSize     = 100
 	flushInterval = 500 * time.Millisecond
 	maxLineLength = 10 * 1024
+	busyTimeoutMs = 1000
 )
 
 type stringFlag struct {
@@ -39,11 +39,15 @@ func (f *stringFlag) String() string {
 }
 
 type logWriter struct {
-	db         *sql.DB
-	name       string
-	insertStmt *sql.Stmt
-	eventStmt  *sql.Stmt
-	batch      []string
+	db    *sql.DB
+	name  string
+	batch []string
+}
+
+type streamEvent struct {
+	output  string
+	line    string
+	hasLine bool
 }
 
 func main() {
@@ -113,9 +117,9 @@ func newLogWriter(name string) (*logWriter, error) {
 	db.SetMaxIdleConns(1)
 
 	for _, statement := range []string{
-		"PRAGMA busy_timeout = 5000",
+		fmt.Sprintf("PRAGMA busy_timeout = %d", busyTimeoutMs),
 		"PRAGMA journal_mode = TRUNCATE",
-		"PRAGMA synchronous = FULL",
+		"PRAGMA synchronous = NORMAL",
 		`CREATE TABLE IF NOT EXISTS process_logs (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			process_name TEXT NOT NULL,
@@ -141,35 +145,14 @@ func newLogWriter(name string) (*logWriter, error) {
 		}
 	}
 
-	insertStmt, err := db.Prepare("INSERT INTO process_logs (process_name, line) VALUES (?, ?)")
-	if err != nil {
-		_ = db.Close()
-		return nil, err
-	}
-
-	eventStmt, err := db.Prepare("INSERT INTO process_events (process_name, event, exit_code, uptime_seconds, restart_count) VALUES (?, ?, ?, ?, ?)")
-	if err != nil {
-		_ = insertStmt.Close()
-		_ = db.Close()
-		return nil, err
-	}
-
 	return &logWriter{
-		db:         db,
-		name:       name,
-		insertStmt: insertStmt,
-		eventStmt:  eventStmt,
-		batch:      make([]string, 0, batchSize),
+		db:    db,
+		name:  name,
+		batch: make([]string, 0, batchSize),
 	}, nil
 }
 
 func (w *logWriter) close() {
-	if w.insertStmt != nil {
-		_ = w.insertStmt.Close()
-	}
-	if w.eventStmt != nil {
-		_ = w.eventStmt.Close()
-	}
 	if w.db != nil {
 		_ = w.db.Close()
 	}
@@ -183,27 +166,27 @@ func (w *logWriter) addLine(line string) {
 }
 
 func (w *logWriter) flush() {
-	if len(w.batch) == 0 || w.db == nil || w.insertStmt == nil {
+	if len(w.batch) == 0 || w.db == nil {
 		return
 	}
 
-	tx, err := w.db.Begin()
-	if err != nil {
-		w.batch = w.batch[:0]
-		return
-	}
-
-	stmt := tx.Stmt(w.insertStmt)
-	defer stmt.Close()
-	for _, line := range w.batch {
-		if _, err := stmt.Exec(w.name, truncateLine(line)); err != nil {
-			_ = tx.Rollback()
-			w.batch = w.batch[:0]
-			return
+	lines := w.batch
+	ok := w.writeTransaction(func(ctx context.Context, conn *sql.Conn) error {
+		stmt, err := conn.PrepareContext(ctx, "INSERT INTO process_logs (process_name, line) VALUES (?, ?)")
+		if err != nil {
+			return err
 		}
-	}
 
-	if err := tx.Commit(); err != nil {
+		for _, line := range lines {
+			if _, err := stmt.ExecContext(ctx, w.name, truncateLine(line)); err != nil {
+				_ = stmt.Close()
+				return err
+			}
+		}
+
+		return stmt.Close()
+	})
+	if !ok {
 		w.batch = w.batch[:0]
 		return
 	}
@@ -212,28 +195,78 @@ func (w *logWriter) flush() {
 }
 
 func (w *logWriter) insertEvent(event string, exitCode any, uptime any, restart any) {
-	if w.db == nil || w.eventStmt == nil {
+	if w.db == nil {
 		return
 	}
-	_, _ = w.eventStmt.Exec(w.name, event, exitCode, uptime, restart)
+	w.writeTransaction(func(ctx context.Context, conn *sql.Conn) error {
+		_, err := conn.ExecContext(
+			ctx,
+			"INSERT INTO process_events (process_name, event, exit_code, uptime_seconds, restart_count) VALUES (?, ?, ?, ?, ?)",
+			w.name,
+			event,
+			exitCode,
+			uptime,
+			restart,
+		)
+		return err
+	})
+}
+
+func (w *logWriter) writeTransaction(fn func(context.Context, *sql.Conn) error) bool {
+	if w.db == nil {
+		return false
+	}
+
+	ctx := context.Background()
+	conn, err := w.db.Conn(ctx)
+	if err != nil {
+		return false
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return false
+	}
+
+	committed := false
+	defer func() {
+		if !committed {
+			_, _ = conn.ExecContext(ctx, "ROLLBACK")
+		}
+	}()
+
+	if err := fn(ctx, conn); err != nil {
+		return false
+	}
+
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return false
+	}
+	committed = true
+
+	return true
 }
 
 func stream(writer *logWriter) {
-	lines := make(chan string)
-	go readLines(os.Stdin, lines)
+	events := make(chan streamEvent)
+	go readStream(os.Stdin, events)
 
 	ticker := time.NewTicker(flushInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case line, ok := <-lines:
+		case event, ok := <-events:
 			if !ok {
 				writer.flush()
 				return
 			}
-			_, _ = fmt.Fprintln(os.Stdout, line)
-			writer.addLine(line)
+			if event.output != "" {
+				_, _ = io.WriteString(os.Stdout, event.output)
+			}
+			if event.hasLine {
+				writer.addLine(event.line)
+			}
 		case <-ticker.C:
 			writer.flush()
 		}
@@ -244,21 +277,58 @@ func passthrough() {
 	_, _ = io.Copy(os.Stdout, os.Stdin)
 }
 
-func readLines(input io.Reader, lines chan<- string) {
-	defer close(lines)
-	reader := bufio.NewReader(input)
+func readStream(input io.Reader, events chan<- streamEvent) {
+	defer close(events)
+	buffer := make([]byte, 32*1024)
+	var line strings.Builder
+	truncated := false
+
 	for {
-		text, err := reader.ReadString('\n')
-		if len(text) > 0 {
-			lines <- strings.TrimSuffix(text, "\n")
+		read, err := input.Read(buffer)
+		if read > 0 {
+			text := string(buffer[:read])
+			events <- streamEvent{output: text}
+			start := 0
+			for index := strings.IndexByte(text[start:], '\n'); index >= 0; index = strings.IndexByte(text[start:], '\n') {
+				end := start + index
+				truncated = appendLineSegment(&line, truncated, text[start:end])
+				events <- streamEvent{line: line.String(), hasLine: true}
+				line.Reset()
+				truncated = false
+				start = end + 1
+			}
+			if start < len(text) {
+				truncated = appendLineSegment(&line, truncated, text[start:])
+			}
 		}
-		if errors.Is(err, io.EOF) {
+		if err == io.EOF {
+			if line.Len() > 0 || truncated {
+				events <- streamEvent{line: line.String(), hasLine: true}
+			}
 			return
 		}
 		if err != nil {
 			return
 		}
 	}
+}
+
+func appendLineSegment(line *strings.Builder, truncated bool, segment string) bool {
+	if truncated {
+		return true
+	}
+
+	remaining := maxLineLength - line.Len()
+	if remaining <= 0 {
+		return true
+	}
+	if len(segment) <= remaining {
+		line.WriteString(segment)
+		return false
+	}
+
+	line.WriteString(segment[:remaining])
+	return true
 }
 
 func parseOptionalInt(value stringFlag) any {
