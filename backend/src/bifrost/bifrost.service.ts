@@ -172,6 +172,30 @@ export class BifrostService {
     })
   }
 
+  async updateProjectResourceBudgets(projectId: string, teamId: string, budgets: BudgetDefaults): Promise<void> {
+    const keys = await db
+      .select({
+        keyType: projectVirtualKeys.keyType,
+        bifrostKeyId: projectVirtualKeys.bifrostKeyId,
+      })
+      .from(projectVirtualKeys)
+      .where(and(eq(projectVirtualKeys.projectId, projectId), eq(projectVirtualKeys.status, "active")))
+
+    const chatKey = keys.find((key) => key.keyType === "chat")
+    const backendKey = keys.find((key) => key.keyType === "backend")
+    if (!chatKey || !backendKey) throw new Error(`Project ${projectId} is missing active Bifrost keys`)
+
+    await Promise.all([
+      this.updateTeamBudget(teamId, this.budgetFor(budgets, "project")),
+      this.updateVirtualKeyBudget(chatKey.bifrostKeyId, this.budgetFor(budgets, "chat")),
+      this.updateVirtualKeyBudget(backendKey.bifrostKeyId, this.budgetFor(budgets, "backend")),
+    ])
+  }
+
+  private async updateVirtualKeyBudget(keyId: string, budget: BifrostBudget): Promise<void> {
+    await this.request("PUT", `/api/governance/virtual-keys/${keyId}`, { budget })
+  }
+
   async deleteTeam(teamId: string): Promise<void> {
     await this.request("DELETE", `/api/governance/teams/${teamId}`)
   }

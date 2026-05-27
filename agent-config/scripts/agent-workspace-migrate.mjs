@@ -61,10 +61,10 @@ function metadataRequires(agentConfig, key) {
   return !!workspaceUpdate && typeof workspaceUpdate === "object" && workspaceUpdate[key] === true
 }
 
-async function modelOverride() {
+async function modelOverride(agentConfig, currentConfig) {
   if (process.env.AGENT_MODEL) return process.env.AGENT_MODEL
-  const current = await readJson(opencodeConfigPath, {})
-  return typeof current?.model === "string" ? current.model : ""
+  if (typeof agentConfig?.model === "string") return agentConfig.model
+  return typeof currentConfig?.model === "string" ? currentConfig.model : ""
 }
 
 async function applyModelOverride(model) {
@@ -74,7 +74,10 @@ async function applyModelOverride(model) {
 }
 
 async function copyAgentOwnedFiles() {
-  const model = await modelOverride()
+  const agentConfig = await loadAgentConfig()
+  const currentConfig = await readJson(opencodeConfigPath, {})
+  const model = await modelOverride(agentConfig, currentConfig)
+  if (model && currentConfig?.model !== model) summary.requiresOpenCodeReload = true
   await mkdir(path.dirname(opencodeConfigPath), { recursive: true })
   await mkdir(path.join(workspace, ".opencode", "agents"), { recursive: true })
   await cp(path.join(opencodeRoot, "opencode.json"), opencodeConfigPath)

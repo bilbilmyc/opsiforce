@@ -15,11 +15,11 @@ export interface TenantPodOptions {
   agentName?: string
 }
 
-export type PodFailureReason = "ImagePullBackOff" | "CrashLoopBackOff"
+export type PodFailureReason = "ImagePullBackOff" | "CrashLoopBackOff" | "Unschedulable"
 
 export class PodStartupFailedError extends Error {
-  constructor(public readonly podName: string, public readonly reason: PodFailureReason) {
-    super(`Pod ${podName} failed: ${reason}`)
+  constructor(public readonly podName: string, public readonly reason: PodFailureReason, detail?: string) {
+    super(`Pod ${podName} failed: ${reason}${detail ? ` (${detail})` : ""}`)
     this.name = "PodStartupFailedError"
   }
 }
@@ -186,6 +186,12 @@ export class PodService {
     return new Promise<string>((resolve, reject) => {
       let settled = false
       const timer = setTimeout(() => {
+        const current = this.podCache.getPod(podName)
+        const failure = current ? this.inspectFailureReason(current) : null
+        if (current && failure === "Unschedulable") {
+          finish(undefined, new PodStartupFailedError(podName, failure, this.inspectFailureMessage(current)))
+          return
+        }
         finish(undefined, new Error(`Pod ${podName} not ready after ${timeoutMs}ms`))
       }, timeoutMs)
 
@@ -268,6 +274,9 @@ export class PodService {
   }
 
   inspectFailureReason(pod: k8s.V1Pod): PodFailureReason | null {
+    const scheduled = pod.status?.conditions?.find((condition) => condition.type === "PodScheduled")
+    if (scheduled?.status === "False" && scheduled.reason === "Unschedulable") return "Unschedulable"
+
     const allStatuses = [
       ...(pod.status?.containerStatuses ?? []),
       ...(pod.status?.initContainerStatuses ?? []),
@@ -278,6 +287,21 @@ export class PodService {
       if (reason === "CrashLoopBackOff") return "CrashLoopBackOff"
     }
     return null
+  }
+
+  inspectFailureMessage(pod: k8s.V1Pod): string | undefined {
+    const scheduled = pod.status?.conditions?.find((condition) => condition.type === "PodScheduled")
+    if (scheduled?.status === "False" && scheduled.message) return scheduled.message
+
+    const allStatuses = [
+      ...(pod.status?.containerStatuses ?? []),
+      ...(pod.status?.initContainerStatuses ?? []),
+    ]
+    for (const cs of allStatuses) {
+      const message = cs.state?.waiting?.message
+      if (message) return message
+    }
+    return undefined
   }
 
   isNotFound(err: unknown): boolean {
@@ -336,6 +360,10 @@ export class PodService {
         throw new Error(`Pod ${podName} was deleted before becoming ready`)
       }
       await sleep(2000)
+    }
+    const pod = await this.readPodIfExists(podName)
+    if (pod && this.inspectFailureReason(pod) === "Unschedulable") {
+      throw new PodStartupFailedError(podName, "Unschedulable", this.inspectFailureMessage(pod))
     }
     throw new Error(`Pod ${podName} not ready after ${timeoutMs}ms`)
   }

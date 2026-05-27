@@ -4,7 +4,6 @@ import { ConfigService } from "@nestjs/config"
 import { Queue } from "bullmq"
 import { and, asc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm"
 import crypto from "crypto"
-import { readFileSync } from "node:fs"
 import { readFile, rm } from "node:fs/promises"
 import { join } from "node:path"
 import { db } from "../../db"
@@ -22,6 +21,7 @@ import { BifrostService } from "../bifrost/bifrost.service"
 import { GatewayKeyService } from "../gateway/gateway-key.service"
 import { DefaultsService } from "../defaults/defaults.service"
 import { TimeoutService } from "../timeout/timeout.service"
+import { readAgentConfig } from "../agent/agent-config"
 import {
   PROJECT_POOL_QUEUE,
   PROJECT_POOL_TEARDOWN_QUEUE,
@@ -65,6 +65,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
   private readonly poolSizeOverride: number | null
   private readonly agentTargetByName: Map<string, number>
   private readonly agentVersionByName: Map<string, string>
+  private readonly agentModelByName: Map<string, string>
   private readonly agentIdToName = new Map<string, string>()
   private readonly agentNameToId = new Map<string, string>()
   private integrityTimer: NodeJS.Timeout | null = null
@@ -86,9 +87,10 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
     this.gatewayUrl = this.configService.get<string>("gatewayUrl", "")
     this.storageMountPath = this.configService.getOrThrow<string>("storageMountPath")
     this.poolSizeOverride = this.configService.get<number | null>("poolSizeOverride", null)
-    const agentConfig = this.readAgentConfig()
+    const agentConfig = readAgentConfig()
     this.agentTargetByName = agentConfig.poolSizes
     this.agentVersionByName = agentConfig.versions
+    this.agentModelByName = agentConfig.models
   }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -145,13 +147,26 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       return null
     }
 
+    const budgetsPatched = await this.patchBifrostBudgetsWithRetries(
+      reserved.id,
+      reserved.bifrostProjectId,
+      claim.tenantId,
+    )
+    if (!budgetsPatched) {
+      this.logger.warn(`Reverting claim ${reserved.id}: Bifrost budget patch failed permanently`)
+      await this.revertReservation(reserved.id)
+      return null
+    }
+
     const patched = await this.patchBifrostTeamWithRetries(reserved.bifrostProjectId, customerId)
     if (patched !== "patched") {
       this.logger.warn(`Reverting claim ${reserved.id}: Bifrost team patch failed permanently`)
       if (patched === "clean-failed") {
         await this.revertReservation(reserved.id)
       } else {
-        await this.destroyPoolSlot(reserved.id, [ProjectStatus.Claiming], "bifrost patch outcome unknown").catch(() => {})
+        await this.destroyPoolSlot(reserved.id, [ProjectStatus.Claiming], "bifrost patch outcome unknown").catch(
+          () => {},
+        )
         await this.replenishIfEnabled(name, reserved.agentId)
       }
       return null
@@ -376,6 +391,34 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       .where(and(eq(projects.id, projectId), eq(projects.status, ProjectStatus.Claiming)))
   }
 
+  private async patchBifrostBudgetsWithRetries(
+    projectId: string,
+    teamId: string | null,
+    tenantId: string,
+  ): Promise<boolean> {
+    if (!this.bifrostService.isEnabled()) return true
+    if (!teamId) {
+      this.logger.warn("Pool project has no bifrost team id; cannot patch budgets")
+      return false
+    }
+
+    const budgets = await this.defaultsService.getTenantBudgets(tenantId)
+    for (let attempt = 0; attempt < PATCH_BACKOFF_MS.length; attempt++) {
+      try {
+        await this.bifrostService.updateProjectResourceBudgets(projectId, teamId, budgets)
+        return true
+      } catch (err) {
+        const delay = PATCH_BACKOFF_MS[attempt]
+        this.logger.warn(
+          `Bifrost budget patch attempt ${attempt + 1} failed (project=${projectId}): ${(err as Error).message}; retrying in ${delay}ms`,
+        )
+        if (attempt < PATCH_BACKOFF_MS.length - 1) await sleep(delay)
+      }
+    }
+
+    return false
+  }
+
   private async patchBifrostTeamWithRetries(teamId: string | null, customerId: string): Promise<TeamPatchResult> {
     if (!this.bifrostService.isEnabled()) return "patched"
     if (!teamId) {
@@ -448,16 +491,15 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       }
       await this.gatewayKeyService.createKey(id, null)
 
-      const [bifrostOptions, gatewayApiKey, agentDefaults] = await Promise.all([
+      const [bifrostOptions, gatewayApiKey] = await Promise.all([
         this.bifrostService.getProjectPodOptions(id),
         this.gatewayKeyService.getProjectToken(id),
-        this.defaultsService.getGlobalAgent(),
       ])
 
       await this.podService.createAssignedPod(id, directory, {
         ...(bifrostOptions ?? {}),
         agentName,
-        agentModel: agentDefaults.defaultModel,
+        agentModel: this.agentModelByName.get(agentName),
         gatewayApiKey: gatewayApiKey ?? undefined,
         gatewayUrl: this.gatewayUrl,
       })
@@ -554,6 +596,15 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       }
       try {
         const customerId = await this.ensureTenantCustomer(row.tenantId)
+        const budgetsPatched = await this.patchBifrostBudgetsWithRetries(
+          row.id,
+          row.bifrostProjectId,
+          row.tenantId,
+        )
+        if (!budgetsPatched) {
+          await this.destroyAndReplenish(row.id, "recovery: bifrost budget patch failed permanently")
+          continue
+        }
         const patched = await this.patchBifrostTeamWithRetries(row.bifrostProjectId, customerId)
         if (patched !== "patched") {
           if (patched === "clean-failed") {
@@ -723,34 +774,26 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
 
   private async workspaceAtTarget(directory: string, agentName: string): Promise<boolean> {
     const targetVersion = this.agentVersionByName.get(agentName)
-    if (!targetVersion) return true
-    const ledgerPath = join(this.storageMountPath, directory, ".opsiforce", "agents", `${agentName}.json`)
+    const targetModel = this.agentModelByName.get(agentName)
+    if (!targetVersion && !targetModel) return true
+    if (targetVersion) {
+      const ledgerPath = join(this.storageMountPath, directory, ".opsiforce", "agents", `${agentName}.json`)
+      try {
+        const ledger = JSON.parse(await readFile(ledgerPath, "utf8")) as { agentVersion?: string }
+        if (ledger.agentVersion !== targetVersion) return false
+      } catch {
+        return false
+      }
+    }
+
+    if (!targetModel) return true
+    const configPath = join(this.storageMountPath, directory, ".xdg", "config", "opencode", "opencode.json")
     try {
-      const ledger = JSON.parse(await readFile(ledgerPath, "utf8")) as { agentVersion?: string }
-      return ledger.agentVersion === targetVersion
+      const config = JSON.parse(await readFile(configPath, "utf8")) as { model?: string }
+      return config.model === targetModel
     } catch {
       return false
     }
-  }
-
-  private readAgentConfig(): { poolSizes: Map<string, number>; versions: Map<string, string> } {
-    const file = join(process.cwd(), "..", "agent-config", "agents.json")
-    const poolSizes = new Map<string, number>()
-    const versions = new Map<string, string>()
-    try {
-      const parsed = JSON.parse(readFileSync(file, "utf8")) as {
-        agents?: Record<string, { poolSize?: number; version?: string }>
-      }
-      for (const [name, conf] of Object.entries(parsed.agents ?? {})) {
-        const value = typeof conf.poolSize === "number" && conf.poolSize > 0 ? conf.poolSize : 0
-        poolSizes.set(name, value)
-        if (typeof conf.version === "string" && conf.version.length > 0) {
-          versions.set(name, conf.version)
-        }
-      }
-    } catch {
-    }
-    return { poolSizes, versions }
   }
 }
 

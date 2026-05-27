@@ -5,14 +5,12 @@ import {
   api,
   type TimeoutDefaults,
   type BudgetDefaults,
-  type AgentDefaults,
 } from "~/api/client"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
-import { Clock, CircleDollarSign, Cpu, SlidersHorizontal } from "~/components/icons"
+import { Clock, CircleDollarSign, SlidersHorizontal } from "~/components/icons"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs"
 import { Button } from "~/components/ui/button"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem, SelectSection } from "~/components/ui/select"
 import { TimeoutRow } from "~/components/ui/timeout-row"
 import { BudgetRow } from "~/components/ui/budget-row"
 import { msToUnit, unitToMs } from "~/lib/duration-units"
@@ -76,16 +74,11 @@ function DefaultsForm(props: { scope: Scope }) {
     queryKey: [...keyPrefix(), "budgets"],
     queryFn: () => api.get<BudgetDefaults>(`${base()}/budgets`),
   }))
-  const agent = createQuery(() => ({
-    queryKey: [...keyPrefix(), "agent"],
-    queryFn: () => api.get<AgentDefaults>(`${base()}/agent`),
-  }))
 
   async function invalidate() {
     await Promise.all([
       qc.invalidateQueries({ queryKey: [...keyPrefix(), "timeouts"] }),
       qc.invalidateQueries({ queryKey: [...keyPrefix(), "budgets"] }),
-      qc.invalidateQueries({ queryKey: [...keyPrefix(), "agent"] }),
     ])
   }
 
@@ -103,15 +96,6 @@ function DefaultsForm(props: { scope: Scope }) {
       <Show when={budgets.data}>
         {(data) => (
           <BudgetsSection
-            base={base()}
-            data={data()}
-            onSaved={invalidate}
-          />
-        )}
-      </Show>
-      <Show when={agent.data}>
-        {(data) => (
-          <AgentSection
             base={base()}
             data={data()}
             onSaved={invalidate}
@@ -224,92 +208,6 @@ function BudgetsSection(props: {
   )
 }
 
-interface ModelGroup {
-  label: string
-  options: AgentDefaults["availableModels"]
-}
-
-const PROVIDER_LABELS: Record<string, string> = {
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-}
-
-function groupModelsByProvider(models: AgentDefaults["availableModels"]): ModelGroup[] {
-  const buckets = new Map<string, AgentDefaults["availableModels"]>()
-  for (const m of models) {
-    const provider = m.value.split("/")[0] ?? "other"
-    const existing = buckets.get(provider)
-    if (existing) {
-      existing.push(m)
-    } else {
-      buckets.set(provider, [m])
-    }
-  }
-  return Array.from(buckets.entries()).map(([provider, options]) => ({
-    label: PROVIDER_LABELS[provider] ?? provider,
-    options,
-  }))
-}
-
-function AgentSection(props: {
-  base: string
-  data: AgentDefaults
-  onSaved: () => Promise<void>
-}) {
-  const [model, setModel] = createSignal(props.data.defaultModel)
-  const [dirty, setDirty] = createSignal(false)
-  const [saving, setSaving] = createSignal(false)
-
-  async function save() {
-    setSaving(true)
-    try {
-      await api.patch(`${props.base}/agent`, { defaultModel: model() })
-      await props.onSaved()
-      setDirty(false)
-      toast.success("Agent defaults updated")
-    } catch {
-      toast.error("Failed to save agent defaults")
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const groups = createMemo(() => groupModelsByProvider(props.data.availableModels))
-  const selectedOption = () => props.data.availableModels.find((m) => m.value === model()) ?? null
-
-  return (
-    <SectionCard icon={<Cpu class="w-4 h-4 text-muted-foreground" />} title="Agent" saving={saving()} dirty={dirty()} onSave={save}>
-      <div class="rounded-lg border border-border p-3 space-y-2.5">
-        <label class="text-xs font-medium text-foreground block">Default Model</label>
-        <Select<AgentDefaults["availableModels"][0], ModelGroup>
-          options={groups()}
-          optionValue="value"
-          optionTextValue="label"
-          optionGroupChildren="options"
-          value={selectedOption()}
-          onChange={(opt) => { if (opt) { setModel(opt.value); setDirty(true) } }}
-          itemComponent={(itemProps) => (
-            <SelectItem item={itemProps.item}>{itemProps.item.rawValue.label}</SelectItem>
-          )}
-          sectionComponent={(sectionProps) => (
-            <SelectSection>{sectionProps.section.rawValue.label}</SelectSection>
-          )}
-        >
-          <SelectTrigger>
-            <SelectValue<typeof props.data.availableModels[0]>>
-              {(state) => <span>{state.selectedOption()?.label ?? model()}</span>}
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent />
-        </Select>
-        <p class="text-xs text-muted-foreground/70">
-          Used to seed new projects. Existing projects keep their current model.
-        </p>
-      </div>
-    </SectionCard>
-  )
-}
-
 function SectionCard(props: {
   icon: JSX.Element
   title: string
@@ -333,4 +231,3 @@ function SectionCard(props: {
     </div>
   )
 }
-
