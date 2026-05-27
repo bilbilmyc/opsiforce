@@ -27,7 +27,7 @@ import {
   projectDuplicateJobs,
 } from "../../db/schema"
 import { PodService, PodStartupFailedError } from "../pod/pod.service"
-import { PodPoolService } from "../pod/pod.pool.service"
+import { ProjectPoolService } from "../pool/project-pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
 import { BifrostService } from "../bifrost/bifrost.service"
 import { assertPositiveMs } from "../common/validation"
@@ -35,6 +35,7 @@ import { DefaultsService } from "../defaults/defaults.service"
 import { GatewayKeyService } from "../gateway/gateway-key.service"
 import { ScheduleService } from "../schedule/schedule.service"
 import { AgentService } from "../agent/agent.service"
+import { readAgentConfig } from "../agent/agent-config"
 import {
   CreateProjectDto,
   UpdateProjectDto,
@@ -48,11 +49,11 @@ import {
   UpdateAppDto,
 } from "./project.types"
 
-// TODO: replace these hand-rolled validators with zod schemas once zod is introduced.
 const APP_NAME_MIN_LENGTH = 1
 const APP_NAME_MAX_LENGTH = 80
 const APP_DESCRIPTION_MAX_LENGTH = 500
 const CRASH_LOOP_RECREATE_AGE_MS = 60 * 1000
+const UNSCHEDULABLE_STARTUP_GRACE_MS = 180 * 1000
 const STARTUP_RETRY_BASE_MS = 5 * 1000
 const STARTUP_RETRY_MAX_MS = 5 * 60 * 1000
 
@@ -116,7 +117,6 @@ export interface EnsureProjectResult {
   project: ProjectResponse
 }
 
-// Common orderBy for project listings: active projects first, most-recent activity first.
 const projectOrderBy = () =>
   [
     asc(sql`CASE WHEN ${projects.status} = 'disabled' THEN 1 ELSE 0 END`),
@@ -157,10 +157,11 @@ export class ProjectService implements OnApplicationBootstrap {
   private readonly startupTasks = new Map<string, Promise<void>>()
   private readonly startupRetries = new Map<string, number>()
   private readonly recreateRequests = new Set<string>()
+  private readonly agentModelByName: Map<string, string>
 
   constructor(
     private readonly podService: PodService,
-    private readonly podPoolService: PodPoolService,
+    private readonly projectPoolService: ProjectPoolService,
     private readonly timeoutService: TimeoutService,
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => BifrostService))
@@ -176,7 +177,9 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly agentService: AgentService,
     @InjectQueue(PROJECT_DUPLICATE_QUEUE)
     private readonly duplicateQueue: Queue<ProjectDuplicateJobData>,
-  ) {}
+  ) {
+    this.agentModelByName = readAgentConfig().models
+  }
 
   async onApplicationBootstrap() {
     await this.cleanupOrphanedAssignedPods().catch((err) => {
@@ -206,8 +209,8 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   private async cleanupOrphanedAssignedPods(): Promise<void> {
-    const assignedPods = await this.podService.listPods("app=opsiforce-agent,opsiforce.io/pool=assigned")
-    const podRefs = assignedPods
+    const agentPods = await this.podService.listPods("app=opsiforce-agent")
+    const podRefs = agentPods
       .map((pod) => ({
         name: pod.metadata?.name ?? null,
         projectId: pod.metadata?.labels?.["opsiforce.io/project-id"] ?? null,
@@ -223,7 +226,13 @@ export class ProjectService implements OnApplicationBootstrap {
       .where(inArray(projects.id, projectIds))
     const projectsExpectingPod = new Set(
       existingRows
-        .filter((row) => row.status === ProjectStatus.Starting || row.status === ProjectStatus.Active)
+        .filter(
+          (row) =>
+            row.status === ProjectStatus.Starting ||
+            row.status === ProjectStatus.Active ||
+            row.status === ProjectStatus.Pending ||
+            row.status === ProjectStatus.Claiming,
+        )
         .map((row) => row.id),
     )
     const orphanedPods = podRefs.filter((pod) => !projectsExpectingPod.has(pod.projectId))
@@ -236,18 +245,51 @@ export class ProjectService implements OnApplicationBootstrap {
     )
   }
 
-
   async create(
     dto: CreateProjectDto | undefined,
     tenantId: string,
     workspaceId: string | null = null,
   ): Promise<ProjectResponse> {
-    const id = crypto.randomUUID()
-    const directory = `projects/${tenantId}/${id}`
-    const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
     const agentId = dto?.agentId ?? (await this.agentService.getDefaultAgentId())
-    const { defaultTimeoutIdle: timeoutIdle, defaultAppTimeoutIdle: appTimeoutIdle } =
-      await this.defaultsService.getTenantTimeouts(tenantId)
+    const timeouts = await this.defaultsService.getTenantTimeouts(tenantId)
+
+    const claimedId = await this.projectPoolService
+      .claimPending(agentId, {
+        tenantId,
+        workspaceId,
+        title: dto?.title ?? null,
+        description: dto?.description ?? null,
+        timeoutIdle: timeouts.defaultTimeoutIdle,
+        appTimeoutIdle: timeouts.defaultAppTimeoutIdle,
+        timezone: dto?.timezone || "UTC",
+      })
+      .catch((err) => {
+        this.logger.warn(`Pool claim failed; falling back to slow path: ${(err as Error).message}`)
+        return null
+      })
+
+    if (claimedId) {
+      const project = await this.findOne(claimedId, tenantId)
+      await Promise.allSettled([
+        this.timeoutService.touch(project.id),
+        this.projectEventsService.publish(project.id),
+      ])
+      return project
+    }
+
+    return this.createDirect(dto, tenantId, workspaceId, agentId, timeouts)
+  }
+
+  private async createDirect(
+    dto: CreateProjectDto | undefined,
+    tenantId: string,
+    workspaceId: string | null,
+    agentId: string,
+    timeouts: { defaultTimeoutIdle: number; defaultAppTimeoutIdle: number },
+  ): Promise<ProjectResponse> {
+    const id = crypto.randomUUID()
+    const directory = `projects/${id}`
+    const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
 
     await db.transaction(async (tx) => {
       await tx.insert(projects).values({
@@ -265,8 +307,8 @@ export class ProjectService implements OnApplicationBootstrap {
 
       await tx.insert(projectSettings).values({
         projectId: id,
-        timeoutIdle,
-        appTimeoutIdle,
+        timeoutIdle: timeouts.defaultTimeoutIdle,
+        appTimeoutIdle: timeouts.defaultAppTimeoutIdle,
         timezone: dto?.timezone || "UTC",
       })
     })
@@ -283,7 +325,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
     const id = crypto.randomUUID()
     const duplicateJobId = crypto.randomUUID()
-    const directory = `projects/${tenantId}/${id}`
+    const directory = `projects/${id}`
     const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
     const title = dto?.title ?? (source.title ? `${source.title} (copy)` : null)
 
@@ -570,17 +612,16 @@ export class ProjectService implements OnApplicationBootstrap {
     ])
 
     await db.delete(projects).where(eq(projects.id, id))
-    await db
-      .insert(deletedProjects)
-      .values({
-        id: project.id,
-        tenantId: project.tenantId,
-        directory: project.directory,
-      })
-      .onConflictDoNothing()
-    await this.podPoolService.replenish().catch((err) => {
-      this.logger.warn(`Failed to replenish warm pool after deleting project ${id}: ${err.message}`)
-    })
+    if (project.tenantId) {
+      await db
+        .insert(deletedProjects)
+        .values({
+          id: project.id,
+          tenantId: project.tenantId,
+          directory: project.directory,
+        })
+        .onConflictDoNothing()
+    }
   }
 
   async disable(id: string, tenantId: string): Promise<ProjectResponse> {
@@ -606,10 +647,6 @@ export class ProjectService implements OnApplicationBootstrap {
       .where(eq(projects.id, id))
     this.appService.invalidate(id)
     await this.projectEventsService.publish(id)
-
-    await this.podPoolService.replenish().catch((err) => {
-      this.logger.warn(`Failed to replenish warm pool after disabling project ${id}: ${err.message}`)
-    })
 
     return this.findOne(id, tenantId)
   }
@@ -764,6 +801,10 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   async ensureProjectAccess(project: ProjectResponse, activity: ProjectActivityKind): Promise<EnsureProjectResult> {
+    if (project.status === ProjectStatus.Pending || project.status === ProjectStatus.Claiming) {
+      throw new NotFoundException(`Project ${project.id} not found`)
+    }
+
     if (project.status === ProjectStatus.Disabled) {
       return { state: "disabled", project }
     }
@@ -863,7 +904,23 @@ export class ProjectService implements OnApplicationBootstrap {
 
     const failure = this.podService.inspectFailureReason(pod)
     if (failure === "ImagePullBackOff") {
-      await this.handleStartupFailure(project.id, podName, new PodStartupFailedError(podName, failure))
+      await this.handleStartupFailure(
+        project.id,
+        podName,
+        new PodStartupFailedError(podName, failure, this.podService.inspectFailureMessage(pod)),
+      )
+      return {
+        state: "failed",
+        project: { ...project, status: ProjectStatus.Failed, podIp: null },
+      }
+    }
+
+    if (failure === "Unschedulable" && this.podService.podAgeMs(pod) > UNSCHEDULABLE_STARTUP_GRACE_MS) {
+      await this.handleStartupFailure(
+        project.id,
+        podName,
+        new PodStartupFailedError(podName, failure, this.podService.inspectFailureMessage(pod)),
+      )
       return {
         state: "failed",
         project: { ...project, status: ProjectStatus.Failed, podIp: null },
@@ -1158,7 +1215,19 @@ export class ProjectService implements OnApplicationBootstrap {
 
         const failure = this.podService.inspectFailureReason(existingPod)
         if (failure === "ImagePullBackOff") {
-          await this.handleStartupFailure(projectId, podName, new PodStartupFailedError(podName, failure))
+          await this.handleStartupFailure(
+            projectId,
+            podName,
+            new PodStartupFailedError(podName, failure, this.podService.inspectFailureMessage(existingPod)),
+          )
+          return
+        }
+        if (failure === "Unschedulable" && this.podService.podAgeMs(existingPod) > UNSCHEDULABLE_STARTUP_GRACE_MS) {
+          await this.handleStartupFailure(
+            projectId,
+            podName,
+            new PodStartupFailedError(podName, failure, this.podService.inspectFailureMessage(existingPod)),
+          )
           return
         }
 
@@ -1176,27 +1245,25 @@ export class ProjectService implements OnApplicationBootstrap {
       }
     }
 
-    const [bifrostOptions, agentDefaults, gatewayApiKey, agentName] = await Promise.all([
+    if (!current.tenantId) {
+      this.logger.warn(`runStartup invoked for pool project ${projectId}; skipping`)
+      return
+    }
+    const [bifrostOptions, gatewayApiKey, agentName] = await Promise.all([
       this.bifrostService.getProjectPodOptions(projectId),
-      this.defaultsService.getTenantAgent(current.tenantId),
       this.gatewayKeyService.getProjectToken(projectId),
       this.agentService.resolveName(current.agentId),
     ])
     const tenantOptions = {
       ...(bifrostOptions ?? {}),
       agentName,
-      agentModel: agentDefaults.defaultModel,
+      agentModel: this.agentModelByName.get(agentName),
       gatewayApiKey: gatewayApiKey ?? undefined,
       gatewayUrl: this.configService.get<string>("gatewayUrl", ""),
     }
 
     try {
-      const assignedPod = await this.podService.createAssignedPod(projectId, current.directory, tenantOptions)
-      if (assignedPod.created) {
-        await this.podPoolService.claimWarmPod().catch((err) => {
-          this.logger.warn(`Failed to claim warm pod for project ${projectId}: ${(err as Error).message}`)
-        })
-      }
+      await this.podService.createAssignedPod(projectId, current.directory, tenantOptions)
       const podIp = await this.podService.waitForReady(podName)
       await this.markProjectActive(projectId, podIp, podName)
     } catch (err) {
@@ -1206,13 +1273,14 @@ export class ProjectService implements OnApplicationBootstrap {
 
   private async handleStartupFailure(projectId: string, podName: string, err: unknown): Promise<void> {
     const message = err instanceof Error ? err.message : "Project pod failed to start"
-    const isPermanentImageFailure = err instanceof PodStartupFailedError && err.reason === "ImagePullBackOff"
+    const isPermanentFailure = err instanceof PodStartupFailedError
+      && (err.reason === "ImagePullBackOff" || err.reason === "Unschedulable")
 
     this.logger.warn(`Startup failed for project ${projectId}: ${message}`)
 
     this.appService.invalidate(projectId)
 
-    const duplicateFailUpdate = isPermanentImageFailure
+    const duplicateFailUpdate = isPermanentFailure
       ? db
           .update(projectDuplicateJobs)
           .set({ status: ProjectDuplicateStatus.Failed, error: message, updatedAt: new Date() })
@@ -1225,7 +1293,7 @@ export class ProjectService implements OnApplicationBootstrap {
       : Promise.resolve()
 
     await Promise.allSettled([
-      isPermanentImageFailure
+      isPermanentFailure
         ? Promise.resolve()
         : this.safeDeletePod(podName, `startup failure for project ${projectId}`),
       duplicateFailUpdate,
@@ -1236,7 +1304,7 @@ export class ProjectService implements OnApplicationBootstrap {
       }),
     ])
 
-    if (isPermanentImageFailure) {
+    if (isPermanentFailure) {
       this.startupRetries.delete(projectId)
       await db
         .update(projects)

@@ -12,9 +12,7 @@ Now the cluster is authoritative:
 
 - **Pod existence and identity** — looked up by deterministic name (`opsiforce-agent-{projectId.slice(0,8)}`)
 - **Pod readiness, IP, failure reasons** — read from `pod.status` and `pod.status.containerStatuses[*].state.waiting.reason`
-- **Warm pool membership** — encoded in pod labels (`opsiforce.io/pool=warm`)
 - **"When did we last try"** — read from `pod.metadata.creationTimestamp`
-- **Atomic warm-pod claim** — `deleteNamespacedPod` with a `resourceVersion` precondition
 
 `projects.pod_ip` is kept as a fast-path cache, but it's never trusted as the source of truth. Every divergence (proxy 5xx, missing pod, IP mismatch) triggers a re-read against Kubernetes and the cache is repaired.
 
@@ -22,12 +20,10 @@ Now the cluster is authoritative:
 
 ## Pod lifecycle
 
-Warm pods are pre-created (no project subPath). When a project needs one, the warm pod is claimed by deletion and replaced by a fresh assigned pod with the project's subPath. Volume mounts are immutable after pod creation, so the warm pod cannot be re-purposed in place.
+Every project has exactly one pod, named by its project id, with a `subPath` pointing at the project's workspace directory. The pod is created at project creation time (either via the [pending pool](./pool.md) or via the direct slow path) and recreated by name whenever it is found missing.
 
 ```
-project access on suspended ─► status = starting ─► claim warm pod (delete with
-                                                     resourceVersion precondition)
-                                                  ─► create assigned pod with subPath
+project access on suspended ─► status = starting ─► create assigned pod with subPath
                                                   ─► wait for Ready + podIP
                                                   ─► status = active
 
@@ -43,55 +39,26 @@ active + pod deleted externally ─► next access ─► sees pod missing in K8
 
 ## Naming
 
-Pod names are deterministic:
-
-- Warm pods: `opsiforce-agent-{uuid[:8]}` (UUID generated when the warm pod is created)
-- Assigned pods: `opsiforce-agent-{projectId[:8]}` — pure function of the project id
+Pod names are deterministic: `opsiforce-agent-{projectId[:8]}` — pure function of the project id.
 
 Determinism is the basis for both `createAssignedPod` idempotency (Kubernetes 409 `AlreadyExists` is treated as success — the pod already exists, proceed) and on-demand reconciliation (any backend can look up a project's pod by id).
 
+The same scheme applies to pending pool projects: they have a project id from the moment the row is inserted, so their pod name is determined identically.
+
 ---
 
-## Warm pool
+## Pending pool
 
-`WARM_POOL_SIZE` warm pods are kept available at all times. The pool is queried via:
+The user-facing "new project" latency is amortized by the [pending project pool](./pool.md). A configurable number of pre-baked projects sit in `status='pending'` per agent. Claim is a fast DB flip plus a single Bifrost team customer-id PATCH (~100–500ms), versus 30–60s for the direct slow path.
 
-```
-listPods(labelSelector = "app=opsiforce-agent,opsiforce.io/pool=warm")
-```
-
-Replenishment fires:
-
-- on backend startup
-- after a warm pod is claimed (during project startup)
-- after a project pod is suspended or its project is deleted
-
-During replenish, stuck warm pods are recycled: a warm pod older than 5 minutes that is not Ready, or any warm pod in `ImagePullBackOff`, is deleted. The pool is then topped up to `WARM_POOL_SIZE`.
-
-### Claiming
-
-```
-1. listPods(labelSelector) returns current warm pods
-2. Filter to pods that are Ready and not already being deleted
-3. Sort by creationTimestamp (oldest first)
-4. For each candidate:
-     deleteNamespacedPod(name, preconditions: { resourceVersion })
-   - 200 OK: we own the slot; proceed to create the assigned pod
-   - 409 Conflict: another backend got it first; try the next candidate
-   - 404 Not Found: pod was already deleted; try the next candidate
-5. Replenish runs in the background to refill the pool
-```
-
-The `resourceVersion` precondition is Kubernetes' compare-and-set primitive. It replaces `FOR UPDATE SKIP LOCKED` from the previous DB-based design.
-
-If no warm pod is claimable, project startup creates the assigned pod directly. Slightly slower; functionally equivalent.
+The previous warm pod pool (image-cached pods labeled `opsiforce.io/pool=warm`) has been removed. On the first boot of the new code, a one-shot sweep deletes any leftover `opsiforce.io/pool=warm` pods from the cluster.
 
 ### Orphan cleanup
 
-On backend boot, assigned pods whose `opsiforce.io/project-id` label no longer matches a project row are deleted. Operators can still clean manually if needed:
+On backend boot, agent pods whose `opsiforce.io/project-id` label no longer matches a project row in `starting`, `active`, `pending`, or `claiming` status are deleted. Operators can clean manually if needed:
 
 ```
-kubectl delete pods -l app=opsiforce-agent,opsiforce.io/pool=assigned --field-selector status.phase=Failed
+kubectl delete pods -l app=opsiforce-agent --field-selector status.phase=Failed
 ```
 
 ---
@@ -101,7 +68,6 @@ kubectl delete pods -l app=opsiforce-agent,opsiforce.io/pool=assigned --field-se
 | Label | Value | Purpose |
 |-------|-------|---------|
 | `app` | `opsiforce-agent` | Identifies all agent pods |
-| `opsiforce.io/pool` | `warm` or `assigned` | Pool membership |
 | `opsiforce.io/project-id` | `{projectId}` | Linked project for assigned pods |
 
 ---
@@ -130,7 +96,7 @@ If `containerStatuses[*].state.waiting.reason` is `ImagePullBackOff` or `ErrImag
 
 ## Status mapping
 
-Project status (`starting`, `active`, `suspended`, `disabled`, `failed`) is derived from the project row plus the K8s pod state:
+Project status (`starting`, `active`, `suspended`, `disabled`, `failed`, `pending`, `claiming`) is derived from the project row plus the K8s pod state. `pending` and `claiming` are pool-only states; see [Pending Project Pools](./pool.md):
 
 | Project status | Pod state in K8s | Behavior on next access |
 |---|---|---|

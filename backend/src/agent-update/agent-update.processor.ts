@@ -2,13 +2,13 @@ import { Processor, WorkerHost } from "@nestjs/bullmq"
 import { Logger, OnApplicationShutdown } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { Job } from "bullmq"
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, notInArray } from "drizzle-orm"
 import { readFile, rm } from "node:fs/promises"
 import path from "node:path"
 import { db } from "../../db"
 import { projectAgentUpdates, projects } from "../../db/schema"
 import { ProjectService } from "../project/project.service"
-import { DefaultsService } from "../defaults/defaults.service"
+import { ProjectStatus } from "../project/project.types"
 import { AgentUpdateK8sService } from "./agent-update.k8s.service"
 import { AgentUpdateService } from "./agent-update.service"
 import {
@@ -29,7 +29,6 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     private readonly agentUpdateService: AgentUpdateService,
     private readonly k8sService: AgentUpdateK8sService,
     private readonly projectService: ProjectService,
-    private readonly defaultsService: DefaultsService,
     private readonly configService: ConfigService,
   ) {
     super()
@@ -50,7 +49,10 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
   private async processSweep(): Promise<void> {
     const agentName = this.agentUpdateService.agentName()
     const targetVersion = this.agentUpdateService.agentTemplateVersion(agentName)
-    const rows = await db.select({ id: projects.id, directory: projects.directory }).from(projects)
+    const rows = await db
+      .select({ id: projects.id, directory: projects.directory })
+      .from(projects)
+      .where(notInArray(projects.status, [ProjectStatus.Pending, ProjectStatus.Claiming]))
     const candidates: Array<{ id: string }> = []
     for (const row of rows) {
       if (!(await this.workspaceAtTarget(row.directory, agentName, targetVersion))) {
@@ -73,6 +75,7 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
 
   private async processProject(data: AgentProjectJobData): Promise<void> {
     const project = await this.projectService.findOneById(data.projectId)
+    if (project.status === ProjectStatus.Pending || project.status === ProjectStatus.Claiming) return
     if (await this.workspaceAtTarget(project.directory, data.agentName, data.targetVersion)) return
 
     const agentId = await this.agentUpdateService.resolveAgentId(data.agentName)
@@ -91,13 +94,12 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     })
 
     try {
-      const agentDefaults = await this.defaultsService.getTenantAgent(project.tenantId)
       const result = await this.k8sService.run({
         projectId: project.id,
         directory: project.directory,
         agentName: data.agentName,
         targetVersion: data.targetVersion,
-        agentModel: agentDefaults.defaultModel,
+        agentModel: this.agentUpdateService.agentModel(data.agentName),
       })
       const summary = await this.readSummary(project.directory, data.agentName, result.logs)
       await this.recordOutcome(updateId, summary, result.succeeded)
@@ -129,7 +131,10 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
   private async workspaceAtTarget(directory: string, agentName: string, targetVersion: string): Promise<boolean> {
     if (!directory) return false
     const ledger = await this.readLedger(directory, agentName)
-    return ledger?.agentVersion === targetVersion
+    if (ledger?.agentVersion !== targetVersion) return false
+    const targetModel = this.agentUpdateService.agentModel(agentName)
+    if (!targetModel) return true
+    return (await this.readWorkspaceModel(directory)) === targetModel
   }
 
   private async lastAppliedVersion(projectId: string, agentId: string): Promise<string | null> {
@@ -212,6 +217,16 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     const ledgerPath = path.join(this.storageMountPath, directory, ".opsiforce", "agents", `${agentName}.json`)
     try {
       return JSON.parse(await readFile(ledgerPath, "utf8")) as { agentVersion?: string }
+    } catch {
+      return null
+    }
+  }
+
+  private async readWorkspaceModel(directory: string): Promise<string | null> {
+    const configPath = path.join(this.storageMountPath, directory, ".xdg", "config", "opencode", "opencode.json")
+    try {
+      const config = JSON.parse(await readFile(configPath, "utf8")) as { model?: string }
+      return typeof config.model === "string" ? config.model : null
     } catch {
       return null
     }

@@ -32,8 +32,14 @@ export class GatewayController {
     }
 
     const context = req.gatewayContext!
+    if (!context.tenantId) {
+      throw new BadRequestException("Gateway calls require a claimed project")
+    }
 
-    const result = await this.gatewayService.dispatch(body.service, body.payload, context)
+    const result = await this.gatewayService.dispatch(body.service, body.payload, {
+      projectId: context.projectId,
+      tenantId: context.tenantId,
+    })
 
     if (result.success) {
       return { success: true, data: result.data }

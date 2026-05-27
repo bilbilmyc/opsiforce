@@ -129,10 +129,10 @@ export class BifrostService {
     return data.customer.budget ?? null
   }
 
-  async createProjectTeam(projectId: string, budgets: BudgetDefaults, customerId: string): Promise<string> {
+  async createProjectTeam(projectId: string, budgets: BudgetDefaults, customerId?: string): Promise<string> {
     const payload: CreateTeamRequest = {
       name: `project-${projectId.slice(0, 8)}`,
-      customer_id: customerId,
+      ...(customerId ? { customer_id: customerId } : {}),
       budget: this.budgetFor(budgets, "project"),
     }
 
@@ -148,8 +148,22 @@ export class BifrostService {
       .set({ bifrostProjectId: teamId })
       .where(eq(projects.id, projectId))
 
-    this.logger.log(`Created Bifrost team for project ${projectId}`)
+    this.logger.log(`Created Bifrost team for project ${projectId}${customerId ? "" : " (orphan)"}`)
     return teamId
+  }
+
+  async reassignTeamCustomer(teamId: string, customerId: string): Promise<void> {
+    await this.request("PUT", `/api/governance/teams/${teamId}`, {
+      customer_id: customerId,
+    })
+  }
+
+  async getTeamCustomerId(teamId: string): Promise<string | null> {
+    const data = await this.request<{ team: { customer_id?: string | null } }>(
+      "GET",
+      `/api/governance/teams/${teamId}`,
+    )
+    return data.team.customer_id ?? null
   }
 
   async updateTeamBudget(teamId: string, budget?: BifrostBudget): Promise<void> {
@@ -158,8 +172,67 @@ export class BifrostService {
     })
   }
 
+  async updateProjectResourceBudgets(projectId: string, teamId: string, budgets: BudgetDefaults): Promise<void> {
+    const keys = await db
+      .select({
+        keyType: projectVirtualKeys.keyType,
+        bifrostKeyId: projectVirtualKeys.bifrostKeyId,
+      })
+      .from(projectVirtualKeys)
+      .where(and(eq(projectVirtualKeys.projectId, projectId), eq(projectVirtualKeys.status, "active")))
+
+    const chatKey = keys.find((key) => key.keyType === "chat")
+    const backendKey = keys.find((key) => key.keyType === "backend")
+    if (!chatKey || !backendKey) throw new Error(`Project ${projectId} is missing active Bifrost keys`)
+
+    await Promise.all([
+      this.updateTeamBudget(teamId, this.budgetFor(budgets, "project")),
+      this.updateVirtualKeyBudget(chatKey.bifrostKeyId, this.budgetFor(budgets, "chat")),
+      this.updateVirtualKeyBudget(backendKey.bifrostKeyId, this.budgetFor(budgets, "backend")),
+    ])
+  }
+
+  private async updateVirtualKeyBudget(keyId: string, budget: BifrostBudget): Promise<void> {
+    await this.request("PUT", `/api/governance/virtual-keys/${keyId}`, { budget })
+  }
+
   async deleteTeam(teamId: string): Promise<void> {
     await this.request("DELETE", `/api/governance/teams/${teamId}`)
+  }
+
+  async destroyTeamAndKeys(teamId: string | null, bifrostKeyIds: string[]): Promise<void> {
+    const errors: string[] = []
+    await Promise.allSettled(
+      bifrostKeyIds.map(async (keyId) => {
+        try {
+          await this.request("DELETE", `/api/governance/virtual-keys/${keyId}`)
+        } catch (err) {
+          if (!this.isNotFoundError(err as Error)) {
+            const message = `key ${keyId}: ${(err as Error).message}`
+            errors.push(message)
+            this.logger.warn(`Failed to delete Bifrost ${message}`)
+          }
+        }
+      }),
+    )
+    if (teamId) {
+      try {
+        await this.deleteTeam(teamId)
+      } catch (err) {
+        if (!this.isNotFoundError(err as Error)) {
+          const message = `team ${teamId}: ${(err as Error).message}`
+          errors.push(message)
+          this.logger.warn(`Failed to delete Bifrost ${message}`)
+        }
+      }
+    }
+    if (errors.length > 0) {
+      throw new Error(`Bifrost teardown incomplete: ${errors.join("; ")}`)
+    }
+  }
+
+  private isNotFoundError(err: Error): boolean {
+    return err.message.includes("(404)")
   }
 
   async getTeamBudget(teamId: string): Promise<BifrostBudget | null> {
@@ -172,7 +245,7 @@ export class BifrostService {
 
   async createProjectKey(
     projectId: string,
-    tenantId: string,
+    tenantId: string | null,
     budgets: BudgetDefaults,
     keyType: KeyType = "chat",
     teamId?: string,
@@ -192,7 +265,7 @@ export class BifrostService {
 
     const payload: CreateVirtualKeyRequest = {
       name: `project-${projectId.slice(0, 8)}-${keyType}`,
-      description: `Virtual key (${keyType}) for project ${projectId} (tenant: ${tenantId})`,
+      description: `Virtual key (${keyType}) for project ${projectId}${tenantId ? ` (tenant: ${tenantId})` : " (pool)"}`,
       provider_configs: BIFROST_PROVIDER_CONFIGS[keyType].map(({ provider, weight }) => ({
         provider,
         weight,
@@ -237,6 +310,16 @@ export class BifrostService {
     await Promise.all([
       this.createProjectKey(projectId, tenantId, budgets, "chat", teamId),
       this.createProjectKey(projectId, tenantId, budgets, "backend", teamId),
+    ])
+  }
+
+  async createOrphanProjectResources(projectId: string): Promise<void> {
+    const budgets = await this.defaultsService.getGlobalBudgets()
+    const teamId = await this.createProjectTeam(projectId, budgets)
+
+    await Promise.all([
+      this.createProjectKey(projectId, null, budgets, "chat", teamId),
+      this.createProjectKey(projectId, null, budgets, "backend", teamId),
     ])
   }
 

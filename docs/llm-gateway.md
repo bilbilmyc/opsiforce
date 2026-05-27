@@ -109,6 +109,10 @@ In both production and local dev, both URLs point to the same in-cluster service
 6. **Used** — agent and app call Bifrost transparently; budget checked: tenant customer → project team → virtual key
 7. **Revoked** — `BifrostService.revokeProjectKeys()` revokes all active keys, deletes the Bifrost team, and removes the `project_budget_config` row
 
+### Orphan teams for pool projects
+
+Projects pre-baked by the [pending project pool](./pool.md) are created with no tenant attached. Bifrost's team API allows `customer_id` to be omitted at create time and reassigned via PUT — so pool projects start with an **orphan team** (no customer), and at claim time we PATCH `team.customer_id` to the claiming tenant's customer id. The VK tokens baked into the pod environment stay valid across the reassignment; the cost ledger flips to the correct customer from that moment onward. No LLM call ever happens against a pool project before claim, so attribution is clean from request one.
+
 ## Usage API
 
 ```

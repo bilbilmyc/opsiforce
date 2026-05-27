@@ -15,6 +15,7 @@ import { BifrostModule } from "../bifrost/bifrost.module"
 import { GatewayModule } from "../gateway/gateway.module"
 import { ScheduleModule } from "../schedule/schedule.module"
 import { ProxyService } from "../proxy/proxy.service"
+import { ProjectPoolModule } from "../pool/project-pool.module"
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ProxyService } from "../proxy/proxy.service"
     GatewayModule,
     ProjectEventsModule,
     forwardRef(() => ScheduleModule),
+    ProjectPoolModule,
   ],
   controllers: [ProjectController],
   providers: [ProjectService, ProjectAuthService, ProjectDuplicateProcessor, ProxyService, AppService],

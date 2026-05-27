@@ -6,6 +6,8 @@ export const ProjectStatus = {
   Suspended: "suspended",
   Disabled: "disabled",
   Failed: "failed",
+  Pending: "pending",
+  Claiming: "claiming",
 } as const
 
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus]

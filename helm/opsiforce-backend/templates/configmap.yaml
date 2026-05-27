@@ -8,7 +8,9 @@ data:
   DATABASE_URL: {{ .Values.config.databaseUrl | quote }}
   REDIS_URL: {{ .Values.config.redisUrl | quote }}
   K8S_NAMESPACE: {{ .Values.config.k8sNamespace | quote }}
-  WARM_POOL_SIZE: {{ .Values.config.warmPoolSize | quote }}
+  {{- if ne (toString .Values.config.poolSizeOverride) "" }}
+  POOL_SIZE_OVERRIDE: {{ .Values.config.poolSizeOverride | quote }}
+  {{- end }}
   {{- if .Values.config.agentContainerImage }}
   AGENT_CONTAINER_IMAGE: {{ .Values.config.agentContainerImage | quote }}
   {{- end }}

@@ -3,12 +3,11 @@ import { InjectQueue } from "@nestjs/bullmq"
 import { ConfigService } from "@nestjs/config"
 import { Queue } from "bullmq"
 import { and, desc, eq, lt } from "drizzle-orm"
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
 import { db } from "../../db"
 import { agents, projectAgentUpdates } from "../../db/schema"
 import { ProjectService } from "../project/project.service"
 import { ProjectStatus } from "../project/project.types"
+import { readAgentConfig, type AgentRuntimeConfig } from "../agent/agent-config"
 import {
   AGENT_WORKSPACE_UPDATE_QUEUE,
   AgentUpdateStatus,
@@ -36,6 +35,7 @@ type SessionStatus = { busy: true } | { busy: false } | { error: string; reloadS
 export class AgentUpdateService implements OnApplicationBootstrap {
   private readonly logger = new Logger(AgentUpdateService.name)
   private readonly agentPort: number
+  private readonly agentConfig: AgentRuntimeConfig
   private readonly templateVersionCache = new Map<string, string>()
 
   constructor(
@@ -45,6 +45,7 @@ export class AgentUpdateService implements OnApplicationBootstrap {
     private readonly projectService: ProjectService,
   ) {
     this.agentPort = this.configService.getOrThrow<number>("agentPort")
+    this.agentConfig = readAgentConfig()
   }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -88,21 +89,13 @@ export class AgentUpdateService implements OnApplicationBootstrap {
   agentTemplateVersion(agentName: string = this.agentName()): string {
     const cached = this.templateVersionCache.get(agentName)
     if (cached !== undefined) return cached
-    const resolved = this.readVersionFromJson(
-      join(process.cwd(), "..", "agent-config", "agents.json"),
-      (json) => (json as { agents?: Record<string, { version?: string }> }).agents?.[agentName]?.version,
-    ) ?? "unknown"
+    const resolved = this.agentConfig.versions.get(agentName) ?? "unknown"
     this.templateVersionCache.set(agentName, resolved)
     return resolved
   }
 
-  private readVersionFromJson(filePath: string, extract: (json: unknown) => string | undefined): string | null {
-    try {
-      const value = extract(JSON.parse(readFileSync(filePath, "utf8")))
-      return typeof value === "string" && value.length > 0 ? value : null
-    } catch {
-      return null
-    }
+  agentModel(agentName: string = this.agentName()): string | undefined {
+    return this.agentConfig.models.get(agentName)
   }
 
   async enqueueProjectSweep(): Promise<void> {

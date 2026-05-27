@@ -5,7 +5,9 @@
       "description": "Build web apps with React, Tailwind, shadcn/ui, and NestJS",
       "default": true,
       "port": 3000,
-      "version": "0.1.2"
+      "version": "0.1.2",
+      "model": "openai/gpt-5.4",
+      "poolSize": 3
     }
   }
 }

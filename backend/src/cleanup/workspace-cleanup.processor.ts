@@ -23,76 +23,101 @@ export class WorkspaceCleanupProcessor extends WorkerHost {
   }
 
   async process(_job: Job): Promise<void> {
-    await this.removeExpiredWorkspaces()
-    await this.removeOrphanedWorkspaces()
+    await this.removeExpiredTombstones()
+    await this.removeOrphanedDirectories()
   }
 
-  private async removeExpiredWorkspaces(): Promise<void> {
+  private async removeExpiredTombstones(): Promise<void> {
     const cutoff = new Date(Date.now() - this.retentionDays * 24 * 60 * 60 * 1000)
     const expired = await db.select().from(deletedProjects).where(lte(deletedProjects.deletedAt, cutoff))
 
     if (expired.length === 0) return
-
     this.logger.log(`Found ${expired.length} expired workspace(s) to clean up`)
-    const tenantDirs = new Set<string>()
 
     for (const record of expired) {
       const workspacePath = path.join(this.storageMountPath, record.directory)
-
       await rm(workspacePath, { recursive: true, force: true }).catch((err) => {
         this.logger.warn(`Failed to remove workspace ${record.directory}: ${(err as Error).message}`)
       })
-
       await db.delete(deletedProjects).where(eq(deletedProjects.id, record.id))
-      tenantDirs.add(path.join(this.storageMountPath, "projects", record.tenantId))
-    }
-
-    for (const tenantDir of tenantDirs) {
-      await this.removeIfEmpty(tenantDir)
+      await this.pruneEmptyAncestors(path.dirname(record.directory))
     }
 
     this.logger.log(`Removed ${expired.length} expired workspace(s)`)
   }
 
-  private async removeOrphanedWorkspaces(): Promise<void> {
-    const projectsDir = path.join(this.storageMountPath, "projects")
-    const tenantDirs = await readdir(projectsDir).catch(() => [] as string[])
-    if (tenantDirs.length === 0) return
+  private async removeOrphanedDirectories(): Promise<void> {
+    const [activeRows, deletedRows] = await Promise.all([
+      db.select({ directory: projects.directory }).from(projects),
+      db.select({ directory: deletedProjects.directory }).from(deletedProjects),
+    ])
 
-    const activeIds = new Set(
-      (await db.select({ id: projects.id }).from(projects)).map((p) => p.id),
-    )
-    const trackedIds = new Set(
-      (await db.select({ id: deletedProjects.id }).from(deletedProjects)).map((p) => p.id),
-    )
+    const knownPaths = new Set<string>()
+    for (const row of activeRows) knownPaths.add(row.directory)
+    for (const row of deletedRows) knownPaths.add(row.directory)
 
-    let removed = 0
-
-    for (const tenantId of tenantDirs) {
-      const tenantPath = path.join(projectsDir, tenantId)
-      const projectDirs = await readdir(tenantPath).catch(() => [] as string[])
-
-      for (const projectId of projectDirs) {
-        if (activeIds.has(projectId) || trackedIds.has(projectId)) continue
-
-        await rm(path.join(tenantPath, projectId), { recursive: true, force: true }).catch((err) => {
-          this.logger.warn(`Failed to remove orphaned workspace projects/${tenantId}/${projectId}: ${(err as Error).message}`)
-        })
-        removed++
+    const keepPrefixes = new Set<string>()
+    for (const p of knownPaths) {
+      let prefix: string | null = path.dirname(p)
+      while (prefix && prefix !== "." && prefix !== path.sep) {
+        keepPrefixes.add(prefix)
+        const parent = path.dirname(prefix)
+        prefix = parent === prefix ? null : parent
       }
-
-      await this.removeIfEmpty(tenantPath)
     }
 
-    if (removed > 0) {
-      this.logger.log(`Removed ${removed} orphaned workspace(s)`)
+    const projectsRoot = path.join(this.storageMountPath, "projects")
+    const removed = await this.walk(projectsRoot, "projects", knownPaths, keepPrefixes)
+    if (removed > 0) this.logger.log(`Removed ${removed} orphaned workspace(s)`)
+  }
+
+  private async walk(
+    absPath: string,
+    relPath: string,
+    knownPaths: Set<string>,
+    keepPrefixes: Set<string>,
+  ): Promise<number> {
+    const entries = await readdir(absPath, { withFileTypes: true }).catch(() => [])
+    let removed = 0
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue
+      const childAbs = path.join(absPath, entry.name)
+      const childRel = path.posix.join(relPath, entry.name)
+
+      if (knownPaths.has(childRel)) continue
+
+      if (keepPrefixes.has(childRel)) {
+        removed += await this.walk(childAbs, childRel, knownPaths, keepPrefixes)
+        await this.removeIfEmpty(childAbs)
+        continue
+      }
+
+      await rm(childAbs, { recursive: true, force: true }).catch((err) => {
+        this.logger.warn(`Failed to remove orphaned workspace ${childRel}: ${(err as Error).message}`)
+      })
+      removed++
+    }
+
+    return removed
+  }
+
+  private async pruneEmptyAncestors(relDir: string): Promise<void> {
+    let current = relDir
+    while (current && current !== "." && current !== path.sep) {
+      if (path.dirname(current) === ".") break
+      const abs = path.join(this.storageMountPath, current)
+      const removed = await this.removeIfEmpty(abs)
+      if (!removed) break
+      current = path.dirname(current)
     }
   }
 
-  private async removeIfEmpty(dirPath: string): Promise<void> {
-    const entries = await readdir(dirPath).catch(() => ["_"])
-    if (entries.length === 0) {
-      await rmdir(dirPath).catch(() => {})
-    }
+  private async removeIfEmpty(dirPath: string): Promise<boolean> {
+    const entries = await readdir(dirPath).catch(() => null)
+    if (!entries || entries.length > 0) return false
+    return rmdir(dirPath)
+      .then(() => true)
+      .catch(() => false)
   }
 }

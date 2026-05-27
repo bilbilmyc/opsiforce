@@ -15,6 +15,13 @@ function parseBooleanEnv(env: string | undefined, fallback: boolean): boolean {
   return env === "true" || env === "1";
 }
 
+function parseIntOrNull(env: string | undefined): number | null {
+  if (env === undefined || env === "") return null;
+  const parsed = parseInt(env, 10);
+  if (Number.isNaN(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
 const platformVersion = JSON.parse(
   readFileSync(join(process.cwd(), "platform-version.json"), "utf8"),
 ).version as string;
@@ -42,7 +49,7 @@ export default () => {
       process.env.DATABASE_URL || "postgresql://localhost:5432/opsiforce",
     redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
     k8sNamespace: process.env.K8S_NAMESPACE || "opsiforce",
-    warmPoolSize: parseInt(process.env.WARM_POOL_SIZE || "2", 10),
+    poolSizeOverride: parseIntOrNull(process.env.POOL_SIZE_OVERRIDE),
     agentContainerImage: resolveAgentContainerImage(),
     agentPort: parseInt(process.env.AGENT_PORT || "4096", 10),
     appPort: parseInt(process.env.APP_PORT || "3000", 10),

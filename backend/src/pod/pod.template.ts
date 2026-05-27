@@ -27,7 +27,6 @@ export interface PodTemplateOptions {
 }
 
 export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
-  const isAssigned = !!options.projectId
   const resolvedAgentName = options.agentName || "app-builder"
 
   const volumeMounts: k8s.V1VolumeMount[] = [
@@ -49,7 +48,6 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
       },
       labels: {
         app: "opsiforce-agent",
-        "opsiforce.io/pool": isAssigned ? "assigned" : "warm",
         ...(options.projectId ? { "opsiforce.io/project-id": options.projectId } : {}),
       },
     },

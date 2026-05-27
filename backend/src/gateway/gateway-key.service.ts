@@ -6,14 +6,14 @@ import { projectGatewayKeys } from "../../db/schema"
 
 export interface GatewayIdentity {
   projectId: string
-  tenantId: string
+  tenantId: string | null
 }
 
 @Injectable()
 export class GatewayKeyService {
   private readonly logger = new Logger(GatewayKeyService.name)
 
-  async createKey(projectId: string, tenantId: string): Promise<string> {
+  async createKey(projectId: string, tenantId: string | null): Promise<string> {
     const [existing] = await db
       .select()
       .from(projectGatewayKeys)

@@ -66,6 +66,7 @@ export class ProxyController {
 
     if (surface === "agent") {
       const project = await this.projectService.findOneById(projectId)
+      if (!project.tenantId) throw new BadRequestException(`Project ${projectId} not yet claimed`)
       await this.assertProjectTenantAccess(project.tenantId, groupsHeader)
       ensured = await this.projectService.ensureProjectAccess(project, activity)
     } else {

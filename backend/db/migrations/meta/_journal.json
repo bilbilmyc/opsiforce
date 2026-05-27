@@ -225,6 +225,20 @@
       "when": 1779375745300,
       "tag": "0031_add-failed-project-status",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1779562800000,
+      "tag": "0032_add-pool-project-statuses",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1779562800100,
+      "tag": "0033_pool-project-nullable-tenant",
+      "breakpoints": true
     }
   ]
 }

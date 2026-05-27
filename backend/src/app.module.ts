@@ -25,6 +25,7 @@ import { AgentModule } from "./agent/agent.module"
 import { AgentUpdateModule } from "./agent-update/agent-update.module"
 import { InternalAppsModule } from "./internal/apps.module"
 import { TenantSettingsModule } from "./tenant-settings/tenant-settings.module"
+import { ProjectPoolModule } from "./pool/project-pool.module"
 
 function parseRedisUrl(url: string) {
   const parsed = new URL(url)
@@ -70,6 +71,7 @@ function parseRedisUrl(url: string) {
     AgentUpdateModule,
     InternalAppsModule,
     TenantSettingsModule,
+    ProjectPoolModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: TenantGuard }],

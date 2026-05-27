@@ -6,7 +6,6 @@ import { projects } from "../../db/schema"
 import { ProjectStatus } from "../project/project.types"
 import { TimeoutService } from "./timeout.service"
 import { PodService } from "../pod/pod.service"
-import { PodPoolService } from "../pod/pod.pool.service"
 import { ProjectEventsService } from "../project/project-events.service"
 
 @Injectable()
@@ -18,7 +17,6 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly timeoutService: TimeoutService,
     private readonly podService: PodService,
-    private readonly podPoolService: PodPoolService,
     private readonly projectEventsService: ProjectEventsService,
   ) {}
 
@@ -81,9 +79,6 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
 
     this.logger.log(`Project ${projectId} suspended due to idle timeout`)
     await this.projectEventsService.publish(projectId)
-    await this.podPoolService.replenish().catch((err) => {
-      this.logger.warn(`Failed to replenish warm pool: ${err.message}`)
-    })
   }
 
   private async sweepExpiredProjects(): Promise<void> {
