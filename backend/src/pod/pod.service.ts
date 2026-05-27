@@ -62,14 +62,6 @@ export class PodService {
     return `opsiforce-agent-${projectId.slice(0, 8)}`
   }
 
-  async createWarmPod(podName: string): Promise<k8s.V1Pod> {
-    const spec = buildPodSpec(this.baseOptions(podName))
-    return this.coreApi.createNamespacedPod({
-      namespace: this.namespace,
-      body: spec,
-    })
-  }
-
   async createAssignedPod(
     projectId: string,
     directory: string,

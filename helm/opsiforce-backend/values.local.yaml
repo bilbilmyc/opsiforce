@@ -22,7 +22,7 @@ config:
   databaseUrl: "postgres://admin:dbpass1@local-pg-postgresql:5432/opsiforce"
   redisUrl: "redis://redis-session-storage-local-master:6379/2"
   k8sNamespace: "local"
-  warmPoolSize: "1"
+  poolSizeOverride: "1"
   agentContainerImage: ""
   agentContainerImagePullPolicy: "Never"
   agentPort: "4096"

@@ -22,6 +22,10 @@ export class ScheduleAgentController {
       throw new BadRequestException("Missing required fields: name, cronPattern, targetPath")
     }
 
+    if (!tenantId) {
+      throw new BadRequestException("Schedules require a claimed project")
+    }
+
     return this.scheduleService.upsert(projectId, tenantId, dto)
   }
 

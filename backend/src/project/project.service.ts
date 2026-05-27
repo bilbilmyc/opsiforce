@@ -27,7 +27,7 @@ import {
   projectDuplicateJobs,
 } from "../../db/schema"
 import { PodService, PodStartupFailedError } from "../pod/pod.service"
-import { PodPoolService } from "../pod/pod.pool.service"
+import { ProjectPoolService } from "../pool/project-pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
 import { BifrostService } from "../bifrost/bifrost.service"
 import { assertPositiveMs } from "../common/validation"
@@ -48,7 +48,6 @@ import {
   UpdateAppDto,
 } from "./project.types"
 
-// TODO: replace these hand-rolled validators with zod schemas once zod is introduced.
 const APP_NAME_MIN_LENGTH = 1
 const APP_NAME_MAX_LENGTH = 80
 const APP_DESCRIPTION_MAX_LENGTH = 500
@@ -116,7 +115,6 @@ export interface EnsureProjectResult {
   project: ProjectResponse
 }
 
-// Common orderBy for project listings: active projects first, most-recent activity first.
 const projectOrderBy = () =>
   [
     asc(sql`CASE WHEN ${projects.status} = 'disabled' THEN 1 ELSE 0 END`),
@@ -160,7 +158,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
   constructor(
     private readonly podService: PodService,
-    private readonly podPoolService: PodPoolService,
+    private readonly projectPoolService: ProjectPoolService,
     private readonly timeoutService: TimeoutService,
     private readonly configService: ConfigService,
     @Inject(forwardRef(() => BifrostService))
@@ -206,8 +204,8 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   private async cleanupOrphanedAssignedPods(): Promise<void> {
-    const assignedPods = await this.podService.listPods("app=opsiforce-agent,opsiforce.io/pool=assigned")
-    const podRefs = assignedPods
+    const agentPods = await this.podService.listPods("app=opsiforce-agent")
+    const podRefs = agentPods
       .map((pod) => ({
         name: pod.metadata?.name ?? null,
         projectId: pod.metadata?.labels?.["opsiforce.io/project-id"] ?? null,
@@ -223,7 +221,13 @@ export class ProjectService implements OnApplicationBootstrap {
       .where(inArray(projects.id, projectIds))
     const projectsExpectingPod = new Set(
       existingRows
-        .filter((row) => row.status === ProjectStatus.Starting || row.status === ProjectStatus.Active)
+        .filter(
+          (row) =>
+            row.status === ProjectStatus.Starting ||
+            row.status === ProjectStatus.Active ||
+            row.status === ProjectStatus.Pending ||
+            row.status === ProjectStatus.Claiming,
+        )
         .map((row) => row.id),
     )
     const orphanedPods = podRefs.filter((pod) => !projectsExpectingPod.has(pod.projectId))
@@ -242,12 +246,62 @@ export class ProjectService implements OnApplicationBootstrap {
     tenantId: string,
     workspaceId: string | null = null,
   ): Promise<ProjectResponse> {
-    const id = crypto.randomUUID()
-    const directory = `projects/${tenantId}/${id}`
-    const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
     const agentId = dto?.agentId ?? (await this.agentService.getDefaultAgentId())
-    const { defaultTimeoutIdle: timeoutIdle, defaultAppTimeoutIdle: appTimeoutIdle } =
-      await this.defaultsService.getTenantTimeouts(tenantId)
+    const [tenantAgent, globalAgent, timeouts, tenantBudgets, globalBudgets] = await Promise.all([
+      this.defaultsService.getTenantAgent(tenantId),
+      this.defaultsService.getGlobalAgent(),
+      this.defaultsService.getTenantTimeouts(tenantId),
+      this.defaultsService.getTenantBudgets(tenantId),
+      this.defaultsService.getGlobalBudgets(),
+    ])
+    const useDefaultModel = tenantAgent.defaultModel === globalAgent.defaultModel
+    const useDefaultBudgets =
+      tenantBudgets.defaultProjectBudget === globalBudgets.defaultProjectBudget &&
+      tenantBudgets.defaultProjectBudgetDuration === globalBudgets.defaultProjectBudgetDuration &&
+      tenantBudgets.defaultChatBudget === globalBudgets.defaultChatBudget &&
+      tenantBudgets.defaultChatBudgetDuration === globalBudgets.defaultChatBudgetDuration &&
+      tenantBudgets.defaultBackendBudget === globalBudgets.defaultBackendBudget &&
+      tenantBudgets.defaultBackendBudgetDuration === globalBudgets.defaultBackendBudgetDuration
+
+    if (useDefaultModel && useDefaultBudgets) {
+      const claimedId = await this.projectPoolService
+        .claimPending(agentId, {
+          tenantId,
+          workspaceId,
+          title: dto?.title ?? null,
+          description: dto?.description ?? null,
+          timeoutIdle: timeouts.defaultTimeoutIdle,
+          appTimeoutIdle: timeouts.defaultAppTimeoutIdle,
+          timezone: dto?.timezone || "UTC",
+        })
+        .catch((err) => {
+          this.logger.warn(`Pool claim failed; falling back to slow path: ${(err as Error).message}`)
+          return null
+        })
+
+      if (claimedId) {
+        const project = await this.findOne(claimedId, tenantId)
+        await Promise.allSettled([
+          this.timeoutService.touch(project.id),
+          this.projectEventsService.publish(project.id),
+        ])
+        return project
+      }
+    }
+
+    return this.createDirect(dto, tenantId, workspaceId, agentId, timeouts)
+  }
+
+  private async createDirect(
+    dto: CreateProjectDto | undefined,
+    tenantId: string,
+    workspaceId: string | null,
+    agentId: string,
+    timeouts: { defaultTimeoutIdle: number; defaultAppTimeoutIdle: number },
+  ): Promise<ProjectResponse> {
+    const id = crypto.randomUUID()
+    const directory = `projects/${id}`
+    const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
 
     await db.transaction(async (tx) => {
       await tx.insert(projects).values({
@@ -265,8 +319,8 @@ export class ProjectService implements OnApplicationBootstrap {
 
       await tx.insert(projectSettings).values({
         projectId: id,
-        timeoutIdle,
-        appTimeoutIdle,
+        timeoutIdle: timeouts.defaultTimeoutIdle,
+        appTimeoutIdle: timeouts.defaultAppTimeoutIdle,
         timezone: dto?.timezone || "UTC",
       })
     })
@@ -283,7 +337,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
     const id = crypto.randomUUID()
     const duplicateJobId = crypto.randomUUID()
-    const directory = `projects/${tenantId}/${id}`
+    const directory = `projects/${id}`
     const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
     const title = dto?.title ?? (source.title ? `${source.title} (copy)` : null)
 
@@ -570,17 +624,16 @@ export class ProjectService implements OnApplicationBootstrap {
     ])
 
     await db.delete(projects).where(eq(projects.id, id))
-    await db
-      .insert(deletedProjects)
-      .values({
-        id: project.id,
-        tenantId: project.tenantId,
-        directory: project.directory,
-      })
-      .onConflictDoNothing()
-    await this.podPoolService.replenish().catch((err) => {
-      this.logger.warn(`Failed to replenish warm pool after deleting project ${id}: ${err.message}`)
-    })
+    if (project.tenantId) {
+      await db
+        .insert(deletedProjects)
+        .values({
+          id: project.id,
+          tenantId: project.tenantId,
+          directory: project.directory,
+        })
+        .onConflictDoNothing()
+    }
   }
 
   async disable(id: string, tenantId: string): Promise<ProjectResponse> {
@@ -606,10 +659,6 @@ export class ProjectService implements OnApplicationBootstrap {
       .where(eq(projects.id, id))
     this.appService.invalidate(id)
     await this.projectEventsService.publish(id)
-
-    await this.podPoolService.replenish().catch((err) => {
-      this.logger.warn(`Failed to replenish warm pool after disabling project ${id}: ${err.message}`)
-    })
 
     return this.findOne(id, tenantId)
   }
@@ -764,6 +813,10 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   async ensureProjectAccess(project: ProjectResponse, activity: ProjectActivityKind): Promise<EnsureProjectResult> {
+    if (project.status === ProjectStatus.Pending || project.status === ProjectStatus.Claiming) {
+      throw new NotFoundException(`Project ${project.id} not found`)
+    }
+
     if (project.status === ProjectStatus.Disabled) {
       return { state: "disabled", project }
     }
@@ -1176,6 +1229,10 @@ export class ProjectService implements OnApplicationBootstrap {
       }
     }
 
+    if (!current.tenantId) {
+      this.logger.warn(`runStartup invoked for pool project ${projectId}; skipping`)
+      return
+    }
     const [bifrostOptions, agentDefaults, gatewayApiKey, agentName] = await Promise.all([
       this.bifrostService.getProjectPodOptions(projectId),
       this.defaultsService.getTenantAgent(current.tenantId),
@@ -1191,12 +1248,7 @@ export class ProjectService implements OnApplicationBootstrap {
     }
 
     try {
-      const assignedPod = await this.podService.createAssignedPod(projectId, current.directory, tenantOptions)
-      if (assignedPod.created) {
-        await this.podPoolService.claimWarmPod().catch((err) => {
-          this.logger.warn(`Failed to claim warm pod for project ${projectId}: ${(err as Error).message}`)
-        })
-      }
+      await this.podService.createAssignedPod(projectId, current.directory, tenantOptions)
       const podIp = await this.podService.waitForReady(podName)
       await this.markProjectActive(projectId, podIp, podName)
     } catch (err) {

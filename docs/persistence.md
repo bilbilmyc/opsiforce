@@ -14,8 +14,8 @@ Database state, persistent storage, and how projects survive pod replacement.
 | `tenant_id` | text FK | Owning tenant |
 | `title` | text | Optional user title |
 | `description` | text | Optional user description |
-| `directory` | text | Persistent workspace subPath: `projects/{tenantId}/{projectId}` |
-| `status` | enum | `starting`, `active`, `suspended`, `disabled`, `failed` |
+| `directory` | text | Persistent workspace subPath. New projects use `projects/{projectId}`; rows created before the pending-pool migration retain `projects/{tenantId}/{projectId}`. |
+| `status` | enum | `starting`, `active`, `suspended`, `disabled`, `failed`, `pending`, `claiming` (the last two are pool-only; see [Pending Project Pools](pool.md)) |
 | `pod_ip` | text | Cached pod IP for routing. Verified against the informer on the active fast path and against Kubernetes on proxy failure; the cluster is authoritative. |
 | `session_id` | text | Reserved column, not used for resume in the current flow |
 | `platform_version` | text | Agent platform version recorded at create time |
@@ -64,7 +64,7 @@ Stores Bifrost team ID and budget config per project (1:1 with `projects`).
 
 - CephFS PVC
 - `ReadWriteMany`
-- pod mounts project data with `subPath = projects/{tenantId}/{projectId}`
+- pod mounts project data with `subPath` equal to the stored `directory` (new: `projects/{projectId}`; legacy: `projects/{tenantId}/{projectId}`)
 
 ### Local minikube
 

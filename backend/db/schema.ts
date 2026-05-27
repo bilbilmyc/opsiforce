@@ -12,9 +12,18 @@ import {
   uniqueIndex,
   unique,
   primaryKey,
+  check,
 } from "drizzle-orm/pg-core"
 
-export const projectStatusEnum = pgEnum("project_status", ["starting", "active", "suspended", "disabled", "failed"])
+export const projectStatusEnum = pgEnum("project_status", [
+  "starting",
+  "active",
+  "suspended",
+  "disabled",
+  "failed",
+  "pending",
+  "claiming",
+])
 
 export const keyTypeEnum = pgEnum("key_type", ["chat", "backend"])
 
@@ -106,27 +115,36 @@ export const workspaceMembers = pgTable(
   }),
 )
 
-export const projects = pgTable("projects", {
-  id: text("id").primaryKey(),
-  tenantId: tenantIdField,
-  workspaceId: text("workspace_id").references(() => workspaces.id, {
-    onDelete: "set null",
-  }),
-  agentId: text("agent_id")
-    .references(() => agents.id)
-    .notNull(),
-  title: text("title"),
-  description: text("description"),
-  directory: text("directory").notNull(),
-  status: projectStatusEnum("status").notNull().default("starting"),
-  podIp: text("pod_ip"),
-  sessionId: text("session_id"),
-  platformVersion: text("platform_version").notNull(),
-  bifrostProjectId: text("bifrost_project_id"),
-  lastActiveAt: timestamp("last_active_at"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-})
+export const projects = pgTable(
+  "projects",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").references(() => tenants.id),
+    workspaceId: text("workspace_id").references(() => workspaces.id, {
+      onDelete: "set null",
+    }),
+    agentId: text("agent_id")
+      .references(() => agents.id)
+      .notNull(),
+    title: text("title"),
+    description: text("description"),
+    directory: text("directory").notNull(),
+    status: projectStatusEnum("status").notNull().default("starting"),
+    podIp: text("pod_ip"),
+    sessionId: text("session_id"),
+    platformVersion: text("platform_version").notNull(),
+    bifrostProjectId: text("bifrost_project_id"),
+    lastActiveAt: timestamp("last_active_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    check(
+      "projects_pool_tenant_null",
+      sql`(${table.status}::text = 'pending' AND ${table.tenantId} IS NULL) OR (${table.status}::text <> 'pending' AND ${table.tenantId} IS NOT NULL)`,
+    ),
+  ],
+)
 
 export const projectSettings = pgTable("project_settings", {
   projectId: text("project_id")
@@ -203,9 +221,7 @@ export const projectVirtualKeys = pgTable("project_virtual_keys", {
   projectId: text("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
-  tenantId: text("tenant_id")
-    .references(() => tenants.id)
-    .notNull(),
+  tenantId: text("tenant_id").references(() => tenants.id),
   keyType: keyTypeEnum("key_type").notNull().default("chat"),
   bifrostKeyId: text("bifrost_key_id").notNull(),
   bifrostKeyToken: text("bifrost_key_token").notNull(),
@@ -251,9 +267,7 @@ export const projectGatewayKeys = pgTable("project_gateway_keys", {
   projectId: text("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
-  tenantId: text("tenant_id")
-    .references(() => tenants.id)
-    .notNull(),
+  tenantId: text("tenant_id").references(() => tenants.id),
   token: text("token").notNull().unique(),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
