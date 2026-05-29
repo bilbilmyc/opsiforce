@@ -163,6 +163,7 @@ export interface Agent {
   id: string
   name: string
   displayName: string | null
+  description: string | null
 }
 
 export interface WorkspacePreferences {

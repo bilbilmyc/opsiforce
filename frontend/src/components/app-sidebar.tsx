@@ -25,21 +25,17 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
 } from "~/components/ui/dropdown-menu";
 import { Button } from "~/components/ui/button";
+import { cn } from "~/lib/cn";
 import TenantSelector from "~/components/tenant-selector";
 import ProjectSidebar from "~/components/project-sidebar";
 import CreateWorkspaceDialog from "~/components/create-workspace-dialog";
 import TenantSettings from "~/components/tenant-settings";
 import {
-  AppWindow,
   Bot,
   Calendar,
   ChevronsUpDown,
-  ChevronRight,
   FolderKanban,
   FolderPlus,
   LogOut,
@@ -334,44 +330,90 @@ function TopPlusMenu(props: {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger as={props.trigger} />
-      <DropdownMenuContent class="min-w-48">
-        <Show when={props.canCreateWorkspace}>
-          <DropdownMenuItem onSelect={props.onOpenCreateWorkspace}>
-            <FolderPlus class="w-4 h-4 text-muted-foreground" />
-            New workspace
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+      <DropdownMenuContent class="w-72">
+        <MenuDividerLabel class="mb-1 mt-1">
+          Select an agent to build a project
+        </MenuDividerLabel>
+        <Show
+          when={(props.agents ?? []).length > 0}
+          fallback={
+            <div class="px-2 py-1.5 text-xs italic text-muted-foreground">
+              No agents available
+            </div>
+          }
+        >
+          <For each={props.agents}>
+            {(agent) => (
+              <RichMenuItem
+                icon={<Bot class="w-4 h-4" />}
+                title={agent.displayName ?? agent.name}
+                description={
+                  agent.description ?? "Start a new project with this agent."
+                }
+                disabled={props.disabled}
+                onSelect={() => props.onCreateProject(agent.id)}
+              />
+            )}
+          </For>
         </Show>
-        <DropdownMenuSub overlap>
-          <DropdownMenuSubTrigger>
-            <AppWindow class="w-4 h-4 text-muted-foreground" />
-            <span class="flex-1">New project</span>
-            <ChevronRight class="w-3.5 h-3.5 text-muted-foreground" />
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            <Show
-              when={(props.agents ?? []).length > 0}
-              fallback={
-                <div class="px-2 py-1.5 text-xs text-muted-foreground italic">
-                  No agents available
-                </div>
-              }
-            >
-              <For each={props.agents}>
-                {(agent) => (
-                  <DropdownMenuItem
-                    disabled={props.disabled}
-                    onSelect={() => props.onCreateProject(agent.id)}
-                  >
-                    <Bot class="w-4 h-4 text-muted-foreground" />
-                    {agent.displayName ?? agent.name}
-                  </DropdownMenuItem>
-                )}
-              </For>
-            </Show>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
+        <Show when={props.canCreateWorkspace}>
+          <MenuDividerLabel>OR</MenuDividerLabel>
+          <RichMenuItem
+            compact
+            icon={<FolderPlus class="w-3.5 h-3.5" />}
+            title="Create new workspace"
+            description="A shared space to group projects and manage access."
+            onSelect={props.onOpenCreateWorkspace}
+          />
+        </Show>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function MenuDividerLabel(props: { children: JSX.Element; class?: string }) {
+  return (
+    <div
+      class={cn(
+        "-mx-1 my-1.5 flex items-center gap-2 text-xs font-medium text-muted-foreground",
+        props.class,
+      )}
+    >
+      <span class="h-px flex-1 bg-border" />
+      <span class="shrink-0">{props.children}</span>
+      <span class="h-px flex-1 bg-border" />
+    </div>
+  );
+}
+
+function RichMenuItem(props: {
+  icon: JSX.Element;
+  title: string;
+  description: string;
+  compact?: boolean;
+  disabled?: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <DropdownMenuItem
+      class={cn("items-start gap-2.5", props.compact ? "py-1.5" : "py-2")}
+      disabled={props.disabled}
+      onSelect={props.onSelect}
+    >
+      <span class="mt-0.5 shrink-0 text-muted-foreground">{props.icon}</span>
+      <span class="flex min-w-0 flex-col gap-0.5">
+        <span
+          class={cn(
+            "font-medium leading-none text-foreground",
+            props.compact ? "text-xs" : "text-sm",
+          )}
+        >
+          {props.title}
+        </span>
+        <span class="text-xs leading-snug text-muted-foreground">
+          {props.description}
+        </span>
+      </span>
+    </DropdownMenuItem>
   );
 }

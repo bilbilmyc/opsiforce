@@ -6,6 +6,7 @@ export interface AgentResponse {
   id: string
   name: string
   displayName: string | null
+  description: string | null
 }
 
 export const DEFAULT_AGENT_NAME = "app-builder"

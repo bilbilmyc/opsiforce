@@ -21,7 +21,7 @@ function DropdownMenuContent(props: ParentProps<ComponentProps<typeof Kobalte.Co
     <Kobalte.Portal>
       <Kobalte.Content
         class={cn(
-          "z-50 min-w-32 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md",
+          "z-50 min-w-32 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none",
           "animate-in fade-in-0 zoom-in-95",
           "data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0 data-[closed]:zoom-out-95 data-[expanded]:zoom-in-95",
           local.class,
@@ -85,7 +85,7 @@ function DropdownMenuSubContent(props: ParentProps<ComponentProps<typeof Kobalte
     <Kobalte.Portal>
       <Kobalte.SubContent
         class={cn(
-          "z-50 min-w-40 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md",
+          "z-50 min-w-40 overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md outline-none",
           "animate-in fade-in-0 zoom-in-95",
           "data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0 data-[closed]:zoom-out-95 data-[expanded]:zoom-in-95",
           local.class,

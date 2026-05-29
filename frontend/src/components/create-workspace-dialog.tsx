@@ -47,7 +47,7 @@ export default function CreateWorkspaceDialog(props: {
       }}
     >
       <DialogContent>
-        <DialogTitle>New workspace</DialogTitle>
+        <DialogTitle>Create new workspace</DialogTitle>
         <DialogDescription>
           A container for grouping projects and controlling which users can see them.
         </DialogDescription>
