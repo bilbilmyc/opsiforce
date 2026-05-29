@@ -4,39 +4,29 @@ import {
   type Accessor,
   type Component,
 } from "solid-js"
-import { useQueryClient } from "@tanstack/solid-query"
 import type { BaseRouterProps } from "@solidjs/router"
 import {
   api,
   type OpenCodeSession,
   type ProjectStatus,
 } from "~/api/client"
-import { projectKeys } from "~/api/projects"
+import { useSyncProjectTitle } from "~/api/projects"
 import { createDirectoryRouter } from "./platform"
 
 export interface OpenCodeConnectionOptions {
   projectId: string
   status: Accessor<ProjectStatus | undefined>
-  currentTitle: Accessor<string | null | undefined>
   initialPrompt?: string
 }
 
 export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
-  const qc = useQueryClient()
   const [router, setRouter] = createSignal<Component<BaseRouterProps> | null>(null)
+  const syncProjectTitle = useSyncProjectTitle()
 
   let connecting = false
-  let titleSynced = false
   let prevStatus: ProjectStatus | undefined
 
-  function syncTitle(title: string | undefined) {
-    if (titleSynced || !title) return
-    titleSynced = true
-    if (options.currentTitle()) return
-    api
-      .patch(`/projects/${options.projectId}`, { title })
-      .then(() => qc.invalidateQueries({ queryKey: projectKeys.all }))
-  }
+  const syncTitle = (title: string) => syncProjectTitle(options.projectId, title)
 
   async function resolveDirectory(): Promise<string | undefined> {
     try {
@@ -98,7 +88,6 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
   function reset() {
     setRouter(null)
     connecting = false
-    titleSynced = false
   }
 
   createEffect(() => {

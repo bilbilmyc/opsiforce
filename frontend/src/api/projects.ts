@@ -2,6 +2,7 @@ import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-que
 import { createEffect, createSignal, onCleanup } from "solid-js"
 import { ApiError, api, type Project, type ProjectState } from "./client"
 import { detectTimezone } from "~/lib/timezone"
+import { isMeaningfulSessionTitle } from "~/lib/session-title"
 
 export const projectKeys = {
   all: ["projects"] as const,
@@ -103,8 +104,33 @@ export function useRenameProject() {
   const qc = useQueryClient()
   return createMutation(() => ({
     mutationFn: (params: { id: string; title: string }) => api.patch<Project>(`/projects/${params.id}`, { title: params.title }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
+    onMutate: (params) => {
+      qc.setQueryData<Project[]>(projectKeys.list(), (prev) =>
+        prev?.map((p) => (p.id === params.id ? { ...p, title: params.title } : p)),
+      )
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
   }))
+}
+
+/**
+ * Adopts an OpenCode session title as the project name the moment it appears — but only while the
+ * project is still untitled, so a generated title never clobbers a manual rename. The sidebar/header
+ * read from the list cache, so we write there optimistically instead of waiting for the PATCH round-trip.
+ */
+export function useSyncProjectTitle() {
+  const qc = useQueryClient()
+  return (projectId: string, title: string) => {
+    if (!isMeaningfulSessionTitle(title)) return
+    const cached = qc.getQueryData<Project[]>(projectKeys.list())
+    const current = cached?.find((p) => p.id === projectId)?.title
+    if (current && current.trim()) return
+    qc.setQueryData<Project[]>(projectKeys.list(), (prev) =>
+      prev?.map((p) => (p.id === projectId ? { ...p, title } : p)),
+    )
+    const reconcile = () => qc.invalidateQueries({ queryKey: projectKeys.all })
+    api.patch<Project>(`/projects/${projectId}`, { title }).then(reconcile, reconcile)
+  }
 }
 
 export function useCreateUnassignedProject() {

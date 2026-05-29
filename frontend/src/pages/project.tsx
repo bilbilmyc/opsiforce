@@ -39,7 +39,6 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
   const connection = useOpenCodeConnection({
     projectId: props.projectId,
     status,
-    currentTitle: () => statusQuery.data?.title,
     initialPrompt: props.initialPrompt,
   })
   const app = () => statusQuery.data?.app

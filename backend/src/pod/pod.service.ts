@@ -48,6 +48,7 @@ export class PodService {
       storageType: this.configService.getOrThrow<"cephfs" | "hostPath">("storageType"),
       cephfsPvcName: this.configService.getOrThrow<string>("cephfsPvcName"),
       storageMountPath: this.configService.getOrThrow<string>("storageMountPath"),
+      appsHostname: this.configService.getOrThrow<string>("appsHostname"),
       imagePullPolicy: this.configService.getOrThrow<string>("agentContainerImagePullPolicy"),
       resources: this.configService.get("agentResources"),
       nodeSelector: this.configService.get("agentNodeSelector"),

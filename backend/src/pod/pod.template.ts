@@ -10,6 +10,7 @@ export interface PodTemplateOptions {
   storageMountPath: string
   subPath?: string
   projectId?: string
+  appsHostname?: string
   imagePullPolicy: string
   resources?: Record<string, unknown>
   nodeSelector?: Record<string, string>
@@ -102,6 +103,9 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             { name: "XDG_CACHE_HOME", value: "/workspace/.xdg/cache" },
             { name: "XDG_STATE_HOME", value: "/workspace/.xdg/state" },
             { name: "AGENT_NAME", value: resolvedAgentName },
+            ...(options.projectId && options.appsHostname
+              ? [{ name: "APP_PUBLIC_URL", value: `https://${options.projectId}.${options.appsHostname}/` }]
+              : []),
             ...(options.bifrostApiKey && options.bifrostProxyUrl
               ? [
                   { name: "OPENAI_API_KEY", value: options.bifrostApiKey },

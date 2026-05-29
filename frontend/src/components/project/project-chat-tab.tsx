@@ -1,33 +1,27 @@
-import { onCleanup, onMount, type Component, type ParentProps } from "solid-js"
+import { onCleanup, type Component } from "solid-js"
 import type { BaseRouterProps } from "@solidjs/router"
 import { AppBaseProviders, AppInterface } from "@opencode-ai/app/app"
 import { PlatformProvider } from "@opencode-ai/app/context/platform"
 import { ServerConnection } from "@opencode-ai/app/context/server"
-import { useLayout } from "@opencode-ai/app/context/layout"
 import { useGlobalSDK } from "@opencode-ai/app/context/global-sdk"
-import { useTheme } from "@opencode-ai/ui/theme/context"
+import { useSyncProjectTitle } from "~/api/projects"
 import FileUpload from "~/components/file-upload"
+import OpencodeOverrides from "./opencode-overrides"
 import { platform } from "./platform"
 
-function ForceLight(props: ParentProps) {
-  const theme = useTheme()
-  onMount(() => theme.setColorScheme("light"))
-  return <>{props.children}</>
-}
-
-function HidePanels() {
-  const layout = useLayout()
-  onMount(() => layout.sidebar.close())
-  return null
-}
-
-function PreviewAutoReload(props: { onReload: () => void }) {
+function OpenCodeEventBridge(props: { onReload: () => void; onTitle: (title: string) => void }) {
   const globalSDK = useGlobalSDK()
   let timer: ReturnType<typeof setTimeout> | undefined
   const unsub = globalSDK.event.listen((e) => {
-    if (e.details.type !== "session.idle") return
-    if (timer) clearTimeout(timer)
-    timer = setTimeout(() => props.onReload(), 1500)
+    const event = e.details
+    if (event.type === "session.idle") {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => props.onReload(), 1500)
+      return
+    }
+    if (event.type === "session.updated" && !event.properties.info.parentID) {
+      props.onTitle(event.properties.info.title)
+    }
   })
   onCleanup(() => {
     unsub()
@@ -43,6 +37,7 @@ export interface ProjectChatTabProps {
 }
 
 export default function ProjectChatTab(props: ProjectChatTabProps) {
+  const syncTitle = useSyncProjectTitle()
   const tunnelUrl = `${window.location.origin}/api/proxy/${props.projectId}`
   const server: ServerConnection.Http = { type: "http", http: { url: tunnelUrl } }
   const serverKey = ServerConnection.Key.make(tunnelUrl)
@@ -51,17 +46,18 @@ export default function ProjectChatTab(props: ProjectChatTabProps) {
     <>
       <PlatformProvider value={platform}>
         <AppBaseProviders>
-          <ForceLight>
-            <AppInterface
-              defaultServer={serverKey}
-              servers={[server]}
-              router={props.router}
-              disableHealthCheck
-            >
-              <HidePanels />
-              <PreviewAutoReload onReload={props.onPreviewReload} />
-            </AppInterface>
-          </ForceLight>
+          <AppInterface
+            defaultServer={serverKey}
+            servers={[server]}
+            router={props.router}
+            disableHealthCheck
+          >
+            <OpencodeOverrides />
+            <OpenCodeEventBridge
+              onReload={props.onPreviewReload}
+              onTitle={(title) => syncTitle(props.projectId, title)}
+            />
+          </AppInterface>
         </AppBaseProviders>
       </PlatformProvider>
       <FileUpload projectId={props.projectId} />
