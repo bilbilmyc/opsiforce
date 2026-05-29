@@ -113,18 +113,13 @@ export function useRenameProject() {
   }))
 }
 
-/**
- * Adopts an OpenCode session title as the project name the moment it appears — but only while the
- * project is still untitled, so a generated title never clobbers a manual rename. The sidebar/header
- * read from the list cache, so we write there optimistically instead of waiting for the PATCH round-trip.
- */
 export function useSyncProjectTitle() {
   const qc = useQueryClient()
-  return (projectId: string, title: string) => {
+  return (projectId: string, title: string, currentTitle?: string | null) => {
     if (!isMeaningfulSessionTitle(title)) return
     const cached = qc.getQueryData<Project[]>(projectKeys.list())
-    const current = cached?.find((p) => p.id === projectId)?.title
-    if (current && current.trim()) return
+    const existing = currentTitle?.trim() || cached?.find((p) => p.id === projectId)?.title?.trim()
+    if (existing) return
     qc.setQueryData<Project[]>(projectKeys.list(), (prev) =>
       prev?.map((p) => (p.id === projectId ? { ...p, title } : p)),
     )

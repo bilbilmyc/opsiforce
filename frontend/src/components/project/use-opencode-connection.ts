@@ -16,6 +16,7 @@ import { createDirectoryRouter } from "./platform"
 export interface OpenCodeConnectionOptions {
   projectId: string
   status: Accessor<ProjectStatus | undefined>
+  currentTitle: Accessor<string | null | undefined>
   initialPrompt?: string
 }
 
@@ -26,7 +27,7 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
   let connecting = false
   let prevStatus: ProjectStatus | undefined
 
-  const syncTitle = (title: string) => syncProjectTitle(options.projectId, title)
+  const syncTitle = (title: string) => syncProjectTitle(options.projectId, title, options.currentTitle())
 
   async function resolveDirectory(): Promise<string | undefined> {
     try {

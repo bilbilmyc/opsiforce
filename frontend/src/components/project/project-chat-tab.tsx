@@ -33,6 +33,7 @@ function OpenCodeEventBridge(props: { onReload: () => void; onTitle: (title: str
 export interface ProjectChatTabProps {
   projectId: string
   router: Component<BaseRouterProps>
+  currentTitle: string | null
   onPreviewReload: () => void
 }
 
@@ -55,7 +56,7 @@ export default function ProjectChatTab(props: ProjectChatTabProps) {
             <OpencodeOverrides />
             <OpenCodeEventBridge
               onReload={props.onPreviewReload}
-              onTitle={(title) => syncTitle(props.projectId, title)}
+              onTitle={(title) => syncTitle(props.projectId, title, props.currentTitle)}
             />
           </AppInterface>
         </AppBaseProviders>
