@@ -307,15 +307,6 @@ export class WorkspaceService {
     return this.projectService.findAllInWorkspace(params.tenantId, params.workspaceId)
   }
 
-  /**
-   * Idempotent project assign. `workspaceId: null` = unassign (admin-only).
-   *
-   * Move-permission rules:
-   * - Unassign (target=null): always admin-only.
-   * - Assign to a workspace the caller owns (their own private workspace): free.
-   * - Move out of a workspace the caller owns into a workspace they belong to: free.
-   * - All other moves: require `manageWorkspaces` or `moveProjectsBetweenWorkspaces`.
-   */
   async assignProject(params: {
     workspaceId: string | null
     projectId: string
@@ -344,6 +335,10 @@ export class WorkspaceService {
     if (workspaceId !== null) {
       const target = await this.findOneBase(workspaceId, tenantId)
 
+      if (target.type === "private" && project.workspaceId !== workspaceId) {
+        throw new ForbiddenException("Public and workspace projects can't be made private")
+      }
+
       const sourceOwnedByCaller = await this.isOwnedByUser(project.workspaceId, userId)
       const targetOwnedByCaller = target.ownerId === userId
 
@@ -355,8 +350,6 @@ export class WorkspaceService {
         )
       }
 
-      // Visibility/membership check on target. Admins bypass for shared
-      // targets; private targets always require ownership.
       const targetVisible = targetOwnedByCaller || (canManageWorkspaces && target.type === "shared")
       if (!targetVisible && !(await this.isMember(workspaceId, userId))) {
         throw new NotFoundException(`Workspace ${workspaceId} not found`)
@@ -395,11 +388,6 @@ export class WorkspaceService {
     return this.projectService.create(dto, tenantId, workspaceId)
   }
 
-  /**
-   * Member + project counts computed via two grouped queries instead of
-   * correlated subqueries in the main SELECT — avoids Drizzle subquery
-   * correlation oddities and surfaces each row count explicitly.
-   */
   private async attachCounts(rows: WorkspaceBaseRow[]): Promise<WorkspaceResponse[]> {
     if (rows.length === 0) return []
     const ids = rows.map((r) => r.id)

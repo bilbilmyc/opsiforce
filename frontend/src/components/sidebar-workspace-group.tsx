@@ -2,6 +2,7 @@ import { For, Show } from "solid-js"
 import { useSortable } from "@dnd-kit/solid/sortable"
 import { type Project, type Workspace } from "~/api/client"
 import { DndType } from "~/lib/sidebar-dnd"
+import SidebarDropZone from "./sidebar-drop-zone"
 import {
   ChevronDown,
   ChevronRight,
@@ -19,7 +20,6 @@ export default function SidebarWorkspaceGroup(props: {
   expanded: boolean
   projects: Project[]
   activeProjectId: string | undefined
-  projectsDraggable: boolean
   creating: boolean
   onToggleFold: () => void
   onOpenSettings?: () => void
@@ -31,12 +31,18 @@ export default function SidebarWorkspaceGroup(props: {
   onProjectDuplicated: (p: Project) => void
 }) {
   const sortable = useSortable({
-    id: `ws:${props.workspace.id}`,
-    index: props.index,
+    get id() {
+      return `ws:${props.workspace.id}`
+    },
+    get index() {
+      return props.index
+    },
     group: "workspaces",
     type: DndType.Workspace,
     accept: DndType.Workspace,
-    data: { workspaceId: props.workspace.id },
+    get data() {
+      return { workspaceId: props.workspace.id }
+    },
   })
 
   return (
@@ -99,7 +105,7 @@ export default function SidebarWorkspaceGroup(props: {
       </div>
 
       <Show when={props.expanded}>
-        <div class="flex flex-col gap-0.5 pl-2">
+        <SidebarDropZone workspaceId={props.workspace.id}>
           <Show
             when={props.projects.length > 0}
             fallback={
@@ -113,7 +119,6 @@ export default function SidebarWorkspaceGroup(props: {
                   index={idx()}
                   groupId={props.workspace.id}
                   isActive={project.id === props.activeProjectId}
-                  draggable={props.projectsDraggable}
                   onSelect={() => props.onSelectProject(project.id)}
                   onRename={(id, title) => props.onRenameProject(id, title)}
                   onSettings={() => props.onProjectSettings(project.id)}
@@ -123,7 +128,7 @@ export default function SidebarWorkspaceGroup(props: {
               )}
             </For>
           </Show>
-        </div>
+        </SidebarDropZone>
       </Show>
     </div>
   )

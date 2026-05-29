@@ -1,15 +1,9 @@
-/**
- * Shared constants for the sidebar's drag-and-drop wiring so the strings don't
- * drift between the `<DragDropProvider>` handler and the sortable descendants.
- */
 export const DndType = {
   Workspace: "workspace",
   Project: "project",
-} as const
-export type DndType = (typeof DndType)[keyof typeof DndType]
+} as const;
+export type DndType = (typeof DndType)[keyof typeof DndType];
 
-/**
- * Sentinel id for the "Public" bucket (workspaceId is NULL on the project).
- * Used as a DnD group name and to translate group → workspaceId (null).
- */
-export const PUBLIC_ID = "public"
+export const PUBLIC_ID = "public";
+
+export const DROP_ZONE_PRIORITY = 1;

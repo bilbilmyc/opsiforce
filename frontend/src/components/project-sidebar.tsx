@@ -1,6 +1,6 @@
 import { For, Show, createMemo, createSignal } from "solid-js"
 import { useMatch, useNavigate } from "@tanstack/solid-router"
-import { DragDropProvider } from "@dnd-kit/solid"
+import { DragDropProvider, type DragDropProviderProps } from "@dnd-kit/solid"
 import { isSortable } from "@dnd-kit/solid/sortable"
 import { toast } from "solid-sonner"
 import { type Project } from "~/api/client"
@@ -25,6 +25,8 @@ import SidebarPublicGroup from "./sidebar-public-group"
 
 const FOLDED_KEY = "opsiforce:workspace:folded"
 const PUBLIC_FOLDED_KEY = "opsiforce:workspace:public-folded"
+
+type DragEndEvent = Parameters<NonNullable<DragDropProviderProps["onDragEnd"]>>[0]
 
 export default function ProjectSidebar(props: { search: string }) {
   const navigate = useNavigate()
@@ -133,6 +135,58 @@ export default function ProjectSidebar(props: { search: string }) {
       onError: () => toast.error("Failed to create project"),
     })
 
+  const handleWorkspaceReorder = (initialIndex: number, index: number) => {
+    if (initialIndex === index) return
+    reorderWorkspacesByIndex(initialIndex, index)
+  }
+
+  const privateWorkspaceId = createMemo(
+    () => (workspaces.data ?? []).find((w) => w.type === "private")?.id,
+  )
+
+  const handleProjectMove = (
+    projectId: string,
+    initialGroup: string | undefined,
+    group: string | undefined,
+  ) => {
+    if (initialGroup === group) return
+    const priv = privateWorkspaceId()
+    if (priv && group === priv) {
+      toast.error("Public and workspace projects can't be made private")
+      return
+    }
+    const fromWorkspaceId = initialGroup === PUBLIC_ID ? null : (initialGroup ?? null)
+    const toWorkspaceId = group === PUBLIC_ID ? null : (group ?? null)
+    moveProject.mutate({
+      projectId,
+      fromWorkspaceId,
+      toWorkspaceId,
+      fromName: workspaceLabel(fromWorkspaceId),
+      toName: workspaceLabel(toWorkspaceId),
+    })
+  }
+
+  const onDragEnd = (event: DragEndEvent) => {
+    if (event.canceled) return
+    const { source, target } = event.operation
+    if (!source || !isSortable(source)) return
+
+    if (source.type === DndType.Workspace) {
+      handleWorkspaceReorder(source.initialIndex, source.index)
+      return
+    }
+
+    if (source.type === DndType.Project) {
+      const initialGroup = source.initialGroup as string | undefined
+      let group = source.group as string | undefined
+      if (initialGroup === group && target && !isSortable(target)) {
+        group = String(target.id)
+      }
+      const projectId = (source.data as { projectId: string }).projectId
+      handleProjectMove(projectId, initialGroup, group)
+    }
+  }
+
   return (
     <>
       <Show
@@ -143,39 +197,7 @@ export default function ProjectSidebar(props: { search: string }) {
           </div>
         }
       >
-        <DragDropProvider
-          onDragEnd={(event) => {
-            if (event.canceled) return
-            const { source } = event.operation
-            if (!source) return
-            if (!isSortable(source)) return
-
-            if (source.type === DndType.Workspace) {
-              const initialIndex = source.initialIndex as number
-              const index = source.index as number
-              if (initialIndex === index) return
-              reorderWorkspacesByIndex(initialIndex, index)
-              return
-            }
-
-            if (source.type === DndType.Project) {
-              const initialGroup = source.initialGroup as string | undefined
-              const group = source.group as string | undefined
-              if (initialGroup === group) return
-              const projectId = (source.data as { projectId: string }).projectId
-              const fromWorkspaceId =
-                initialGroup === PUBLIC_ID ? null : (initialGroup ?? null)
-              const toWorkspaceId = group === PUBLIC_ID ? null : (group ?? null)
-              moveProject.mutate({
-                projectId,
-                fromWorkspaceId,
-                toWorkspaceId,
-                fromName: workspaceLabel(fromWorkspaceId),
-                toName: workspaceLabel(toWorkspaceId),
-              })
-            }
-          }}
-        >
+        <DragDropProvider onDragEnd={onDragEnd}>
           <div class="flex flex-col gap-1">
             <For each={workspaces.data}>
               {(ws, idx) => (
@@ -185,7 +207,6 @@ export default function ProjectSidebar(props: { search: string }) {
                   expanded={shouldShowExpanded(ws.id)}
                   projects={filterByQuery(groupedProjects().byWs.get(ws.id) ?? [])}
                   activeProjectId={activeProjectId()}
-                  projectsDraggable={true}
                   creating={createInWs.isPending}
                   onToggleFold={() => toggleFold(ws.id)}
                   onOpenSettings={
