@@ -78,6 +78,5 @@ affinity:
                 - cpx22
                 - cpx32
                 - ccx13
-                - ccx23
                 - cx23
                 - cx33

@@ -46,7 +46,6 @@ agent:
                   - cpx22
                   - cpx32
                   - ccx13
-                  - ccx23
                   - cx23
                   - cx33
     tolerations: []
@@ -90,6 +89,5 @@ valkey:
                   - cpx22
                   - cpx32
                   - ccx13
-                  - ccx23
                   - cx23
                   - cx33
