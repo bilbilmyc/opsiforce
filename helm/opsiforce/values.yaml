@@ -38,6 +38,17 @@ agent:
                 operator: In
                 values:
                   - east
+              - key: node.kubernetes.io/instance-type
+                operator: NotIn
+                values:
+                  - cpx11
+                  - cpx21
+                  - cpx22
+                  - cpx32
+                  - ccx13
+                  - ccx23
+                  - cx23
+                  - cx33
     tolerations: []
 
 warmPool:
@@ -71,3 +82,14 @@ valkey:
                 operator: In
                 values:
                   - east
+              - key: node.kubernetes.io/instance-type
+                operator: NotIn
+                values:
+                  - cpx11
+                  - cpx21
+                  - cpx22
+                  - cpx32
+                  - ccx13
+                  - ccx23
+                  - cx23
+                  - cx33
