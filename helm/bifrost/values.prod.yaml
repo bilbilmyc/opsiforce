@@ -66,6 +66,7 @@ bifrost:
         - name: openai-primary
           value: env.OPENAI_API_KEY
           weight: 1
+          models: ["*"]
       network_config:
         default_request_timeout_in_seconds: 1200
         max_retries: 2
@@ -77,6 +78,7 @@ bifrost:
         - name: anthropic-primary
           value: env.ANTHROPIC_API_KEY
           weight: 1
+          models: ["*"]
       network_config:
         default_request_timeout_in_seconds: 1200
         max_retries: 2
@@ -88,6 +90,7 @@ bifrost:
         - name: placeholder
           value: ""
           weight: 1
+          models: ["*"]
       network_config:
         base_url: "https://b3bff37a-6f24-48b2-a469-142a96bc4b39.apps.dev.opsima.com/api/openai-oauth"
         default_request_timeout_in_seconds: 1200
@@ -122,6 +125,7 @@ bifrost:
         - name: placeholder
           value: ""
           weight: 1
+          models: ["*"]
       network_config:
         base_url: "https://2de6-85-130-139-186.ngrok-free.app"
         default_request_timeout_in_seconds: 1200
@@ -156,6 +160,7 @@ bifrost:
         - name: placeholder
           value: ""
           weight: 1
+          models: ["*"]
       network_config:
         base_url: "https://2de6-85-130-139-186.ngrok-free.app"
         default_request_timeout_in_seconds: 1200
