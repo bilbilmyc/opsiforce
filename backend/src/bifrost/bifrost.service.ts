@@ -133,7 +133,7 @@ export class BifrostService {
     const payload: CreateTeamRequest = {
       name: `project-${projectId.slice(0, 8)}`,
       ...(customerId ? { customer_id: customerId } : {}),
-      budget: this.budgetFor(budgets, "project"),
+      budgets: [this.budgetFor(budgets, "project")],
     }
 
     const result = await this.request<CreateTeamResponse>(
@@ -168,7 +168,7 @@ export class BifrostService {
 
   async updateTeamBudget(teamId: string, budget?: BifrostBudget): Promise<void> {
     await this.request("PUT", `/api/governance/teams/${teamId}`, {
-      ...(budget ? { budget } : {}),
+      ...(budget ? { budgets: [budget] } : {}),
     })
   }
 
@@ -193,7 +193,7 @@ export class BifrostService {
   }
 
   private async updateVirtualKeyBudget(keyId: string, budget: BifrostBudget): Promise<void> {
-    await this.request("PUT", `/api/governance/virtual-keys/${keyId}`, { budget })
+    await this.request("PUT", `/api/governance/virtual-keys/${keyId}`, { budgets: [budget] })
   }
 
   async deleteTeam(teamId: string): Promise<void> {
@@ -269,8 +269,9 @@ export class BifrostService {
       provider_configs: BIFROST_PROVIDER_CONFIGS[keyType].map(({ provider, weight }) => ({
         provider,
         weight,
+        allowed_models: ["*"],
       })),
-      budget: this.budgetFor(budgets, keyType),
+      budgets: [this.budgetFor(budgets, keyType)],
       ...(teamId ? { team_id: teamId } : {}),
     }
 
@@ -375,7 +376,7 @@ export class BifrostService {
       : undefined
 
     await this.request("PUT", `/api/governance/virtual-keys/${key.bifrostKeyId}`, {
-      ...(budget ? { budget } : {}),
+      ...(budget ? { budgets: [budget] } : {}),
     })
 
     this.logger.log(`Updated budget for ${keyType} key of project ${projectId}: $${maxBudget}/${budgetDuration}`)

@@ -17,7 +17,7 @@ export interface CreateVirtualKeyRequest {
   name: string
   description?: string
   provider_configs?: BifrostProviderConfig[]
-  budget?: BifrostBudget
+  budgets?: BifrostBudget[]
   team_id?: string
   is_active?: boolean
 }
@@ -58,7 +58,7 @@ export interface CreateCustomerResponse {
 export interface CreateTeamRequest {
   name: string
   customer_id?: string
-  budget?: BifrostBudget
+  budgets?: BifrostBudget[]
 }
 
 export interface BifrostTeam {
