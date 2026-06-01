@@ -4,7 +4,7 @@ service:
 fullnameOverride: opsiforce-bifrost
 
 image:
-  tag: "v1.4.20"
+  tag: "v1.5.3"
 
 replicaCount: 1
 
