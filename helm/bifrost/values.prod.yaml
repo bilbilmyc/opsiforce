@@ -90,7 +90,14 @@ bifrost:
         - name: placeholder
           value: ""
           weight: 1
-          models: ["*"]
+          models:
+            - gpt-5.5
+            - gpt-5.4
+            - gpt-5.4-mini
+            - gpt-5.3-codex
+            - gpt-5.3-codex-spark
+            - gpt-5.2
+            - codex-auto-review
       network_config:
         base_url: "https://b3bff37a-6f24-48b2-a469-142a96bc4b39.apps.dev.opsima.com/api/openai-oauth"
         default_request_timeout_in_seconds: 1200
