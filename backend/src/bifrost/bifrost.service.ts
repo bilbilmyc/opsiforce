@@ -133,7 +133,7 @@ export class BifrostService {
     const payload: CreateTeamRequest = {
       name: `project-${projectId.slice(0, 8)}`,
       ...(customerId ? { customer_id: customerId } : {}),
-      budget: this.budgetFor(budgets, "project"),
+      budgets: [this.budgetFor(budgets, "project")],
     }
 
     const result = await this.request<CreateTeamResponse>(
@@ -168,7 +168,7 @@ export class BifrostService {
 
   async updateTeamBudget(teamId: string, budget?: BifrostBudget): Promise<void> {
     await this.request("PUT", `/api/governance/teams/${teamId}`, {
-      ...(budget ? { budget } : {}),
+      ...(budget ? { budgets: [budget] } : {}),
     })
   }
 
@@ -193,7 +193,7 @@ export class BifrostService {
   }
 
   private async updateVirtualKeyBudget(keyId: string, budget: BifrostBudget): Promise<void> {
-    await this.request("PUT", `/api/governance/virtual-keys/${keyId}`, { budget })
+    await this.request("PUT", `/api/governance/virtual-keys/${keyId}`, { budgets: [budget] })
   }
 
   async deleteTeam(teamId: string): Promise<void> {
@@ -236,11 +236,11 @@ export class BifrostService {
   }
 
   async getTeamBudget(teamId: string): Promise<BifrostBudget | null> {
-    const data = await this.request<{ team: { budget?: BifrostBudget } }>(
+    const data = await this.request<{ team: { budget?: BifrostBudget; budgets?: BifrostBudget[] } }>(
       "GET",
       `/api/governance/teams/${teamId}`,
     )
-    return data.team.budget ?? null
+    return data.team.budgets?.[0] ?? data.team.budget ?? null
   }
 
   async createProjectKey(
@@ -269,8 +269,9 @@ export class BifrostService {
       provider_configs: BIFROST_PROVIDER_CONFIGS[keyType].map(({ provider, weight }) => ({
         provider,
         weight,
+        allowed_models: ["*"],
       })),
-      budget: this.budgetFor(budgets, keyType),
+      budgets: [this.budgetFor(budgets, keyType)],
       ...(teamId ? { team_id: teamId } : {}),
     }
 
@@ -348,11 +349,12 @@ export class BifrostService {
 
     return Promise.all(
       keys.map(async (k) => {
-        const data = await this.request<{ virtual_key: { budget?: BifrostBudget } }>(
+        const data = await this.request<{ virtual_key: { budget?: BifrostBudget; budgets?: BifrostBudget[] } }>(
           "GET",
           `/api/governance/virtual-keys/${k.bifrostKeyId}`,
         )
-        return { keyType: k.keyType as KeyType, budget: data.virtual_key.budget ?? null }
+        const budget = data.virtual_key.budgets?.[0] ?? data.virtual_key.budget ?? null
+        return { keyType: k.keyType as KeyType, budget }
       }),
     )
   }
@@ -374,7 +376,7 @@ export class BifrostService {
       : undefined
 
     await this.request("PUT", `/api/governance/virtual-keys/${key.bifrostKeyId}`, {
-      ...(budget ? { budget } : {}),
+      ...(budget ? { budgets: [budget] } : {}),
     })
 
     this.logger.log(`Updated budget for ${keyType} key of project ${projectId}: $${maxBudget}/${budgetDuration}`)
