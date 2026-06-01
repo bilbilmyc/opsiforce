@@ -236,11 +236,11 @@ export class BifrostService {
   }
 
   async getTeamBudget(teamId: string): Promise<BifrostBudget | null> {
-    const data = await this.request<{ team: { budget?: BifrostBudget } }>(
+    const data = await this.request<{ team: { budget?: BifrostBudget; budgets?: BifrostBudget[] } }>(
       "GET",
       `/api/governance/teams/${teamId}`,
     )
-    return data.team.budget ?? null
+    return data.team.budgets?.[0] ?? data.team.budget ?? null
   }
 
   async createProjectKey(
@@ -348,11 +348,12 @@ export class BifrostService {
 
     return Promise.all(
       keys.map(async (k) => {
-        const data = await this.request<{ virtual_key: { budget?: BifrostBudget } }>(
+        const data = await this.request<{ virtual_key: { budget?: BifrostBudget; budgets?: BifrostBudget[] } }>(
           "GET",
           `/api/governance/virtual-keys/${k.bifrostKeyId}`,
         )
-        return { keyType: k.keyType as KeyType, budget: data.virtual_key.budget ?? null }
+        const budget = data.virtual_key.budgets?.[0] ?? data.virtual_key.budget ?? null
+        return { keyType: k.keyType as KeyType, budget }
       }),
     )
   }
