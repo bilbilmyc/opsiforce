@@ -59,6 +59,7 @@ bifrost:
   client:
     dropExcessRequests: true
     enableLogging: true
+    logRetentionDays: 7
     allowDirectKeys: false
   providers:
     openai:

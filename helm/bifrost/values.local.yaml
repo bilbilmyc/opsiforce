@@ -50,6 +50,7 @@ bifrost:
     passwordKey: password
   client:
     enableLogging: true
+    logRetentionDays: 7
     allowDirectKeys: false
   providers:
     openai:
