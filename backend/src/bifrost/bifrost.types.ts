@@ -72,45 +72,6 @@ export interface CreateTeamResponse {
   team: BifrostTeam
 }
 
-export interface BifrostLogStats {
-  total_requests: number
-  total_tokens: number
-  total_cost: number
-  average_latency: number
-  success_rate: number
-}
-
-export interface BifrostCostBucket {
-  timestamp: string
-  total_cost: number
-  by_model: Record<string, number>
-}
-
-export interface BifrostCostHistogram {
-  buckets: BifrostCostBucket[]
-  bucket_size_seconds: number
-  models: string[]
-}
-
-export interface KeyTypeUsage {
-  keyType: KeyType
-  totalRequests: number
-  totalTokens: number
-  totalCost: number
-  averageLatency: number
-  successRate: number
-}
-
-export interface ProjectUsageResponse {
-  projectId: string
-  totalRequests: number
-  totalTokens: number
-  totalCost: number
-  averageLatency: number
-  successRate: number
-  byKeyType?: KeyTypeUsage[]
-}
-
 export interface ProjectBudgetEntry {
   keyType: KeyType
   maxBudget: number | null
@@ -144,13 +105,4 @@ export interface UpdateTenantBudgetRequest {
 export interface UpdateProjectBudgetRequest {
   maxBudget: number
   budgetDuration: string
-}
-
-export interface TenantUsageResponse {
-  tenantId: string
-  totalRequests: number
-  totalTokens: number
-  totalCost: number
-  projects: ProjectUsageResponse[]
-  byKeyType?: KeyTypeUsage[]
 }
