@@ -113,28 +113,6 @@ In both production and local dev, both URLs point to the same in-cluster service
 
 Projects pre-baked by the [pending project pool](./pool.md) are created with no tenant attached. Bifrost's team API allows `customer_id` to be omitted at create time and reassigned via PUT — so pool projects start with an **orphan team** (no customer), and at claim time we PATCH `team.customer_id` to the claiming tenant's customer id. The VK tokens baked into the pod environment stay valid across the reassignment; the cost ledger flips to the correct customer from that moment onward. No LLM call ever happens against a pool project before claim, so attribution is clean from request one.
 
-## Usage API
-
-```
-GET /api/usage                    → aggregate usage for current tenant
-GET /api/usage/projects/:id       → usage for specific project (includes byKeyType breakdown)
-```
-
-Project usage response includes `byKeyType` array with per-key-type stats:
-```json
-{
-  "projectId": "...",
-  "totalRequests": 150,
-  "totalCost": 0.42,
-  "byKeyType": [
-    { "keyType": "chat", "totalRequests": 120, "totalCost": 0.35 },
-    { "keyType": "backend", "totalRequests": 30, "totalCost": 0.07 }
-  ]
-}
-```
-
-Returns zeros when Bifrost is not configured (no `BIFROST_PROXY_URL`).
-
 ## Dynamic Skills
 
 The `llm-api` skill is included in the app-builder template at `.opencode/skills/llm-api/SKILL.md`. It teaches the agent that `APP_LLM_API_KEY` and `APP_LLM_BASE_URL` are set, with examples for text generation, structured output (JSON mode + JSON schema), streaming, multi-turn conversation, vision (image analysis), and audio transcription.

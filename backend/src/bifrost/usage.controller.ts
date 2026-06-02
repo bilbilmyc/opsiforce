@@ -6,31 +6,16 @@ import { TenantService } from "../tenant/tenant.service"
 import type {
   KeyType,
   BifrostBudget,
-  BifrostLogStats,
-  KeyTypeUsage,
   ProjectBudgetEntry,
   UpdateBudgetRequest,
   ProjectBudgetResponse,
   TenantBudgetResponse,
   UpdateTenantBudgetRequest,
   UpdateProjectBudgetRequest,
-  ProjectUsageResponse,
-  TenantUsageResponse,
 } from "./bifrost.types"
 
 const VALID_KEY_TYPES: KeyType[] = ["chat", "backend"]
 const VALID_DURATIONS = ["1m", "1h", "1d", "1w", "1M", "1Y"]
-
-function mapKeyTypeStats(entries: Array<{ keyType: KeyType } & BifrostLogStats>): KeyTypeUsage[] {
-  return entries.map((kt) => ({
-    keyType: kt.keyType,
-    totalRequests: kt.total_requests,
-    totalTokens: kt.total_tokens,
-    totalCost: kt.total_cost,
-    averageLatency: kt.average_latency,
-    successRate: kt.success_rate,
-  }))
-}
 
 function toBudgetResponse(budget: BifrostBudget | null) {
   return {
@@ -51,65 +36,6 @@ export class UsageController {
     private readonly projectService: ProjectService,
     private readonly tenantService: TenantService,
   ) {}
-
-  @Get()
-  async getTenantUsage(@CurrentTenant() tenant: TenantContext): Promise<TenantUsageResponse> {
-    if (!this.bifrostService.isEnabled()) {
-      return { tenantId: tenant.tenantId, totalRequests: 0, totalTokens: 0, totalCost: 0, projects: [] }
-    }
-
-    const [stats, projectList] = await Promise.all([
-      this.bifrostService.getTenantUsage(tenant.tenantId),
-      this.projectService.findAll(tenant.tenantId),
-    ])
-
-    const projectUsages = await Promise.all(
-      projectList.map(async (project): Promise<ProjectUsageResponse | null> => {
-        const { aggregate, byKeyType } = await this.bifrostService.getProjectUsage(project.id)
-        if (!aggregate) return null
-        return {
-          projectId: project.id,
-          totalRequests: aggregate.total_requests,
-          totalTokens: aggregate.total_tokens,
-          totalCost: aggregate.total_cost,
-          averageLatency: aggregate.average_latency,
-          successRate: aggregate.success_rate,
-          byKeyType: mapKeyTypeStats(byKeyType),
-        }
-      }),
-    )
-
-    return {
-      tenantId: tenant.tenantId,
-      totalRequests: stats.total_requests,
-      totalTokens: stats.total_tokens,
-      totalCost: stats.total_cost,
-      projects: projectUsages.filter((p): p is ProjectUsageResponse => p !== null),
-    }
-  }
-
-  @Get("projects/:id")
-  async getProjectUsage(
-    @Param("id") id: string,
-    @CurrentTenant() tenant: TenantContext,
-  ): Promise<ProjectUsageResponse> {
-    await this.projectService.findOne(id, tenant.tenantId)
-
-    if (!this.bifrostService.isEnabled()) {
-      return { projectId: id, totalRequests: 0, totalTokens: 0, totalCost: 0, averageLatency: 0, successRate: 0 }
-    }
-
-    const { aggregate, byKeyType } = await this.bifrostService.getProjectUsage(id)
-    return {
-      projectId: id,
-      totalRequests: aggregate?.total_requests ?? 0,
-      totalTokens: aggregate?.total_tokens ?? 0,
-      totalCost: aggregate?.total_cost ?? 0,
-      averageLatency: aggregate?.average_latency ?? 0,
-      successRate: aggregate?.success_rate ?? 0,
-      byKeyType: mapKeyTypeStats(byKeyType),
-    }
-  }
 
   @Get("projects/:id/budgets")
   async getProjectBudgets(

@@ -17,8 +17,6 @@ import type {
   CreateCustomerResponse,
   CreateTeamRequest,
   CreateTeamResponse,
-  BifrostLogStats,
-  BifrostCostHistogram,
 } from "./bifrost.types"
 import { BIFROST_PROVIDER_CONFIGS } from "./bifrost.providers"
 
@@ -42,10 +40,6 @@ export class BifrostService {
 
   isEnabled(): boolean {
     return !!this.proxyUrl && !!this.adminUsername && !!this.adminPassword
-  }
-
-  getPodProxyUrl(): string {
-    return this.podProxyUrl
   }
 
   private budgetFor(defaults: BudgetDefaults, level: "tenant" | "project" | KeyType): BifrostBudget {
@@ -115,10 +109,6 @@ export class BifrostService {
     await this.request("PUT", `/api/governance/customers/${customerId}`, {
       ...(budget ? { budget } : {}),
     })
-  }
-
-  async deleteCustomer(customerId: string): Promise<void> {
-    await this.request("DELETE", `/api/governance/customers/${customerId}`)
   }
 
   async getCustomerBudget(customerId: string): Promise<BifrostBudget | null> {
@@ -236,11 +226,11 @@ export class BifrostService {
   }
 
   async getTeamBudget(teamId: string): Promise<BifrostBudget | null> {
-    const data = await this.request<{ team: { budget?: BifrostBudget; budgets?: BifrostBudget[] } }>(
+    const data = await this.request<{ team: { budgets?: BifrostBudget[] } }>(
       "GET",
       `/api/governance/teams/${teamId}`,
     )
-    return data.team.budgets?.[0] ?? data.team.budget ?? null
+    return data.team.budgets?.[0] ?? null
   }
 
   async createProjectKey(
@@ -270,6 +260,7 @@ export class BifrostService {
         provider,
         weight,
         allowed_models: ["*"],
+        key_ids: ["*"],
       })),
       budgets: [this.budgetFor(budgets, keyType)],
       ...(teamId ? { team_id: teamId } : {}),
@@ -349,11 +340,11 @@ export class BifrostService {
 
     return Promise.all(
       keys.map(async (k) => {
-        const data = await this.request<{ virtual_key: { budget?: BifrostBudget; budgets?: BifrostBudget[] } }>(
+        const data = await this.request<{ virtual_key: { budgets?: BifrostBudget[] } }>(
           "GET",
           `/api/governance/virtual-keys/${k.bifrostKeyId}`,
         )
-        const budget = data.virtual_key.budgets?.[0] ?? data.virtual_key.budget ?? null
+        const budget = data.virtual_key.budgets?.[0] ?? null
         return { keyType: k.keyType as KeyType, budget }
       }),
     )
@@ -416,89 +407,5 @@ export class BifrostService {
         this.logger.warn(`Failed to delete Bifrost team for project ${projectId}: ${(err as Error).message}`)
       }
     }
-  }
-
-  async getProjectUsage(projectId: string): Promise<{
-    aggregate: BifrostLogStats | null
-    byKeyType: Array<{ keyType: KeyType } & BifrostLogStats>
-  }> {
-    const keys = await db
-      .select()
-      .from(projectVirtualKeys)
-      .where(and(eq(projectVirtualKeys.projectId, projectId), eq(projectVirtualKeys.status, "active")))
-
-    if (keys.length === 0) return { aggregate: null, byKeyType: [] }
-
-    const allKeyIds = keys.map((k) => k.bifrostKeyId).join(",")
-    const aggregate = await this.request<BifrostLogStats>(
-      "GET",
-      `/api/logs/stats?virtual_key_ids=${allKeyIds}`,
-    )
-
-    const keysByType: Record<string, typeof keys> = {}
-    for (const k of keys) {
-      ;(keysByType[k.keyType] ??= []).push(k)
-    }
-
-    const byKeyType = await Promise.all(
-      Object.entries(keysByType).map(async ([keyType, typeKeys]) => {
-        const typeKeyIds = typeKeys.map((k) => k.bifrostKeyId).join(",")
-        const stats = await this.request<BifrostLogStats>(
-          "GET",
-          `/api/logs/stats?virtual_key_ids=${typeKeyIds}`,
-        )
-        return { keyType: keyType as KeyType, ...stats }
-      }),
-    )
-
-    return { aggregate, byKeyType }
-  }
-
-  async getTenantUsage(tenantId: string): Promise<BifrostLogStats> {
-    const keys = await db
-      .select()
-      .from(projectVirtualKeys)
-      .where(and(eq(projectVirtualKeys.tenantId, tenantId), eq(projectVirtualKeys.status, "active")))
-
-    if (keys.length === 0) {
-      return { total_requests: 0, total_tokens: 0, total_cost: 0, average_latency: 0, success_rate: 0 }
-    }
-
-    const keyIds = keys.map((k) => k.bifrostKeyId).join(",")
-    return this.request<BifrostLogStats>(
-      "GET",
-      `/api/logs/stats?virtual_key_ids=${keyIds}`,
-    )
-  }
-
-  async getUsageHistogram(
-    projectId: string,
-    startTime?: string,
-    endTime?: string,
-    keyType?: KeyType,
-  ): Promise<BifrostCostHistogram | null> {
-    const conditions = [
-      eq(projectVirtualKeys.projectId, projectId),
-      eq(projectVirtualKeys.status, "active"),
-      ...(keyType ? [eq(projectVirtualKeys.keyType, keyType)] : []),
-    ]
-
-    const keys = await db
-      .select()
-      .from(projectVirtualKeys)
-      .where(and(...conditions))
-
-    if (keys.length === 0) return null
-
-    const params = new URLSearchParams({
-      virtual_key_ids: keys.map((k) => k.bifrostKeyId).join(","),
-    })
-    if (startTime) params.set("start_time", startTime)
-    if (endTime) params.set("end_time", endTime)
-
-    return this.request<BifrostCostHistogram>(
-      "GET",
-      `/api/logs/histogram/cost?${params.toString()}`,
-    )
   }
 }
