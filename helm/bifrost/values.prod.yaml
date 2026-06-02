@@ -23,6 +23,30 @@ autoscaling:
   targetCPUUtilizationPercentage: 70
   targetMemoryUtilizationPercentage: 80
 
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: cfke.io/region
+              operator: In
+              values:
+                - northamerica
+            - key: cfke.io/subregion
+              operator: In
+              values:
+                - east
+            - key: node.kubernetes.io/instance-type
+              operator: NotIn
+              values:
+                - cpx11
+                - cpx21
+                - cpx22
+                - cpx32
+                - ccx13
+                - cx23
+                - cx33
+
 storage:
   mode: postgres
   configStore:
