@@ -23,9 +23,9 @@ Run `agent-browser skills get core --full` before your first interaction in a se
 
 ## Debugging workflow
 
-**Before opening the browser**, verify the dev servers are running — see §Verifying the app runs in the agent instructions. A blank page is almost always a crashed process, not a UI bug.
+**Before opening the browser**, verify the dev servers are running (run `cd /workspace/app && yarn check`, then check for recent crashes/errors — the queries are in the `sqlite` skill, §Platform observability DB). A blank page is almost always a crashed process, not a UI bug.
 
-When investigating UI issues, pair browser output with platform-DB queries (see §Debugging with sqlite3 in the agent instructions for the SQL):
+When investigating UI issues, pair browser output with platform-DB queries (load the `sqlite` skill — see its §Platform observability DB section for the SQL):
 
 1. Open the app at `http://localhost:3000` — see what the user sees
 2. Take a snapshot to inspect the DOM

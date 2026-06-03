@@ -1,16 +1,16 @@
 ---
 name: llm-api
-description: Use the LLM API (APP_LLM_API_KEY) to add AI features — chat completions, structured output, streaming, vision (image analysis), image generation, audio transcription. Supports OpenAI (GPT) and Anthropic (Claude) models via the Bifrost gateway, including reasoning/thinking effort control. Trigger when building AI-powered features, calling GPT/Claude models, generating text, generating or editing images, analyzing images, transcribing audio, or when AI output quality is poor.
+description: Call the LLM gateway (APP_LLM_API_KEY) for AI capabilities — chat/text completions, structured output, streaming, vision (image analysis), image generation, and audio/video transcription. Routes to OpenAI (GPT) and Anthropic (Claude) through Bifrost via one OpenAI-compatible key, with reasoning-effort control. Use whenever a task needs AI — adding a feature to an app being built, or doing a one-off job directly such as transcribing a video/podcast/audio file, analyzing or generating images, or generating text — including direct tasks with no app. This is the only sanctioned path for transcription; a local speech model or browser speech API must not be used.
 ---
 
 # AI API Integration
 
-A dedicated OpenAI-compatible API is available for the apps you build, via these environment variables:
+A single OpenAI-compatible gateway is available via these environment variables — for the apps you build **and for one-off AI tasks you run yourself** (transcribing a file, analyzing an image, generating text/images):
 
-- `APP_LLM_API_KEY` — API key for the app backend
-- `APP_LLM_BASE_URL` — Base URL for the API endpoint
+- `APP_LLM_API_KEY` — gateway API key
+- `APP_LLM_BASE_URL` — gateway base URL (already includes `/v1`)
 
-**Important:** Use `APP_LLM_API_KEY` / `APP_LLM_BASE_URL` in app code. Do NOT use `OPENAI_API_KEY` / `OPENAI_BASE_URL` — those are reserved for the coding agent.
+**Use `APP_LLM_API_KEY` / `APP_LLM_BASE_URL` for every gateway call** — in app code and in direct shell tasks alike. Do NOT use `OPENAI_API_KEY` / `OPENAI_BASE_URL`; those are the coding agent's own chat key.
 
 The endpoint is a gateway that routes to both OpenAI and Anthropic. You select the provider with the `provider/model` prefix in the `model` field (e.g. `openai/gpt-5.4-mini`, `anthropic/claude-sonnet-4-6`). One SDK, one key, both providers.
 
@@ -312,6 +312,19 @@ const transcription = await llm.audio.transcriptions.create({
 
 Supported formats: mp3, mp4, mpeg, mpga, m4a, wav, webm (max 25 MB). Use `response_format` for different outputs: `"text"` (plain string), `"json"` (with text field), `"verbose_json"` (with word-level timestamps), `"srt"` or `"vtt"` (subtitle formats).
 
+#### Direct task — transcribe a file yourself, no app
+
+When asked to transcribe a video/podcast/audio (not build an app), skip app code — fetch the media and post it to the gateway from the shell:
+
+```bash
+yt-dlp -x --audio-format mp3 -o audio.mp3 "<url>"   # or, for a local file: ffmpeg -i input.mp4 -vn audio.mp3
+curl -s "$APP_LLM_BASE_URL/audio/transcriptions" \
+  -H "Authorization: Bearer $APP_LLM_API_KEY" \
+  -F model=whisper-1 -F response_format=text -F file=@audio.mp3
+```
+
+Whisper accepts up to 25 MB per request — split longer media with `ffmpeg` (`-f segment -segment_time 900`) and join the text.
+
 ### Image Generation
 
 Generate an image from a text prompt with `gpt-image-2` (the current OpenAI image model) via `images.generate`. Image models **always return base64** (`b64_json`) — there is no URL to fetch.
@@ -357,7 +370,7 @@ const out = edited.data[0].b64_json!
 - **Use `max_completion_tokens`, never `max_tokens`** — `max_tokens` is silently ignored by the gateway. Size the limit generously when reasoning is on (reasoning tokens come out of this budget), and keep it above `1024` for Claude.
 - **Match the model to the task** — `gpt-5.4-nano` / `claude-haiku-4-5` for fast/cheap work; `gpt-5.4-mini` / `claude-sonnet-4-6` for quality; `gpt-5.5` / `claude-opus-4-8` for the hardest tasks.
 - **Image generation returns base64** — `images.generate` / `images.edit` with `gpt-image-2` return `b64_json` (no URL); convert to a `Buffer` or data URL to store or serve.
-- **No browser speech APIs** — never use `SpeechRecognition`, `webkitSpeechRecognition`, or any Web Speech API. For all audio/speech/transcription, use the Whisper API (`whisper-1`) on the backend. Record audio on the frontend with `MediaRecorder`, send the blob to a backend endpoint, and transcribe server-side.
+- **Transcription: gateway only** — never use browser speech APIs (`SpeechRecognition`, `webkitSpeechRecognition`) or a local speech model (`openai-whisper`, `faster-whisper`, `vosk`). Always go through the gateway's `whisper-1` (see [Audio Transcription](#audio-transcription)). In an app, record with `MediaRecorder` and transcribe server-side; as a direct task, use the shell recipe above.
 - **Backend only** — never expose `APP_LLM_API_KEY` to the frontend or client-side code.
 - **Always wrap AI calls in try/catch** with user-friendly error messages.
 - **For streaming responses to the frontend, use Server-Sent Events (SSE).**

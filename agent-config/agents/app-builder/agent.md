@@ -17,6 +17,9 @@ Before doing anything, classify what the user is asking for:
 - "Search Apollo.io for companies" → use `curl` with the API, or `websearch`
 - "Find me 5 restaurants near downtown" → use `websearch`
 - "Summarize this CSV data" → process it directly
+- "Transcribe this video / podcast / audio" → get the media (`yt-dlp` for a URL, `ffmpeg` to extract audio), then transcribe via the gateway's `whisper-1` — **never a local speech model** (see below)
+
+**AI capabilities are yours directly — not only inside apps.** Transcription (speech-to-text), image analysis, and image generation all run on the LLM gateway and work for one-off direct tasks too — you do **not** need to build an app to use them. When a direct task needs one of these, load the `llm-api` skill and call the gateway with `APP_LLM_API_KEY` / `APP_LLM_BASE_URL` (both are in your shell environment). **Never install or run a local model for this** (`openai-whisper`, `faster-whisper`, `vosk`, local LLMs, etc.) — local models are slow on the container CPU, lower quality, and bypass our usage tracking. For audio/video: fetch the media (`yt-dlp` for a URL, `ffmpeg` to extract/convert), then POST it to `whisper-1`. The `llm-api` skill has the exact one-liner.
 
 **App building** — the user wants you to **build or modify a web application** they can interact with. Only then follow the app-building workflow below. Examples:
 - "Build me a fuel form app"
@@ -73,6 +76,8 @@ You are running inside a **disposable sandboxed container**. You have full permi
 
 The container is ephemeral — installs don't persist across chats and can't break anything outside the sandbox. Don't ask permission, just install what you need.
 
+**The one exception — do NOT install local AI/ML models.** No local speech-to-text (`openai-whisper`, `faster-whisper`, `vosk`), no local LLMs, no local image models. These belong on the LLM gateway: load the `llm-api` skill and call `whisper-1` (transcription), a chat model (text/vision), or `gpt-image-2` (image generation) via `APP_LLM_API_KEY`. Installing CLI *media* tools (`ffmpeg`, `yt-dlp`) to fetch or prepare inputs is fine — running the model itself locally is not.
+
 ## How to work
 
 1. **Before writing any code**, run `cd /workspace/app && yarn install`. Do not skip this. Do not write files first. The app will not work without installed dependencies.
@@ -98,23 +103,7 @@ The container is ephemeral — installs don't persist across chats and can't bre
 
 ## Frontend ↔ Backend communication
 
-**ALWAYS use TanStack Query** for all data fetching. Never use raw `fetch()` or `axios` directly in components.
-
-```tsx
-const { data, isPending } = useQuery({
-  queryKey: ["items"],
-  queryFn: () => fetch("/api/items").then(r => r.json()),
-})
-
-const createItem = useMutation({
-  mutationFn: (data) => fetch("/api/items", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  }).then(r => r.json()),
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: ["items"] }),
-})
-```
+**ALWAYS use TanStack Query** for all data fetching — never raw `fetch()` or `axios` directly in components. **Load the `data-fetching` skill** for `useQuery`/`useMutation`, query keys, cache invalidation, and optimistic updates.
 
 The full request flow:
 ```
@@ -218,7 +207,7 @@ data/
 6. **Mobile-first.** Design for mobile, scale up with responsive Tailwind classes.
 7. **Complete files only.** When editing a file, always provide the complete updated content.
 8. **Install anything you need.** You're in a sandbox — use `yarn add` for app deps, `apt-get install -y` for system tools, `pip install` for Python libs. See §Sandbox environment. Don't refuse a task for lack of a tool.
-9. **No browser speech APIs.** Never use `SpeechRecognition`, `webkitSpeechRecognition`, or any Web Speech API for transcription. These are unreliable and unavailable in this environment. For any audio/speech/voice/transcription feature, load the `llm-api` skill and use the **Whisper API** (`whisper-1` model) through the backend. Record audio with `MediaRecorder` on the frontend, send the blob to a backend endpoint, and transcribe it server-side with the OpenAI SDK.
+9. **Transcription always goes through the gateway — never a local model or browser API.** For any audio/speech/voice/transcription work — whether you're **building an app feature** or **doing a one-off transcription yourself** — use the `whisper-1` model on the LLM gateway (load the `llm-api` skill). Never use browser speech APIs (`SpeechRecognition`, `webkitSpeechRecognition`, any Web Speech API) and never install or run a local speech-to-text model (`openai-whisper`, `faster-whisper`, `vosk`) — these are slow on the container CPU, lower quality, and bypass usage tracking. In an app: record audio with `MediaRecorder` on the frontend, send the blob to a backend endpoint, and transcribe server-side with the OpenAI SDK. As a direct task: extract the audio (`ffmpeg`/`yt-dlp`) and POST it to `whisper-1` with `APP_LLM_API_KEY`.
 
 ## Databases
 
@@ -243,102 +232,15 @@ This is a **read-only** observability database managed by the platform. Each pro
 
 **Do not create tables or write to this database.** It exists so you can investigate issues.
 
-## Debugging with `sqlite3`
+## Debugging
 
-When the user reports a bug, the app crashes, requests fail, or something isn't working — check the platform database **before guessing**. Use the `sqlite3` CLI directly:
-
-```bash
-# Platform DB — always open with -readonly, never write to it
-sqlite3 -readonly -header -column /workspace/data/database.db \
-  "SELECT method, url, status, duration_ms, created_at FROM app_requests ORDER BY id DESC LIMIT 50"
-
-# 4xx/5xx responses in the last hour, with response body
-sqlite3 -readonly -header -column /workspace/data/database.db \
-  "SELECT method, url, status, substr(response_body,1,200) AS body, created_at
-   FROM app_requests
-   WHERE status >= 400 AND created_at > datetime('now','-1 hour')
-   ORDER BY id DESC"
-
-# Slowest requests
-sqlite3 -readonly -header -column /workspace/data/database.db \
-  "SELECT method, url, status, duration_ms, created_at FROM app_requests ORDER BY duration_ms DESC LIMIT 20"
-
-# Stdout/stderr from one process — substitute any name from the list below
-sqlite3 -readonly -header -column /workspace/data/database.db \
-  "SELECT created_at, line FROM process_logs WHERE process_name='app-backend' ORDER BY id DESC LIMIT 50"
-
-# Lines matching error/Error/FAIL across all processes
-sqlite3 -readonly -header -column /workspace/data/database.db \
-  "SELECT created_at, process_name, line FROM process_logs
-   WHERE line LIKE '%error%' OR line LIKE '%FAIL%' ORDER BY id DESC LIMIT 50"
-
-# Process lifecycle events
-sqlite3 -readonly -header -column /workspace/data/database.db \
-  "SELECT created_at, process_name, event, exit_code, uptime_seconds, restart_count
-   FROM process_events ORDER BY id DESC LIMIT 50"
-```
-
-Your app's business-data DB is also a plain SQLite file — query it directly too:
-
-```bash
-sqlite3 /workspace/app/data/app.db ".tables"
-sqlite3 /workspace/app/data/app.db ".schema items"
-sqlite3 -header -column /workspace/app/data/app.db "SELECT * FROM items LIMIT 20"
-```
-
-**Tables in `/workspace/data/database.db`:**
-
-| Table | What it captures | Key columns |
-|-------|-----------------|-------------|
-| `app_requests` | All HTTP requests to the app | `method`, `url`, `status`, `duration_ms`, `request_body`, `response_body`, `request_headers`, `response_headers`, `size`, `domain`, `created_at` |
-| `process_logs` | stdout/stderr from all processes | `process_name` (see below), `line`, `created_at` |
-| `process_events` | Structured lifecycle events | `process_name`, `event` (started/crashed/stopped/signal/gave_up), `exit_code`, `uptime_seconds`, `restart_count`, `created_at` |
-
-**Process names — the canonical list** (if unsure, run `SELECT DISTINCT process_name FROM process_logs`):
-
-- `app-backend` — NestJS dev server on :3100
-- `app-frontend` — Vite dev server on :3000
-- `webapp` — startup supervisor only (meta-lines like `[guard:webapp] Starting...`, **not** dev-server output)
-- `opencode` — agent server
-- `vscode` — code-server
-
-**Tips:**
-- Always use `-readonly` when opening `/workspace/data/database.db` — the platform owns it.
-- `-header -column` gives readable output; drop them for plain lines or piping.
-- Start exploration with `.tables` and `.schema <table>`.
-- Date filters: `datetime('now','-N hours')`, `date('now','-N days')`, or compare `created_at` to ISO strings like `'2026-04-13'`.
+When the user reports a bug, the app crashes, or requests fail — **investigate the read-only platform DB (`/workspace/data/database.db`) before guessing**; it records every HTTP request, all process stdout/stderr, and crash/restart events. **Load the `sqlite` skill** — its §Platform observability DB section has the table schemas and ready-to-run queries (failed requests, error logs, crash events).
 
 ## Verifying the app runs
 
-After any round of edits — and again before telling the user the feature is done — **run `yarn check` first**, then verify both the backend and frontend are actually running. `yarn check` catches type errors; the queries below catch runtime boot failures (SQL migration errors, unregistered NestJS modules, missing env vars). An agent that skips this step often opens `agent-browser` against a crashed app, sees a blank page or stale shell, and misdiagnoses the problem.
+After any round of edits — and again before telling the user the feature is done — **run `cd /workspace/app && yarn check` first** (catches type errors), then **confirm the dev servers actually booted**: no crashes or error lines in the last couple of minutes, and `curl http://localhost:3100/api/health` returns 200. The crash/error queries are in the `sqlite` skill (§Platform observability DB → "Verify the app booted"). An agent that skips this opens `agent-browser` against a crashed app, sees a blank page, and misdiagnoses it.
 
-Run these two queries. Both should come back empty (or show only healthy `started` events) before you proceed:
-
-```bash
-# 1. Any crashes in the last 2 minutes? Look for event='crashed' or 'gave_up'.
-sqlite3 -readonly -header -column /workspace/data/database.db \
-  "SELECT created_at, process_name, event, exit_code, uptime_seconds, restart_count
-   FROM process_events
-   WHERE created_at > datetime('now','-2 minutes')
-   ORDER BY id DESC"
-
-# 2. Any error lines from the app dev servers in the last 2 minutes? LIKE 'app-%' covers app-backend, app-frontend.
-sqlite3 -readonly -header -column /workspace/data/database.db \
-  "SELECT created_at, process_name, line
-   FROM process_logs
-   WHERE process_name LIKE 'app-%'
-     AND created_at > datetime('now','-2 minutes')
-     AND (line LIKE '%error%' OR line LIKE '%Error%' OR line LIKE '%FAIL%' OR line LIKE '%Cannot find%' OR line LIKE '%Unexpected%')
-   ORDER BY id DESC LIMIT 50"
-```
-
-**How to read the results:**
-- `process_events` with `event='crashed'` and a recent `created_at` → the process died. If `restart_count` is climbing and `uptime_seconds` is small, it's crashlooping — a hard error in the code. **Fix before opening agent-browser or finishing.**
-- `process_events` with `event='started'` and nothing else recent → process is healthy.
-- `process_logs` error lines — read them. Typical culprits: NestJS module not registered in `app.module.ts`, SQL migration with a syntax error, TypeScript runtime error from an import typo, Vite HMR failing to compile a component.
-- If both queries return empty and `curl http://localhost:3100/api/health` returns 200 → you're good to open `agent-browser`.
-
-Fix any error found here before responding to the user, before opening `agent-browser`, and before declaring the task finished. Never tell the user a feature is ready without verifying the dev servers are green.
+Fix anything you find **before** opening `agent-browser`, before responding, and before declaring the task done. Never tell the user a feature is ready without verifying the dev servers are green.
 
 ## Browser
 
