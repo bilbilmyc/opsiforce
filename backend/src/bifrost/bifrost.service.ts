@@ -177,13 +177,16 @@ export class BifrostService {
 
     await Promise.all([
       this.updateTeamBudget(teamId, this.budgetFor(budgets, "project")),
-      this.updateVirtualKeyBudget(chatKey.bifrostKeyId, this.budgetFor(budgets, "chat")),
-      this.updateVirtualKeyBudget(backendKey.bifrostKeyId, this.budgetFor(budgets, "backend")),
+      this.updateVirtualKey(chatKey.bifrostKeyId, teamId, this.budgetFor(budgets, "chat")),
+      this.updateVirtualKey(backendKey.bifrostKeyId, teamId, this.budgetFor(budgets, "backend")),
     ])
   }
 
-  private async updateVirtualKeyBudget(keyId: string, budget: BifrostBudget): Promise<void> {
-    await this.request("PUT", `/api/governance/virtual-keys/${keyId}`, { budgets: [budget] })
+  private async updateVirtualKey(keyId: string, teamId: string | null, budget?: BifrostBudget): Promise<void> {
+    await this.request("PUT", `/api/governance/virtual-keys/${keyId}`, {
+      ...(budget ? { budgets: [budget] } : {}),
+      ...(teamId ? { team_id: teamId } : {}),
+    })
   }
 
   async deleteTeam(teamId: string): Promise<void> {
@@ -362,13 +365,16 @@ export class BifrostService {
 
     if (!key) throw new Error(`No active ${keyType} key for project ${projectId}`)
 
+    const [project] = await db
+      .select({ teamId: projects.bifrostProjectId })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+
     const budget: BifrostBudget | undefined = maxBudget > 0
       ? { max_limit: maxBudget, reset_duration: budgetDuration }
       : undefined
 
-    await this.request("PUT", `/api/governance/virtual-keys/${key.bifrostKeyId}`, {
-      ...(budget ? { budgets: [budget] } : {}),
-    })
+    await this.updateVirtualKey(key.bifrostKeyId, project?.teamId ?? null, budget)
 
     this.logger.log(`Updated budget for ${keyType} key of project ${projectId}: $${maxBudget}/${budgetDuration}`)
   }
