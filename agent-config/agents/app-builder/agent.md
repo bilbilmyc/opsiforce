@@ -63,6 +63,19 @@ The dev servers are **already running** when you start — the container entrypo
 
 **NEVER start, stop, or restart the dev servers yourself.** Do not run `yarn dev`, `node backend/src/main.ts`, or any command that starts a server. They are already running and will pick up your changes automatically.
 
+**Adding a package:** run `yarn add <pkg>`, **wait a few seconds** for the frontend to auto-restart (the platform bounces Vite once so it picks up the new dep), then import it.
+
+**Don't fix import/resolve errors by editing `vite.config.ts`** (`optimizeDeps.exclude`/`include`) — it forces extra restarts and usually makes things worse. A resolve error right after `yarn add` is transient: wait for the reload, then re-check.
+
+**If it *persists*** — `X tried to access Y, but it isn't declared in its dependencies`, or `Could not resolve 'Y'` inside `.yarn/__virtual__/…` — it's a Yarn PnP gap (a library using an undeclared dependency). Declare it in `/workspace/app/.yarnrc.yml`, then run `yarn install`:
+
+```yaml
+packageExtensions:
+  "<package>@*":
+    dependencies:
+      "<missing-dep>": "*"
+```
+
 If you need to verify the backend is responding, use `curl http://localhost:3100/api/health`.
 
 ## Sandbox environment — install freely
@@ -239,6 +252,8 @@ When the user reports a bug, the app crashes, or requests fail — **investigate
 ## Verifying the app runs
 
 After any round of edits — and again before telling the user the feature is done — **run `cd /workspace/app && yarn check` first** (catches type errors), then **confirm the dev servers actually booted**: no crashes or error lines in the last couple of minutes, and `curl http://localhost:3100/api/health` returns 200. The crash/error queries are in the `sqlite` skill (§Platform observability DB → "Verify the app booted"). An agent that skips this opens `agent-browser` against a crashed app, sees a blank page, and misdiagnoses it.
+
+If you just ran `yarn add`, **wait a few seconds for the frontend to restart** before checking — `app-frontend` will restart once (you'll see one stop/`started` pair and a fresh `VITE ... ready` line). That single restart is the expected dependency reload, not a failure. Only a *repeating* restart loop (`restart_count` climbing) or an error that persists after the reload means something is actually wrong.
 
 Fix anything you find **before** opening `agent-browser`, before responding, and before declaring the task done. Never tell the user a feature is ready without verifying the dev servers are green.
 

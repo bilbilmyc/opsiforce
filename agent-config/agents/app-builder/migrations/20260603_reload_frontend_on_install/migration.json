@@ -1,0 +1,15 @@
+{
+  "id": "20260603_reload_frontend_on_install",
+  "requiresPodRecreate": false,
+  "operations": [
+    {
+      "type": "command",
+      "command": "node",
+      "args": [
+        "${MIGRATION_DIR}/migrate.mjs"
+      ],
+      "cwd": ".",
+      "timeoutSeconds": 60
+    }
+  ]
+}
