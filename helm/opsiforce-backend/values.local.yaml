@@ -38,10 +38,10 @@ config:
   agentUpdateJobTimeoutMs: "1800000"
   agentResources:
     requests:
-      cpu: "200m"
-      memory: 1312Mi
-    limits:
+      cpu: "500m"
       memory: 2Gi
+    limits:
+      memory: 4Gi
   agentNodeSelector: ~
   agentTolerations: ~
   agentAffinity: ~

@@ -22,6 +22,12 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
   const canViewDb = () => hasPermission(Permission.viewDbTab)
 
   const [activeTab, setActiveTab] = createSignal<ProjectTab>("chat")
+  const [visitedTabs, setVisitedTabs] = createSignal<Set<ProjectTab>>(new Set<ProjectTab>(["chat"]))
+
+  const selectTab = (tab: ProjectTab) => {
+    setActiveTab(tab)
+    setVisitedTabs((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)))
+  }
 
   const projectId = () => props.projectId
   const statusQuery = useProjectStatus(projectId, {
@@ -59,7 +65,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
             workspaceId={data().workspaceId}
             showTabs={!!connection.router()}
             activeTab={activeTab()}
-            onActiveTabChange={setActiveTab}
+            onActiveTabChange={selectTab}
             onDeleted={() => navigate({ to: "/" })}
             onDuplicated={(p) =>
               navigate({
@@ -100,12 +106,22 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
           </Show>
         </div>
 
-        <Show when={activeTab() === "code" && canViewCode()}>
-          <ProjectCodeTab projectId={props.projectId} />
+        <Show when={visitedTabs().has("code") && canViewCode()}>
+          <div
+            class="flex-1 min-w-0 flex flex-col"
+            style={{ display: activeTab() === "code" ? "flex" : "none" }}
+          >
+            <ProjectCodeTab projectId={props.projectId} />
+          </div>
         </Show>
 
-        <Show when={activeTab() === "db" && canViewDb()}>
-          <ProjectDbTab projectId={props.projectId} />
+        <Show when={visitedTabs().has("db") && canViewDb()}>
+          <div
+            class="flex-1 min-w-0 flex flex-col"
+            style={{ display: activeTab() === "db" ? "flex" : "none" }}
+          >
+            <ProjectDbTab projectId={props.projectId} />
+          </div>
         </Show>
 
         <Show when={app()?.exists ? app() : null}>
