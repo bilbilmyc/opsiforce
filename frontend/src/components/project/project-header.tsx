@@ -87,17 +87,15 @@ export default function ProjectHeader(props: ProjectHeaderProps) {
       </div>
 
       <div class="flex items-center gap-1.5 shrink-0">
-        <Show when={hasMultipleEnvironments()}>
-          <Button
-            size="sm"
-            variant="ghost"
-            class="h-7 px-2 text-muted-foreground"
-            onClick={() => setManageOpen(true)}
-          >
-            <Layers class="w-3.5 h-3.5" />
-            Manage
-          </Button>
-        </Show>
+        <Button
+          size="sm"
+          variant="ghost"
+          class="h-7 px-2 text-muted-foreground"
+          onClick={() => setManageOpen(true)}
+        >
+          <Layers class="w-3.5 h-3.5" />
+          Manage
+        </Button>
         <Show when={canPublish() && props.appExists}>
           <Button size="sm" class="h-7 px-2.5" onClick={() => setPublishOpen(true)}>
             <Rocket class="w-3.5 h-3.5" />
@@ -121,19 +119,20 @@ export default function ProjectHeader(props: ProjectHeaderProps) {
           open={publishOpen()}
           onOpenChange={setPublishOpen}
           initialEnvironmentId={
-            props.activeEnvironmentId === props.projectId ? null : props.activeEnvironmentId
+            props.activeEnvironmentId === props.projectId
+              ? null
+              : (props.environments.find((e) => e.id === props.activeEnvironmentId)?.environmentId ??
+                null)
           }
         />
       </Show>
 
-      <Show when={hasMultipleEnvironments()}>
-        <ManageEnvironmentsDialog
-          projectId={props.projectId}
-          open={manageOpen()}
-          onOpenChange={setManageOpen}
-          onEnvironmentDeleted={handleEnvironmentDeleted}
-        />
-      </Show>
+      <ManageEnvironmentsDialog
+        projectId={props.projectId}
+        open={manageOpen()}
+        onOpenChange={setManageOpen}
+        onEnvironmentDeleted={handleEnvironmentDeleted}
+      />
     </div>
   )
 }

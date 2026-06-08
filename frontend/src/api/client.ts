@@ -177,6 +177,7 @@ export interface ProjectAuthResponse {
   mode: ProjectAuthMode
   config?: ProjectAuthOidcConfig
   bypassAuthPaths?: string[]
+  callbackUrl: string
 }
 
 export interface UpdateProjectAuthDto {
@@ -236,6 +237,7 @@ export const userApi = {
 export interface Schedule {
   id: string
   projectId: string
+  projectEnvironmentId: string
   tenantId: string
   name: string
   cronPattern: string
@@ -248,6 +250,8 @@ export interface Schedule {
   createdAt: string
   updatedAt: string
   projectTitle?: string | null
+  environmentName?: string | null
+  isDefault?: boolean
 }
 
 export interface ScheduleExecution {
@@ -270,8 +274,8 @@ export interface UpdateScheduleDto {
 }
 
 export const scheduleApi = {
-  list: (projectId?: string) => api.get<Schedule[]>(projectId ? `/schedules?projectId=${projectId}` : "/schedules"),
-  listByProject: (projectId: string) => api.get<Schedule[]>(`/projects/${projectId}/schedules`),
+  list: (environmentId?: string) =>
+    api.get<Schedule[]>(environmentId ? `/schedules?environmentId=${environmentId}` : "/schedules"),
   update: (projectId: string, scheduleId: string, dto: UpdateScheduleDto) =>
     api.patch<Schedule>(`/projects/${projectId}/schedules/${scheduleId}`, dto),
   remove: (projectId: string, scheduleId: string) => api.delete<void>(`/projects/${projectId}/schedules/${scheduleId}`),

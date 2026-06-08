@@ -4,7 +4,14 @@ import crypto from "crypto"
 import { InjectQueue } from "@nestjs/bullmq"
 import { Queue } from "bullmq"
 import { db } from "../../db"
-import { projectSchedules, scheduleExecutions, projects, projectSettings } from "../../db/schema"
+import {
+  projectSchedules,
+  scheduleExecutions,
+  projects,
+  projectSettings,
+  projectEnvironments,
+  environments,
+} from "../../db/schema"
 import type { CreateScheduleDto, UpdateScheduleDto, ScheduleJobData, ScheduleTrigger } from "./schedule.types"
 import { SCHEDULE_QUEUE_NAME } from "./schedule.types"
 
@@ -64,14 +71,6 @@ export class ScheduleService {
     return row
   }
 
-  async findByProject(projectId: string) {
-    return db
-      .select()
-      .from(projectSchedules)
-      .where(eq(projectSchedules.projectId, projectId))
-      .orderBy(desc(projectSchedules.createdAt))
-  }
-
   async findByEnvironment(projectEnvironmentId: string) {
     return db
       .select()
@@ -80,14 +79,17 @@ export class ScheduleService {
       .orderBy(desc(projectSchedules.createdAt))
   }
 
-  async findByTenant(tenantId: string, projectId?: string) {
+  async findByTenant(tenantId: string, environmentId?: string) {
     const conditions = [eq(projectSchedules.tenantId, tenantId)]
-    if (projectId) conditions.push(eq(projectSchedules.projectId, projectId))
+    if (environmentId) {
+      conditions.push(eq(projectEnvironments.environmentId, environmentId))
+    }
 
     return db
       .select({
         id: projectSchedules.id,
         projectId: projectSchedules.projectId,
+        projectEnvironmentId: projectSchedules.projectEnvironmentId,
         tenantId: projectSchedules.tenantId,
         name: projectSchedules.name,
         cronPattern: projectSchedules.cronPattern,
@@ -100,9 +102,13 @@ export class ScheduleService {
         createdAt: projectSchedules.createdAt,
         updatedAt: projectSchedules.updatedAt,
         projectTitle: projects.title,
+        environmentName: environments.name,
+        isDefault: projectEnvironments.isDefault,
       })
       .from(projectSchedules)
       .innerJoin(projects, eq(projects.id, projectSchedules.projectId))
+      .leftJoin(projectEnvironments, eq(projectEnvironments.id, projectSchedules.projectEnvironmentId))
+      .leftJoin(environments, eq(environments.id, projectEnvironments.environmentId))
       .where(and(...conditions))
       .orderBy(desc(projectSchedules.createdAt))
   }

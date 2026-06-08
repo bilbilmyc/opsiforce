@@ -6,8 +6,6 @@ import {
   PanelRightClose,
   PanelRightOpen,
   Pencil,
-  Pin,
-  PinOff,
   RefreshCw,
 } from "~/components/icons"
 import { ToolbarButton } from "~/components/ui/toolbar-button"
@@ -17,7 +15,6 @@ import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
 import { useProjects } from "~/api/projects"
 import PinBadge from "./pin-badge"
-import PinAppDialogs, { type PinDialogAction } from "./pin-app-dialogs"
 import EditAppDialog from "./edit-app-dialog"
 
 export interface ProjectPreviewPanelProps {
@@ -31,7 +28,6 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
   const [open, setOpen] = createSignal(true)
   const [iframeLoading, setIframeLoading] = createSignal(true)
   const [copied, setCopied] = createSignal(false)
-  const [pinAction, setPinAction] = createSignal<PinDialogAction>(null)
   const [editAppOpen, setEditAppOpen] = createSignal(false)
 
   const { hasPermission } = usePermissions()
@@ -40,7 +36,7 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
   const projectsEnabled = () => canPinApps() || canEditAppDetails()
   const projects = useProjects({ enabled: projectsEnabled })
   const project = () => projects.data?.find((p) => p.id === props.projectId)
-  const isPinned = () => project()?.isPinned === true
+  const isPinnedHere = () => project()?.pinnedEnvironmentId === props.environmentId
   const hasApp = () => project()?.hasApp === true
   const showEditAction = () => canEditAppDetails() && hasApp()
 
@@ -107,9 +103,7 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             <span class="text-xs font-medium text-muted-foreground truncate">
               {props.appName || "App"}
             </span>
-            <Show when={canPinApps()}>
-              <PinBadge isPinned={isPinned()} compact />
-            </Show>
+            <PinBadge isPinned={isPinnedHere()} compact />
             <Show when={showEditAction()}>
               <ToolbarButton onClick={() => setEditAppOpen(true)} tooltip="Edit app details">
                 <Pencil class="w-3 h-3" />
@@ -120,20 +114,6 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             </Show>
           </div>
           <div class="flex items-center">
-            <Show when={canPinApps()}>
-              <Show
-                when={isPinned()}
-                fallback={
-                  <ToolbarButton onClick={() => setPinAction("pin")} tooltip="Pin to Makara">
-                    <Pin class="w-3.5 h-3.5" />
-                  </ToolbarButton>
-                }
-              >
-                <ToolbarButton onClick={() => setPinAction("unpin")} tooltip="Unpin from Makara">
-                  <PinOff class="w-3.5 h-3.5" />
-                </ToolbarButton>
-              </Show>
-            </Show>
             <ToolbarButton onClick={copyUrl} tooltip={copied() ? "Copied!" : "Copy URL"}>
               {copied() ? (
                 <Check class="w-3.5 h-3.5 text-green-500" />
@@ -156,12 +136,6 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             onError={() => setIframeLoading(false)}
           />
         </div>
-        <PinAppDialogs
-          projectId={props.projectId}
-          environmentId={props.environmentId}
-          action={pinAction()}
-          onActionChange={setPinAction}
-        />
         <EditAppDialog
           projectId={props.projectId}
           open={editAppOpen()}

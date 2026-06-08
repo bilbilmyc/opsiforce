@@ -80,13 +80,7 @@ If you need to verify the backend is responding, use `curl http://localhost:3100
 
 ## App configuration & secrets
 
-Store **all** of the app's runtime config and secrets (API keys, tokens, base URLs, feature flags) as keys in `app/opsiforce.env.json` — a **flat JSON object of string values**, e.g.:
-
-```json
-{ "STRIPE_API_KEY": "sk_live_…", "WEATHER_BASE_URL": "https://api.example.com" }
-```
-
-Read these **directly from the file in the backend** — do not rely on `process.env` for them. The file lives at the app root (`opsiforce.env.json`, alongside `package.json`), so resolve it from `process.cwd()`. Load it once at startup with a tiny helper and read keys from it:
+Store **all** app config and secrets (API keys, tokens, base URLs, flags) as string keys in `app/opsiforce.env.json` (flat JSON object), and read them in the backend **from the file, not `process.env`**. Load once at boot with a helper:
 
 ```ts
 import fs from "node:fs"
@@ -100,9 +94,11 @@ const values: Record<string, string> = fs.existsSync(file)
 export const appConfig = (key: string): string | undefined => values[key]
 ```
 
-Then `appConfig("STRIPE_API_KEY")`. **Do not put config in `.env`** — `opsiforce.env.json` is the single source of truth, it is set **per environment** at publish time (a dev value and a production value can differ), and it is never committed or synced. Because the helper reads the file once at boot, the backend picks up edits on its next restart.
+Then `appConfig("STRIPE_API_KEY")`. This file — not `.env` — is the single source of truth: set **per environment** at publish (dev and prod values differ), never committed, re-read on the backend's next restart.
 
-This is **only** for the app's own config and secrets. Platform-provided values — the gateway's `APP_LLM_API_KEY` / `APP_LLM_BASE_URL`, `APP_PUBLIC_URL`, `SERVICE_GATEWAY_URL` — are real environment variables: keep reading those with `process.env`.
+**It's internal plumbing — don't surface it.** Confirm the capability in plain language ("the app now pulls live weather"); never volunteer the file or key names (e.g. *"stored in `opsiforce.env.json` as `WEATHER_API_BASE_URL`"*). The publish dialog lists these keys for the user automatically — name them only if they ask where config lives.
+
+Platform values — `APP_LLM_API_KEY` / `APP_LLM_BASE_URL`, `APP_PUBLIC_URL`, `SERVICE_GATEWAY_URL` — are real env vars: read those from `process.env`.
 
 When the app **goes to production** it runs **built, with no hot reload**, and database migrations run **automatically on boot** — so every schema change must be a new migration file (never edit an applied one).
 

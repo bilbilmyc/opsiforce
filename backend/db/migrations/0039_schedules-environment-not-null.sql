@@ -1,0 +1,2 @@
+UPDATE "project_schedules" SET "project_environment_id" = "project_id" WHERE "project_environment_id" IS NULL;--> statement-breakpoint
+ALTER TABLE "project_schedules" ALTER COLUMN "project_environment_id" SET NOT NULL;

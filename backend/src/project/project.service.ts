@@ -761,35 +761,54 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.getLogging(id, tenantId)
   }
 
-  async getAuth(id: string, tenantId: string): Promise<ProjectAuthResponse> {
-    const project = await this.findOne(id, tenantId)
-    if (project.authMode === "public") return { mode: "public" }
-    const { config, bypassAuthPaths } = await this.projectAuthService.getConfig(id)
-    if (project.authMode === "makara") return { mode: "makara", bypassAuthPaths }
-    return { mode: "manual", config, bypassAuthPaths }
+  private async resolveProjectEnvironment(
+    projectId: string,
+    environmentId: string,
+    tenantId: string,
+  ): Promise<ProjectEnvironmentContext> {
+    await this.findOne(projectId, tenantId)
+    const env = await this.projectEnvironmentService.findById(environmentId)
+    if (env.projectId !== projectId) {
+      throw new NotFoundException(`Environment ${environmentId} not found`)
+    }
+    return env
   }
 
-  async updateAuth(id: string, dto: UpdateProjectAuthDto, tenantId: string): Promise<ProjectAuthResponse> {
-    const project = await this.findOne(id, tenantId)
+  async getAuth(projectId: string, environmentId: string, tenantId: string): Promise<ProjectAuthResponse> {
+    const env = await this.resolveProjectEnvironment(projectId, environmentId, tenantId)
+    const callbackUrl = this.projectAuthService.callbackUrl(env.id)
+    if (env.authMode === "public") return { mode: "public", callbackUrl }
+    const { config, bypassAuthPaths } = await this.projectAuthService.getConfig(env.id)
+    if (env.authMode === "makara") return { mode: "makara", bypassAuthPaths, callbackUrl }
+    return { mode: "manual", config, bypassAuthPaths, callbackUrl }
+  }
+
+  async updateAuth(
+    projectId: string,
+    environmentId: string,
+    dto: UpdateProjectAuthDto,
+    tenantId: string,
+  ): Promise<ProjectAuthResponse> {
+    const env = await this.resolveProjectEnvironment(projectId, environmentId, tenantId)
     if (dto.mode !== "public" && dto.mode !== "manual" && dto.mode !== "makara") {
       throw new BadRequestException(`Unknown auth mode: ${dto.mode}`)
     }
 
     if (dto.mode === "manual") {
-      await this.projectAuthService.apply(project.id, dto.config ?? {}, dto.bypassAuthPaths)
+      await this.projectAuthService.apply(env.id, dto.config ?? {}, dto.bypassAuthPaths)
     } else if (dto.mode === "makara") {
       const makaraTenantName = await this.findMakaraTenantName(tenantId)
-      await this.projectAuthService.applyMakara(project.id, makaraTenantName, dto.bypassAuthPaths)
+      await this.projectAuthService.applyMakara(env.id, makaraTenantName, dto.bypassAuthPaths)
     } else {
-      await this.projectAuthService.remove(project.id)
+      await this.projectAuthService.remove(env.id)
     }
 
     await db
       .update(projectEnvironments)
       .set({ authMode: dto.mode, updatedAt: new Date() })
-      .where(eq(projectEnvironments.id, project.id))
+      .where(eq(projectEnvironments.id, env.id))
 
-    return this.getAuth(id, tenantId)
+    return this.getAuth(projectId, env.id, tenantId)
   }
 
   async remove(id: string, tenantId: string): Promise<void> {
@@ -908,6 +927,9 @@ export class ProjectService implements OnApplicationBootstrap {
 
     await Promise.allSettled([
       this.safeDeletePod(this.podService.assignedPodName(env.id), `deleting environment ${env.id}`),
+      this.projectAuthService.remove(env.id).catch((err) => {
+        this.logger.warn(`Failed to remove auth middleware for environment ${env.id}: ${(err as Error).message}`)
+      }),
       this.bifrostService.isEnabled()
         ? this.bifrostService.revokeEnvironmentKeys(env.id).catch((err) => {
             this.logger.warn(`Failed to revoke Bifrost keys for environment ${env.id}: ${(err as Error).message}`)
@@ -1022,7 +1044,7 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId)
   }
 
-  private async findMakaraTenantName(tenantId: string): Promise<string> {
+  async findMakaraTenantName(tenantId: string): Promise<string> {
     const [row] = await db
       .select({
         makaraTenantName: tenantSettings.makaraTenantName,

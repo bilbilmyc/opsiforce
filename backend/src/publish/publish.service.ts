@@ -117,6 +117,7 @@ export class PublishService {
     const projectEnvironmentId = existing?.id ?? crypto.randomUUID()
 
     if (!existing) {
+      const devEnv = await this.projectEnvironmentService.findDefaultByProjectId(projectId)
       await this.projectEnvironmentService.create({
         id: projectEnvironmentId,
         projectId,
@@ -125,6 +126,7 @@ export class PublishService {
         directory: `projects/${projectEnvironmentId}`,
         platformVersion: this.platformVersion,
         status: ProjectStatus.Starting,
+        authMode: devEnv.authMode,
       })
     }
 

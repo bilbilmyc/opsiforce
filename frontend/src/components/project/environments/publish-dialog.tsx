@@ -24,6 +24,7 @@ import {
   usePublishTargets,
   type PublishTarget,
 } from "~/api/publish"
+import { useProjects } from "~/api/projects"
 import EnvStatusDot from "./env-status-dot"
 import PublishProgress from "./publish-progress"
 
@@ -43,6 +44,9 @@ export default function PublishDialog(props: PublishDialogProps) {
   const [publishedEnvId, setPublishedEnvId] = createSignal<string | null>(null)
 
   const targets = usePublishTargets(projectId, { enabled: () => props.open })
+  const projects = useProjects({ enabled: () => props.open })
+  const devAuthIsManual = () =>
+    projects.data?.find((p) => p.id === props.projectId)?.authMode === "manual"
   const selectedTarget = createMemo(() =>
     (targets.data ?? []).find((t) => t.environmentId === targetId()),
   )
@@ -166,6 +170,13 @@ export default function PublishDialog(props: PublishDialogProps) {
           }
         >
           <div class="mt-4 space-y-4">
+            <Show when={devAuthIsManual()}>
+              <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                Development uses manual OIDC auth, which the new environment inherits. After
+                publishing, register the new environment's callback URL (shown in its Auth dialog)
+                with your identity provider, or sign-in there will fail.
+              </p>
+            </Show>
             <div class="space-y-1.5">
               <label class="block text-xs font-medium text-foreground">Environment</label>
               <Show

@@ -37,5 +37,5 @@ By default both permissions are granted to the same admin-level groups in Keyclo
 - Pin / edit endpoints: `packages/opsiforce/backend/src/project/project.controller.ts` (`PATCH /:id/app/pin`, `PATCH /:id/app`)
 - Service flow: `packages/opsiforce/backend/src/project/project.service.ts` (`setAppPin`, `updateApp`)
 - Makara discovery endpoint: `packages/opsiforce/backend/src/internal/apps.controller.ts`
-- UI surfaces: preview panel header (`frontend/src/components/project/project-preview-panel.tsx`) and the project actions kebab "App" submenu (`frontend/src/components/project-actions-menu.tsx`)
+- UI surface: the preview panel header Edit action (`frontend/src/components/project/project-preview-panel.tsx`) — the project actions kebab is strictly project-level and no longer carries app edit; pinning moved to the per-environment Environments dialog
 - Edit dialog: `frontend/src/components/project/edit-app-dialog.tsx`

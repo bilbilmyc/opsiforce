@@ -30,9 +30,27 @@ _Avoid_: Project (when you mean the built application)
 The act of materializing or updating a non-Development ProjectEnvironment from the Development one's files, so the App runs in a chosen Environment.
 _Avoid_: Deploy, Release, Promote
 
+**App Auth**:
+Per-ProjectEnvironment control over how visitors sign in to the App at that environment's URL — one of **public** (anyone), **manual** (the owner's own OIDC provider), or **makara** (the platform's Keycloak, scoped to the tenant). Each ProjectEnvironment carries its own; a newly published environment is **seeded once** from Development's setting at first publish, then managed independently per environment.
+_Avoid_: Project auth (it is not project-wide — each environment has its own); Login, SSO (non-canonical)
+
+**Auth mode**:
+The chosen App Auth setting for one ProjectEnvironment — `public`, `manual`, or `makara` (the stored identifier is `auth_mode`).
+_Avoid_: Auth type, Auth provider
+
+**Pin (to Makara)**:
+Designating the one ProjectEnvironment whose running App represents the Project in the tenant's Makara catalog. A Project has **at most one pin**; pinning another environment moves it. Only a public-auth environment may be pinned. Distinct from Publish (which deploys an environment) — pinning merely exposes an already-running one in the catalog. The App's name/description shown there are project-level (one App), not per-environment.
+_Avoid_: Publish, Share, Expose (non-canonical)
+
 **Resources**:
 The CPU/memory size of a Project's agent pod, chosen as a class — Small, Medium, Large, or Custom. A project-level policy: one choice applies to every one of the Project's ProjectEnvironment pods (Development and any published target alike).
 _Avoid_: Pod class (the internal identifier — never user-facing); Environment size (collides with Environment); Tier, Machine size, Compute (non-canonical — say Resources)
+
+### Schedules
+
+**Schedule**:
+A recurring cron job an agent registers against an endpoint in the App, owned by **one ProjectEnvironment** — it fires only against that environment's running App. Publishing copies Development's chosen schedules into the target environment, so a same-named schedule can exist and fire **independently** in several environments (the copies are intentional, not duplicates).
+_Avoid_: Cron job (the mechanism, not the domain concept); Job (collides with BullMQ jobs and publish jobs)
 
 ### Request Logging
 

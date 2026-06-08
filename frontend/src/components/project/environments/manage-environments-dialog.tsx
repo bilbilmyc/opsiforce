@@ -1,7 +1,9 @@
 import { For, Show, createSignal } from "solid-js"
+import { useNavigate } from "@tanstack/solid-router"
 import { toast } from "solid-sonner"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
+import { useProjects } from "~/api/projects"
 import {
   useDeleteProjectEnvironment,
   useProjectEnvironments,
@@ -16,6 +18,8 @@ import {
 } from "~/components/ui/dialog"
 import ConfirmDialog from "~/components/ui/confirm-dialog"
 import Skeleton from "~/components/ui/skeleton"
+import ProjectAuthDialog from "~/components/project-auth-dialog"
+import PinAppDialogs, { type PinDialogAction } from "../pin-app-dialogs"
 import EnvManageRow from "./env-manage-row"
 
 export interface ManageEnvironmentsDialogProps {
@@ -27,18 +31,33 @@ export interface ManageEnvironmentsDialogProps {
 
 export default function ManageEnvironmentsDialog(props: ManageEnvironmentsDialogProps) {
   const { hasPermission } = usePermissions()
+  const canManageAuth = () => hasPermission(Permission.manageProjectAuthSettings)
+  const canPin = () => hasPermission(Permission.pinApps)
   const canRestart = () => hasPermission(Permission.restartProject)
   const canDelete = () => hasPermission(Permission.deleteEnvironment)
+
+  const navigate = useNavigate()
 
   const environments = useProjectEnvironments(() => props.projectId, {
     enabled: () => props.open,
   })
+  const projects = useProjects({ enabled: () => props.open })
+  const hasApp = () => projects.data?.find((p) => p.id === props.projectId)?.hasApp === true
+
   const restart = useRestartProjectEnvironment()
   const remove = useDeleteProjectEnvironment()
 
+  const [authEnv, setAuthEnv] = createSignal<ProjectEnvironment | null>(null)
+  const [pinAction, setPinAction] = createSignal<PinDialogAction>(null)
+  const [pinEnvironmentId, setPinEnvironmentId] = createSignal<string | undefined>(undefined)
   const [pendingDelete, setPendingDelete] = createSignal<ProjectEnvironment | null>(null)
   const [pendingRestart, setPendingRestart] = createSignal<ProjectEnvironment | null>(null)
   const [restartingId, setRestartingId] = createSignal<string | null>(null)
+
+  const openSchedules = (env: ProjectEnvironment) => {
+    props.onOpenChange(false)
+    navigate({ to: "/schedules", search: { environmentId: env.environmentId } })
+  }
 
   const confirmRestart = () => {
     const env = pendingRestart()
@@ -74,8 +93,8 @@ export default function ManageEnvironmentsDialog(props: ManageEnvironmentsDialog
       <DialogContent class="max-w-lg">
         <DialogTitle>Environments</DialogTitle>
         <DialogDescription>
-          The environments this app runs in. Open a surface, restart, or remove a published
-          environment.
+          Each environment this app runs in. Manage its auth, pin it to the Makara catalog, open its
+          schedules, restart, or remove a published environment.
         </DialogDescription>
 
         <div class="mt-4 space-y-2">
@@ -92,9 +111,22 @@ export default function ManageEnvironmentsDialog(props: ManageEnvironmentsDialog
               {(env) => (
                 <EnvManageRow
                   environment={env}
-                  canRestart={canRestart() && env.status !== "disabled"}
+                  hasApp={hasApp()}
+                  canManageAuth={canManageAuth()}
+                  canPin={canPin()}
+                  canRestart={canRestart()}
                   canDelete={canDelete()}
                   restarting={restartingId() === env.id}
+                  onAuth={() => setAuthEnv(env)}
+                  onPin={() => {
+                    setPinEnvironmentId(env.id)
+                    setPinAction("pin")
+                  }}
+                  onUnpin={() => {
+                    setPinEnvironmentId(undefined)
+                    setPinAction("unpin")
+                  }}
+                  onSchedules={() => openSchedules(env)}
                   onRestart={() => setPendingRestart(env)}
                   onDelete={() => setPendingDelete(env)}
                 />
@@ -103,6 +135,23 @@ export default function ManageEnvironmentsDialog(props: ManageEnvironmentsDialog
           </Show>
         </div>
       </DialogContent>
+
+      <ProjectAuthDialog
+        projectId={props.projectId}
+        environmentId={authEnv()?.id ?? ""}
+        environmentName={authEnv()?.name}
+        open={authEnv() !== null}
+        onOpenChange={(open) => {
+          if (!open) setAuthEnv(null)
+        }}
+      />
+
+      <PinAppDialogs
+        projectId={props.projectId}
+        environmentId={pinEnvironmentId()}
+        action={pinAction()}
+        onActionChange={setPinAction}
+      />
 
       <ConfirmDialog
         open={pendingRestart() !== null}

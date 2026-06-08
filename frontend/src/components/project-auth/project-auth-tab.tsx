@@ -11,6 +11,7 @@ import { useProjectAuth } from "./use-project-auth"
 
 export interface ProjectAuthTabProps {
   projectId: string
+  environmentId: string
   disabled?: boolean
 }
 
@@ -51,7 +52,8 @@ function validationError(
 
 export function ProjectAuthTab(props: ProjectAuthTabProps) {
   const projectId = () => props.projectId
-  const { query, mutation } = useProjectAuth(projectId)
+  const environmentId = () => props.environmentId
+  const { query, mutation } = useProjectAuth(projectId, environmentId)
 
   const [draftMode, setDraftMode] = createSignal<ProjectAuthMode>("public")
   const [draftConfig, setDraftConfig] = createSignal<ProjectAuthOidcConfig>(EMPTY_CONFIG)
@@ -152,6 +154,7 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
               onChange={setDraftConfig}
               disabled={props.disabled || mutation.isPending}
               secretAlreadySet={serverHasExistingConfig()}
+              callbackUrl={query.data?.callbackUrl}
             />
           </div>
         </Show>

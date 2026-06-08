@@ -438,9 +438,11 @@ export const projectSchedules = pgTable(
     projectId: text("project_id")
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
-    projectEnvironmentId: text("project_environment_id").references(() => projectEnvironments.id, {
-      onDelete: "cascade",
-    }),
+    projectEnvironmentId: text("project_environment_id")
+      .references(() => projectEnvironments.id, {
+        onDelete: "cascade",
+      })
+      .notNull(),
     tenantId: text("tenant_id")
       .references(() => tenants.id)
       .notNull(),

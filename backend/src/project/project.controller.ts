@@ -170,27 +170,29 @@ export class ProjectController {
     return this.projectService.update(id, dto, tenant.tenantId)
   }
 
-  @Get(":id/auth")
+  @Get(":id/environments/:environmentId/auth")
   @RequirePermission(Perms.manageProjectAuthSettings)
   async getAuth(
     @Param("id") id: string,
+    @Param("environmentId") environmentId: string,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ) {
     await this.gate(id, tenant, user)
-    return this.projectService.getAuth(id, tenant.tenantId)
+    return this.projectService.getAuth(id, environmentId, tenant.tenantId)
   }
 
-  @Put(":id/auth")
+  @Put(":id/environments/:environmentId/auth")
   @RequirePermission(Perms.manageProjectAuthSettings)
   async updateAuth(
     @Param("id") id: string,
+    @Param("environmentId") environmentId: string,
     @Body() dto: UpdateProjectAuthDto,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
   ) {
     await this.gate(id, tenant, user)
-    return this.projectService.updateAuth(id, dto, tenant.tenantId)
+    return this.projectService.updateAuth(id, environmentId, dto, tenant.tenantId)
   }
 
   @Get(":id/logging")

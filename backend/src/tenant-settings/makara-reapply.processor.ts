@@ -32,13 +32,12 @@ export class MakaraReapplyProcessor extends WorkerHost {
       return
     }
 
-    const [makaraEnv] = await db
+    const makaraEnvs = await db
       .select({ id: projectEnvironments.id })
       .from(projectEnvironments)
       .where(and(eq(projectEnvironments.projectId, projectId), eq(projectEnvironments.authMode, "makara")))
-      .limit(1)
 
-    if (!makaraEnv) {
+    if (makaraEnvs.length === 0) {
       this.logger.log(
         `Skipping Makara reapply for project ${projectId}: no environment uses Makara auth`,
       )
@@ -53,14 +52,17 @@ export class MakaraReapplyProcessor extends WorkerHost {
       return
     }
 
-    const { bypassAuthPaths } = await this.projectAuthService.getConfig(projectId)
-    await this.projectAuthService.applyMakara(projectId, currentName, bypassAuthPaths)
-    if (currentName !== intendedName) {
-      this.logger.log(
-        `Re-applied Makara auth for project ${projectId} → ${currentName} (job was enqueued for '${intendedName}', mapping has since changed)`,
-      )
-    } else {
-      this.logger.log(`Re-applied Makara auth for project ${projectId} → ${currentName}`)
+    for (const env of makaraEnvs) {
+      const { bypassAuthPaths } = await this.projectAuthService.getConfig(env.id)
+      await this.projectAuthService.applyMakara(env.id, currentName, bypassAuthPaths)
     }
+
+    const staleNote =
+      currentName !== intendedName
+        ? ` (job was enqueued for '${intendedName}', mapping has since changed)`
+        : ""
+    this.logger.log(
+      `Re-applied Makara auth for ${makaraEnvs.length} environment(s) of project ${projectId} → ${currentName}${staleNote}`,
+    )
   }
 }

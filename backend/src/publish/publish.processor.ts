@@ -12,6 +12,7 @@ import { PublishService } from "./publish.service"
 import { ProjectEventsService } from "../project/project-events.service"
 import { PROJECT_PUBLISH_QUEUE, PublishJobData, PublishStatus } from "./publish.types"
 import { ProjectService } from "../project/project.service"
+import { ProjectAuthService } from "../project/project-auth.service"
 import { ProjectEnvironmentService } from "../project-environment/project-environment.service"
 import { GatewayKeyService } from "../gateway/gateway-key.service"
 import { ScheduleService } from "../schedule/schedule.service"
@@ -35,6 +36,7 @@ export class PublishProcessor extends WorkerHost {
     private readonly git: GitService,
     private readonly publishService: PublishService,
     private readonly projectService: ProjectService,
+    private readonly projectAuthService: ProjectAuthService,
     private readonly projectEnvironmentService: ProjectEnvironmentService,
     private readonly gatewayKeyService: GatewayKeyService,
     private readonly scheduleService: ScheduleService,
@@ -77,6 +79,14 @@ export class PublishProcessor extends WorkerHost {
 
       await this.writeEnvFile(prodEnv.directory, data.variables, data.isFirstPublish)
       await this.mirrorSchedules(data.projectId, data.projectEnvironmentId, data.tenantId, data.scheduleIds)
+
+      if (data.isFirstPublish && devEnv.authMode !== "public") {
+        const makaraFallbackTenantName =
+          devEnv.authMode === "makara"
+            ? await this.projectService.findMakaraTenantName(data.tenantId)
+            : undefined
+        await this.projectAuthService.inheritAuth(devEnv.id, data.projectEnvironmentId, makaraFallbackTenantName)
+      }
 
       await this.setStatus(data.publishJobId, PublishStatus.Building)
       if (data.isFirstPublish) {
