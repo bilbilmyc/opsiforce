@@ -4,7 +4,7 @@ import { promisify } from "node:util"
 
 const run = promisify(execFile)
 
-const SAFE_DIRECTORY = ["-c", "safe.directory=*"]
+const BASE_CONFIG = ["-c", "safe.directory=*", "-c", "core.hooksPath=/dev/null"]
 const COMMITTER = ["-c", "user.email=publish@opsiforce.local", "-c", "user.name=OpsiForce Publish"]
 
 @Injectable()
@@ -12,7 +12,7 @@ export class GitService {
   private readonly logger = new Logger(GitService.name)
 
   private async git(cwd: string, args: string[]): Promise<string> {
-    const { stdout } = await run("git", [...SAFE_DIRECTORY, ...args], { cwd, maxBuffer: 32 * 1024 * 1024 })
+    const { stdout } = await run("git", [...BASE_CONFIG, ...args], { cwd, maxBuffer: 32 * 1024 * 1024 })
     return stdout.trim()
   }
 
@@ -25,14 +25,14 @@ export class GitService {
     await this.git(dir, ["add", "-A"])
     const staged = await this.git(dir, ["status", "--porcelain"])
     if (staged.length > 0) {
-      await this.git(dir, [...COMMITTER, "commit", "-m", message])
+      await this.git(dir, [...COMMITTER, "commit", "--no-verify", "-m", message])
     }
     return this.currentSha(dir)
   }
 
   /** Materialise `destDir` as a local clone of `srcDir` (git-ignored runtime state is not copied). */
   async cloneLocal(srcDir: string, destDir: string): Promise<void> {
-    await run("git", [...SAFE_DIRECTORY, "clone", "--local", srcDir, destDir], { maxBuffer: 32 * 1024 * 1024 })
+    await run("git", [...BASE_CONFIG, "clone", "--local", srcDir, destDir], { maxBuffer: 32 * 1024 * 1024 })
   }
 
   /** Pull new commits from the clone origin (the dev directory) into `dir`. */

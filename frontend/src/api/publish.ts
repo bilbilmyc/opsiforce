@@ -99,14 +99,14 @@ export function usePublish() {
 
 export function usePublishJob(
   projectId: () => string,
-  projectEnvironmentId: () => string | null,
+  environmentId: () => string | null,
   options?: { enabled?: () => boolean },
 ) {
   const [data, setData] = createSignal<PublishJob | null>(null)
 
   createEffect(() => {
-    const enabled = (options?.enabled ? options.enabled() : true) && !!projectEnvironmentId()
-    const envId = projectEnvironmentId()
+    const enabled = (options?.enabled ? options.enabled() : true) && !!environmentId()
+    const envId = environmentId()
     const pid = projectId()
     if (!enabled || !envId) {
       setData(null)

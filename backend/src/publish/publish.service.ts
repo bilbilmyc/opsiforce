@@ -185,7 +185,7 @@ export class PublishService {
       .select()
       .from(projectPublishJobs)
       .where(
-        and(eq(projectPublishJobs.projectId, projectId), eq(projectPublishJobs.projectEnvironmentId, environmentId)),
+        and(eq(projectPublishJobs.projectId, projectId), eq(projectPublishJobs.environmentId, environmentId)),
       )
       .orderBy(desc(projectPublishJobs.createdAt))
       .limit(1)
