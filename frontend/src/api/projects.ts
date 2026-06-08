@@ -17,6 +17,7 @@ interface ProjectStatusErrorPayload {
 }
 
 export function useProjectStatus(projectId: () => string, options?: { enabled?: () => boolean }) {
+  const qc = useQueryClient()
   const [data, setData] = createSignal<ProjectState>()
   const [error, setError] = createSignal<unknown>()
 
@@ -26,6 +27,7 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
     if (status.status === "suspended") {
       fetch(`/api/proxy/${status.id}/ping`).catch(() => {})
     }
+    qc.invalidateQueries({ queryKey: environmentKeys.forProject(status.id) })
   }
 
   createEffect(() => {

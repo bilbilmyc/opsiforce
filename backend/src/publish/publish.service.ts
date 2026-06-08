@@ -118,16 +118,23 @@ export class PublishService {
 
     if (!existing) {
       const devEnv = await this.projectEnvironmentService.findDefaultByProjectId(projectId)
-      await this.projectEnvironmentService.create({
-        id: projectEnvironmentId,
-        projectId,
-        environmentId: dto.environmentId,
-        isDefault: false,
-        directory: `projects/${projectEnvironmentId}`,
-        platformVersion: this.platformVersion,
-        status: ProjectStatus.Publishing,
-        authMode: devEnv.authMode,
-      })
+      try {
+        await this.projectEnvironmentService.create({
+          id: projectEnvironmentId,
+          projectId,
+          environmentId: dto.environmentId,
+          isDefault: false,
+          directory: `projects/${projectEnvironmentId}`,
+          platformVersion: this.platformVersion,
+          status: ProjectStatus.Publishing,
+          authMode: devEnv.authMode,
+        })
+      } catch (err) {
+        if (isProjectEnvironmentConflict(err)) {
+          throw new ConflictException("A publish is already in progress for this environment")
+        }
+        throw err
+      }
     }
 
     const publishJobId = crypto.randomUUID()
@@ -224,6 +231,12 @@ function isActivePublishConflict(err: unknown): boolean {
   const code = (err as { code?: string })?.code
   const constraint = (err as { constraint_name?: string })?.constraint_name
   return code === "23505" && constraint === "uq_project_publish_jobs_one_active"
+}
+
+function isProjectEnvironmentConflict(err: unknown): boolean {
+  const code = (err as { code?: string })?.code
+  const constraint = (err as { constraint_name?: string })?.constraint_name
+  return code === "23505" && constraint === "project_environments_project_id_environment_id_unique"
 }
 
 function toResponse(row: typeof projectPublishJobs.$inferSelect): PublishJobResponse {

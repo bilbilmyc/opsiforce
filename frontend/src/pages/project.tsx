@@ -63,6 +63,12 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
   })
 
   createEffect(() => {
+    if (isDevelopmentActive()) return
+    if (activeEnvironment()?.status !== "suspended") return
+    fetch(`/api/proxy/${activeEnvironmentId()}/ping`).catch(() => {})
+  })
+
+  createEffect(() => {
     if (statusQuery.error instanceof ApiError && statusQuery.error.status === 404) {
       untrack(() => navigate({ to: "/" }))
     }

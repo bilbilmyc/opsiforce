@@ -50,6 +50,7 @@ export class ScheduleService {
         method: dto.method || "POST",
         body: dto.body ?? null,
         headers: dto.headers ?? null,
+        isActive: dto.isActive ?? true,
       })
       .onConflictDoUpdate({
         target: [projectSchedules.projectEnvironmentId, projectSchedules.name],
@@ -60,6 +61,7 @@ export class ScheduleService {
           body: dto.body ?? null,
           headers: dto.headers ?? null,
           timeZone: tz,
+          ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
           updatedAt: new Date(),
         },
       })

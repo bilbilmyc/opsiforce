@@ -182,6 +182,7 @@ export class PublishProcessor extends WorkerHost {
         method: schedule.method,
         body: schedule.body ?? undefined,
         headers,
+        isActive: schedule.isActive,
       })
     }
 
