@@ -9,18 +9,22 @@ import { join } from "node:path"
 import { db } from "../../db"
 import {
   agents,
+  projectEnvironments,
   projectGatewayKeys,
+  projectPodSettings,
   projectSettings,
   projectVirtualKeys,
   projects,
   tenants,
 } from "../../db/schema"
+import { resolvePreset, type PodResources } from "../pod/pod-classes"
 import { ProjectStatus } from "../project/project.types"
 import { PodService } from "../pod/pod.service"
 import { BifrostService } from "../bifrost/bifrost.service"
 import { GatewayKeyService } from "../gateway/gateway-key.service"
 import { DefaultsService } from "../defaults/defaults.service"
 import { TimeoutService } from "../timeout/timeout.service"
+import { EnvironmentService } from "../environment/environment.service"
 import { readAgentConfig } from "../agent/agent-config"
 import {
   PROJECT_POOL_QUEUE,
@@ -81,6 +85,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
     private readonly gatewayKeyService: GatewayKeyService,
     private readonly defaultsService: DefaultsService,
     private readonly timeoutService: TimeoutService,
+    private readonly environmentService: EnvironmentService,
     private readonly configService: ConfigService,
   ) {
     this.platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
@@ -175,8 +180,9 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
     const finalized = await this.finalizeClaim(reserved.id, claim, livePodIp).catch(() => false)
     if (!finalized) {
       const [check] = await db
-        .select({ status: projects.status, tenantId: projects.tenantId })
+        .select({ status: projectEnvironments.status, tenantId: projects.tenantId })
         .from(projects)
+        .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
         .where(eq(projects.id, reserved.id))
       if (check?.status === ProjectStatus.Active && check.tenantId === claim.tenantId) {
         return reserved.id
@@ -293,16 +299,25 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
   }
 
   private async reservePending(agentId: string, claim: PoolClaim): Promise<PendingRow | null> {
+    const defaultEnvironment = await this.environmentService.ensureDefaultForTenant(claim.tenantId)
+
     return db.transaction(async (tx) => {
       const reserved = await tx
         .select({
           id: projects.id,
-          directory: projects.directory,
+          directory: projectEnvironments.directory,
           bifrostProjectId: projects.bifrostProjectId,
           agentId: projects.agentId,
         })
         .from(projects)
-        .where(and(eq(projects.status, ProjectStatus.Pending), eq(projects.agentId, agentId), isNotNull(projects.podIp)))
+        .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
+        .where(
+          and(
+            eq(projectEnvironments.status, ProjectStatus.Pending),
+            eq(projects.agentId, agentId),
+            isNotNull(projectEnvironments.podIp),
+          ),
+        )
         .orderBy(asc(projects.createdAt))
         .limit(1)
         .for("update", { skipLocked: true })
@@ -317,10 +332,14 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
           workspaceId: claim.workspaceId,
           title: claim.title,
           description: claim.description,
-          status: ProjectStatus.Claiming,
           updatedAt: new Date(),
         })
         .where(eq(projects.id, row.id))
+
+      await tx
+        .update(projectEnvironments)
+        .set({ status: ProjectStatus.Claiming, environmentId: defaultEnvironment.id, updatedAt: new Date() })
+        .where(eq(projectEnvironments.id, row.id))
 
       await tx
         .update(projectSettings)
@@ -338,9 +357,9 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
   private async finalizeClaim(projectId: string, claim: PoolClaim, podIp: string): Promise<boolean> {
     return db.transaction(async (tx) => {
       const [row] = await tx
-        .select({ status: projects.status })
-        .from(projects)
-        .where(eq(projects.id, projectId))
+        .select({ status: projectEnvironments.status })
+        .from(projectEnvironments)
+        .where(eq(projectEnvironments.id, projectId))
         .for("update")
       if (!row || row.status !== ProjectStatus.Claiming) return false
 
@@ -364,31 +383,44 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
         .where(eq(projectSettings.projectId, projectId))
 
       await tx
-        .update(projects)
+        .update(projectEnvironments)
         .set({
           status: ProjectStatus.Active,
           podIp,
           lastActiveAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(projects.id, projectId))
+        .where(eq(projectEnvironments.id, projectId))
 
       return true
     })
   }
 
   private async revertReservation(projectId: string): Promise<void> {
-    await db
-      .update(projects)
-      .set({
-        status: ProjectStatus.Pending,
-        tenantId: null,
-        workspaceId: null,
-        title: null,
-        description: null,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(projects.id, projectId), eq(projects.status, ProjectStatus.Claiming)))
+    await db.transaction(async (tx) => {
+      const [env] = await tx
+        .select({ status: projectEnvironments.status })
+        .from(projectEnvironments)
+        .where(eq(projectEnvironments.id, projectId))
+        .for("update")
+      if (!env || env.status !== ProjectStatus.Claiming) return
+
+      await tx
+        .update(projects)
+        .set({
+          tenantId: null,
+          workspaceId: null,
+          title: null,
+          description: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(projects.id, projectId))
+
+      await tx
+        .update(projectEnvironments)
+        .set({ status: ProjectStatus.Pending, environmentId: null, updatedAt: new Date() })
+        .where(eq(projectEnvironments.id, projectId))
+    })
   }
 
   private async patchBifrostBudgetsWithRetries(
@@ -471,10 +503,6 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
         agentId,
         title: null,
         description: null,
-        directory,
-        status: ProjectStatus.Pending,
-        podIp: null,
-        platformVersion: this.platformVersion,
       })
 
       await tx.insert(projectSettings).values({
@@ -483,20 +511,36 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
         appTimeoutIdle: timeouts.defaultAppTimeoutIdle,
         timezone: "UTC",
       })
+
+      await tx.insert(projectPodSettings).values({
+        projectId: id,
+        podClass: "small",
+        ...resolvePreset("small", this.configService.get<PodResources | null>("podClassSmall", null)),
+      })
+
+      await tx.insert(projectEnvironments).values({
+        id,
+        projectId: id,
+        environmentId: null,
+        isDefault: true,
+        directory,
+        status: ProjectStatus.Pending,
+        platformVersion: this.platformVersion,
+      })
     })
 
     try {
       if (this.bifrostService.isEnabled()) {
-        await this.bifrostService.createOrphanProjectResources(id)
+        await this.bifrostService.createOrphanEnvironmentResources({ projectId: id, projectEnvironmentId: id })
       }
-      await this.gatewayKeyService.createKey(id, null)
+      await this.gatewayKeyService.createKey(id, id, null)
 
       const [bifrostOptions, gatewayApiKey] = await Promise.all([
-        this.bifrostService.getProjectPodOptions(id),
-        this.gatewayKeyService.getProjectToken(id),
+        this.bifrostService.getEnvironmentPodOptions(id),
+        this.gatewayKeyService.getEnvironmentToken(id),
       ])
 
-      await this.podService.createAssignedPod(id, directory, {
+      await this.podService.createAssignedPod(id, directory, id, {
         ...(bifrostOptions ?? {}),
         agentName,
         agentModel: this.agentModelByName.get(agentName),
@@ -507,9 +551,9 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       const podName = this.podService.assignedPodName(id)
       const podIp = await this.podService.waitForReady(podName, POOL_PROVISION_READY_TIMEOUT_MS)
       await db
-        .update(projects)
+        .update(projectEnvironments)
         .set({ podIp, updatedAt: new Date() })
-        .where(and(eq(projects.id, id), eq(projects.status, ProjectStatus.Pending)))
+        .where(and(eq(projectEnvironments.id, id), eq(projectEnvironments.status, ProjectStatus.Pending)))
       this.logger.log(`Pool project ${id} ready (agent=${agentName})`)
     } catch (err) {
       this.logger.warn(`Failed to provision pool project ${id}: ${(err as Error).message}`)
@@ -526,12 +570,13 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
     const captured = await db.transaction(async (tx) => {
       const [row] = await tx
         .select({
-          status: projects.status,
+          status: projectEnvironments.status,
           bifrostProjectId: projects.bifrostProjectId,
           agentId: projects.agentId,
-          directory: projects.directory,
+          directory: projectEnvironments.directory,
         })
         .from(projects)
+        .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
         .where(eq(projects.id, projectId))
         .for("update")
       if (!row || !expectedStatuses.includes(row.status as ProjectStatus)) return null
@@ -586,7 +631,8 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
         bifrostProjectId: projects.bifrostProjectId,
       })
       .from(projects)
-      .where(and(eq(projects.status, ProjectStatus.Claiming), lt(projects.updatedAt, cutoff)))
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
+      .where(and(eq(projectEnvironments.status, ProjectStatus.Claiming), lt(projectEnvironments.updatedAt, cutoff)))
 
     for (const row of stale) {
       if (!row.tenantId) {
@@ -639,9 +685,9 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
 
     return db.transaction(async (tx) => {
       const [row] = await tx
-        .select({ status: projects.status })
-        .from(projects)
-        .where(eq(projects.id, projectId))
+        .select({ status: projectEnvironments.status })
+        .from(projectEnvironments)
+        .where(eq(projectEnvironments.id, projectId))
         .for("update")
       if (!row || row.status !== ProjectStatus.Claiming) return false
 
@@ -664,14 +710,14 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
         .where(eq(projectSettings.projectId, projectId))
 
       await tx
-        .update(projects)
+        .update(projectEnvironments)
         .set({
           status: ProjectStatus.Active,
           podIp,
           lastActiveAt: new Date(),
           updatedAt: new Date(),
         })
-        .where(eq(projects.id, projectId))
+        .where(eq(projectEnvironments.id, projectId))
 
       return true
     })
@@ -679,9 +725,15 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
 
   private async reconcilePendingPods(): Promise<void> {
     const pending = await db
-      .select({ id: projects.id, directory: projects.directory, agentId: projects.agentId, podIp: projects.podIp })
+      .select({
+        id: projects.id,
+        directory: projectEnvironments.directory,
+        agentId: projects.agentId,
+        podIp: projectEnvironments.podIp,
+      })
       .from(projects)
-      .where(eq(projects.status, ProjectStatus.Pending))
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
+      .where(eq(projectEnvironments.status, ProjectStatus.Pending))
       .orderBy(asc(projects.createdAt))
 
     for (const row of pending) {
@@ -713,9 +765,9 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       const podIp = pod.status?.podIP ?? null
       if (podIp && podIp !== row.podIp) {
         await db
-          .update(projects)
+          .update(projectEnvironments)
           .set({ podIp, updatedAt: new Date() })
-          .where(and(eq(projects.id, row.id), eq(projects.status, ProjectStatus.Pending)))
+          .where(and(eq(projectEnvironments.id, row.id), eq(projectEnvironments.status, ProjectStatus.Pending)))
       }
     }
   }
@@ -731,10 +783,11 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
     const [counts] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(projects)
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .where(
         and(
           eq(projects.agentId, agentId),
-          inArray(projects.status, [ProjectStatus.Pending, ProjectStatus.Claiming]),
+          inArray(projectEnvironments.status, [ProjectStatus.Pending, ProjectStatus.Claiming]),
         ),
       )
     return counts?.count ?? 0

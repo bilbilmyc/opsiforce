@@ -1,11 +1,11 @@
 import { Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
-import { eq, and, like } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { db } from "../../db"
-import { projects } from "../../db/schema"
+import { projectEnvironments } from "../../db/schema"
 import { PodService } from "../pod/pod.service"
 
-interface ProjectUpstreamRef {
+interface EnvironmentUpstreamRef {
   id: string
   podIp: string | null
 }
@@ -27,106 +27,42 @@ export class ProxyService {
     this.dbViewerPort = this.configService.getOrThrow<number>("dbViewerPort")
   }
 
-  async resolveUpstream(projectId: string, tenantId: string): Promise<string> {
-    return this.resolveUpstreamForPort(projectId, tenantId, this.agentPort)
+  resolveUpstreamForProject(env: EnvironmentUpstreamRef): string {
+    return this.upstreamFromEnvironment(env, this.agentPort)
   }
 
-  resolveUpstreamForProject(project: ProjectUpstreamRef): string {
-    return this.upstreamFromProject(project, this.agentPort)
+  resolveAppUpstreamForProject(env: EnvironmentUpstreamRef): string {
+    return this.upstreamFromEnvironment(env, this.appPort)
   }
 
-  async resolveAppUpstream(projectId: string, tenantId: string): Promise<string> {
-    return this.resolveUpstreamForPort(projectId, tenantId, this.appPort)
+  resolveVscodeUpstreamForProject(env: EnvironmentUpstreamRef): string {
+    return this.upstreamFromEnvironment(env, this.vscodePort)
   }
 
-  resolveAppUpstreamForProject(project: ProjectUpstreamRef): string {
-    return this.upstreamFromProject(project, this.appPort)
+  resolveDbUpstreamForProject(env: EnvironmentUpstreamRef): string {
+    return this.upstreamFromEnvironment(env, this.dbViewerPort)
   }
 
-  async resolveVscodeUpstream(projectId: string, tenantId: string): Promise<string> {
-    return this.resolveUpstreamForPort(projectId, tenantId, this.vscodePort)
+  getAssignedPodName(environmentId: string): string {
+    return this.podService.assignedPodName(environmentId)
   }
 
-  resolveVscodeUpstreamForProject(project: ProjectUpstreamRef): string {
-    return this.upstreamFromProject(project, this.vscodePort)
+  async resolveAppUpstreamByEnvironmentId(environmentId: string): Promise<string> {
+    const [env] = await db
+      .select({ id: projectEnvironments.id, podIp: projectEnvironments.podIp })
+      .from(projectEnvironments)
+      .where(eq(projectEnvironments.id, environmentId))
+
+    if (!env) throw new NotFoundException(`Project environment ${environmentId} not found`)
+
+    return this.upstreamFromEnvironment(env, this.appPort)
   }
 
-  async resolveVscodeUpstreamByProjectId(projectId: string): Promise<string> {
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId))
-
-    if (!project) throw new NotFoundException(`Project ${projectId} not found`)
-
-    return this.upstreamFromProject(project, this.vscodePort)
-  }
-
-  async resolveDbUpstream(projectId: string, tenantId: string): Promise<string> {
-    return this.resolveUpstreamForPort(projectId, tenantId, this.dbViewerPort)
-  }
-
-  resolveDbUpstreamForProject(project: ProjectUpstreamRef): string {
-    return this.upstreamFromProject(project, this.dbViewerPort)
-  }
-
-  async resolveDbUpstreamByProjectId(projectId: string): Promise<string> {
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId))
-
-    if (!project) throw new NotFoundException(`Project ${projectId} not found`)
-
-    return this.upstreamFromProject(project, this.dbViewerPort)
-  }
-
-  getAssignedPodName(projectId: string): string {
-    return this.podService.assignedPodName(projectId)
-  }
-
-  async resolveAppUpstreamByProjectId(projectId: string): Promise<string> {
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(eq(projects.id, projectId))
-
-    if (!project) throw new NotFoundException(`Project ${projectId} not found`)
-
-    return this.upstreamFromProject(project, this.appPort)
-  }
-
-  async resolveAppUpstreamByShortId(shortId: string): Promise<string> {
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(like(projects.id, `${shortId}%`))
-
-    if (!project) throw new NotFoundException(`Project matching ${shortId} not found`)
-
-    return this.upstreamFromProject(project, this.appPort)
-  }
-
-  private upstreamFromProject(project: ProjectUpstreamRef, port: number): string {
-    if (project.podIp) {
-      return `http://${project.podIp}:${port}`
+  private upstreamFromEnvironment(env: EnvironmentUpstreamRef, port: number): string {
+    if (env.podIp) {
+      return `http://${env.podIp}:${port}`
     }
 
-    throw new ServiceUnavailableException(`Project ${project.id} has no active pod`)
-  }
-
-  private async resolveUpstreamForPort(projectId: string, tenantId: string, port: number): Promise<string> {
-    const [project] = await db
-      .select()
-      .from(projects)
-      .where(and(eq(projects.id, projectId), eq(projects.tenantId, tenantId)))
-
-    if (!project) throw new NotFoundException(`Project ${projectId} not found`)
-
-    if (project.podIp) {
-      return `http://${project.podIp}:${port}`
-    }
-
-    throw new ServiceUnavailableException(`Project ${projectId} has no active pod`)
+    throw new ServiceUnavailableException(`Project environment ${env.id} has no active pod`)
   }
 }

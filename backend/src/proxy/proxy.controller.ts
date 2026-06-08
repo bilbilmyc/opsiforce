@@ -11,8 +11,10 @@ import {
   UnauthorizedException,
 } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
-import { ProjectService, type EnsureProjectResult } from "../project/project.service"
-import { ProjectResponse } from "../project/project.types"
+import { ProjectService, type EnsureEnvironmentResult } from "../project/project.service"
+import { RequestLogMode } from "../project/project.types"
+import { ProjectEnvironmentService } from "../project-environment/project-environment.service"
+import type { ProjectEnvironmentContext } from "../project-environment/project-environment.types"
 import { OPSIFORCE_TENANT_GROUP_PREFIX, TenantService } from "../tenant/tenant.service"
 import { Public } from "../tenant/tenant.decorator"
 import { AgentUpdateService } from "../agent-update/agent-update.service"
@@ -24,11 +26,17 @@ interface EnsureProxyBody {
   surface?: ProxySurface
 }
 
+interface ProxyLoggingConfig {
+  mode: RequestLogMode
+  bodyLimit: number
+}
+
 interface EnsureProxyResponse {
-  state: EnsureProjectResult["state"]
+  state: EnsureEnvironmentResult["state"]
   upstream?: string
   podName?: string | null
   directory?: string
+  logging?: ProxyLoggingConfig
 }
 
 @Public()
@@ -41,15 +49,16 @@ export class ProxyController {
     private readonly configService: ConfigService,
     private readonly proxyService: ProxyService,
     private readonly projectService: ProjectService,
+    private readonly projectEnvironmentService: ProjectEnvironmentService,
     private readonly tenantService: TenantService,
     private readonly agentUpdateService: AgentUpdateService,
   ) {
     this.proxyControlToken = this.configService.getOrThrow<string>("proxyControlToken")
   }
 
-  @Post("projects/:projectId/ensure")
-  async ensureProject(
-    @Param("projectId") projectId: string,
+  @Post("projects/:environmentId/ensure")
+  async ensureEnvironment(
+    @Param("environmentId") environmentId: string,
     @Body() body: EnsureProxyBody,
     @Headers("x-proxy-control-token") token: string | undefined,
     @Headers("x-forwarded-groups") groupsHeader: string | undefined,
@@ -61,56 +70,55 @@ export class ProxyController {
       throw new BadRequestException("Invalid proxy surface")
     }
 
-    const activity = surface === "app" ? "app" : "agent"
-    let ensured: EnsureProjectResult
+    const env = await this.projectEnvironmentService.findByIdOrNull(environmentId)
+    if (!env) throw new NotFoundException(`Project environment ${environmentId} not found`)
 
     if (surface === "agent") {
-      const project = await this.projectService.findOneById(projectId)
-      if (!project.tenantId) throw new BadRequestException(`Project ${projectId} not yet claimed`)
-      await this.assertProjectTenantAccess(project.tenantId, groupsHeader)
-      ensured = await this.projectService.ensureProjectAccess(project, activity)
-    } else {
-      ensured = await this.projectService.ensureProjectById(projectId, activity)
+      if (!env.tenantId) throw new BadRequestException(`Project environment ${environmentId} not yet claimed`)
+      await this.assertProjectTenantAccess(env.tenantId, groupsHeader)
     }
 
-    if (surface === "agent" && ensured.state === "ready") {
-      const reload = await this.agentUpdateService.applyPendingReloadForProject(projectId).catch((err) => {
-        this.logger.warn(`Failed to apply pending agent reload for project ${projectId}: ${(err as Error).message}`)
+    const activity = surface === "app" ? "app" : "agent"
+    let ensured = await this.projectService.ensureEnvironment(env, activity)
+
+    if (surface === "agent" && ensured.state === "ready" && env.isDefault) {
+      const reload = await this.agentUpdateService.applyPendingReloadForProject(env.projectId).catch((err) => {
+        this.logger.warn(`Failed to apply pending agent reload for project ${env.projectId}: ${(err as Error).message}`)
         return null
       })
       if (reload?.podRecreated) {
-        ensured = await this.projectService.ensureProjectById(projectId, activity)
+        ensured = await this.projectService.ensureEnvironmentById(environmentId, activity)
       }
     }
 
-    return this.toEnsureResponse(surface, ensured.project, ensured)
+    return this.toEnsureResponse(surface, ensured)
   }
 
-  @Post("projects/:projectId/failure")
-  async handleProjectFailure(
-    @Param("projectId") projectId: string,
+  @Post("projects/:environmentId/failure")
+  async handleEnvironmentFailure(
+    @Param("environmentId") environmentId: string,
     @Headers("x-proxy-control-token") token: string | undefined,
   ): Promise<{ restart: boolean }> {
     this.assertToken(token)
-    return { restart: await this.projectService.handleProxyFailureById(projectId) }
+    return { restart: await this.projectService.handleProxyFailureByEnvId(environmentId) }
   }
 
-  private toEnsureResponse(
-    surface: ProxySurface,
-    project: ProjectResponse,
-    ensured: EnsureProjectResult,
-  ): EnsureProxyResponse {
+  private toEnsureResponse(surface: ProxySurface, ensured: EnsureEnvironmentResult): EnsureProxyResponse {
     if (ensured.state !== "ready") {
       return { state: ensured.state }
     }
 
-    const upstream = resolveUpstreamForSurface(this.proxyService, surface, project)
+    const env = ensured.env
+    const upstream = resolveUpstreamForSurface(this.proxyService, surface, env)
 
     return {
       state: ensured.state,
       upstream,
-      podName: this.proxyService.getAssignedPodName(project.id),
-      directory: project.directory,
+      podName: this.proxyService.getAssignedPodName(env.id),
+      directory: env.directory,
+      ...(surface === "app"
+        ? { logging: { mode: env.requestLogMode, bodyLimit: env.requestLogBodyLimit } }
+        : {}),
     }
   }
 
@@ -139,17 +147,17 @@ export class ProxyController {
 function resolveUpstreamForSurface(
   proxyService: ProxyService,
   surface: ProxySurface,
-  project: ProjectResponse,
+  env: ProjectEnvironmentContext,
 ): string {
   switch (surface) {
     case "agent":
-      return proxyService.resolveUpstreamForProject(project)
+      return proxyService.resolveUpstreamForProject(env)
     case "app":
-      return proxyService.resolveAppUpstreamForProject(project)
+      return proxyService.resolveAppUpstreamForProject(env)
     case "vscode":
-      return proxyService.resolveVscodeUpstreamForProject(project)
+      return proxyService.resolveVscodeUpstreamForProject(env)
     case "db":
-      return proxyService.resolveDbUpstreamForProject(project)
+      return proxyService.resolveDbUpstreamForProject(env)
   }
 }
 

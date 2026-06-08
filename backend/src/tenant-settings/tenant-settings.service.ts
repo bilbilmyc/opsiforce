@@ -3,7 +3,7 @@ import { InjectQueue } from "@nestjs/bullmq"
 import { Queue } from "bullmq"
 import { and, eq } from "drizzle-orm"
 import { db } from "../../db"
-import { projectSettings, projects, tenantSettings } from "../../db/schema"
+import { projectEnvironments, projects, tenantSettings } from "../../db/schema"
 import { MAKARA_TENANT_GROUP_PREFIX, TenantService } from "../tenant/tenant.service"
 import {
   TENANT_MAKARA_REAPPLY_QUEUE,
@@ -64,10 +64,10 @@ export class TenantSettingsService {
 
   private async enqueueReapplies(tenantId: string, makaraTenantName: string): Promise<void> {
     const rows = await db
-      .select({ projectId: projects.id })
+      .selectDistinct({ projectId: projects.id })
       .from(projects)
-      .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
-      .where(and(eq(projects.tenantId, tenantId), eq(projectSettings.authMode, "makara")))
+      .innerJoin(projectEnvironments, eq(projectEnvironments.projectId, projects.id))
+      .where(and(eq(projects.tenantId, tenantId), eq(projectEnvironments.authMode, "makara")))
 
     if (rows.length === 0) return
 

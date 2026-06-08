@@ -20,9 +20,12 @@ import {
   UpdateProjectDto,
   DuplicateProjectDto,
   UpdateProjectAuthDto,
+  UpdateProjectLoggingDto,
   ProjectStatus,
   SetAppPinDto,
+  SetEnvironmentSessionDto,
   UpdateAppDto,
+  UpdateProjectPodClassDto,
 } from "./project.types"
 import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
 import { CurrentUser, type UserContext } from "../user/user.decorator"
@@ -190,6 +193,41 @@ export class ProjectController {
     return this.projectService.updateAuth(id, dto, tenant.tenantId)
   }
 
+  @Get(":id/logging")
+  @RequirePermission(Perms.manageProjectLoggingSettings)
+  async getLogging(
+    @Param("id") id: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    return this.projectService.getLogging(id, tenant.tenantId)
+  }
+
+  @Put(":id/logging")
+  @RequirePermission(Perms.manageProjectLoggingSettings)
+  async updateLogging(
+    @Param("id") id: string,
+    @Body() dto: UpdateProjectLoggingDto,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    return this.projectService.updateLogging(id, dto, tenant.tenantId)
+  }
+
+  @Put(":id/pod-class")
+  @RequirePermission(Perms.manageProjectPodSettings)
+  async updatePodClass(
+    @Param("id") id: string,
+    @Body() dto: UpdateProjectPodClassDto,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    return this.projectService.updatePodClass(id, dto, tenant.tenantId)
+  }
+
   @Delete(":id")
   async remove(
     @Param("id") id: string,
@@ -245,6 +283,57 @@ export class ProjectController {
     return this.projectService.restart(id, tenant.tenantId)
   }
 
+  @Get(":id/environments")
+  async listEnvironments(
+    @Param("id") id: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    return this.projectService.listEnvironments(id, tenant.tenantId)
+  }
+
+  @Post(":id/environments/:environmentId/restart")
+  @RequirePermission(Perms.restartProject)
+  async restartEnvironment(
+    @Param("id") id: string,
+    @Param("environmentId") environmentId: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    return this.projectService.restart(id, tenant.tenantId, environmentId)
+  }
+
+  @Patch(":id/environments/:environmentId/session")
+  async setEnvironmentSession(
+    @Param("id") id: string,
+    @Param("environmentId") environmentId: string,
+    @Body() dto: SetEnvironmentSessionDto,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    if (dto?.sessionId !== null && typeof dto?.sessionId !== "string") {
+      throw new BadRequestException("sessionId must be a string or null")
+    }
+    await this.projectService.setEnvironmentSession(id, environmentId, tenant.tenantId, dto.sessionId)
+    return { ok: true }
+  }
+
+  @Delete(":id/environments/:environmentId")
+  @RequirePermission(Perms.deleteEnvironment)
+  async removeEnvironment(
+    @Param("id") id: string,
+    @Param("environmentId") environmentId: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    await this.projectService.removeEnvironment(id, environmentId, tenant.tenantId)
+    return { ok: true }
+  }
+
   @Patch(":id/app/pin")
   @RequirePermission(Perms.pinApps)
   async setAppPin(
@@ -258,7 +347,7 @@ export class ProjectController {
       throw new BadRequestException("isPinned must be a boolean")
     }
     const dbUserId = await this.resolveUserId(user, tenant.tenantId)
-    return this.projectService.setAppPin(id, tenant.tenantId, dbUserId, dto.isPinned)
+    return this.projectService.setAppPin(id, tenant.tenantId, dbUserId, dto.isPinned, dto.environmentId)
   }
 
   @Patch(":id/app")

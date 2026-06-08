@@ -3,7 +3,7 @@ import { Logger } from "@nestjs/common";
 import { Job } from "bullmq";
 import { eq } from "drizzle-orm";
 import { db } from "../../db";
-import { projectSchedules, projects } from "../../db/schema";
+import { projects } from "../../db/schema";
 import { ScheduleService } from "./schedule.service";
 import { ProjectService } from "../project/project.service";
 import { ProxyService } from "../proxy/proxy.service";
@@ -41,6 +41,8 @@ export class ScheduleWorker extends WorkerHost {
       return;
     }
 
+    const routingId = schedule.projectEnvironmentId ?? schedule.projectId;
+
     const [project] = await db
       .select()
       .from(projects)
@@ -57,8 +59,8 @@ export class ScheduleWorker extends WorkerHost {
       return;
     }
 
-    const ensured = await this.projectService.ensureProjectById(
-      project.id,
+    const ensured = await this.projectService.ensureEnvironmentById(
+      routingId,
       "app",
     );
 
@@ -74,7 +76,7 @@ export class ScheduleWorker extends WorkerHost {
     }
 
     if (ensured.state === "starting") {
-      const ready = await this.waitForProjectReady(project.id, 120_000);
+      const ready = await this.waitForEnvironmentReady(routingId, 120_000);
       if (!ready) {
         await this.scheduleService.recordExecution(
           scheduleId,
@@ -89,8 +91,8 @@ export class ScheduleWorker extends WorkerHost {
     const start = Date.now();
 
     try {
-      const upstream = await this.proxyService.resolveAppUpstreamByProjectId(
-        project.id,
+      const upstream = await this.proxyService.resolveAppUpstreamByEnvironmentId(
+        routingId,
       );
       const url = `${upstream}${schedule.targetPath}`;
 
@@ -137,8 +139,8 @@ export class ScheduleWorker extends WorkerHost {
     }
   }
 
-  private async waitForProjectReady(
-    projectId: string,
+  private async waitForEnvironmentReady(
+    environmentId: string,
     timeoutMs: number,
   ): Promise<boolean> {
     const interval = 3000;
@@ -148,8 +150,8 @@ export class ScheduleWorker extends WorkerHost {
       await new Promise((resolve) => setTimeout(resolve, interval));
 
       try {
-        const ensured = await this.projectService.ensureProjectById(
-          projectId,
+        const ensured = await this.projectService.ensureEnvironmentById(
+          environmentId,
           "app",
         );
         if (ensured.state === "ready") return true;

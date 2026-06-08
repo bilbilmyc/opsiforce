@@ -5,6 +5,7 @@ import { toast } from "solid-sonner"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
 import { api, type Project } from "~/api/client"
+import { useRestartProjectEnvironment } from "~/api/environments"
 import { PUBLIC_LABEL, useMoveProject, useWorkspaces } from "~/api/workspaces"
 import {
   AppWindow,
@@ -47,6 +48,7 @@ export default function ProjectActionsMenu(props: {
   status: Project["status"]
   workspaceId: string | null
   project?: Project
+  activeEnvironmentId?: string
   showRename?: boolean
   onRename?: () => void
   onSettings?: () => void
@@ -61,7 +63,8 @@ export default function ProjectActionsMenu(props: {
 
   const canSeeSettings = () =>
     hasPermission(Permission.manageProjectBudgetSettings) ||
-    hasPermission(Permission.manageProjectTimeoutSettings)
+    hasPermission(Permission.manageProjectTimeoutSettings) ||
+    hasPermission(Permission.manageProjectPodSettings)
   const canManageAuth = () => hasPermission(Permission.manageProjectAuthSettings)
   const canDisable = () => hasPermission(Permission.disableProject)
   const canRestart = () => hasPermission(Permission.restartProject)
@@ -140,6 +143,21 @@ export default function ProjectActionsMenu(props: {
       qc.refetchQueries({ queryKey: ["projects", props.projectId] })
     },
   }))
+
+  const restartEnvironment = useRestartProjectEnvironment()
+
+  const isDevelopmentActive = () =>
+    !props.activeEnvironmentId || props.activeEnvironmentId === props.projectId
+
+  const handleRestart = () => {
+    if (isDevelopmentActive()) {
+      restartProject.mutate(undefined as never)
+      return
+    }
+    const environmentId = props.activeEnvironmentId
+    if (!environmentId) return
+    restartEnvironment.mutate({ projectId: props.projectId, environmentId })
+  }
 
   return (
     <>
@@ -302,7 +320,12 @@ export default function ProjectActionsMenu(props: {
       </DropdownMenu>
 
       <Show when={!props.onSettings}>
-        <ProjectSettings projectId={props.projectId} open={settingsOpen()} onOpenChange={setSettingsOpen} />
+        <ProjectSettings
+          projectId={props.projectId}
+          activeEnvironmentId={props.activeEnvironmentId}
+          open={settingsOpen()}
+          onOpenChange={setSettingsOpen}
+        />
       </Show>
 
       <ConfirmDialog
@@ -349,11 +372,12 @@ export default function ProjectActionsMenu(props: {
         description="Are you sure you want to restart this project? Project data will be preserved."
         confirmLabel="Restart"
         variant="destructive"
-        onConfirm={() => restartProject.mutate(undefined as never)}
+        onConfirm={handleRestart}
       />
 
       <PinAppDialogs
         projectId={props.projectId}
+        environmentId={props.activeEnvironmentId}
         action={pinAction()}
         onActionChange={setPinAction}
       />

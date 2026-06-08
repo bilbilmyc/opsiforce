@@ -16,7 +16,12 @@ export class ScheduleService {
     @InjectQueue(SCHEDULE_QUEUE_NAME) private readonly queue: Queue<ScheduleJobData>,
   ) {}
 
-  async upsert(projectId: string, tenantId: string, dto: CreateScheduleDto) {
+  async upsert(
+    projectId: string,
+    projectEnvironmentId: string,
+    tenantId: string,
+    dto: CreateScheduleDto,
+  ) {
     const [settings] = await db
       .select({ timezone: projectSettings.timezone })
       .from(projectSettings)
@@ -29,6 +34,7 @@ export class ScheduleService {
       .values({
         id: crypto.randomUUID(),
         projectId,
+        projectEnvironmentId,
         tenantId,
         name: dto.name,
         cronPattern: dto.cronPattern,
@@ -39,7 +45,7 @@ export class ScheduleService {
         headers: dto.headers ?? null,
       })
       .onConflictDoUpdate({
-        target: [projectSchedules.projectId, projectSchedules.name],
+        target: [projectSchedules.projectEnvironmentId, projectSchedules.name],
         set: {
           cronPattern: dto.cronPattern,
           targetPath: dto.targetPath,
@@ -54,7 +60,7 @@ export class ScheduleService {
 
     await this.syncJobScheduler(row.id, row.cronPattern, row.timeZone, row.isActive)
 
-    this.logger.log(`Upserted schedule "${dto.name}" for project ${projectId}`)
+    this.logger.log(`Upserted schedule "${dto.name}" for environment ${projectEnvironmentId}`)
     return row
   }
 
@@ -168,6 +174,18 @@ export class ScheduleService {
 
     await db.delete(projectSchedules).where(eq(projectSchedules.projectId, projectId))
     this.logger.log(`Removed all schedules for project ${projectId}`)
+  }
+
+  async removeAllForEnvironment(projectEnvironmentId: string): Promise<void> {
+    const rows = await db
+      .select({ id: projectSchedules.id })
+      .from(projectSchedules)
+      .where(eq(projectSchedules.projectEnvironmentId, projectEnvironmentId))
+
+    await Promise.all(rows.map((row) => this.removeJobScheduler(row.id).catch(() => {})))
+
+    await db.delete(projectSchedules).where(eq(projectSchedules.projectEnvironmentId, projectEnvironmentId))
+    this.logger.log(`Removed all schedules for environment ${projectEnvironmentId}`)
   }
 
   async triggerNow(scheduleId: string) {

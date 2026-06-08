@@ -1,6 +1,8 @@
 node_modules
 dist
+**/dist
 .env
+opsiforce.env.json
 
 .yarn/cache
 .yarn/unplugged

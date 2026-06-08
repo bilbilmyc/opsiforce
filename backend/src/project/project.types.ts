@@ -1,4 +1,4 @@
-import { projectApps, projectSettings, projects } from "../../db/schema"
+import type { PodClass } from "../pod/pod-classes"
 
 export const ProjectStatus = {
   Starting: "starting",
@@ -11,6 +11,17 @@ export const ProjectStatus = {
 } as const
 
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus]
+
+export const RequestLogMode = {
+  Off: "off",
+  Metadata: "metadata",
+  Full: "full",
+} as const
+
+export type RequestLogMode = (typeof RequestLogMode)[keyof typeof RequestLogMode]
+
+export const REQUEST_LOG_BODY_LIMIT_DEFAULT = 10240
+export const REQUEST_LOG_BODY_LIMIT_MAX = 256 * 1024
 
 export interface CreateProjectDto {
   title?: string
@@ -31,20 +42,62 @@ export interface DuplicateProjectDto {
   title?: string
 }
 
-type ProjectRow = typeof projects.$inferSelect
-type ProjectSettingsRow = typeof projectSettings.$inferSelect
-type ProjectAppRow = typeof projectApps.$inferSelect
+export interface UpdateProjectLoggingDto {
+  mode: RequestLogMode
+  bodyLimit?: number
+}
 
-export interface ProjectResponse extends ProjectRow {
-  timeoutIdle: ProjectSettingsRow["timeoutIdle"]
-  appTimeoutIdle: ProjectSettingsRow["appTimeoutIdle"]
-  timezone: ProjectSettingsRow["timezone"]
-  authMode: ProjectSettingsRow["authMode"]
+export interface ProjectLoggingResponse {
+  mode: RequestLogMode
+  bodyLimit: number
+}
+
+export interface UpdateProjectPodClassDto {
+  podClass: PodClass
+  cpuMillicores?: number
+  memoryRequestMib?: number
+  memoryLimitMib?: number
+}
+
+/**
+ * A Project merged with its Development ProjectEnvironment (whose id == the
+ * project id). Runtime fields (status, podIp, directory, sessionId,
+ * platformVersion, authMode, lastActiveAt) come from that environment; identity
+ * and policy come from the project shell.
+ */
+export interface ProjectResponse {
+  id: string
+  tenantId: string | null
+  workspaceId: string | null
+  agentId: string
+  title: string | null
+  description: string | null
+  disabled: boolean
+  bifrostProjectId: string | null
+  directory: string
+  status: ProjectStatus
+  podIp: string | null
+  sessionId: string | null
+  platformVersion: string
+  authMode: ProjectAuthMode
+  lastActiveAt: Date | null
+  timeoutIdle: number
+  appTimeoutIdle: number
+  timezone: string
+  requestLogMode: RequestLogMode
+  requestLogBodyLimit: number
+  podClass: PodClass
+  cpuMillicores: number
+  memoryRequestMib: number
+  memoryLimitMib: number
   isPinned: boolean
-  pinnedAt: ProjectAppRow["pinnedAt"]
+  pinnedAt: Date | null
+  pinnedEnvironmentId: string | null
   hasApp: boolean
-  appName: ProjectAppRow["name"]
-  appDescription: ProjectAppRow["description"]
+  appName: string | null
+  appDescription: string | null
+  createdAt: Date
+  updatedAt: Date
 }
 
 export interface ProjectState {
@@ -54,6 +107,20 @@ export interface ProjectState {
   title: string | null
   operation: ProjectDuplicateOperation | null
   app: ProjectAppMeta | null
+}
+
+export interface ProjectEnvironmentSummary {
+  id: string
+  projectId: string
+  environmentId: string | null
+  name: string
+  isDefault: boolean
+  status: ProjectStatus
+  authMode: ProjectAuthMode
+  deployedCommitSha: string | null
+  lastActiveAt: Date | null
+  isPinned: boolean
+  sessionId: string | null
 }
 
 export interface ProjectDuplicateOperation {
@@ -96,6 +163,11 @@ export interface UpdateProjectAuthDto {
 
 export interface SetAppPinDto {
   isPinned: boolean
+  environmentId?: string
+}
+
+export interface SetEnvironmentSessionDto {
+  sessionId: string | null
 }
 
 export interface UpdateAppDto {

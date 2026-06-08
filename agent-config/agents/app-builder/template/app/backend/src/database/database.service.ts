@@ -55,8 +55,15 @@ export class DatabaseService implements OnModuleInit {
     for (const file of files) {
       if (applied.has(file)) continue
       const sql = fs.readFileSync(path.join(migrationsDir, file), "utf-8")
-      this.db.exec(sql)
-      this.run("INSERT INTO _migrations (name) VALUES (?)", [file])
+      this.db.exec("BEGIN")
+      try {
+        this.db.exec(sql)
+        this.run("INSERT INTO _migrations (name) VALUES (?)", [file])
+        this.db.exec("COMMIT")
+      } catch (e) {
+        this.db.exec("ROLLBACK")
+        throw e
+      }
     }
   }
 }

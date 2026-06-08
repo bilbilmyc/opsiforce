@@ -73,6 +73,33 @@ export interface Tenant {
 
 export type ProjectStatus = "starting" | "active" | "suspended" | "disabled" | "failed"
 
+export type RequestLogMode = "off" | "metadata" | "full"
+
+export type PodClass = "small" | "medium" | "large" | "custom"
+
+export interface PodResources {
+  cpuMillicores: number
+  memoryRequestMib: number
+  memoryLimitMib: number
+}
+
+export interface PodClassPreset {
+  podClass: "small" | "medium" | "large"
+  resources: PodResources
+}
+
+export interface PodClassCatalog {
+  presets: PodClassPreset[]
+  customBounds: { min: PodResources; max: PodResources }
+}
+
+export interface UpdateProjectPodClassDto {
+  podClass: PodClass
+  cpuMillicores?: number
+  memoryRequestMib?: number
+  memoryLimitMib?: number
+}
+
 export interface Project {
   id: string
   tenantId: string
@@ -85,6 +112,12 @@ export interface Project {
   timeoutIdle: number
   appTimeoutIdle: number
   timezone: string
+  requestLogMode: RequestLogMode
+  requestLogBodyLimit: number
+  podClass: PodClass
+  cpuMillicores: number
+  memoryRequestMib: number
+  memoryLimitMib: number
   authMode: ProjectAuthMode
   isPinned: boolean
   pinnedAt: string | null
@@ -93,6 +126,14 @@ export interface Project {
   appDescription: string | null
   lastActiveAt: string | null
   createdAt: string
+  disabled: boolean
+  pinnedEnvironmentId: string | null
+}
+
+export const podClassApi = {
+  catalog: () => api.get<PodClassCatalog>("/pod-classes"),
+  update: (projectId: string, dto: UpdateProjectPodClassDto) =>
+    api.put<Project>(`/projects/${projectId}/pod-class`, dto),
 }
 
 export interface ProjectState {

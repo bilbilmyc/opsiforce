@@ -65,7 +65,8 @@ backend/src/migrations/
 ### Rules
 
 - Files run in alphabetical order, each only once
-- **Never modify an existing migration** — always create a new file
+- Migrations run **automatically on every boot** (dev and production), each in its **own transaction** (the whole file commits, or rolls back on error). Once a migration has run it is recorded and skipped forever.
+- **Never modify an existing migration** — it has already been applied and won't re-run; editing it has no effect (and in production would diverge environments). Every schema change is a **new** file.
 - **Never modify the existing `items` table** — create your own tables
 - Naming: `NNN_description.sql`
 

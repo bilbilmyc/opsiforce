@@ -3,8 +3,7 @@ import { ConfigService } from "@nestjs/config"
 import { eq, and, isNull } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
-import { projectVirtualKeys, tenants, projects } from "../../db/schema"
-import type { TenantPodOptions } from "../pod/pod.service"
+import { projectVirtualKeys, projectEnvironments, tenants, projects } from "../../db/schema"
 import { DefaultsService } from "../defaults/defaults.service"
 import type { BudgetDefaults } from "../defaults/defaults.types"
 import type {
@@ -242,12 +241,17 @@ export class BifrostService {
     budgets: BudgetDefaults,
     keyType: KeyType = "chat",
     teamId?: string,
+    projectEnvironmentId?: string,
   ): Promise<{ keyId: string; keyToken: string }> {
+    const dedupeCondition = projectEnvironmentId
+      ? eq(projectVirtualKeys.projectEnvironmentId, projectEnvironmentId)
+      : eq(projectVirtualKeys.projectId, projectId)
+
     const [existing] = await db
       .select()
       .from(projectVirtualKeys)
       .where(and(
-        eq(projectVirtualKeys.projectId, projectId),
+        dedupeCondition,
         eq(projectVirtualKeys.keyType, keyType),
         eq(projectVirtualKeys.status, "active"),
       ))
@@ -281,6 +285,7 @@ export class BifrostService {
     await db.insert(projectVirtualKeys).values({
       id: crypto.randomUUID(),
       projectId,
+      ...(projectEnvironmentId ? { projectEnvironmentId } : {}),
       tenantId,
       keyType,
       bifrostKeyId: keyId,
@@ -292,7 +297,24 @@ export class BifrostService {
     return { keyId, keyToken }
   }
 
-  async createProjectResources(projectId: string, tenantId: string): Promise<void> {
+  private async ensureProjectTeam(projectId: string, budgets: BudgetDefaults, customerId?: string): Promise<string> {
+    const [project] = await db
+      .select({ teamId: projects.bifrostProjectId })
+      .from(projects)
+      .where(eq(projects.id, projectId))
+
+    if (project?.teamId) return project.teamId
+
+    return this.createProjectTeam(projectId, budgets, customerId)
+  }
+
+  async createEnvironmentResources(params: {
+    projectId: string
+    projectEnvironmentId: string
+    tenantId: string
+  }): Promise<void> {
+    const { projectId, projectEnvironmentId, tenantId } = params
+
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId))
     if (!tenant) return
 
@@ -300,33 +322,53 @@ export class BifrostService {
     const customerId = tenant.bifrostTenantId
       ?? await this.createTenantCustomer(tenantId, tenant.name, budgets)
 
-    const teamId = await this.createProjectTeam(projectId, budgets, customerId)
+    const teamId = await this.ensureProjectTeam(projectId, budgets, customerId)
 
     await Promise.all([
-      this.createProjectKey(projectId, tenantId, budgets, "chat", teamId),
-      this.createProjectKey(projectId, tenantId, budgets, "backend", teamId),
+      this.createProjectKey(projectId, tenantId, budgets, "chat", teamId, projectEnvironmentId),
+      this.createProjectKey(projectId, tenantId, budgets, "backend", teamId, projectEnvironmentId),
     ])
   }
 
-  async createOrphanProjectResources(projectId: string): Promise<void> {
+  async createOrphanEnvironmentResources(params: {
+    projectId: string
+    projectEnvironmentId: string
+  }): Promise<void> {
+    const { projectId, projectEnvironmentId } = params
+
     const budgets = await this.defaultsService.getGlobalBudgets()
-    const teamId = await this.createProjectTeam(projectId, budgets)
+    const teamId = await this.ensureProjectTeam(projectId, budgets)
 
     await Promise.all([
-      this.createProjectKey(projectId, null, budgets, "chat", teamId),
-      this.createProjectKey(projectId, null, budgets, "backend", teamId),
+      this.createProjectKey(projectId, null, budgets, "chat", teamId, projectEnvironmentId),
+      this.createProjectKey(projectId, null, budgets, "backend", teamId, projectEnvironmentId),
     ])
   }
 
-  async getProjectPodOptions(projectId: string): Promise<TenantPodOptions | undefined> {
+  async getEnvironmentPodOptions(
+    projectEnvironmentId: string,
+  ): Promise<{ bifrostApiKey: string; bifrostBackendApiKey?: string; bifrostProxyUrl: string } | null> {
+    const [env] = await db
+      .select({ projectId: projectEnvironments.projectId })
+      .from(projectEnvironments)
+      .where(eq(projectEnvironments.id, projectEnvironmentId))
+    if (!env) return null
+
     const keys = await db
       .select()
       .from(projectVirtualKeys)
-      .where(and(eq(projectVirtualKeys.projectId, projectId), eq(projectVirtualKeys.status, "active")))
+      .where(and(
+        eq(projectVirtualKeys.projectId, env.projectId),
+        eq(projectVirtualKeys.status, "active"),
+      ))
 
-    const chatKey = keys.find((k) => k.keyType === "chat")
-    const backendKey = keys.find((k) => k.keyType === "backend")
-    if (!chatKey || !backendKey) return undefined
+    const pick = (keyType: KeyType) =>
+      keys.find((k) => k.keyType === keyType && k.projectEnvironmentId === projectEnvironmentId)
+      ?? keys.find((k) => k.keyType === keyType)
+
+    const chatKey = pick("chat")
+    const backendKey = pick("backend")
+    if (!chatKey || !backendKey) return null
 
     return {
       bifrostApiKey: chatKey.bifrostKeyToken,
@@ -412,6 +454,35 @@ export class BifrostService {
       } catch (err) {
         this.logger.warn(`Failed to delete Bifrost team for project ${projectId}: ${(err as Error).message}`)
       }
+    }
+  }
+
+  async revokeEnvironmentKeys(projectEnvironmentId: string): Promise<void> {
+    const activeKeys = await db
+      .select()
+      .from(projectVirtualKeys)
+      .where(and(
+        eq(projectVirtualKeys.projectEnvironmentId, projectEnvironmentId),
+        eq(projectVirtualKeys.status, "active"),
+      ))
+
+    await Promise.allSettled(activeKeys.map(async (key) => {
+      try {
+        await this.request<DeleteVirtualKeyResponse>(
+          "DELETE",
+          `/api/governance/virtual-keys/${key.bifrostKeyId}`,
+        )
+      } catch (err) {
+        this.logger.warn(`Failed to delete Bifrost key ${key.bifrostKeyId}: ${(err as Error).message}`)
+      }
+      await db
+        .update(projectVirtualKeys)
+        .set({ status: "revoked", updatedAt: new Date() })
+        .where(eq(projectVirtualKeys.id, key.id))
+    }))
+
+    if (activeKeys.length > 0) {
+      this.logger.log(`Revoked ${activeKeys.length} Bifrost virtual key(s) for environment ${projectEnvironmentId}`)
     }
   }
 }

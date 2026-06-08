@@ -78,6 +78,34 @@ packageExtensions:
 
 If you need to verify the backend is responding, use `curl http://localhost:3100/api/health`.
 
+## App configuration & secrets
+
+Store **all** of the app's runtime config and secrets (API keys, tokens, base URLs, feature flags) as keys in `app/opsiforce.env.json` — a **flat JSON object of string values**, e.g.:
+
+```json
+{ "STRIPE_API_KEY": "sk_live_…", "WEATHER_BASE_URL": "https://api.example.com" }
+```
+
+Read these **directly from the file in the backend** — do not rely on `process.env` for them. The file lives at the app root (`opsiforce.env.json`, alongside `package.json`), so resolve it from `process.cwd()`. Load it once at startup with a tiny helper and read keys from it:
+
+```ts
+import fs from "node:fs"
+import path from "node:path"
+
+const file = path.resolve(process.cwd(), "opsiforce.env.json")
+const values: Record<string, string> = fs.existsSync(file)
+  ? JSON.parse(fs.readFileSync(file, "utf8"))
+  : {}
+
+export const appConfig = (key: string): string | undefined => values[key]
+```
+
+Then `appConfig("STRIPE_API_KEY")`. **Do not put config in `.env`** — `opsiforce.env.json` is the single source of truth, it is set **per environment** at publish time (a dev value and a production value can differ), and it is never committed or synced. Because the helper reads the file once at boot, the backend picks up edits on its next restart.
+
+This is **only** for the app's own config and secrets. Platform-provided values — the gateway's `APP_LLM_API_KEY` / `APP_LLM_BASE_URL`, `APP_PUBLIC_URL`, `SERVICE_GATEWAY_URL` — are real environment variables: keep reading those with `process.env`.
+
+When the app **goes to production** it runs **built, with no hot reload**, and database migrations run **automatically on boot** — so every schema change must be a new migration file (never edit an applied one).
+
 ## Sandbox environment — install freely
 
 You are running inside a **disposable sandboxed container**. You have full permission to install any tools you need to do your job. Do not refuse a task because a tool is missing — install it and continue.

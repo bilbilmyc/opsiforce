@@ -1,0 +1,10 @@
+ALTER TABLE "project_schedules" DROP CONSTRAINT "project_schedules_project_id_name_unique";--> statement-breakpoint
+ALTER TABLE "projects" DROP CONSTRAINT "projects_pool_tenant_null";--> statement-breakpoint
+ALTER TABLE "project_settings" DROP COLUMN "auth_mode";--> statement-breakpoint
+ALTER TABLE "projects" DROP COLUMN "directory";--> statement-breakpoint
+ALTER TABLE "projects" DROP COLUMN "status";--> statement-breakpoint
+ALTER TABLE "projects" DROP COLUMN "pod_ip";--> statement-breakpoint
+ALTER TABLE "projects" DROP COLUMN "session_id";--> statement-breakpoint
+ALTER TABLE "projects" DROP COLUMN "platform_version";--> statement-breakpoint
+ALTER TABLE "projects" DROP COLUMN "last_active_at";--> statement-breakpoint
+ALTER TABLE "project_schedules" ADD CONSTRAINT "project_schedules_environment_id_name_unique" UNIQUE("project_environment_id","name");

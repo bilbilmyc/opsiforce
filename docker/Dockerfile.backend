@@ -34,6 +34,8 @@ WORKDIR /app/packages/opsiforce/backend/
 ENV NODE_ENV="production"
 ENV NODE_OPTIONS="--max-http-header-size=128000"
 
+RUN apk add --no-cache git
+
 RUN apk add --no-cache python3 make g++ && \
     yarn workspaces focus --all --production && \
     apk del python3 make g++

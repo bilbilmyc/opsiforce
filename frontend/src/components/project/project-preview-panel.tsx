@@ -1,4 +1,4 @@
-import { Show, createSignal, onMount } from "solid-js"
+import { Show, createEffect, createSignal, onMount } from "solid-js"
 import {
   Check,
   Copy,
@@ -22,6 +22,7 @@ import EditAppDialog from "./edit-app-dialog"
 
 export interface ProjectPreviewPanelProps {
   projectId: string
+  environmentId: string
   appName?: string
   onReloadRef?: (reload: () => void) => void
 }
@@ -53,8 +54,13 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
 
   const previewDomain = import.meta.env.VITE_WEBAPP_PREVIEW_DOMAIN
   const publicDomain = import.meta.env.VITE_WEBAPP_DOMAIN
-  const previewUrl = `https://${props.projectId}.${previewDomain}/`
-  const publicUrl = `https://${props.projectId}.${publicDomain}/`
+  const previewUrl = () => `https://${props.environmentId}.${previewDomain}/`
+  const publicUrl = () => `https://${props.environmentId}.${publicDomain}/`
+
+  createEffect(() => {
+    props.environmentId
+    setIframeLoading(true)
+  })
 
   function reload() {
     const iframe = document.getElementById("webapp-preview") as HTMLIFrameElement | null
@@ -64,7 +70,7 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
   }
 
   function copyUrl() {
-    navigator.clipboard.writeText(publicUrl)
+    navigator.clipboard.writeText(publicUrl())
     setCopied(true)
     setTimeout(() => setCopied(false), 1500)
   }
@@ -78,7 +84,7 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
         <button
           onClick={() => setOpen(true)}
           class="shrink-0 w-8 bg-sidebar border-l border-border flex items-center justify-center hover:bg-accent transition-colors"
-          title="Open preview"
+          title="Open app"
         >
           <PanelRightOpen class="w-4 h-4 text-muted-foreground" />
         </button>
@@ -95,11 +101,11 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
         />
         <div class="h-8 flex items-center justify-between px-1.5 bg-sidebar border-b border-border shrink-0">
           <div class="flex items-center gap-1">
-            <ToolbarButton onClick={() => setOpen(false)} tooltip="Close preview">
+            <ToolbarButton onClick={() => setOpen(false)} tooltip="Close app">
               <PanelRightClose class="w-3.5 h-3.5" />
             </ToolbarButton>
             <span class="text-xs font-medium text-muted-foreground truncate">
-              {props.appName || "Preview"}
+              {props.appName || "App"}
             </span>
             <Show when={canPinApps()}>
               <PinBadge isPinned={isPinned()} compact />
@@ -135,7 +141,7 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
                 <Copy class="w-3.5 h-3.5" />
               )}
             </ToolbarButton>
-            <ToolbarButton onClick={reload} tooltip="Reload preview">
+            <ToolbarButton onClick={reload} tooltip="Reload app">
               <RefreshCw class="w-3.5 h-3.5" />
             </ToolbarButton>
           </div>
@@ -143,7 +149,7 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
         <div class="flex-1 min-h-0">
           <iframe
             id="webapp-preview"
-            src={previewUrl}
+            src={previewUrl()}
             class="w-full h-full border-0"
             allow="microphone; camera; clipboard-read; clipboard-write; geolocation; fullscreen; autoplay; display-capture; web-share"
             onLoad={() => setIframeLoading(false)}

@@ -1,9 +1,9 @@
 import { Processor, WorkerHost } from "@nestjs/bullmq"
 import { Logger } from "@nestjs/common"
 import { Job } from "bullmq"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 import { db } from "../../db"
-import { projectSettings, projects, tenantSettings } from "../../db/schema"
+import { projectEnvironments, projects, tenantSettings } from "../../db/schema"
 import { ProjectAuthService } from "../project/project-auth.service"
 import { TENANT_MAKARA_REAPPLY_QUEUE, type MakaraReapplyJobData } from "./tenant-settings.types"
 
@@ -20,12 +20,10 @@ export class MakaraReapplyProcessor extends WorkerHost {
 
     const [row] = await db
       .select({
-        authMode: projectSettings.authMode,
         tenantId: projects.tenantId,
         currentMakaraTenantName: tenantSettings.makaraTenantName,
       })
       .from(projects)
-      .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .leftJoin(tenantSettings, eq(tenantSettings.tenantId, projects.tenantId))
       .where(eq(projects.id, projectId))
 
@@ -34,9 +32,15 @@ export class MakaraReapplyProcessor extends WorkerHost {
       return
     }
 
-    if (row.authMode !== "makara") {
+    const [makaraEnv] = await db
+      .select({ id: projectEnvironments.id })
+      .from(projectEnvironments)
+      .where(and(eq(projectEnvironments.projectId, projectId), eq(projectEnvironments.authMode, "makara")))
+      .limit(1)
+
+    if (!makaraEnv) {
       this.logger.log(
-        `Skipping Makara reapply for project ${projectId}: authMode is now '${row.authMode}'`,
+        `Skipping Makara reapply for project ${projectId}: no environment uses Makara auth`,
       )
       return
     }

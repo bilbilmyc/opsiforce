@@ -6,7 +6,7 @@ import { and, desc, eq, notInArray } from "drizzle-orm"
 import { readFile, rm } from "node:fs/promises"
 import path from "node:path"
 import { db } from "../../db"
-import { projectAgentUpdates, projects } from "../../db/schema"
+import { projectAgentUpdates, projectEnvironments, projects } from "../../db/schema"
 import { ProjectService } from "../project/project.service"
 import { ProjectStatus } from "../project/project.types"
 import { AgentUpdateK8sService } from "./agent-update.k8s.service"
@@ -50,9 +50,15 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     const agentName = this.agentUpdateService.agentName()
     const targetVersion = this.agentUpdateService.agentTemplateVersion(agentName)
     const rows = await db
-      .select({ id: projects.id, directory: projects.directory })
-      .from(projects)
-      .where(notInArray(projects.status, [ProjectStatus.Pending, ProjectStatus.Claiming]))
+      .select({ id: projectEnvironments.id, directory: projectEnvironments.directory })
+      .from(projectEnvironments)
+      .innerJoin(projects, eq(projects.id, projectEnvironments.projectId))
+      .where(
+        and(
+          eq(projectEnvironments.isDefault, true),
+          notInArray(projectEnvironments.status, [ProjectStatus.Pending, ProjectStatus.Claiming]),
+        ),
+      )
     const candidates: Array<{ id: string }> = []
     for (const row of rows) {
       if (!(await this.workspaceAtTarget(row.directory, agentName, targetVersion))) {

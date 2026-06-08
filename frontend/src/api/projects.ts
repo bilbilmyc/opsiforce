@@ -146,8 +146,11 @@ export function useCreateUnassignedProject() {
 export function useSetAppPin() {
   const qc = useQueryClient()
   return createMutation(() => ({
-    mutationFn: (params: { projectId: string; isPinned: boolean }) =>
-      api.patch<Project>(`/projects/${params.projectId}/app/pin`, { isPinned: params.isPinned }),
+    mutationFn: (params: { projectId: string; isPinned: boolean; environmentId?: string }) =>
+      api.patch<Project>(`/projects/${params.projectId}/app/pin`, {
+        isPinned: params.isPinned,
+        ...(params.environmentId ? { environmentId: params.environmentId } : {}),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
   }))
 }

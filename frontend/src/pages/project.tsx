@@ -4,6 +4,7 @@ import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
 import { ApiError } from "~/api/client"
 import { useProjectStatus } from "~/api/projects"
+import { useProjectEnvironments, useSetEnvironmentSession } from "~/api/environments"
 import Spinner from "~/components/ui/spinner"
 import ProjectHeader, { type ProjectTab } from "~/components/project/project-header"
 import ProjectChatTab from "~/components/project/project-chat-tab"
@@ -13,6 +14,7 @@ import ProjectPreviewPanel from "~/components/project/project-preview-panel"
 import ProjectDisabled from "~/components/project/project-disabled"
 import ProjectFailed from "~/components/project/project-failed"
 import ProjectDuplicateProgress from "~/components/project/project-duplicate-progress"
+import EnvProdBanner from "~/components/project/environments/env-prod-banner"
 import { useOpenCodeConnection } from "~/components/project/use-opencode-connection"
 
 export default function ProjectView(props: { projectId: string; initialPrompt?: string }) {
@@ -23,6 +25,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
 
   const [activeTab, setActiveTab] = createSignal<ProjectTab>("chat")
   const [visitedTabs, setVisitedTabs] = createSignal<Set<ProjectTab>>(new Set<ProjectTab>(["chat"]))
+  const [activeEnvironmentId, setActiveEnvironmentId] = createSignal(props.projectId)
 
   const selectTab = (tab: ProjectTab) => {
     setActiveTab(tab)
@@ -36,16 +39,43 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
   const status = () => statusQuery.data?.status
   const duplicateOperation = createMemo(() => (status() !== "active" ? statusQuery.data?.operation : undefined))
 
+  const environments = useProjectEnvironments(projectId)
+  const environmentList = () => environments.data ?? []
+  const activeEnvironment = createMemo(() =>
+    environmentList().find((e) => e.id === activeEnvironmentId()),
+  )
+  const isDevelopmentActive = () => activeEnvironmentId() === props.projectId
+
+  createEffect(() => {
+    if (props.projectId) {
+      untrack(() => setActiveEnvironmentId(props.projectId))
+    }
+  })
+
+  createEffect(() => {
+    const list = environments.data
+    if (!list) return
+    const exists = list.some((e) => e.id === activeEnvironmentId())
+    if (!exists) untrack(() => setActiveEnvironmentId(props.projectId))
+  })
+
   createEffect(() => {
     if (statusQuery.error instanceof ApiError && statusQuery.error.status === 404) {
       untrack(() => navigate({ to: "/" }))
     }
   })
 
+  const setEnvironmentSession = useSetEnvironmentSession()
+  const rememberedSessionId = () => activeEnvironment()?.sessionId ?? null
+
   const connection = useOpenCodeConnection({
     projectId: props.projectId,
+    environmentId: activeEnvironmentId,
     status,
+    rememberedSessionId,
     currentTitle: () => statusQuery.data?.title,
+    onResolveSession: (envId, sessionId) =>
+      setEnvironmentSession(props.projectId, envId, sessionId),
     initialPrompt: props.initialPrompt,
   })
   const app = () => statusQuery.data?.app
@@ -63,9 +93,13 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
             projectId={props.projectId}
             status={data().status}
             workspaceId={data().workspaceId}
+            appExists={!!data().app?.exists}
             showTabs={!!connection.router()}
             activeTab={activeTab()}
             onActiveTabChange={selectTab}
+            environments={environmentList()}
+            activeEnvironmentId={activeEnvironmentId()}
+            onActiveEnvironmentChange={setActiveEnvironmentId}
             onDeleted={() => navigate({ to: "/" })}
             onDuplicated={(p) =>
               navigate({
@@ -76,6 +110,13 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
             }
           />
         )}
+      </Show>
+
+      <Show when={!isDevelopmentActive()}>
+        <EnvProdBanner
+          environmentName={activeEnvironment()?.name ?? "this"}
+          onSwitchToDevelopment={() => setActiveEnvironmentId(props.projectId)}
+        />
       </Show>
 
       <div class="flex-1 min-h-0 flex">
@@ -92,6 +133,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
                     {(router) => (
                       <ProjectChatTab
                         projectId={props.projectId}
+                        environmentId={activeEnvironmentId()}
                         router={router()}
                         currentTitle={statusQuery.data?.title ?? null}
                         onPreviewReload={() => reloadPreview()}
@@ -111,7 +153,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
             class="flex-1 min-w-0 flex flex-col"
             style={{ display: activeTab() === "code" ? "flex" : "none" }}
           >
-            <ProjectCodeTab projectId={props.projectId} />
+            <ProjectCodeTab environmentId={activeEnvironmentId()} />
           </div>
         </Show>
 
@@ -120,7 +162,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
             class="flex-1 min-w-0 flex flex-col"
             style={{ display: activeTab() === "db" ? "flex" : "none" }}
           >
-            <ProjectDbTab projectId={props.projectId} />
+            <ProjectDbTab environmentId={activeEnvironmentId()} />
           </div>
         </Show>
 
@@ -128,6 +170,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
           {(meta) => (
             <ProjectPreviewPanel
               projectId={props.projectId}
+              environmentId={activeEnvironmentId()}
               appName={meta().name ?? undefined}
               onReloadRef={onReloadRef}
             />

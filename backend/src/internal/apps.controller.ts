@@ -1,8 +1,8 @@
 import { BadRequestException, Controller, Get, Headers, NotFoundException } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { db } from "../../db"
-import { projectApps, projects } from "../../db/schema"
+import { projectApps, projectEnvironments, projects } from "../../db/schema"
 import { RequirePermission } from "../permission/permission.guard"
 import { Perms } from "../permission/permission.constants"
 import { Public } from "../tenant/tenant.decorator"
@@ -40,7 +40,7 @@ export class InternalAppsController {
 
     const rows = await db
       .select({
-        projectId: projectApps.projectId,
+        routingId: projectEnvironments.id,
         name: projectApps.name,
         description: projectApps.description,
         pinnedAt: projectApps.pinnedAt,
@@ -48,10 +48,15 @@ export class InternalAppsController {
       })
       .from(projectApps)
       .innerJoin(projects, eq(projects.id, projectApps.projectId))
+      .innerJoin(
+        projectEnvironments,
+        eq(projectEnvironments.id, sql`coalesce(${projectApps.pinnedEnvironmentId}, ${projects.id})`),
+      )
       .where(
         and(
           eq(projects.tenantId, tenant.id),
-          eq(projects.status, ProjectStatus.Active),
+          eq(projects.disabled, false),
+          inArray(projectEnvironments.status, [ProjectStatus.Active, ProjectStatus.Suspended]),
           eq(projectApps.isPinned, true),
         ),
       )
@@ -59,10 +64,10 @@ export class InternalAppsController {
 
     const appsHostname = this.configService.getOrThrow<string>("appsHostname")
     return rows.map((row) => ({
-      projectId: row.projectId,
+      projectId: row.routingId,
       name: row.name ?? row.projectTitle,
       description: row.description,
-      appUrl: `https://${row.projectId}.${appsHostname}/`,
+      appUrl: `https://${row.routingId}.${appsHostname}/`,
       pinnedAt: row.pinnedAt ? row.pinnedAt.toISOString() : null,
     }))
   }

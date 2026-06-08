@@ -100,7 +100,7 @@ A scheduled endpoint is just a regular endpoint in your app. When it fires, it c
 Pick the output that fits the use case. A few patterns:
 
 - **Update in-app data** — write a summary row, mark stale records, refresh a materialized view. Users see the result next time they open the relevant page.
-- **Call an external HTTP API** — if the job needs to push to a third-party service, do it with `fetch` from inside the endpoint handler (credentials must come from the app's own env).
+- **Call an external HTTP API** — if the job needs to push to a third-party service, do it with `fetch` from inside the endpoint handler. Any config or secret the endpoint reads (API keys, base URLs) comes from the app's own config — store it in `app/opsiforce.env.json` and read it via your `appConfig` helper (see agent.md → App configuration & secrets), not `process.env`. Those values are **per-environment** (set separately for dev and production at publish time), so the same schedule can hit a test endpoint in dev and the real one in production.
 - **Log and surface in the UI** — append to a `job_runs` table so the user can see in the app whether the scheduled job succeeded.
 
 > **Email note:** sending emails is **not supported** on this platform. If the user asks for a scheduled email (daily digest, weekly report, reminder email), see the `send-email` skill and propose an in-app alternative (dashboard page, in-app inbox, export button) instead.

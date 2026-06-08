@@ -13,13 +13,13 @@ import { eq, and, desc, asc, inArray, isNull, or, sql, type SQL } from "drizzle-
 import { Queue } from "bullmq"
 import crypto from "crypto"
 import path from "path"
-import { rename, writeFile } from "fs/promises"
 import { db } from "../../db"
 import {
   projectSettings,
+  projectPodSettings,
   projects,
   projectApps,
-  deletedProjects,
+  projectEnvironments,
   workspaceMembers,
   workspaces,
   tenants,
@@ -31,23 +31,43 @@ import { ProjectPoolService } from "../pool/project-pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
 import { BifrostService } from "../bifrost/bifrost.service"
 import { assertPositiveMs } from "../common/validation"
+import { writeJsonAtomic } from "../common/fs"
 import { DefaultsService } from "../defaults/defaults.service"
 import { GatewayKeyService } from "../gateway/gateway-key.service"
 import { ScheduleService } from "../schedule/schedule.service"
 import { AgentService } from "../agent/agent.service"
 import { readAgentConfig } from "../agent/agent-config"
+import { EnvironmentService } from "../environment/environment.service"
+import { ProjectEnvironmentService } from "../project-environment/project-environment.service"
+import type { ProjectEnvironmentContext } from "../project-environment/project-environment.types"
 import {
   CreateProjectDto,
   UpdateProjectDto,
   DuplicateProjectDto,
   ProjectResponse,
+  ProjectEnvironmentSummary,
   ProjectStatus,
   ProjectState,
   ProjectAuthResponse,
   UpdateProjectAuthDto,
   ProjectDuplicateOperation,
   UpdateAppDto,
+  UpdateProjectPodClassDto,
+  UpdateProjectLoggingDto,
+  ProjectLoggingResponse,
+  RequestLogMode,
+  REQUEST_LOG_BODY_LIMIT_MAX,
 } from "./project.types"
+import {
+  buildPodClassCatalog,
+  clampCustom,
+  isPreset,
+  resolvePreset,
+  toK8sResources,
+  type K8sResourceRequirements,
+  type PodClassCatalog,
+  type PodResources,
+} from "../pod/pod-classes"
 
 const APP_NAME_MIN_LENGTH = 1
 const APP_NAME_MAX_LENGTH = 80
@@ -112,17 +132,19 @@ import {
 
 type ProjectActivityKind = "agent" | "app"
 
-export interface EnsureProjectResult {
+export interface EnsureEnvironmentResult {
   state: "ready" | "starting" | "disabled" | "failed"
-  project: ProjectResponse
+  env: ProjectEnvironmentContext
 }
 
 const projectOrderBy = () =>
   [
-    asc(sql`CASE WHEN ${projects.status} = 'disabled' THEN 1 ELSE 0 END`),
-    desc(projects.lastActiveAt),
+    asc(sql`CASE WHEN ${projects.disabled} THEN 1 ELSE 0 END`),
+    desc(projectEnvironments.lastActiveAt),
     desc(projects.createdAt),
   ] as const
+
+const effectiveStatus = sql<ProjectStatus>`CASE WHEN ${projects.disabled} THEN 'disabled' ELSE ${projectEnvironments.status} END`
 
 const projectSelectFields = {
   id: projects.id,
@@ -131,22 +153,30 @@ const projectSelectFields = {
   agentId: projects.agentId,
   title: projects.title,
   description: projects.description,
-  directory: projects.directory,
-  status: projects.status,
-  podIp: projects.podIp,
-  sessionId: projects.sessionId,
-  platformVersion: projects.platformVersion,
+  disabled: projects.disabled,
   bifrostProjectId: projects.bifrostProjectId,
+  directory: projectEnvironments.directory,
+  status: effectiveStatus.as("status"),
+  podIp: projectEnvironments.podIp,
+  sessionId: projectEnvironments.sessionId,
+  platformVersion: projectEnvironments.platformVersion,
+  authMode: projectEnvironments.authMode,
   timeoutIdle: projectSettings.timeoutIdle,
   appTimeoutIdle: projectSettings.appTimeoutIdle,
   timezone: projectSettings.timezone,
-  authMode: projectSettings.authMode,
+  requestLogMode: projectSettings.requestLogMode,
+  requestLogBodyLimit: projectSettings.requestLogBodyLimit,
+  podClass: projectPodSettings.podClass,
+  cpuMillicores: projectPodSettings.cpuMillicores,
+  memoryRequestMib: projectPodSettings.memoryRequestMib,
+  memoryLimitMib: projectPodSettings.memoryLimitMib,
   isPinned: sql<boolean>`coalesce(${projectApps.isPinned}, false)`.as("is_pinned"),
   pinnedAt: projectApps.pinnedAt,
+  pinnedEnvironmentId: projectApps.pinnedEnvironmentId,
   hasApp: sql<boolean>`${projectApps.projectId} is not null`.as("has_app"),
   appName: projectApps.name,
   appDescription: projectApps.description,
-  lastActiveAt: projects.lastActiveAt,
+  lastActiveAt: projectEnvironments.lastActiveAt,
   createdAt: projects.createdAt,
   updatedAt: projects.updatedAt,
 }
@@ -175,6 +205,8 @@ export class ProjectService implements OnApplicationBootstrap {
     @Inject(forwardRef(() => AppService))
     private readonly appService: AppService,
     private readonly agentService: AgentService,
+    private readonly environmentService: EnvironmentService,
+    private readonly projectEnvironmentService: ProjectEnvironmentService,
     @InjectQueue(PROJECT_DUPLICATE_QUEUE)
     private readonly duplicateQueue: Queue<ProjectDuplicateJobData>,
   ) {
@@ -188,23 +220,21 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.recoverDuplicateJobs().catch((err) => {
       this.logger.warn(`Failed to recover duplicate jobs on startup: ${err.message}`)
     })
-    await this.resumeStartingProjects().catch((err) => {
-      this.logger.warn(`Failed to resume starting projects: ${err.message}`)
+    await this.resumeStartingEnvironments().catch((err) => {
+      this.logger.warn(`Failed to resume starting environments: ${err.message}`)
     })
   }
 
-  private async resumeStartingProjects(): Promise<void> {
-    const rows = await db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(eq(projects.status, ProjectStatus.Starting))
+  private async resumeStartingEnvironments(): Promise<void> {
+    const rows = await this.projectEnvironmentService.listByStatus(ProjectStatus.Starting)
+    const active = rows.filter((env) => !env.disabled)
 
-    for (const { id } of rows) {
-      this.spawnStartupWorker(id)
+    for (const env of active) {
+      this.spawnStartupWorker(env.id)
     }
 
-    if (rows.length > 0) {
-      this.logger.log(`Resumed startup workers for ${rows.length} project(s) in 'starting' state`)
+    if (active.length > 0) {
+      this.logger.log(`Resumed startup workers for ${active.length} environment(s) in 'starting' state`)
     }
   }
 
@@ -213,34 +243,39 @@ export class ProjectService implements OnApplicationBootstrap {
     const podRefs = agentPods
       .map((pod) => ({
         name: pod.metadata?.name ?? null,
-        projectId: pod.metadata?.labels?.["opsiforce.io/project-id"] ?? null,
+        envId:
+          pod.metadata?.labels?.["opsiforce.io/environment-id"] ??
+          pod.metadata?.labels?.["opsiforce.io/project-id"] ??
+          null,
       }))
-      .filter((pod): pod is { name: string; projectId: string } => !!pod.name && !!pod.projectId)
+      .filter((pod): pod is { name: string; envId: string } => !!pod.name && !!pod.envId)
 
     if (podRefs.length === 0) return
 
-    const projectIds = Array.from(new Set(podRefs.map((pod) => pod.projectId)))
+    const envIds = Array.from(new Set(podRefs.map((pod) => pod.envId)))
     const existingRows = await db
-      .select({ id: projects.id, status: projects.status })
-      .from(projects)
-      .where(inArray(projects.id, projectIds))
-    const projectsExpectingPod = new Set(
+      .select({ id: projectEnvironments.id, status: projectEnvironments.status, disabled: projects.disabled })
+      .from(projectEnvironments)
+      .innerJoin(projects, eq(projects.id, projectEnvironments.projectId))
+      .where(inArray(projectEnvironments.id, envIds))
+    const envsExpectingPod = new Set(
       existingRows
         .filter(
           (row) =>
-            row.status === ProjectStatus.Starting ||
-            row.status === ProjectStatus.Active ||
-            row.status === ProjectStatus.Pending ||
-            row.status === ProjectStatus.Claiming,
+            !row.disabled &&
+            (row.status === ProjectStatus.Starting ||
+              row.status === ProjectStatus.Active ||
+              row.status === ProjectStatus.Pending ||
+              row.status === ProjectStatus.Claiming),
         )
         .map((row) => row.id),
     )
-    const orphanedPods = podRefs.filter((pod) => !projectsExpectingPod.has(pod.projectId))
+    const orphanedPods = podRefs.filter((pod) => !envsExpectingPod.has(pod.envId))
 
     await Promise.allSettled(
       orphanedPods.map((pod) => {
-        this.logger.warn(`Deleting orphaned assigned pod ${pod.name} for missing project ${pod.projectId}`)
-        return this.safeDeletePod(pod.name, `orphaned project ${pod.projectId}`)
+        this.logger.warn(`Deleting orphaned assigned pod ${pod.name} for missing environment ${pod.envId}`)
+        return this.safeDeletePod(pod.name, `orphaned environment ${pod.envId}`)
       }),
     )
   }
@@ -290,6 +325,7 @@ export class ProjectService implements OnApplicationBootstrap {
     const id = crypto.randomUUID()
     const directory = `projects/${id}`
     const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
+    const defaultEnvironment = await this.environmentService.ensureDefaultForTenant(tenantId)
 
     await db.transaction(async (tx) => {
       await tx.insert(projects).values({
@@ -299,10 +335,6 @@ export class ProjectService implements OnApplicationBootstrap {
         agentId,
         title: dto?.title ?? null,
         description: dto?.description ?? null,
-        directory,
-        status: ProjectStatus.Starting,
-        podIp: null,
-        platformVersion,
       })
 
       await tx.insert(projectSettings).values({
@@ -311,10 +343,26 @@ export class ProjectService implements OnApplicationBootstrap {
         appTimeoutIdle: timeouts.defaultAppTimeoutIdle,
         timezone: dto?.timezone || "UTC",
       })
+
+      await tx.insert(projectPodSettings).values({
+        projectId: id,
+        podClass: "small",
+        ...resolvePreset("small", this.podClassSmallOverride()),
+      })
+
+      await tx.insert(projectEnvironments).values({
+        id,
+        projectId: id,
+        environmentId: defaultEnvironment.id,
+        isDefault: true,
+        directory,
+        platformVersion,
+        status: ProjectStatus.Starting,
+      })
     })
 
-    await this.createBifrostResources(id, tenantId)
-    await this.createGatewayKey(id, tenantId)
+    await this.createBifrostResources(id, id, tenantId)
+    await this.createGatewayKey(id, id, tenantId)
     this.spawnStartupWorker(id)
 
     return this.findOne(id, tenantId)
@@ -328,6 +376,7 @@ export class ProjectService implements OnApplicationBootstrap {
     const directory = `projects/${id}`
     const platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
     const title = dto?.title ?? (source.title ? `${source.title} (copy)` : null)
+    const defaultEnvironment = await this.environmentService.ensureDefaultForTenant(tenantId)
 
     await db.transaction(async (tx) => {
       await tx.insert(projects).values({
@@ -337,10 +386,6 @@ export class ProjectService implements OnApplicationBootstrap {
         agentId: source.agentId,
         title,
         description: source.description,
-        directory,
-        status: ProjectStatus.Starting,
-        podIp: null,
-        platformVersion,
       })
 
       await tx.insert(projectSettings).values({
@@ -348,6 +393,26 @@ export class ProjectService implements OnApplicationBootstrap {
         timeoutIdle: source.timeoutIdle,
         appTimeoutIdle: source.appTimeoutIdle,
         timezone: source.timezone,
+        requestLogMode: source.requestLogMode,
+        requestLogBodyLimit: source.requestLogBodyLimit,
+      })
+
+      await tx.insert(projectPodSettings).values({
+        projectId: id,
+        podClass: source.podClass,
+        cpuMillicores: source.cpuMillicores,
+        memoryRequestMib: source.memoryRequestMib,
+        memoryLimitMib: source.memoryLimitMib,
+      })
+
+      await tx.insert(projectEnvironments).values({
+        id,
+        projectId: id,
+        environmentId: defaultEnvironment.id,
+        isDefault: true,
+        directory,
+        platformVersion,
+        status: ProjectStatus.Starting,
       })
 
       await tx.insert(projectDuplicateJobs).values({
@@ -359,8 +424,8 @@ export class ProjectService implements OnApplicationBootstrap {
       })
     })
 
-    await this.createBifrostResources(id, tenantId)
-    await this.createGatewayKey(id, tenantId)
+    await this.createBifrostResources(id, id, tenantId)
+    await this.createGatewayKey(id, id, tenantId)
     await this.enqueueDuplicateJob({
       duplicateJobId,
       sourceProjectId: source.id,
@@ -371,9 +436,10 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId)
   }
 
-  async ensureProjectById(projectId: string, activity: ProjectActivityKind): Promise<EnsureProjectResult> {
-    const project = await this.findOneById(projectId)
-    return this.ensureProjectAccess(project, activity)
+  async ensureEnvironmentById(envId: string, activity: ProjectActivityKind): Promise<EnsureEnvironmentResult> {
+    const env = await this.projectEnvironmentService.findByIdOrNull(envId)
+    if (!env) throw new NotFoundException(`Project environment ${envId} not found`)
+    return this.ensureEnvironment(env, activity)
   }
 
   async findAll(tenantId: string): Promise<ProjectResponse[]> {
@@ -389,7 +455,9 @@ export class ProjectService implements OnApplicationBootstrap {
     return db
       .select(projectSelectFields)
       .from(projects)
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+      .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
       .leftJoin(
         workspaceMembers,
@@ -401,7 +469,7 @@ export class ProjectService implements OnApplicationBootstrap {
           or(isNull(projects.workspaceId), sql`${workspaceMembers.workspaceId} is not null`),
         ),
       )
-      .orderBy(...projectOrderBy())
+      .orderBy(...projectOrderBy()) as Promise<ProjectResponse[]>
   }
 
   async findAllInWorkspace(tenantId: string, workspaceId: string): Promise<ProjectResponse[]> {
@@ -412,23 +480,26 @@ export class ProjectService implements OnApplicationBootstrap {
     return db
       .select(projectSelectFields)
       .from(projects)
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+      .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
       .where(where)
-      .orderBy(...projectOrderBy())
+      .orderBy(...projectOrderBy()) as Promise<ProjectResponse[]>
   }
 
   async findOne(id: string, tenantId: string): Promise<ProjectResponse> {
-    const [project] = await db
+    const [project] = (await db
       .select(projectSelectFields)
       .from(projects)
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+      .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
-      .where(and(eq(projects.id, id), eq(projects.tenantId, tenantId)))
+      .where(and(eq(projects.id, id), eq(projects.tenantId, tenantId)))) as ProjectResponse[]
     if (!project) throw new NotFoundException(`Project ${id} not found`)
     return project
   }
-
 
   async findOneForUser(params: {
     projectId: string
@@ -440,7 +511,6 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.assertProjectVisibleToUser(project.id, project.workspaceId, userId)
     return project
   }
-
 
   private async assertProjectVisibleToUser(
     projectId: string,
@@ -484,18 +554,20 @@ export class ProjectService implements OnApplicationBootstrap {
     const [row] = await db
       .select({
         id: projects.id,
-        status: projects.status,
+        status: projectEnvironments.status,
+        disabled: projects.disabled,
         workspaceId: projects.workspaceId,
         title: projects.title,
       })
       .from(projects)
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .where(and(eq(projects.id, projectId), eq(projects.tenantId, tenantId)))
 
     if (!row) throw new NotFoundException(`Project ${projectId} not found`)
 
     await this.assertProjectVisibleToUser(row.id, row.workspaceId, userId)
 
-    const status = row.status as ProjectStatus
+    const status = row.disabled ? ProjectStatus.Disabled : (row.status as ProjectStatus)
     const operation = await this.findDuplicateOperation(row.id)
     const app = status === ProjectStatus.Active ? await this.appService.get(row.id) : null
     return {
@@ -509,15 +581,57 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   async findOneById(id: string): Promise<ProjectResponse> {
-    const [project] = await db
+    const [project] = (await db
       .select(projectSelectFields)
       .from(projects)
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
+      .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
-      .where(eq(projects.id, id))
+      .where(eq(projects.id, id))) as ProjectResponse[]
 
     if (!project) throw new NotFoundException(`Project ${id} not found`)
     return project
+  }
+
+  async listEnvironments(projectId: string, tenantId: string): Promise<ProjectEnvironmentSummary[]> {
+    await this.findOne(projectId, tenantId)
+    const envs = await this.projectEnvironmentService.listByProjectId(projectId)
+    const pinned = await db
+      .select({ pinnedEnvironmentId: projectApps.pinnedEnvironmentId })
+      .from(projectApps)
+      .where(eq(projectApps.projectId, projectId))
+    const pinnedEnvironmentId = pinned[0]?.pinnedEnvironmentId ?? null
+
+    return envs
+      .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.createdAt.getTime() - b.createdAt.getTime())
+      .map((env) => ({
+        id: env.id,
+        projectId: env.projectId,
+        environmentId: env.environmentId,
+        name: env.isDefault ? "Development" : env.environmentName ?? "Environment",
+        isDefault: env.isDefault,
+        status: env.disabled ? ProjectStatus.Disabled : env.status,
+        authMode: env.authMode,
+        deployedCommitSha: env.deployedCommitSha,
+        lastActiveAt: env.lastActiveAt,
+        isPinned: pinnedEnvironmentId === env.id,
+        sessionId: env.sessionId,
+      }))
+  }
+
+  async setEnvironmentSession(
+    projectId: string,
+    environmentId: string,
+    tenantId: string,
+    sessionId: string | null,
+  ): Promise<void> {
+    await this.findOne(projectId, tenantId)
+    const env = await this.projectEnvironmentService.findById(environmentId)
+    if (env.projectId !== projectId) {
+      throw new NotFoundException(`Environment ${environmentId} does not belong to project ${projectId}`)
+    }
+    await this.projectEnvironmentService.patch(environmentId, { sessionId })
   }
 
   async update(id: string, dto: UpdateProjectDto, tenantId: string): Promise<ProjectResponse> {
@@ -534,7 +648,7 @@ export class ProjectService implements OnApplicationBootstrap {
     if (dto.timezone !== undefined) settingsUpdates.timezone = dto.timezone
 
     await db.transaction(async (tx) => {
-      if (Object.keys(projectUpdates).length > 0 || Object.keys(settingsUpdates).length > 0) {
+      if (Object.keys(projectUpdates).length > 0) {
         await tx
           .update(projects)
           .set({ ...projectUpdates, updatedAt: now })
@@ -560,6 +674,93 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId)
   }
 
+  getPodClassCatalog(): PodClassCatalog {
+    return buildPodClassCatalog(this.podClassSmallOverride())
+  }
+
+  async updatePodClass(id: string, dto: UpdateProjectPodClassDto, tenantId: string): Promise<ProjectResponse> {
+    const project = await this.findOne(id, tenantId)
+    const resources = this.resolvePodClassResources(dto)
+
+    await db
+      .update(projectPodSettings)
+      .set({ podClass: dto.podClass, ...resources })
+      .where(eq(projectPodSettings.projectId, project.id))
+
+    return this.findOne(id, tenantId)
+  }
+
+  private resolvePodClassResources(dto: UpdateProjectPodClassDto): PodResources {
+    if (dto.podClass === "custom") {
+      if (
+        typeof dto.cpuMillicores !== "number" ||
+        typeof dto.memoryRequestMib !== "number" ||
+        typeof dto.memoryLimitMib !== "number"
+      ) {
+        throw new BadRequestException(
+          "Custom pod class requires numeric cpuMillicores, memoryRequestMib, and memoryLimitMib",
+        )
+      }
+      return clampCustom({
+        cpuMillicores: dto.cpuMillicores,
+        memoryRequestMib: dto.memoryRequestMib,
+        memoryLimitMib: dto.memoryLimitMib,
+      })
+    }
+    if (!isPreset(dto.podClass)) {
+      throw new BadRequestException(`Unknown pod class: ${dto.podClass}`)
+    }
+    return resolvePreset(dto.podClass, this.podClassSmallOverride())
+  }
+
+  private podClassSmallOverride(): PodResources | null {
+    return this.configService.get<PodResources | null>("podClassSmall", null)
+  }
+
+  private async podResourcesForProject(projectId: string): Promise<K8sResourceRequirements> {
+    const [row] = await db
+      .select({
+        cpuMillicores: projectPodSettings.cpuMillicores,
+        memoryRequestMib: projectPodSettings.memoryRequestMib,
+        memoryLimitMib: projectPodSettings.memoryLimitMib,
+      })
+      .from(projectPodSettings)
+      .where(eq(projectPodSettings.projectId, projectId))
+    return toK8sResources(row ?? resolvePreset("small", this.podClassSmallOverride()))
+  }
+
+  async getLogging(id: string, tenantId: string): Promise<ProjectLoggingResponse> {
+    const project = await this.findOne(id, tenantId)
+    return { mode: project.requestLogMode, bodyLimit: project.requestLogBodyLimit }
+  }
+
+  async updateLogging(
+    id: string,
+    dto: UpdateProjectLoggingDto,
+    tenantId: string,
+  ): Promise<ProjectLoggingResponse> {
+    const project = await this.findOne(id, tenantId)
+
+    if (!Object.values(RequestLogMode).includes(dto.mode)) {
+      throw new BadRequestException(`Unknown request log mode: ${dto.mode}`)
+    }
+
+    const settingsUpdates: Partial<typeof projectSettings.$inferInsert> = {
+      requestLogMode: dto.mode,
+    }
+
+    if (dto.bodyLimit !== undefined) {
+      if (!Number.isFinite(dto.bodyLimit) || dto.bodyLimit < 0) {
+        throw new BadRequestException("bodyLimit must be a non-negative byte value")
+      }
+      settingsUpdates.requestLogBodyLimit = Math.min(Math.round(dto.bodyLimit), REQUEST_LOG_BODY_LIMIT_MAX)
+    }
+
+    await db.update(projectSettings).set(settingsUpdates).where(eq(projectSettings.projectId, project.id))
+
+    return this.getLogging(id, tenantId)
+  }
+
   async getAuth(id: string, tenantId: string): Promise<ProjectAuthResponse> {
     const project = await this.findOne(id, tenantId)
     if (project.authMode === "public") return { mode: "public" }
@@ -583,20 +784,23 @@ export class ProjectService implements OnApplicationBootstrap {
       await this.projectAuthService.remove(project.id)
     }
 
-    await db.update(projectSettings).set({ authMode: dto.mode }).where(eq(projectSettings.projectId, project.id))
+    await db
+      .update(projectEnvironments)
+      .set({ authMode: dto.mode, updatedAt: new Date() })
+      .where(eq(projectEnvironments.id, project.id))
 
     return this.getAuth(id, tenantId)
   }
 
   async remove(id: string, tenantId: string): Promise<void> {
     const project = await this.findOne(id, tenantId)
-    const podName = this.podService.assignedPodName(id)
+    const envs = await this.projectEnvironmentService.listByProjectId(id)
 
     this.appService.stopPolling(id)
     this.appService.invalidate(id)
 
     await Promise.allSettled([
-      this.safeDeletePod(podName, `removing project ${id}`),
+      ...envs.map((env) => this.safeDeletePod(this.podService.assignedPodName(env.id), `removing project ${id}`)),
       this.bifrostService.isEnabled()
         ? this.bifrostService.revokeProjectKeys(id).catch((err) => {
             this.logger.warn(`Failed to revoke Bifrost keys for project ${id}: ${(err as Error).message}`)
@@ -608,43 +812,46 @@ export class ProjectService implements OnApplicationBootstrap {
       this.scheduleService.removeAllForProject(id).catch((err) => {
         this.logger.warn(`Failed to remove schedules for project ${id}: ${(err as Error).message}`)
       }),
-      this.timeoutService.clear(id),
+      ...envs.map((env) => this.timeoutService.clear(env.id)),
     ])
 
     await db.delete(projects).where(eq(projects.id, id))
+
     if (project.tenantId) {
-      await db
-        .insert(deletedProjects)
-        .values({
-          id: project.id,
-          tenantId: project.tenantId,
-          directory: project.directory,
-        })
-        .onConflictDoNothing()
+      await Promise.allSettled(
+        envs.map((env) =>
+          this.projectEnvironmentService.delete({
+            id: env.id,
+            projectId: env.projectId,
+            tenantId: env.tenantId,
+            directory: env.directory,
+          }),
+        ),
+      )
     }
   }
 
   async disable(id: string, tenantId: string): Promise<ProjectResponse> {
     const project = await this.findOne(id, tenantId)
-    if (project.status === ProjectStatus.Disabled) {
+    if (project.disabled) {
       throw new BadRequestException("Project is already disabled")
     }
 
-    const podName = this.podService.assignedPodName(id)
+    const envs = await this.projectEnvironmentService.listByProjectId(id)
 
     await Promise.allSettled([
-      this.safeDeletePod(podName, `disabling project ${id}`),
-      this.timeoutService.clear(id),
+      ...envs.map((env) => this.safeDeletePod(this.podService.assignedPodName(env.id), `disabling project ${id}`)),
+      ...envs.map((env) => this.timeoutService.clear(env.id)),
     ])
 
-    await db
-      .update(projects)
-      .set({
-        status: ProjectStatus.Disabled,
-        podIp: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(projects.id, id))
+    await db.transaction(async (tx) => {
+      await tx.update(projects).set({ disabled: true, updatedAt: new Date() }).where(eq(projects.id, id))
+      await tx
+        .update(projectEnvironments)
+        .set({ podIp: null, updatedAt: new Date() })
+        .where(eq(projectEnvironments.projectId, id))
+    })
+
     this.appService.invalidate(id)
     await this.projectEventsService.publish(id)
 
@@ -653,37 +860,76 @@ export class ProjectService implements OnApplicationBootstrap {
 
   async enable(id: string, tenantId: string): Promise<ProjectResponse> {
     const project = await this.findOne(id, tenantId)
-    if (project.status !== ProjectStatus.Disabled) {
+    if (!project.disabled) {
       throw new BadRequestException("Project is not disabled")
     }
 
-    await db
-      .update(projects)
-      .set({
-        status: ProjectStatus.Starting,
-        podIp: null,
-        updatedAt: new Date(),
-      })
-      .where(eq(projects.id, id))
+    const envs = await this.projectEnvironmentService.listByProjectId(id)
 
-    this.spawnStartupWorker(id)
+    await db.update(projects).set({ disabled: false, updatedAt: new Date() }).where(eq(projects.id, id))
+    await Promise.all(
+      envs.map((env) => this.projectEnvironmentService.patch(env.id, { status: ProjectStatus.Starting, podIp: null })),
+    )
+
+    envs.forEach((env) => this.spawnStartupWorker(env.id))
     await this.projectEventsService.publish(id)
     return this.findOne(id, tenantId)
   }
 
-  async reassignPod(id: string, tenantId: string): Promise<void> {
+  async restart(id: string, tenantId: string, environmentId?: string): Promise<ProjectResponse> {
     const project = await this.findOne(id, tenantId)
-    await this.requestProjectStartup(project, { deleteExistingPod: true })
-  }
-
-  async restart(id: string, tenantId: string): Promise<ProjectResponse> {
-    const project = await this.findOne(id, tenantId)
-    if (project.status === ProjectStatus.Disabled) {
+    if (project.disabled) {
       throw new BadRequestException("Disabled project cannot be restarted")
     }
 
-    await this.requestProjectStartup(project, { deleteExistingPod: true })
+    const env = await this.projectEnvironmentService.findById(environmentId ?? id)
+    if (env.projectId !== id) {
+      throw new NotFoundException(`Environment ${environmentId ?? id} not found`)
+    }
+
+    await this.requestEnvironmentStartup(env, { deleteExistingPod: true })
     return this.findOne(id, tenantId)
+  }
+
+  async removeEnvironment(projectId: string, environmentId: string, tenantId: string): Promise<void> {
+    await this.findOne(projectId, tenantId)
+    const env = await this.projectEnvironmentService.findById(environmentId)
+    if (env.projectId !== projectId) {
+      throw new NotFoundException(`Environment ${environmentId} not found`)
+    }
+    if (env.isDefault) {
+      throw new BadRequestException("The Development environment cannot be deleted")
+    }
+
+    await db
+      .update(projectApps)
+      .set({ isPinned: false, pinnedEnvironmentId: null, pinnedById: null, pinnedAt: null, updatedAt: new Date() })
+      .where(and(eq(projectApps.projectId, projectId), eq(projectApps.pinnedEnvironmentId, env.id)))
+
+    await Promise.allSettled([
+      this.safeDeletePod(this.podService.assignedPodName(env.id), `deleting environment ${env.id}`),
+      this.bifrostService.isEnabled()
+        ? this.bifrostService.revokeEnvironmentKeys(env.id).catch((err) => {
+            this.logger.warn(`Failed to revoke Bifrost keys for environment ${env.id}: ${(err as Error).message}`)
+          })
+        : Promise.resolve(),
+      this.gatewayKeyService.revokeEnvironmentKeys(env.id).catch((err) => {
+        this.logger.warn(`Failed to revoke gateway keys for environment ${env.id}: ${(err as Error).message}`)
+      }),
+      this.scheduleService.removeAllForEnvironment(env.id).catch((err) => {
+        this.logger.warn(`Failed to remove schedules for environment ${env.id}: ${(err as Error).message}`)
+      }),
+      this.timeoutService.clear(env.id),
+    ])
+
+    await this.projectEnvironmentService.delete({
+      id: env.id,
+      projectId: env.projectId,
+      tenantId: env.tenantId,
+      directory: env.directory,
+    })
+
+    await this.projectEventsService.publish(projectId)
   }
 
   async updateApp(id: string, tenantId: string, body: UpdateAppDto): Promise<ProjectResponse> {
@@ -720,22 +966,30 @@ export class ProjectService implements OnApplicationBootstrap {
     meta: { name: string; description: string | null },
   ): Promise<void> {
     const storageMountPath = this.configService.getOrThrow<string>("storageMountPath")
-    const appDir = path.join(storageMountPath, projectDirectory, "app")
-    const target = path.join(appDir, "app.meta.json")
-    const tmp = path.join(appDir, `.app.meta.json.${crypto.randomUUID()}.tmp`)
+    const target = path.join(storageMountPath, projectDirectory, "app", "app.meta.json")
     const content: { name: string; description?: string } = { name: meta.name }
     if (meta.description !== null) content.description = meta.description
-    await writeFile(tmp, JSON.stringify(content, null, 2), "utf8")
-    await rename(tmp, target)
+    await writeJsonAtomic(target, content)
   }
 
-  async setAppPin(id: string, tenantId: string, userId: string, isPinned: boolean): Promise<ProjectResponse> {
+  async setAppPin(
+    id: string,
+    tenantId: string,
+    userId: string,
+    isPinned: boolean,
+    environmentId?: string,
+  ): Promise<ProjectResponse> {
     const project = await this.findOne(id, tenantId)
 
     if (isPinned) {
-      if (project.authMode !== "public") {
+      const pinnedEnvironmentId = environmentId ?? project.pinnedEnvironmentId ?? id
+      const targetEnv = await this.projectEnvironmentService.findById(pinnedEnvironmentId)
+      if (targetEnv.projectId !== id) {
+        throw new BadRequestException("Pinned environment does not belong to this project")
+      }
+      if (targetEnv.authMode !== "public") {
         throw new BadRequestException(
-          "Only apps with public auth can be pinned to Makara. Change the project's auth mode to public in Settings before pinning.",
+          "Only apps with public auth can be pinned to Makara. Change the environment's auth mode to public before pinning.",
         )
       }
       if (!project.hasApp) {
@@ -747,6 +1001,7 @@ export class ProjectService implements OnApplicationBootstrap {
         .update(projectApps)
         .set({
           isPinned: true,
+          pinnedEnvironmentId,
           pinnedById: userId,
           pinnedAt: new Date(),
           updatedAt: new Date(),
@@ -781,149 +1036,148 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   async reassignPodById(id: string): Promise<void> {
-    const project = await this.findOneById(id)
-    await this.requestProjectStartup(project, { deleteExistingPod: true })
+    const env = await this.projectEnvironmentService.findById(id)
+    await this.requestEnvironmentStartup(env, { deleteExistingPod: true })
   }
 
   async requestStartupForId(id: string): Promise<void> {
-    const project = await this.findOneById(id)
-    await this.requestProjectStartup(project, { deleteExistingPod: false })
+    const env = await this.projectEnvironmentService.findById(id)
+    await this.requestEnvironmentStartup(env, { deleteExistingPod: false })
   }
 
   async touchActivity(projectId: string): Promise<void> {
-    await this.timeoutService.touch(projectId)
-    await db.update(projects).set({ lastActiveAt: new Date(), updatedAt: new Date() }).where(eq(projects.id, projectId))
+    await this.touchEnvironmentActivity(projectId, "agent")
   }
 
   async touchAppActivity(projectId: string): Promise<void> {
-    await this.timeoutService.touchApp(projectId)
-    await db.update(projects).set({ lastActiveAt: new Date(), updatedAt: new Date() }).where(eq(projects.id, projectId))
+    await this.touchEnvironmentActivity(projectId, "app")
   }
 
-  async ensureProjectAccess(project: ProjectResponse, activity: ProjectActivityKind): Promise<EnsureProjectResult> {
-    if (project.status === ProjectStatus.Pending || project.status === ProjectStatus.Claiming) {
-      throw new NotFoundException(`Project ${project.id} not found`)
-    }
-
-    if (project.status === ProjectStatus.Disabled) {
-      return { state: "disabled", project }
-    }
-
-    if (project.status === ProjectStatus.Failed) {
-      return { state: "failed", project }
-    }
-
-    this.recordActivity(project.id, activity)
-
-    if (project.status === ProjectStatus.Suspended) {
-      return this.wakeSuspendedProject(project)
-    }
-
-    if (project.status === ProjectStatus.Starting) {
-      return this.handleStartingProject(project)
-    }
-
-    if (project.podIp) {
-      return this.verifyCachedActiveProject(project)
-    }
-
-    return this.verifyActiveProject(project)
+  private async touchEnvironmentActivity(envId: string, activity: ProjectActivityKind): Promise<void> {
+    if (activity === "agent") await this.timeoutService.touch(envId)
+    else await this.timeoutService.touchApp(envId)
+    await this.projectEnvironmentService.touchActivity(envId)
   }
 
-  async handleProxyFailure(projectId: string, tenantId: string): Promise<boolean> {
-    return this.handleProxyFailureForProject(await this.findOne(projectId, tenantId))
+  async ensureEnvironment(env: ProjectEnvironmentContext, activity: ProjectActivityKind): Promise<EnsureEnvironmentResult> {
+    if (env.status === ProjectStatus.Pending || env.status === ProjectStatus.Claiming) {
+      throw new NotFoundException(`Project environment ${env.id} not found`)
+    }
+
+    if (env.disabled) {
+      return { state: "disabled", env }
+    }
+
+    if (env.status === ProjectStatus.Failed) {
+      return { state: "failed", env }
+    }
+
+    this.recordActivity(env.id, activity)
+
+    if (env.status === ProjectStatus.Suspended) {
+      return this.wakeSuspendedEnvironment(env)
+    }
+
+    if (env.status === ProjectStatus.Starting) {
+      return this.handleStartingEnvironment(env)
+    }
+
+    if (env.podIp) {
+      return this.verifyCachedActiveEnvironment(env)
+    }
+
+    return this.verifyActiveEnvironment(env)
   }
 
-  async handleProxyFailureById(projectId: string): Promise<boolean> {
-    return this.handleProxyFailureForProject(await this.findOneById(projectId))
+  async handleProxyFailureByEnvId(envId: string): Promise<boolean> {
+    const env = await this.projectEnvironmentService.findByIdOrNull(envId)
+    if (!env) return false
+    return this.handleProxyFailureForEnvironment(env)
   }
 
-  private async handleProxyFailureForProject(project: ProjectResponse): Promise<boolean> {
-    if (project.status === ProjectStatus.Disabled) return false
-    if (project.status === ProjectStatus.Failed) return false
+  private async handleProxyFailureForEnvironment(env: ProjectEnvironmentContext): Promise<boolean> {
+    if (env.disabled) return false
+    if (env.status === ProjectStatus.Failed) return false
 
-    if (project.status === ProjectStatus.Starting) {
-      this.spawnStartupWorker(project.id)
+    if (env.status === ProjectStatus.Starting) {
+      this.spawnStartupWorker(env.id)
       return true
     }
 
-    const podName = this.podService.assignedPodName(project.id)
+    const podName = this.podService.assignedPodName(env.id)
     const pod = await this.readPodOrNull(podName)
     if (!pod || !this.podService.isPodReady(pod)) {
-      await this.requestProjectStartup(project, { deleteExistingPod: !!pod })
+      await this.requestEnvironmentStartup(env, { deleteExistingPod: !!pod })
       return true
     }
 
     const livePodIp = pod.status?.podIP ?? null
-    if (livePodIp && livePodIp !== project.podIp) {
-      await db
-        .update(projects)
-        .set({ podIp: livePodIp, updatedAt: new Date() })
-        .where(and(eq(projects.id, project.id), eq(projects.status, ProjectStatus.Active)))
-      this.logger.warn(`Repaired stale pod_ip for project ${project.id}: ${project.podIp} -> ${livePodIp}`)
+    if (livePodIp && livePodIp !== env.podIp) {
+      await this.projectEnvironmentService.patch(env.id, { podIp: livePodIp }, ProjectStatus.Active)
+      this.logger.warn(`Repaired stale pod_ip for environment ${env.id}: ${env.podIp} -> ${livePodIp}`)
     }
 
     return false
   }
 
-  private async wakeSuspendedProject(project: ProjectResponse): Promise<EnsureProjectResult> {
-    const [updated] = await db
-      .update(projects)
-      .set({ status: ProjectStatus.Starting, podIp: null, updatedAt: new Date() })
-      .where(and(eq(projects.id, project.id), eq(projects.status, ProjectStatus.Suspended)))
-      .returning()
+  private async wakeSuspendedEnvironment(env: ProjectEnvironmentContext): Promise<EnsureEnvironmentResult> {
+    const updated = await this.projectEnvironmentService.patch(
+      env.id,
+      { status: ProjectStatus.Starting, podIp: null },
+      ProjectStatus.Suspended,
+    )
 
     if (updated) {
-      await this.projectEventsService.publish(project.id)
+      await this.projectEventsService.publish(env.projectId)
     }
 
-    this.spawnStartupWorker(project.id)
+    this.spawnStartupWorker(env.id)
     return {
       state: "starting",
-      project: { ...project, status: ProjectStatus.Starting, podIp: null },
+      env: { ...env, status: ProjectStatus.Starting, podIp: null },
     }
   }
 
-  private async handleStartingProject(project: ProjectResponse): Promise<EnsureProjectResult> {
-    const podName = this.podService.assignedPodName(project.id)
+  private async handleStartingEnvironment(env: ProjectEnvironmentContext): Promise<EnsureEnvironmentResult> {
+    const podName = this.podService.assignedPodName(env.id)
     const pod = await this.readPodOrNull(podName)
 
     if (!pod) {
-      this.spawnStartupWorker(project.id)
-      return { state: "starting", project }
+      this.spawnStartupWorker(env.id)
+      return { state: "starting", env }
     }
 
     const podIp = pod.status?.podIP ?? null
     if (this.podService.isPodReady(pod) && podIp) {
-      await this.markProjectActive(project.id, podIp, podName)
+      await this.markEnvironmentActive(env.id, podIp, podName)
       return {
         state: "ready",
-        project: { ...project, status: ProjectStatus.Active, podIp },
+        env: { ...env, status: ProjectStatus.Active, podIp },
       }
     }
 
     const failure = this.podService.inspectFailureReason(pod)
     if (failure === "ImagePullBackOff") {
       await this.handleStartupFailure(
-        project.id,
+        env.id,
         podName,
         new PodStartupFailedError(podName, failure, this.podService.inspectFailureMessage(pod)),
       )
       return {
         state: "failed",
-        project: { ...project, status: ProjectStatus.Failed, podIp: null },
+        env: { ...env, status: ProjectStatus.Failed, podIp: null },
       }
     }
 
     if (failure === "Unschedulable" && this.podService.podAgeMs(pod) > UNSCHEDULABLE_STARTUP_GRACE_MS) {
       await this.handleStartupFailure(
-        project.id,
+        env.id,
         podName,
         new PodStartupFailedError(podName, failure, this.podService.inspectFailureMessage(pod)),
       )
       return {
         state: "failed",
-        project: { ...project, status: ProjectStatus.Failed, podIp: null },
+        env: { ...env, status: ProjectStatus.Failed, podIp: null },
       }
     }
 
@@ -931,109 +1185,104 @@ export class ProjectService implements OnApplicationBootstrap {
       const ageMs = this.podService.podAgeMs(pod)
       if (ageMs > CRASH_LOOP_RECREATE_AGE_MS) {
         this.logger.warn(`Pod ${podName} stuck in CrashLoopBackOff (age=${ageMs}ms); recreating`)
-        await this.safeDeletePod(podName, `CrashLoopBackOff recreate for project ${project.id}`)
-        this.spawnStartupWorker(project.id)
+        await this.safeDeletePod(podName, `CrashLoopBackOff recreate for environment ${env.id}`)
+        this.spawnStartupWorker(env.id)
       }
     }
 
-    return { state: "starting", project }
+    return { state: "starting", env }
   }
 
-  private async verifyActiveProject(project: ProjectResponse): Promise<EnsureProjectResult> {
-    const podName = this.podService.assignedPodName(project.id)
+  private async verifyActiveEnvironment(env: ProjectEnvironmentContext): Promise<EnsureEnvironmentResult> {
+    const podName = this.podService.assignedPodName(env.id)
     const pod = await this.readPodOrNull(podName)
     const podIp = pod?.status?.podIP ?? null
 
     if (pod && this.podService.isPodReady(pod) && podIp) {
-      if (podIp !== project.podIp) {
-        await db
-          .update(projects)
-          .set({ podIp, updatedAt: new Date() })
-          .where(and(eq(projects.id, project.id), eq(projects.status, ProjectStatus.Active)))
+      if (podIp !== env.podIp) {
+        await this.projectEnvironmentService.patch(env.id, { podIp }, ProjectStatus.Active)
       }
-      return { state: "ready", project: { ...project, podIp } }
+      return { state: "ready", env: { ...env, podIp } }
     }
 
-    const startingProject = await this.requestProjectStartup(project, { deleteExistingPod: !!pod })
-    return { state: "starting", project: startingProject }
+    const startingEnv = await this.requestEnvironmentStartup(env, { deleteExistingPod: !!pod })
+    return { state: "starting", env: startingEnv }
   }
 
-  private async verifyCachedActiveProject(project: ProjectResponse): Promise<EnsureProjectResult> {
-    const podName = this.podService.assignedPodName(project.id)
+  private async verifyCachedActiveEnvironment(env: ProjectEnvironmentContext): Promise<EnsureEnvironmentResult> {
+    const podName = this.podService.assignedPodName(env.id)
     const snapshot = this.podService.getCachedPodSnapshot(podName)
-    if (!snapshot.synced) return { state: "ready", project }
+    if (!snapshot.synced) return { state: "ready", env }
 
     const pod = snapshot.pod
     const podIp = pod?.status?.podIP ?? null
     if (pod && this.podService.isPodReady(pod) && podIp) {
-      if (podIp !== project.podIp) {
-        await db
-          .update(projects)
-          .set({ podIp, updatedAt: new Date() })
-          .where(and(eq(projects.id, project.id), eq(projects.status, ProjectStatus.Active)))
+      if (podIp !== env.podIp) {
+        await this.projectEnvironmentService.patch(env.id, { podIp }, ProjectStatus.Active)
       }
-      return { state: "ready", project: { ...project, podIp } }
+      return { state: "ready", env: { ...env, podIp } }
     }
 
-    const startingProject = await this.requestProjectStartup(project, { deleteExistingPod: !!pod })
-    return { state: "starting", project: startingProject }
+    const startingEnv = await this.requestEnvironmentStartup(env, { deleteExistingPod: !!pod })
+    return { state: "starting", env: startingEnv }
   }
 
-  private async markProjectActive(projectId: string, podIp: string, podName: string): Promise<void> {
-    const [updated] = await db
-      .update(projects)
-      .set({
-        status: ProjectStatus.Active,
-        podIp,
-        lastActiveAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(projects.id, projectId), eq(projects.status, ProjectStatus.Starting)))
-      .returning()
+  private async markEnvironmentActive(envId: string, podIp: string, podName: string): Promise<void> {
+    const updated = await this.projectEnvironmentService.patch(
+      envId,
+      { status: ProjectStatus.Active, podIp, lastActiveAt: new Date() },
+      ProjectStatus.Starting,
+    )
 
     if (!updated) {
-      this.startupRetries.delete(projectId)
-      await this.safeDeletePod(podName, `orphan after disable/delete race for project ${projectId}`)
+      this.startupRetries.delete(envId)
+      await this.safeDeletePod(podName, `orphan after disable/delete race for environment ${envId}`)
       return
     }
 
-    this.startupRetries.delete(projectId)
+    this.startupRetries.delete(envId)
 
     await Promise.allSettled([
-      this.timeoutService.touch(projectId).catch((err) => {
-        this.logger.warn(`Failed to touch timeout for project ${projectId}: ${(err as Error).message}`)
+      this.timeoutService.touch(envId).catch((err) => {
+        this.logger.warn(`Failed to touch timeout for environment ${envId}: ${(err as Error).message}`)
       }),
-      db
-        .update(projectDuplicateJobs)
-        .set({ status: ProjectDuplicateStatus.Completed, updatedAt: new Date() })
-        .where(
-          and(
-            eq(projectDuplicateJobs.targetProjectId, projectId),
-            eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting),
-          ),
-        ),
-      this.projectEventsService.publish(projectId).catch((err) => {
-        this.logger.warn(`Failed to publish project active event for ${projectId}: ${(err as Error).message}`)
+      updated.isDefault
+        ? db
+            .update(projectDuplicateJobs)
+            .set({ status: ProjectDuplicateStatus.Completed, updatedAt: new Date() })
+            .where(
+              and(
+                eq(projectDuplicateJobs.targetProjectId, updated.projectId),
+                eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting),
+              ),
+            )
+        : Promise.resolve(),
+      this.projectEventsService.publish(updated.projectId).catch((err) => {
+        this.logger.warn(`Failed to publish active event for environment ${envId}: ${(err as Error).message}`)
       }),
     ])
-    this.logger.log(`Project ${projectId} active on pod ${podName} (${podIp})`)
+    this.logger.log(`Environment ${envId} active on pod ${podName} (${podIp})`)
   }
 
-  private async createBifrostResources(projectId: string, tenantId: string): Promise<void> {
+  private async createBifrostResources(projectId: string, environmentId: string, tenantId: string): Promise<void> {
     if (!this.bifrostService.isEnabled()) return
 
     try {
-      await this.bifrostService.createProjectResources(projectId, tenantId)
+      await this.bifrostService.createEnvironmentResources({
+        projectId,
+        projectEnvironmentId: environmentId,
+        tenantId,
+      })
     } catch (err) {
-      this.logger.warn(`Failed to create Bifrost resources for project ${projectId}: ${(err as Error).message}`)
+      this.logger.warn(`Failed to create Bifrost resources for environment ${environmentId}: ${(err as Error).message}`)
     }
   }
 
-  private async createGatewayKey(projectId: string, tenantId: string): Promise<void> {
+  private async createGatewayKey(projectId: string, environmentId: string, tenantId: string): Promise<void> {
     try {
-      await this.gatewayKeyService.createKey(projectId, tenantId)
+      await this.gatewayKeyService.createKey(projectId, environmentId, tenantId)
     } catch (err) {
-      this.logger.warn(`Failed to create gateway key for project ${projectId}: ${(err as Error).message}`)
+      this.logger.warn(`Failed to create gateway key for environment ${environmentId}: ${(err as Error).message}`)
     }
   }
 
@@ -1127,37 +1376,28 @@ export class ProjectService implements OnApplicationBootstrap {
     return !!job
   }
 
-  private async requestProjectStartup(
-    project: ProjectResponse,
+  private async requestEnvironmentStartup(
+    env: ProjectEnvironmentContext,
     options: { deleteExistingPod: boolean },
-  ): Promise<ProjectResponse> {
-    if (project.status === ProjectStatus.Starting) {
+  ): Promise<ProjectEnvironmentContext> {
+    if (env.status === ProjectStatus.Starting) {
       if (options.deleteExistingPod) {
-        const podName = this.podService.assignedPodName(project.id)
-        this.recreateRequests.add(project.id)
-        await this.safeDeletePod(podName, `restart for project ${project.id}`)
+        const podName = this.podService.assignedPodName(env.id)
+        this.recreateRequests.add(env.id)
+        await this.safeDeletePod(podName, `restart for environment ${env.id}`)
       }
-      this.spawnStartupWorker(project.id)
-      return project
+      this.spawnStartupWorker(env.id)
+      return env
     }
 
-    const [updated] = await db
-      .update(projects)
-      .set({
-        status: ProjectStatus.Starting,
-        podIp: null,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(projects.id, project.id),
-          inArray(projects.status, [ProjectStatus.Active, ProjectStatus.Suspended, ProjectStatus.Failed]),
-        ),
-      )
-      .returning()
+    const updated = await this.projectEnvironmentService.patch(
+      env.id,
+      { status: ProjectStatus.Starting, podIp: null },
+      [ProjectStatus.Active, ProjectStatus.Suspended, ProjectStatus.Failed],
+    )
 
     if (!updated) {
-      const current = await this.findOneById(project.id)
+      const current = await this.projectEnvironmentService.findById(env.id)
       if (current.status === ProjectStatus.Starting) {
         this.spawnStartupWorker(current.id)
       }
@@ -1165,58 +1405,57 @@ export class ProjectService implements OnApplicationBootstrap {
     }
 
     if (options.deleteExistingPod) {
-      const podName = this.podService.assignedPodName(project.id)
-      this.recreateRequests.add(project.id)
-      await this.safeDeletePod(podName, `restart for project ${project.id}`)
+      const podName = this.podService.assignedPodName(env.id)
+      this.recreateRequests.add(env.id)
+      await this.safeDeletePod(podName, `restart for environment ${env.id}`)
     }
 
-    this.spawnStartupWorker(project.id)
-    this.appService.invalidate(project.id)
-    await this.projectEventsService.publish(project.id)
+    this.spawnStartupWorker(env.id)
+    this.appService.invalidate(env.projectId)
+    await this.projectEventsService.publish(env.projectId)
 
-    return this.findOneById(project.id)
+    return this.projectEnvironmentService.findById(env.id)
   }
 
-  private spawnStartupWorker(projectId: string): void {
-    if (this.startupTasks.has(projectId)) return
-    const task = this.runStartup(projectId)
+  private spawnStartupWorker(envId: string): void {
+    if (this.startupTasks.has(envId)) return
+    const task = this.runStartup(envId)
       .catch((err) => {
-        this.logger.warn(`Startup worker for project ${projectId} crashed: ${(err as Error).message}`)
+        this.logger.warn(`Startup worker for environment ${envId} crashed: ${(err as Error).message}`)
       })
       .finally(() => {
-        this.startupTasks.delete(projectId)
+        this.startupTasks.delete(envId)
       })
-    this.startupTasks.set(projectId, task)
+    this.startupTasks.set(envId, task)
   }
 
-  private async runStartup(projectId: string): Promise<void> {
-    if (await this.hasBlockingDuplicateOperation(projectId)) return
-
-    const current = await this.findOneById(projectId).catch(() => null)
+  private async runStartup(envId: string): Promise<void> {
+    const current = await this.projectEnvironmentService.findByIdOrNull(envId).catch(() => null)
     if (!current || current.status !== ProjectStatus.Starting) return
+    if (current.isDefault && (await this.hasBlockingDuplicateOperation(current.projectId))) return
 
-    const podName = this.podService.assignedPodName(projectId)
-    const recreateRequested = this.recreateRequests.delete(projectId)
+    const podName = this.podService.assignedPodName(envId)
+    const recreateRequested = this.recreateRequests.delete(envId)
     const existingPod = await this.readPodOrNull(podName)
     if (existingPod && !existingPod.metadata?.deletionTimestamp) {
       if (recreateRequested) {
         try {
           await this.podService.deletePod(podName)
         } catch (err) {
-          await this.handleStartupFailure(projectId, podName, err)
+          await this.handleStartupFailure(envId, podName, err)
           return
         }
       } else {
         const existingPodIp = existingPod.status?.podIP ?? null
         if (this.podService.isPodReady(existingPod) && existingPodIp) {
-          await this.markProjectActive(projectId, existingPodIp, podName)
+          await this.markEnvironmentActive(envId, existingPodIp, podName)
           return
         }
 
         const failure = this.podService.inspectFailureReason(existingPod)
         if (failure === "ImagePullBackOff") {
           await this.handleStartupFailure(
-            projectId,
+            envId,
             podName,
             new PodStartupFailedError(podName, failure, this.podService.inspectFailureMessage(existingPod)),
           )
@@ -1224,7 +1463,7 @@ export class ProjectService implements OnApplicationBootstrap {
         }
         if (failure === "Unschedulable" && this.podService.podAgeMs(existingPod) > UNSCHEDULABLE_STARTUP_GRACE_MS) {
           await this.handleStartupFailure(
-            projectId,
+            envId,
             podName,
             new PodStartupFailedError(podName, failure, this.podService.inspectFailureMessage(existingPod)),
           )
@@ -1234,51 +1473,68 @@ export class ProjectService implements OnApplicationBootstrap {
         if (failure !== "CrashLoopBackOff" || this.podService.podAgeMs(existingPod) <= CRASH_LOOP_RECREATE_AGE_MS) {
           try {
             const podIp = await this.podService.waitForReady(podName)
-            await this.markProjectActive(projectId, podIp, podName)
+            await this.markEnvironmentActive(envId, podIp, podName)
           } catch (err) {
-            await this.handleStartupFailure(projectId, podName, err)
+            await this.handleStartupFailure(envId, podName, err)
           }
           return
         }
 
-        await this.safeDeletePod(podName, `CrashLoopBackOff recreate for project ${projectId}`)
+        await this.safeDeletePod(podName, `CrashLoopBackOff recreate for environment ${envId}`)
       }
     }
 
     if (!current.tenantId) {
-      this.logger.warn(`runStartup invoked for pool project ${projectId}; skipping`)
+      this.logger.warn(`runStartup invoked for pool environment ${envId}; skipping`)
       return
     }
-    const [bifrostOptions, gatewayApiKey, agentName] = await Promise.all([
-      this.bifrostService.getProjectPodOptions(projectId),
-      this.gatewayKeyService.getProjectToken(projectId),
+    const [bifrostOptions, gatewayApiKey, agentName, podResources] = await Promise.all([
+      this.bifrostService.getEnvironmentPodOptions(envId),
+      this.gatewayKeyService.getEnvironmentToken(envId),
       this.agentService.resolveName(current.agentId),
+      this.podResourcesForProject(current.projectId),
     ])
+
+    if (this.bifrostService.isEnabled() && !bifrostOptions) {
+      await this.handleStartupFailure(
+        envId,
+        podName,
+        new Error(`No active LLM virtual keys for environment ${envId}; refusing to start pod without credentials`),
+      )
+      return
+    }
+
     const tenantOptions = {
       ...(bifrostOptions ?? {}),
       agentName,
       agentModel: this.agentModelByName.get(agentName),
       gatewayApiKey: gatewayApiKey ?? undefined,
       gatewayUrl: this.configService.get<string>("gatewayUrl", ""),
+      opsiforceEnv: current.isDefault ? undefined : "production",
+      resources: podResources,
     }
 
     try {
-      await this.podService.createAssignedPod(projectId, current.directory, tenantOptions)
+      await this.podService.createAssignedPod(envId, current.directory, current.projectId, tenantOptions)
       const podIp = await this.podService.waitForReady(podName)
-      await this.markProjectActive(projectId, podIp, podName)
+      await this.markEnvironmentActive(envId, podIp, podName)
     } catch (err) {
-      await this.handleStartupFailure(projectId, podName, err)
+      await this.handleStartupFailure(envId, podName, err)
     }
   }
 
-  private async handleStartupFailure(projectId: string, podName: string, err: unknown): Promise<void> {
+  private async handleStartupFailure(envId: string, podName: string, err: unknown): Promise<void> {
     const message = err instanceof Error ? err.message : "Project pod failed to start"
-    const isPermanentFailure = err instanceof PodStartupFailedError
-      && (err.reason === "ImagePullBackOff" || err.reason === "Unschedulable")
+    const isPermanentFailure =
+      err instanceof PodStartupFailedError && (err.reason === "ImagePullBackOff" || err.reason === "Unschedulable")
 
-    this.logger.warn(`Startup failed for project ${projectId}: ${message}`)
+    this.logger.warn(`Startup failed for environment ${envId}: ${message}`)
 
-    this.appService.invalidate(projectId)
+    const env = await this.projectEnvironmentService.findByIdOrNull(envId).catch(() => null)
+    this.appService.invalidate(envId)
+    if (env) this.appService.invalidate(env.projectId)
+
+    const projectId = env?.projectId ?? envId
 
     const duplicateFailUpdate = isPermanentFailure
       ? db
@@ -1295,31 +1551,30 @@ export class ProjectService implements OnApplicationBootstrap {
     await Promise.allSettled([
       isPermanentFailure
         ? Promise.resolve()
-        : this.safeDeletePod(podName, `startup failure for project ${projectId}`),
+        : this.safeDeletePod(podName, `startup failure for environment ${envId}`),
       duplicateFailUpdate,
       this.projectEventsService.publish(projectId).catch((publishErr) => {
-        this.logger.warn(
-          `Failed to publish startup failure event for ${projectId}: ${(publishErr as Error).message}`,
-        )
+        this.logger.warn(`Failed to publish startup failure event for ${envId}: ${(publishErr as Error).message}`)
       }),
     ])
 
     if (isPermanentFailure) {
-      this.startupRetries.delete(projectId)
-      await db
-        .update(projects)
-        .set({ status: ProjectStatus.Failed, podIp: null, updatedAt: new Date() })
-        .where(and(eq(projects.id, projectId), eq(projects.status, ProjectStatus.Starting)))
+      this.startupRetries.delete(envId)
+      await this.projectEnvironmentService.patch(
+        envId,
+        { status: ProjectStatus.Failed, podIp: null },
+        ProjectStatus.Starting,
+      )
       await this.projectEventsService.publish(projectId).catch(() => {})
       return
     }
 
-    const attempts = (this.startupRetries.get(projectId) ?? 0) + 1
-    this.startupRetries.set(projectId, attempts)
+    const attempts = (this.startupRetries.get(envId) ?? 0) + 1
+    this.startupRetries.set(envId, attempts)
     const delay = Math.min(STARTUP_RETRY_BASE_MS * Math.pow(2, attempts - 1), STARTUP_RETRY_MAX_MS)
-    this.logger.warn(`Scheduling retry ${attempts} for project ${projectId} in ${delay}ms`)
+    this.logger.warn(`Scheduling retry ${attempts} for environment ${envId} in ${delay}ms`)
     setTimeout(() => {
-      this.spawnStartupWorker(projectId)
+      this.spawnStartupWorker(envId)
     }, delay)
   }
 
@@ -1338,11 +1593,9 @@ export class ProjectService implements OnApplicationBootstrap {
     }
   }
 
-  private recordActivity(projectId: string, activity: ProjectActivityKind) {
-    const touch = activity === "agent" ? this.touchActivity(projectId) : this.touchAppActivity(projectId)
-
-    void touch.catch((err) => {
-      this.logger.warn(`Failed to touch ${activity} activity for project ${projectId}: ${err.message}`)
+  private recordActivity(envId: string, activity: ProjectActivityKind) {
+    void this.touchEnvironmentActivity(envId, activity).catch((err) => {
+      this.logger.warn(`Failed to touch ${activity} activity for environment ${envId}: ${err.message}`)
     })
   }
 }

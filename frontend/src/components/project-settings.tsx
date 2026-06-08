@@ -1,17 +1,21 @@
 import { For, Show, createSignal, createEffect, createMemo } from "solid-js"
 import { toast } from "solid-sonner"
 import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-query"
-import { api, type Project } from "~/api/client"
+import { api, podClassApi, type Project, type PodClass, type UpdateProjectPodClassDto, type RequestLogMode } from "~/api/client"
 import { usePermissions } from "~/api/permissions"
+import { useRestartProjectEnvironment } from "~/api/environments"
 import { Permission } from "~/constants/permissions"
-import { CircleDollarSign, Clock } from "~/components/icons"
+import { CircleDollarSign, Clock, Cpu, RotateCcw, ScrollText } from "~/components/icons"
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "~/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs"
 import { Button } from "~/components/ui/button"
 import { BudgetRow } from "~/components/ui/budget-row"
 import { TimeoutRow } from "~/components/ui/timeout-row"
+import { RequestLoggingControls } from "~/components/ui/request-logging-controls"
+import { ResourcesSelector } from "~/components/project/resources-selector"
 import Skeleton from "~/components/ui/skeleton"
 import { msToUnit, unitToMs } from "~/lib/duration-units"
+import { coresToMillicores, gibToMib, mibToGib, millicoresToCores, trimNumber } from "~/lib/pod-resources"
 import { type BudgetConfig } from "~/constants/budget"
 
 interface BudgetEntry {
@@ -30,6 +34,7 @@ interface BudgetDraft { budget: string; duration: string }
 
 export default function ProjectSettings(props: {
   projectId: string
+  activeEnvironmentId?: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -37,7 +42,11 @@ export default function ProjectSettings(props: {
   const { hasPermission } = usePermissions()
   const canBudgets = () => hasPermission(Permission.manageProjectBudgetSettings)
   const canTimeouts = () => hasPermission(Permission.manageProjectTimeoutSettings)
-  const defaultTab = createMemo(() => (canBudgets() ? "budgets" : "timeouts"))
+  const canPod = () => hasPermission(Permission.manageProjectPodSettings)
+  const canLogging = () => hasPermission(Permission.manageProjectLoggingSettings)
+  const defaultTab = createMemo(() =>
+    canBudgets() ? "budgets" : canTimeouts() ? "timeouts" : canPod() ? "resources" : "logging",
+  )
   const [activeTab, setActiveTab] = createSignal(defaultTab())
   const [budgetDrafts, setBudgetDrafts] = createSignal<Record<string, BudgetDraft>>({})
   const [projectBudgetDraft, setProjectBudgetDraft] = createSignal("")
@@ -46,9 +55,31 @@ export default function ProjectSettings(props: {
   const [agentUnit, setAgentUnit] = createSignal("minutes")
   const [appValue, setAppValue] = createSignal("")
   const [appUnit, setAppUnit] = createSignal("days")
+  const [loggingMode, setLoggingMode] = createSignal<RequestLogMode>("full")
+  const [loggingBodyLimitKb, setLoggingBodyLimitKb] = createSignal("")
+  const [podClassDraft, setPodClassDraft] = createSignal<PodClass>("small")
+  const [cpuCoresDraft, setCpuCoresDraft] = createSignal("")
+  const [memRequestGibDraft, setMemRequestGibDraft] = createSignal("")
+  const [memLimitGibDraft, setMemLimitGibDraft] = createSignal("")
   const [budgetsDirty, setBudgetsDirty] = createSignal(false)
   const [timeoutsDirty, setTimeoutsDirty] = createSignal(false)
+  const [loggingDirty, setLoggingDirty] = createSignal(false)
+  const [podDirty, setPodDirty] = createSignal(false)
+  const [podNeedsRestart, setPodNeedsRestart] = createSignal(false)
   const [saving, setSaving] = createSignal(false)
+
+  const restartEnvironment = useRestartProjectEnvironment()
+  const restartTargetEnvId = () => props.activeEnvironmentId ?? props.projectId
+
+  const podClasses = createQuery(() => ({
+    queryKey: ["pod-classes"],
+    queryFn: () => podClassApi.catalog(),
+    enabled: props.open && canPod(),
+  }))
+
+  const customLimitError = () =>
+    podClassDraft() === "custom" &&
+    (parseFloat(memLimitGibDraft()) || 0) < (parseFloat(memRequestGibDraft()) || 0)
 
   const project = createQuery(() => ({
     queryKey: ["projects", props.projectId],
@@ -101,12 +132,37 @@ export default function ProjectSettings(props: {
     }
   })
 
+  createEffect(() => {
+    if (project.data) {
+      setPodClassDraft(project.data.podClass)
+      setCpuCoresDraft(trimNumber(millicoresToCores(project.data.cpuMillicores)))
+      setMemRequestGibDraft(trimNumber(mibToGib(project.data.memoryRequestMib)))
+      setMemLimitGibDraft(trimNumber(mibToGib(project.data.memoryLimitMib)))
+      setPodDirty(false)
+    }
+  })
+
+  createEffect(() => {
+    if (project.data) {
+      setLoggingMode(project.data.requestLogMode)
+      setLoggingBodyLimitKb(String(Math.round(project.data.requestLogBodyLimit / 1024)))
+      setLoggingDirty(false)
+    }
+  })
+
   function updateBudgetDraft(keyType: string, field: keyof BudgetDraft, value: string) {
     setBudgetDrafts((prev) => ({ ...prev, [keyType]: { ...prev[keyType], [field]: value } }))
     setBudgetsDirty(true)
   }
 
-  const isDirty = () => activeTab() === "budgets" ? budgetsDirty() : timeoutsDirty()
+  const isDirty = () =>
+    activeTab() === "budgets"
+      ? budgetsDirty()
+      : activeTab() === "timeouts"
+        ? timeoutsDirty()
+        : activeTab() === "logging"
+          ? loggingDirty()
+          : podDirty()
 
   async function handleSave() {
     setSaving(true)
@@ -130,7 +186,7 @@ export default function ProjectSettings(props: {
           qc.invalidateQueries({ queryKey: ["projects", props.projectId, "budget"] }),
         ])
         toast.success("Budgets updated")
-      } else {
+      } else if (activeTab() === "timeouts") {
         const projectData = project.data
         if (!projectData) throw new Error("Project not loaded")
 
@@ -148,6 +204,30 @@ export default function ProjectSettings(props: {
         })
         await qc.invalidateQueries({ queryKey: ["projects", props.projectId] })
         toast.success("Timeouts updated")
+      } else if (activeTab() === "logging") {
+        const kb = parseFloat(loggingBodyLimitKb())
+        const bodyLimit = Number.isFinite(kb) ? Math.max(0, Math.round(kb * 1024)) : undefined
+        await api.put(`/projects/${props.projectId}/logging`, {
+          mode: loggingMode(),
+          bodyLimit,
+        })
+        await qc.invalidateQueries({ queryKey: ["projects", props.projectId] })
+        toast.success("Request logging updated")
+      } else {
+        const podClass = podClassDraft()
+        const dto: UpdateProjectPodClassDto =
+          podClass === "custom"
+            ? {
+                podClass,
+                cpuMillicores: coresToMillicores(parseFloat(cpuCoresDraft()) || 0),
+                memoryRequestMib: gibToMib(parseFloat(memRequestGibDraft()) || 0),
+                memoryLimitMib: gibToMib(parseFloat(memLimitGibDraft()) || 0),
+              }
+            : { podClass }
+        await podClassApi.update(props.projectId, dto)
+        await qc.invalidateQueries({ queryKey: ["projects", props.projectId] })
+        setPodNeedsRestart(true)
+        toast.success("Resources updated")
       }
     } catch {
       toast.error("Failed to save settings")
@@ -156,15 +236,30 @@ export default function ProjectSettings(props: {
     }
   }
 
+  function handleOpenChange(open: boolean) {
+    if (!open) setPodNeedsRestart(false)
+    props.onOpenChange(open)
+  }
+
   function handleCancel() {
-    props.onOpenChange(false)
+    handleOpenChange(false)
+  }
+
+  async function handleRestartToApply() {
+    try {
+      await restartEnvironment.mutateAsync({ projectId: props.projectId, environmentId: restartTargetEnvId() })
+      setPodNeedsRestart(false)
+      toast.success("Restarting to apply new resources")
+    } catch {
+      toast.error("Failed to restart")
+    }
   }
 
   return (
-    <Dialog open={props.open} onOpenChange={props.onOpenChange}>
+    <Dialog open={props.open} onOpenChange={handleOpenChange}>
       <DialogContent class="max-w-2xl">
         <DialogTitle>Project Settings</DialogTitle>
-        <DialogDescription>Configure budgets and timeouts for this project.</DialogDescription>
+        <DialogDescription>Configure budgets, timeouts, resources, and request logging for this project.</DialogDescription>
 
         <Tabs defaultValue={defaultTab()} class="mt-4" onChange={setActiveTab}>
           <TabsList>
@@ -178,6 +273,18 @@ export default function ProjectSettings(props: {
               <TabsTrigger value="timeouts">
                 <Clock class="w-3.5 h-3.5 mr-1.5" />
                 Timeouts
+              </TabsTrigger>
+            </Show>
+            <Show when={canPod()}>
+              <TabsTrigger value="resources">
+                <Cpu class="w-3.5 h-3.5 mr-1.5" />
+                Resources
+              </TabsTrigger>
+            </Show>
+            <Show when={canLogging()}>
+              <TabsTrigger value="logging">
+                <ScrollText class="w-3.5 h-3.5 mr-1.5" />
+                Logging
               </TabsTrigger>
             </Show>
           </TabsList>
@@ -254,6 +361,70 @@ export default function ProjectSettings(props: {
               </div>
             </TabsContent>
           </Show>
+
+          <Show when={canPod()}>
+            <TabsContent value="resources">
+              <div class="space-y-3">
+                <ResourcesSelector
+                  catalog={podClasses.data}
+                  selectedClass={podClassDraft()}
+                  cpuCores={cpuCoresDraft()}
+                  memRequestGib={memRequestGibDraft()}
+                  memLimitGib={memLimitGibDraft()}
+                  limitError={customLimitError()}
+                  disabled={saving()}
+                  onSelectClass={(c) => { setPodClassDraft(c); setPodDirty(true) }}
+                  onCpuChange={(v) => { setCpuCoresDraft(v); setPodDirty(true) }}
+                  onMemRequestChange={(v) => { setMemRequestGibDraft(v); setPodDirty(true) }}
+                  onMemLimitChange={(v) => { setMemLimitGibDraft(v); setPodDirty(true) }}
+                />
+                <Show
+                  when={podNeedsRestart()}
+                  fallback={
+                    <p class="text-xs text-muted-foreground/70">
+                      Resources apply the next time the environment restarts or resumes.
+                    </p>
+                  }
+                >
+                  <div class="flex items-center justify-between gap-2 rounded-lg border border-border bg-accent/30 p-3">
+                    <p class="text-xs text-muted-foreground">Restart the environment to apply the new size.</p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={restartEnvironment.isPending}
+                      onClick={handleRestartToApply}
+                    >
+                      <RotateCcw class="w-3.5 h-3.5 mr-1.5" />
+                      {restartEnvironment.isPending ? "Restarting..." : "Restart to apply"}
+                    </Button>
+                  </div>
+                </Show>
+              </div>
+            </TabsContent>
+          </Show>
+
+          <Show when={canLogging()}>
+            <TabsContent value="logging">
+              <div class="space-y-3">
+                <p class="text-xs text-muted-foreground">
+                  Control how this app's HTTP requests are recorded. Lighter levels reduce proxy
+                  overhead and memory use for high-traffic apps.
+                </p>
+                <RequestLoggingControls
+                  mode={loggingMode()}
+                  bodyLimitKb={loggingBodyLimitKb()}
+                  onModeChange={(m) => {
+                    setLoggingMode(m)
+                    setLoggingDirty(true)
+                  }}
+                  onBodyLimitKbChange={(v) => {
+                    setLoggingBodyLimitKb(v)
+                    setLoggingDirty(true)
+                  }}
+                />
+              </div>
+            </TabsContent>
+          </Show>
         </Tabs>
 
         <div class="mt-4 flex justify-end gap-2">
@@ -262,7 +433,7 @@ export default function ProjectSettings(props: {
           </Button>
           <Button
             size="sm"
-            disabled={!isDirty() || saving()}
+            disabled={!isDirty() || saving() || customLimitError()}
             onClick={handleSave}
           >
             {saving() ? "Saving..." : "Save"}

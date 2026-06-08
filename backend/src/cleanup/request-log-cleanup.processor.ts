@@ -7,7 +7,7 @@ import path from "path"
 import { open } from "sqlite"
 import sqlite3 from "sqlite3"
 import { db } from "../../db"
-import { projects } from "../../db/schema"
+import { projectEnvironments } from "../../db/schema"
 
 export const REQUEST_LOG_CLEANUP_QUEUE = "request-log-cleanup"
 type LogTable = "app_requests" | "process_logs" | "process_events"
@@ -27,8 +27,8 @@ export class RequestLogCleanupProcessor extends WorkerHost {
   async process(_job: Job): Promise<void> {
     const startedAt = Date.now()
     const rows = await db
-      .select({ id: projects.id, directory: projects.directory })
-      .from(projects)
+      .select({ id: projectEnvironments.id, directory: projectEnvironments.directory })
+      .from(projectEnvironments)
 
     let scanned = 0
     let skipped = 0
@@ -48,7 +48,7 @@ export class RequestLogCleanupProcessor extends WorkerHost {
         scanned++
       } catch (err) {
         this.logger.warn(
-          `Failed to clean request log for project ${row.id} at ${dbPath}: ${(err as Error).message}`,
+          `Failed to clean request log for environment ${row.id} at ${dbPath}: ${(err as Error).message}`,
         )
       }
     }

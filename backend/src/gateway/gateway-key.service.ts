@@ -6,6 +6,7 @@ import { projectGatewayKeys } from "../../db/schema"
 
 export interface GatewayIdentity {
   projectId: string
+  projectEnvironmentId: string | null
   tenantId: string | null
 }
 
@@ -13,12 +14,16 @@ export interface GatewayIdentity {
 export class GatewayKeyService {
   private readonly logger = new Logger(GatewayKeyService.name)
 
-  async createKey(projectId: string, tenantId: string | null): Promise<string> {
+  async createKey(
+    projectId: string,
+    projectEnvironmentId: string,
+    tenantId: string | null,
+  ): Promise<string> {
     const [existing] = await db
       .select()
       .from(projectGatewayKeys)
       .where(and(
-        eq(projectGatewayKeys.projectId, projectId),
+        eq(projectGatewayKeys.projectEnvironmentId, projectEnvironmentId),
         eq(projectGatewayKeys.status, "active"),
       ))
 
@@ -29,12 +34,13 @@ export class GatewayKeyService {
     await db.insert(projectGatewayKeys).values({
       id: crypto.randomUUID(),
       projectId,
+      projectEnvironmentId,
       tenantId,
       token,
       status: "active",
     })
 
-    this.logger.log(`Created gateway key for project ${projectId}`)
+    this.logger.log(`Created gateway key for environment ${projectEnvironmentId}`)
     return token
   }
 
@@ -42,6 +48,7 @@ export class GatewayKeyService {
     const [key] = await db
       .select({
         projectId: projectGatewayKeys.projectId,
+        projectEnvironmentId: projectGatewayKeys.projectEnvironmentId,
         tenantId: projectGatewayKeys.tenantId,
       })
       .from(projectGatewayKeys)
@@ -53,12 +60,12 @@ export class GatewayKeyService {
     return key ?? null
   }
 
-  async getProjectToken(projectId: string): Promise<string | null> {
+  async getEnvironmentToken(projectEnvironmentId: string): Promise<string | null> {
     const [key] = await db
       .select({ token: projectGatewayKeys.token })
       .from(projectGatewayKeys)
       .where(and(
-        eq(projectGatewayKeys.projectId, projectId),
+        eq(projectGatewayKeys.projectEnvironmentId, projectEnvironmentId),
         eq(projectGatewayKeys.status, "active"),
       ))
 
@@ -66,7 +73,7 @@ export class GatewayKeyService {
   }
 
   async revokeKeys(projectId: string): Promise<void> {
-    const result = await db
+    await db
       .update(projectGatewayKeys)
       .set({ status: "revoked", updatedAt: new Date() })
       .where(and(
@@ -75,5 +82,17 @@ export class GatewayKeyService {
       ))
 
     this.logger.log(`Revoked gateway keys for project ${projectId}`)
+  }
+
+  async revokeEnvironmentKeys(projectEnvironmentId: string): Promise<void> {
+    await db
+      .update(projectGatewayKeys)
+      .set({ status: "revoked", updatedAt: new Date() })
+      .where(and(
+        eq(projectGatewayKeys.projectEnvironmentId, projectEnvironmentId),
+        eq(projectGatewayKeys.status, "active"),
+      ))
+
+    this.logger.log(`Revoked gateway keys for environment ${projectEnvironmentId}`)
   }
 }

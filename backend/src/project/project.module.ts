@@ -3,6 +3,7 @@ import { BullModule } from "@nestjs/bullmq"
 import { BullBoardModule } from "@bull-board/nestjs"
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter"
 import { ProjectController } from "./project.controller"
+import { PodClassController } from "./pod-class.controller"
 import { ProjectService } from "./project.service"
 import { ProjectAuthService } from "./project-auth.service"
 import { ProjectDuplicateProcessor } from "./project-duplicate.processor"
@@ -16,6 +17,8 @@ import { GatewayModule } from "../gateway/gateway.module"
 import { ScheduleModule } from "../schedule/schedule.module"
 import { ProxyService } from "../proxy/proxy.service"
 import { ProjectPoolModule } from "../pool/project-pool.module"
+import { EnvironmentModule } from "../environment/environment.module"
+import { ProjectEnvironmentModule } from "../project-environment/project-environment.module"
 
 @Module({
   imports: [
@@ -31,8 +34,10 @@ import { ProjectPoolModule } from "../pool/project-pool.module"
     ProjectEventsModule,
     forwardRef(() => ScheduleModule),
     ProjectPoolModule,
+    EnvironmentModule,
+    ProjectEnvironmentModule,
   ],
-  controllers: [ProjectController],
+  controllers: [ProjectController, PodClassController],
   providers: [ProjectService, ProjectAuthService, ProjectDuplicateProcessor, ProxyService, AppService],
   exports: [ProjectService, ProjectAuthService],
 })

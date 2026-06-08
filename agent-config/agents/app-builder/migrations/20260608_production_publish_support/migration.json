@@ -1,0 +1,15 @@
+{
+  "id": "20260608_production_publish_support",
+  "requiresPodRecreate": true,
+  "operations": [
+    {
+      "type": "command",
+      "command": "node",
+      "args": [
+        "${MIGRATION_DIR}/migrate.mjs"
+      ],
+      "cwd": "app",
+      "timeoutSeconds": 60
+    }
+  ]
+}
