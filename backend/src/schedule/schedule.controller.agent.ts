@@ -31,12 +31,14 @@ export class ScheduleAgentController {
 
   @Get()
   async list(@Req() req: GatewayRequest) {
-    return this.scheduleService.findByProject(req.gatewayContext.projectId)
+    const { projectId, projectEnvironmentId } = req.gatewayContext
+    return this.scheduleService.findByEnvironment(projectEnvironmentId ?? projectId)
   }
 
   @Delete(":id")
   async remove(@Param("id") id: string, @Req() req: GatewayRequest) {
-    await this.scheduleService.removeById(req.gatewayContext.projectId, id)
+    const { projectId, projectEnvironmentId } = req.gatewayContext
+    await this.scheduleService.removeByEnvironment(projectEnvironmentId ?? projectId, id)
     return { success: true }
   }
 }

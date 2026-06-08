@@ -5,6 +5,8 @@ import { PublishDto } from "./publish.types"
 import { ProjectService } from "../project/project.service"
 import { ProjectEventsService } from "../project/project-events.service"
 import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
+import { CurrentUser, type UserContext } from "../user/user.decorator"
+import { UserService } from "../user/user.service"
 import { RequirePermission } from "../permission/permission.guard"
 import { Perms } from "../permission/permission.constants"
 
@@ -14,12 +16,17 @@ export class PublishController {
     private readonly publishService: PublishService,
     private readonly projectEventsService: ProjectEventsService,
     private readonly projectService: ProjectService,
+    private readonly userService: UserService,
   ) {}
 
   @Get("targets")
   @RequirePermission(Perms.publishProject)
-  async targets(@Param("projectId") projectId: string, @CurrentTenant() tenant: TenantContext) {
-    await this.gate(projectId, tenant.tenantId)
+  async targets(
+    @Param("projectId") projectId: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(projectId, tenant.tenantId, user)
     return this.publishService.listTargets(projectId, tenant.tenantId)
   }
 
@@ -29,8 +36,9 @@ export class PublishController {
     @Param("projectId") projectId: string,
     @Query("environmentId") environmentId: string,
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
   ) {
-    await this.gate(projectId, tenant.tenantId)
+    await this.gate(projectId, tenant.tenantId, user)
     return this.publishService.getForm(projectId, tenant.tenantId, environmentId)
   }
 
@@ -40,8 +48,9 @@ export class PublishController {
     @Param("projectId") projectId: string,
     @Body() dto: PublishDto,
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
   ) {
-    await this.gate(projectId, tenant.tenantId)
+    await this.gate(projectId, tenant.tenantId, user)
     return this.publishService.publish(projectId, tenant.tenantId, dto)
   }
 
@@ -51,8 +60,9 @@ export class PublishController {
     @Param("projectId") projectId: string,
     @Param("environmentId") environmentId: string,
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
   ) {
-    await this.gate(projectId, tenant.tenantId)
+    await this.gate(projectId, tenant.tenantId, user)
     return this.publishService.getLatestJob(projectId, environmentId)
   }
 
@@ -62,10 +72,11 @@ export class PublishController {
     @Param("projectId") projectId: string,
     @Param("environmentId") environmentId: string,
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply,
   ) {
-    await this.gate(projectId, tenant.tenantId)
+    await this.gate(projectId, tenant.tenantId, user)
 
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -105,7 +116,20 @@ export class PublishController {
     await send()
   }
 
-  private async gate(projectId: string, tenantId: string): Promise<void> {
-    await this.projectService.findOne(projectId, tenantId)
+  private async gate(projectId: string, tenantId: string, user: UserContext): Promise<void> {
+    const userId = await this.resolveUserId(user, tenantId)
+    await this.projectService.findOneForUser({ projectId, tenantId, userId })
+  }
+
+  private async resolveUserId(user: UserContext, tenantId: string): Promise<string> {
+    const row = await this.userService.getOrCreateUser(
+      {
+        keycloakId: user.userId,
+        email: user.email ?? undefined,
+        displayName: user.displayName ?? undefined,
+      },
+      tenantId,
+    )
+    return row.id
   }
 }

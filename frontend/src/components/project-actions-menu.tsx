@@ -64,6 +64,7 @@ export default function ProjectActionsMenu(props: {
   const canSeeSettings = () =>
     hasPermission(Permission.manageProjectBudgetSettings) ||
     hasPermission(Permission.manageProjectTimeoutSettings) ||
+    hasPermission(Permission.manageProjectLoggingSettings) ||
     hasPermission(Permission.manageProjectPodSettings)
   const canManageAuth = () => hasPermission(Permission.manageProjectAuthSettings)
   const canDisable = () => hasPermission(Permission.disableProject)

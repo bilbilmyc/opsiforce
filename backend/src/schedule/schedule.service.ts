@@ -72,6 +72,14 @@ export class ScheduleService {
       .orderBy(desc(projectSchedules.createdAt))
   }
 
+  async findByEnvironment(projectEnvironmentId: string) {
+    return db
+      .select()
+      .from(projectSchedules)
+      .where(eq(projectSchedules.projectEnvironmentId, projectEnvironmentId))
+      .orderBy(desc(projectSchedules.createdAt))
+  }
+
   async findByTenant(tenantId: string, projectId?: string) {
     const conditions = [eq(projectSchedules.tenantId, tenantId)]
     if (projectId) conditions.push(eq(projectSchedules.projectId, projectId))
@@ -151,17 +159,22 @@ export class ScheduleService {
     this.logger.log(`Deleted schedule ${scheduleId}`)
   }
 
-  async removeById(projectId: string, scheduleId: string) {
+  async removeByEnvironment(projectEnvironmentId: string, scheduleId: string) {
     const [schedule] = await db
       .select()
       .from(projectSchedules)
-      .where(and(eq(projectSchedules.projectId, projectId), eq(projectSchedules.id, scheduleId)))
+      .where(
+        and(
+          eq(projectSchedules.projectEnvironmentId, projectEnvironmentId),
+          eq(projectSchedules.id, scheduleId),
+        ),
+      )
 
     if (!schedule) throw new NotFoundException(`Schedule ${scheduleId} not found`)
 
     await this.removeJobScheduler(schedule.id)
     await db.delete(projectSchedules).where(eq(projectSchedules.id, schedule.id))
-    this.logger.log(`Deleted schedule ${scheduleId} for project ${projectId}`)
+    this.logger.log(`Deleted schedule ${scheduleId} for environment ${projectEnvironmentId}`)
   }
 
   async removeAllForProject(projectId: string) {

@@ -158,6 +158,7 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
         </div>
         <PinAppDialogs
           projectId={props.projectId}
+          environmentId={props.environmentId}
           action={pinAction()}
           onActionChange={setPinAction}
         />
