@@ -288,6 +288,13 @@
       "when": 1780931678697,
       "tag": "0040_one-active-publish-per-environment",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1780952474234,
+      "tag": "0041_add-publishing-project-status",
+      "breakpoints": true
     }
   ]
 }

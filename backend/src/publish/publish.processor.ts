@@ -90,6 +90,11 @@ export class PublishProcessor extends WorkerHost {
 
       await this.setStatus(data.publishJobId, PublishStatus.Building)
       if (data.isFirstPublish) {
+        await this.projectEnvironmentService.patch(
+          data.projectEnvironmentId,
+          { status: ProjectStatus.Starting, podIp: null },
+          ProjectStatus.Publishing,
+        )
         await this.projectService.requestStartupForId(data.projectEnvironmentId)
       } else {
         await this.projectService.reassignPodById(data.projectEnvironmentId)

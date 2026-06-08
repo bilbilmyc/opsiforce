@@ -73,11 +73,6 @@ export class ProjectEnvironmentService {
     return row
   }
 
-  /**
-   * The default ("Development") environment of a project shares the project's id
-   * (ADR-0002). Use this instead of passing a bare projectId where an environment
-   * id is expected, so the convention has a single named source of truth.
-   */
   defaultEnvironmentId(projectId: string): string {
     return projectId
   }
@@ -121,11 +116,6 @@ export class ProjectEnvironmentService {
     })
   }
 
-  /**
-   * Conditional patch. When `expectStatus` is given the row is only updated if it
-   * currently holds one of those statuses (compare-and-set for lifecycle races).
-   * Returns the updated row, or undefined when the guard rejected the write.
-   */
   async patch(
     envId: string,
     patch: ProjectEnvironmentPatch,

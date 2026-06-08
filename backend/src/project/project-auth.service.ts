@@ -331,16 +331,6 @@ export class ProjectAuthService {
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
   }
 
-  /**
-   * Seed a target routing id's auth by cloning the source's live middleware
-   * spec to the target host (rewriting only the resource name and CallbackUri).
-   * Mode-agnostic: carries manual's client secret (which lives only in the
-   * middleware) and makara's tenant-role claims without re-deriving either.
-   *
-   * If the source middleware is missing, fall back to re-deriving makara from
-   * `makaraFallbackTenantName` when given; otherwise throw (fail-closed, so a
-   * manual environment is never published onto the unprotected wildcard route).
-   */
   async inheritAuth(
     fromRoutingId: string,
     toRoutingId: string,

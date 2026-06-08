@@ -22,6 +22,7 @@ export const projectStatusEnum = pgEnum("project_status", [
   "failed",
   "pending",
   "claiming",
+  "publishing",
 ])
 
 export const keyTypeEnum = pgEnum("key_type", ["chat", "backend"])

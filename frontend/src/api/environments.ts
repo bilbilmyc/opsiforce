@@ -10,6 +10,7 @@ export type ProjectEnvironmentStatus =
   | "failed"
   | "pending"
   | "claiming"
+  | "publishing"
 
 export interface Environment {
   id: string

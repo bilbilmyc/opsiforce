@@ -1094,6 +1094,10 @@ export class ProjectService implements OnApplicationBootstrap {
       return { state: "failed", env }
     }
 
+    if (env.status === ProjectStatus.Publishing) {
+      return { state: "starting", env }
+    }
+
     this.recordActivity(env.id, activity)
 
     if (env.status === ProjectStatus.Suspended) {
@@ -1120,6 +1124,7 @@ export class ProjectService implements OnApplicationBootstrap {
   private async handleProxyFailureForEnvironment(env: ProjectEnvironmentContext): Promise<boolean> {
     if (env.disabled) return false
     if (env.status === ProjectStatus.Failed) return false
+    if (env.status === ProjectStatus.Publishing) return false
 
     if (env.status === ProjectStatus.Starting) {
       this.spawnStartupWorker(env.id)

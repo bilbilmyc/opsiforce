@@ -125,7 +125,7 @@ export class PublishService {
         isDefault: false,
         directory: `projects/${projectEnvironmentId}`,
         platformVersion: this.platformVersion,
-        status: ProjectStatus.Starting,
+        status: ProjectStatus.Publishing,
         authMode: devEnv.authMode,
       })
     }
