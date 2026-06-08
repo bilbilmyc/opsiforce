@@ -102,6 +102,7 @@ export function usePublishJob(
   environmentId: () => string | null,
   options?: { enabled?: () => boolean },
 ) {
+  const qc = useQueryClient()
   const [data, setData] = createSignal<PublishJob | null>(null)
 
   createEffect(() => {
@@ -123,7 +124,11 @@ export function usePublishJob(
       try {
         const job = JSON.parse(event.data) as PublishJob
         setData(job)
-        if (job.status === "done" || job.status === "failed") source.close()
+        if (job.status === "done" || job.status === "failed") {
+          qc.invalidateQueries({ queryKey: environmentKeys.forProject(pid) })
+          qc.invalidateQueries({ queryKey: publishKeys.targets(pid) })
+          source.close()
+        }
       } catch {
         // ignore malformed frames
       }

@@ -1,6 +1,7 @@
 import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
 import { createEffect, createSignal, onCleanup } from "solid-js"
 import { ApiError, api, type Project, type ProjectState } from "./client"
+import { environmentKeys } from "./environments"
 import { detectTimezone } from "~/lib/timezone"
 import { isMeaningfulSessionTitle } from "~/lib/session-title"
 
@@ -151,7 +152,10 @@ export function useSetAppPin() {
         isPinned: params.isPinned,
         ...(params.environmentId ? { environmentId: params.environmentId } : {}),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
+    onSuccess: (_data, params) => {
+      qc.invalidateQueries({ queryKey: projectKeys.all })
+      qc.invalidateQueries({ queryKey: environmentKeys.forProject(params.projectId) })
+    },
   }))
 }
 

@@ -598,10 +598,11 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.findOne(projectId, tenantId)
     const envs = await this.projectEnvironmentService.listByProjectId(projectId)
     const pinned = await db
-      .select({ pinnedEnvironmentId: projectApps.pinnedEnvironmentId })
+      .select({ isPinned: projectApps.isPinned, pinnedEnvironmentId: projectApps.pinnedEnvironmentId })
       .from(projectApps)
       .where(eq(projectApps.projectId, projectId))
-    const pinnedEnvironmentId = pinned[0]?.pinnedEnvironmentId ?? null
+    const pinnedRow = pinned[0]
+    const pinnedEnvironmentId = pinnedRow?.isPinned ? pinnedRow.pinnedEnvironmentId ?? projectId : null
 
     return envs
       .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.createdAt.getTime() - b.createdAt.getTime())
