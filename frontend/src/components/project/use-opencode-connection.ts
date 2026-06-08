@@ -10,13 +10,16 @@ import {
   type OpenCodeSession,
   type ProjectStatus,
 } from "~/api/client"
+import type { ProjectEnvironmentStatus } from "~/api/environments"
 import { useSyncProjectTitle } from "~/api/projects"
 import { createDirectoryRouter } from "./platform"
+
+type ConnectionStatus = ProjectStatus | ProjectEnvironmentStatus
 
 export interface OpenCodeConnectionOptions {
   projectId: string
   environmentId: Accessor<string>
-  status: Accessor<ProjectStatus | undefined>
+  status: Accessor<ConnectionStatus | undefined>
   rememberedSessionId: Accessor<string | null | undefined>
   currentTitle: Accessor<string | null | undefined>
   onResolveSession: (environmentId: string, sessionId: string) => void
@@ -28,7 +31,7 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
   const syncProjectTitle = useSyncProjectTitle()
 
   let connecting = false
-  let prevStatus: ProjectStatus | undefined
+  let prevStatus: ConnectionStatus | undefined
   let prevEnvId: string | undefined
 
   const syncTitle = (title: string) => syncProjectTitle(options.projectId, title, options.currentTitle())
@@ -63,7 +66,7 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
   }
 
   async function startFromInitialPrompt(environmentId: string): Promise<string | undefined> {
-    if (!options.initialPrompt) return undefined
+    if (!options.initialPrompt || environmentId !== options.projectId) return undefined
     try {
       const session = await api.post<OpenCodeSession>(`/proxy/${environmentId}/session`)
       if (!session?.id) return undefined

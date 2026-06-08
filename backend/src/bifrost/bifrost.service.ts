@@ -243,15 +243,11 @@ export class BifrostService {
     teamId?: string,
     projectEnvironmentId?: string,
   ): Promise<{ keyId: string; keyToken: string }> {
-    const dedupeCondition = projectEnvironmentId
-      ? eq(projectVirtualKeys.projectEnvironmentId, projectEnvironmentId)
-      : eq(projectVirtualKeys.projectId, projectId)
-
     const [existing] = await db
       .select()
       .from(projectVirtualKeys)
       .where(and(
-        dedupeCondition,
+        eq(projectVirtualKeys.projectId, projectId),
         eq(projectVirtualKeys.keyType, keyType),
         eq(projectVirtualKeys.status, "active"),
       ))

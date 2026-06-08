@@ -281,6 +281,13 @@
       "when": 1780921852379,
       "tag": "0039_schedules-environment-not-null",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1780931678697,
+      "tag": "0040_one-active-publish-per-environment",
+      "breakpoints": true
     }
   ]
 }

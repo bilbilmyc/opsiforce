@@ -46,6 +46,9 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
   )
   const isDevelopmentActive = () => activeEnvironmentId() === props.projectId
 
+  const connectionStatus = () =>
+    isDevelopmentActive() ? status() : activeEnvironment()?.status
+
   createEffect(() => {
     if (props.projectId) {
       untrack(() => setActiveEnvironmentId(props.projectId))
@@ -71,7 +74,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
   const connection = useOpenCodeConnection({
     projectId: props.projectId,
     environmentId: activeEnvironmentId,
-    status,
+    status: connectionStatus,
     rememberedSessionId,
     currentTitle: () => statusQuery.data?.title,
     onResolveSession: (envId, sessionId) =>
@@ -124,8 +127,8 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
           class="flex-1 min-w-0 flex flex-col oc-chat-only"
           style={{ display: activeTab() === "chat" ? "flex" : "none" }}
         >
-          <Show when={status() !== "disabled"} fallback={<ProjectDisabled projectId={props.projectId} />}>
-            <Show when={status() !== "failed"} fallback={<ProjectFailed projectId={props.projectId} />}>
+          <Show when={connectionStatus() !== "disabled"} fallback={<ProjectDisabled projectId={props.projectId} />}>
+            <Show when={connectionStatus() !== "failed"} fallback={<ProjectFailed projectId={props.projectId} />}>
               <Show
                 when={duplicateOperation()}
                 fallback={

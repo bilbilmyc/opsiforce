@@ -33,10 +33,23 @@ else
 fi
 `
 
+const PREVIOUS_STARTUP = `#!/bin/bash
+set -e
+cd "$(dirname "$0")"
+
+while [ ! -f ".pnp.cjs" ]; do
+  sleep 2
+done
+
+guard app-backend yarn dev:backend &
+guard app-frontend yarn dev:frontend &
+wait -n
+`
+
 function writeStartup() {
   const target = path.join(appDir, "startup.sh")
-  const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : ""
-  if (current === STARTUP) return
+  const current = fs.existsSync(target) ? fs.readFileSync(target, "utf8") : null
+  if (current !== PREVIOUS_STARTUP) return
   fs.writeFileSync(target, STARTUP)
   fs.chmodSync(target, 0o755)
   changed.push("startup.sh")
@@ -82,13 +95,8 @@ function patchViteConfig() {
     "  },",
     "",
   ].join("\n")
-  if (/\n\s*build\s*:\s*\{/.test(src)) {
-    src = src.replace(/(\n)(\s*build\s*:\s*\{)/, `\n${block}$2`)
-  } else if (/\}\)\s*;?\s*$/.test(src)) {
-    src = src.replace(/(\}\)\s*;?\s*)$/, `${block}$1`)
-  } else {
-    return
-  }
+  if (!/\n\s*build\s*:\s*\{/.test(src)) return
+  src = src.replace(/(\n)(\s*build\s*:\s*\{)/, `\n${block}$2`)
   fs.writeFileSync(target, src)
   changed.push("frontend/vite.config.ts")
 }

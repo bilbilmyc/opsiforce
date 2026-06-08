@@ -1,8 +1,9 @@
-import { Controller, Post, Param, Req, Res, Logger } from "@nestjs/common"
+import { Controller, Post, Param, Query, Req, Res, Logger, NotFoundException } from "@nestjs/common"
 import type { MultipartFile } from "@fastify/multipart"
 import { FastifyRequest, FastifyReply } from "fastify"
 import { UploadService } from "./upload.service"
 import { ProjectService } from "../project/project.service"
+import { ProjectEnvironmentService } from "../project-environment/project-environment.service"
 import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
 
 interface MultipartRequest extends FastifyRequest {
@@ -18,11 +19,13 @@ export class UploadController {
   constructor(
     private readonly uploadService: UploadService,
     private readonly projectService: ProjectService,
+    private readonly projectEnvironmentService: ProjectEnvironmentService,
   ) {}
 
   @Post(":projectId/upload")
   async upload(
     @Param("projectId") projectId: string,
+    @Query("environmentId") environmentId: string | undefined,
     @CurrentTenant() tenant: TenantContext,
     @Req() req: MultipartRequest,
     @Res() reply: FastifyReply,
@@ -31,6 +34,16 @@ export class UploadController {
       projectId,
       tenant.tenantId,
     )
+
+    let directory = project.directory
+    if (environmentId && environmentId !== projectId) {
+      const env = await this.projectEnvironmentService.findById(environmentId)
+      if (env.projectId !== projectId) {
+        throw new NotFoundException(`Environment ${environmentId} not found`)
+      }
+      directory = env.directory
+    }
+
     this.projectService.touchActivity(projectId).catch(() => {})
 
     reply.hijack()
@@ -56,7 +69,7 @@ export class UploadController {
 
         try {
           const destPath = this.uploadService.resolveUploadPath(
-            project.directory,
+            directory,
             relativePath,
           )
           let lastProgressAt = 0

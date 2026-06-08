@@ -131,14 +131,21 @@ export class PublishService {
     }
 
     const publishJobId = crypto.randomUUID()
-    await db.insert(projectPublishJobs).values({
-      id: publishJobId,
-      projectId,
-      projectEnvironmentId,
-      environmentId: dto.environmentId,
-      tenantId,
-      status: PublishStatus.Queued,
-    })
+    try {
+      await db.insert(projectPublishJobs).values({
+        id: publishJobId,
+        projectId,
+        projectEnvironmentId,
+        environmentId: dto.environmentId,
+        tenantId,
+        status: PublishStatus.Queued,
+      })
+    } catch (err) {
+      if (isActivePublishConflict(err)) {
+        throw new ConflictException("A publish is already in progress for this environment")
+      }
+      throw err
+    }
 
     await this.queue.add(
       "publish",
@@ -211,6 +218,12 @@ export class PublishService {
       return {}
     }
   }
+}
+
+function isActivePublishConflict(err: unknown): boolean {
+  const code = (err as { code?: string })?.code
+  const constraint = (err as { constraint_name?: string })?.constraint_name
+  return code === "23505" && constraint === "uq_project_publish_jobs_one_active"
 }
 
 function toResponse(row: typeof projectPublishJobs.$inferSelect): PublishJobResponse {

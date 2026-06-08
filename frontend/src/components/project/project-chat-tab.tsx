@@ -68,7 +68,7 @@ export default function ProjectChatTab(props: ProjectChatTabProps) {
           )
         }}
       </Show>
-      <FileUpload projectId={props.projectId} />
+      <FileUpload projectId={props.projectId} environmentId={props.environmentId} />
     </>
   )
 }

@@ -369,6 +369,9 @@ export const projectPublishJobs = pgTable(
     index("idx_project_publish_jobs_project").on(table.projectId),
     index("idx_project_publish_jobs_environment").on(table.projectEnvironmentId),
     index("idx_project_publish_jobs_status").on(table.status),
+    uniqueIndex("uq_project_publish_jobs_one_active")
+      .on(table.projectId, table.environmentId)
+      .where(sql`${table.status} in ('queued', 'committing', 'swapping', 'building', 'migrating')`),
   ],
 )
 
