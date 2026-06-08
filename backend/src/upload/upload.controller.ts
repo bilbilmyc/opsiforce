@@ -44,7 +44,7 @@ export class UploadController {
       directory = env.directory
     }
 
-    this.projectService.touchActivity(projectId).catch(() => {})
+    this.projectService.touchActivity(environmentId ?? projectId).catch(() => {})
 
     reply.hijack()
     reply.raw.writeHead(200, {

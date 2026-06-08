@@ -52,6 +52,7 @@ export class PublishProcessor extends WorkerHost {
     const data = job.data
     let prodDir: string | null = null
     let previousSha: string | null = null
+    let previousEnvVars: Record<string, string> | null = null
 
     try {
       await this.setStatus(data.publishJobId, PublishStatus.Committing, { startedAt: new Date() })
@@ -75,10 +76,10 @@ export class PublishProcessor extends WorkerHost {
       } else {
         await this.git.fetchOrigin(prodDir)
         await this.git.resetHard(prodDir, sha)
+        previousEnvVars = await this.publishService.readEnvFile(prodEnv.directory)
       }
 
       await this.writeEnvFile(prodEnv.directory, data.variables, data.isFirstPublish)
-      await this.mirrorSchedules(data.projectId, data.projectEnvironmentId, data.tenantId, data.scheduleIds)
 
       if (data.isFirstPublish && devEnv.authMode !== "public") {
         const makaraFallbackTenantName =
@@ -109,6 +110,14 @@ export class PublishProcessor extends WorkerHost {
         throw new Error("Production app did not become ready within the deploy window")
       }
 
+      try {
+        await this.reconcileSchedules(data.projectId, data.projectEnvironmentId, data.tenantId, data.scheduleIds)
+      } catch (scheduleErr) {
+        this.logger.warn(
+          `Schedule reconcile for ${data.projectEnvironmentId} failed after a healthy publish: ${(scheduleErr as Error).message}`,
+        )
+      }
+
       await this.projectEnvironmentService.patch(data.projectEnvironmentId, { deployedCommitSha: sha })
       await this.setStatus(data.publishJobId, PublishStatus.Done, { completedAt: new Date() })
       this.logger.log(`Published ${data.projectId} to environment ${data.environmentId} (${data.projectEnvironmentId})`)
@@ -119,6 +128,9 @@ export class PublishProcessor extends WorkerHost {
       if (!data.isFirstPublish && prodDir && previousSha) {
         try {
           await this.git.resetHard(prodDir, previousSha)
+          if (previousEnvVars) {
+            await this.restoreEnvFile(prodDir, previousEnvVars)
+          }
           await this.projectService.reassignPodById(data.projectEnvironmentId)
         } catch (rollbackErr) {
           this.logger.warn(
@@ -139,24 +151,27 @@ export class PublishProcessor extends WorkerHost {
     }
   }
 
-  private async mirrorSchedules(
+  private async reconcileSchedules(
     projectId: string,
     projectEnvironmentId: string,
     tenantId: string,
     scheduleIds: string[],
   ): Promise<void> {
-    await this.scheduleService.removeAllForEnvironment(projectEnvironmentId)
-    if (scheduleIds.length === 0) return
-
-    const devSchedules = await db
-      .select()
-      .from(projectSchedules)
-      .where(
-        and(
-          eq(projectSchedules.projectEnvironmentId, this.projectEnvironmentService.defaultEnvironmentId(projectId)),
-          inArray(projectSchedules.id, scheduleIds),
-        ),
-      )
+    const devSchedules =
+      scheduleIds.length === 0
+        ? []
+        : await db
+            .select()
+            .from(projectSchedules)
+            .where(
+              and(
+                eq(
+                  projectSchedules.projectEnvironmentId,
+                  this.projectEnvironmentService.defaultEnvironmentId(projectId),
+                ),
+                inArray(projectSchedules.id, scheduleIds),
+              ),
+            )
 
     for (const schedule of devSchedules) {
       const headers = isStringRecord(schedule.headers) ? schedule.headers : undefined
@@ -168,6 +183,14 @@ export class PublishProcessor extends WorkerHost {
         body: schedule.body ?? undefined,
         headers,
       })
+    }
+
+    const desiredNames = new Set(devSchedules.map((schedule) => schedule.name))
+    const existing = await this.scheduleService.findByEnvironment(projectEnvironmentId)
+    for (const current of existing) {
+      if (!desiredNames.has(current.name)) {
+        await this.scheduleService.removeByEnvironment(projectEnvironmentId, current.id)
+      }
     }
   }
 
@@ -195,6 +218,11 @@ export class PublishProcessor extends WorkerHost {
     const merged = { ...existing, ...variables }
     const target = path.join(this.storageMountPath, directory, "app", "opsiforce.env.json")
     await writeJsonAtomic(target, merged)
+  }
+
+  private async restoreEnvFile(prodDir: string, variables: Record<string, string>): Promise<void> {
+    const target = path.join(prodDir, "app", "opsiforce.env.json")
+    await writeJsonAtomic(target, variables)
   }
 
   private async setStatus(
