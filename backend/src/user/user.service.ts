@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, NotFoundException, forwardRef } from "@nestjs/common"
-import { eq, sql } from "drizzle-orm"
+import { eq, inArray, sql } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
 import { users, userTenants, userWorkspacePreferences } from "../../db/schema"
@@ -16,6 +16,7 @@ export interface UserRecord {
   keycloakId: string
   email: string | null
   displayName: string | null
+  lastAccessTime: Date | null
   createdAt: Date
   updatedAt: Date
 }
@@ -59,17 +60,26 @@ export class UserService {
     if (existing) {
       const newEmail = identity.email ?? null
       const newDisplayName = identity.displayName ?? null
-      if (existing.email !== newEmail || existing.displayName !== newDisplayName) {
-        await db
-          .update(users)
-          .set({ email: newEmail, displayName: newDisplayName, updatedAt: new Date() })
-          .where(eq(users.keycloakId, identity.keycloakId))
-      }
+      const profileChanged = existing.email !== newEmail || existing.displayName !== newDisplayName
+      const now = new Date()
+      await db
+        .update(users)
+        .set(
+          profileChanged
+            ? { email: newEmail, displayName: newDisplayName, lastAccessTime: now, updatedAt: now }
+            : { lastAccessTime: now },
+        )
+        .where(eq(users.keycloakId, identity.keycloakId))
       if (tenantId) {
         await this.ensureUserTenant(existing.id, tenantId)
         await this.workspaceService.ensurePrivateWorkspace(existing.id, tenantId)
       }
-      return { ...existing, email: newEmail ?? existing.email, displayName: newDisplayName ?? existing.displayName }
+      return {
+        ...existing,
+        email: newEmail ?? existing.email,
+        displayName: newDisplayName ?? existing.displayName,
+        lastAccessTime: now,
+      }
     }
 
     const [created] = await db
@@ -79,6 +89,7 @@ export class UserService {
         keycloakId: identity.keycloakId,
         email: identity.email ?? null,
         displayName: identity.displayName ?? null,
+        lastAccessTime: new Date(),
       })
       .onConflictDoNothing()
       .returning()
@@ -120,6 +131,19 @@ export class UserService {
   async findByKeycloakId(keycloakId: string): Promise<UserRecord | null> {
     const [row] = await db.select().from(users).where(eq(users.keycloakId, keycloakId))
     return row ?? null
+  }
+
+  async getLastAccessTimes(keycloakUserIds: string[]): Promise<Record<string, string | null>> {
+    if (keycloakUserIds.length === 0) return {}
+    const rows = await db
+      .select({ keycloakId: users.keycloakId, lastAccessTime: users.lastAccessTime })
+      .from(users)
+      .where(inArray(users.keycloakId, keycloakUserIds))
+    const result: Record<string, string | null> = {}
+    rows.forEach((row) => {
+      result[row.keycloakId] = row.lastAccessTime ? row.lastAccessTime.toISOString() : null
+    })
+    return result
   }
 
   async getWorkspacePreferences(userId: string): Promise<WorkspacePreferencesResponse> {

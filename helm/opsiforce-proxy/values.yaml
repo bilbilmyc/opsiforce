@@ -9,6 +9,8 @@ proxy:
   agentService:
   backendService:
   frontendService:
+  keycloakMsApiBackend:
+  keycloakMsAssetsBackend:
 
 oauth2Proxy:
   image:

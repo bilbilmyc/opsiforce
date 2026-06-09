@@ -24,6 +24,8 @@ What `dev-opsiforce-only` starts:
 - **Tilt:** build/deploy backend and runtime proxy dev images, live-update source into pods
 - **Frontend:** start Vite (HMR) — imports OpenCode from `opencode/` at build time
 
+For User Management, run `yarn run dev-keycloak-ms-only` as well so `/ms-assets` and `/ms-api` have a local keycloak-ms target. This builds keycloak-ms and serves it with `vite preview` — required because the `/users` page loads keycloak-ms as a Module Federation remote (`/ms-assets/remoteEntry.js`), which only exists in a build. Do **not** use `dev-ms-only` for this: it runs keycloak-ms as a raw `vite dev` server that never emits `remoteEntry.js`, so the embedded UI fails with "Failed to load user management." (`dev-ms-only`/`dev-ms` stay around for working on the keycloak-ms app standalone with HMR.)
+
 Shortcut:
 
 ```bash

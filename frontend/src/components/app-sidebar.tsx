@@ -44,6 +44,7 @@ import {
   Search,
   Settings,
   SlidersHorizontal,
+  Users,
   Wallet,
   X,
 } from "~/components/icons";
@@ -264,6 +265,14 @@ export default function AppSidebar() {
                   >
                     <Settings class="w-4 h-4 text-muted-foreground" />
                     Workspaces
+                  </DropdownMenuItem>
+                </Show>
+                <Show when={hasPermission(Permission.manageUsers)}>
+                  <DropdownMenuItem
+                    onSelect={() => navigate({ to: "/settings/users" })}
+                  >
+                    <Users class="w-4 h-4 text-muted-foreground" />
+                    Users
                   </DropdownMenuItem>
                 </Show>
                 <Show when={hasPermission(Permission.manageTenantBudget)}>

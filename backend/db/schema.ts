@@ -414,6 +414,7 @@ export const users = pgTable("users", {
   keycloakId: text("keycloak_id").notNull().unique(),
   email: text("email"),
   displayName: text("display_name"),
+  lastAccessTime: timestamp("last_access_time"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })

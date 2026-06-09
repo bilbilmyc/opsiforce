@@ -93,6 +93,8 @@ yarn run dev-opsiforce-only
 - Tilt backend/proxy loop
 - Vite frontend server
 
+User Management also needs the shared keycloak-ms local stack. Run `yarn run dev-keycloak-ms-only` when working on `/users` — it builds keycloak-ms and serves it via `vite preview`, which the `/users` Module Federation remote (`/ms-assets/remoteEntry.js`) requires. Do not use `dev-ms-only` here: it runs keycloak-ms as a raw dev server that never emits `remoteEntry.js`.
+
 ### Shortcut
 
 For a slower all-in-one startup, use:

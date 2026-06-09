@@ -157,6 +157,14 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         ws: true,
       },
+      "/ms-api": {
+        target: process.env.VITE_USER_MS_URL || "http://localhost:4112",
+        changeOrigin: true,
+      },
+      "/ms-assets": {
+        target: process.env.VITE_USER_MS_URL || "http://localhost:4112",
+        changeOrigin: true,
+      },
     },
   },
   worker: {
