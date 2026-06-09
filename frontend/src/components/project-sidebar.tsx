@@ -18,6 +18,7 @@ import { DndType, PUBLIC_ID } from "~/lib/sidebar-dnd"
 import { Permission } from "~/constants/permissions"
 import { FolderOpen } from "~/components/icons"
 import Spinner from "~/components/ui/spinner"
+import ConfirmDialog from "~/components/ui/confirm-dialog"
 import ProjectSettings from "./project-settings"
 import WorkspaceSettings from "./workspace-settings"
 import SidebarWorkspaceGroup from "./sidebar-workspace-group"
@@ -27,6 +28,15 @@ const FOLDED_KEY = "opsiforce:workspace:folded"
 const PUBLIC_FOLDED_KEY = "opsiforce:workspace:public-folded"
 
 type DragEndEvent = Parameters<NonNullable<DragDropProviderProps["onDragEnd"]>>[0]
+
+interface PendingMove {
+  projectId: string
+  fromWorkspaceId: string | null
+  toWorkspaceId: string | null
+  fromName: string
+  toName: string
+  projectTitle: string
+}
 
 export default function ProjectSidebar(props: { search: string }) {
   const navigate = useNavigate()
@@ -39,6 +49,7 @@ export default function ProjectSidebar(props: { search: string }) {
 
   const [settingsProjectId, setSettingsProjectId] = createSignal<string | null>(null)
   const [settingsWorkspaceId, setSettingsWorkspaceId] = createSignal<string | null>(null)
+  const [pendingMove, setPendingMove] = createSignal<PendingMove | null>(null)
 
   const projects = useProjects()
   const workspaces = useWorkspaces()
@@ -157,12 +168,26 @@ export default function ProjectSidebar(props: { search: string }) {
     }
     const fromWorkspaceId = initialGroup === PUBLIC_ID ? null : (initialGroup ?? null)
     const toWorkspaceId = group === PUBLIC_ID ? null : (group ?? null)
-    moveProject.mutate({
+    const project = (projects.data ?? []).find((p) => p.id === projectId)
+    setPendingMove({
       projectId,
       fromWorkspaceId,
       toWorkspaceId,
       fromName: workspaceLabel(fromWorkspaceId),
       toName: workspaceLabel(toWorkspaceId),
+      projectTitle: project?.title?.trim() || "Untitled project",
+    })
+  }
+
+  const confirmMove = () => {
+    const move = pendingMove()
+    if (!move) return
+    moveProject.mutate({
+      projectId: move.projectId,
+      fromWorkspaceId: move.fromWorkspaceId,
+      toWorkspaceId: move.toWorkspaceId,
+      fromName: move.fromName,
+      toName: move.toName,
     })
   }
 
@@ -293,6 +318,21 @@ export default function ProjectSidebar(props: { search: string }) {
           />
         )}
       </Show>
+
+      <ConfirmDialog
+        open={!!pendingMove()}
+        onOpenChange={(open) => {
+          if (!open) setPendingMove(null)
+        }}
+        title="Move project"
+        description={
+          pendingMove()
+            ? `Move "${pendingMove()?.projectTitle}" from ${pendingMove()?.fromName} to ${pendingMove()?.toName}?`
+            : ""
+        }
+        confirmLabel="Move"
+        onConfirm={confirmMove}
+      />
     </>
   )
 }

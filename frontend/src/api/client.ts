@@ -273,9 +273,19 @@ export interface UpdateScheduleDto {
   isActive?: boolean
 }
 
+export interface ScheduleListFilter {
+  environmentId?: string
+  projectEnvironmentId?: string
+}
+
 export const scheduleApi = {
-  list: (environmentId?: string) =>
-    api.get<Schedule[]>(environmentId ? `/schedules?environmentId=${environmentId}` : "/schedules"),
+  list: (filter?: ScheduleListFilter) => {
+    const params = new URLSearchParams()
+    if (filter?.environmentId) params.set("environmentId", filter.environmentId)
+    if (filter?.projectEnvironmentId) params.set("projectEnvironmentId", filter.projectEnvironmentId)
+    const qs = params.toString()
+    return api.get<Schedule[]>(qs ? `/schedules?${qs}` : "/schedules")
+  },
   update: (projectId: string, scheduleId: string, dto: UpdateScheduleDto) =>
     api.patch<Schedule>(`/projects/${projectId}/schedules/${scheduleId}`, dto),
   remove: (projectId: string, scheduleId: string) => api.delete<void>(`/projects/${projectId}/schedules/${scheduleId}`),

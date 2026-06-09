@@ -241,7 +241,6 @@ export class BifrostService {
     budgets: BudgetDefaults,
     keyType: KeyType = "chat",
     teamId?: string,
-    projectEnvironmentId?: string,
   ): Promise<{ keyId: string; keyToken: string }> {
     const [existing] = await db
       .select()
@@ -281,7 +280,6 @@ export class BifrostService {
     await db.insert(projectVirtualKeys).values({
       id: crypto.randomUUID(),
       projectId,
-      ...(projectEnvironmentId ? { projectEnvironmentId } : {}),
       tenantId,
       keyType,
       bifrostKeyId: keyId,
@@ -304,12 +302,11 @@ export class BifrostService {
     return this.createProjectTeam(projectId, budgets, customerId)
   }
 
-  async createEnvironmentResources(params: {
+  async createProjectResources(params: {
     projectId: string
-    projectEnvironmentId: string
     tenantId: string
   }): Promise<void> {
-    const { projectId, projectEnvironmentId, tenantId } = params
+    const { projectId, tenantId } = params
 
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId))
     if (!tenant) return
@@ -321,23 +318,22 @@ export class BifrostService {
     const teamId = await this.ensureProjectTeam(projectId, budgets, customerId)
 
     await Promise.all([
-      this.createProjectKey(projectId, tenantId, budgets, "chat", teamId, projectEnvironmentId),
-      this.createProjectKey(projectId, tenantId, budgets, "backend", teamId, projectEnvironmentId),
+      this.createProjectKey(projectId, tenantId, budgets, "chat", teamId),
+      this.createProjectKey(projectId, tenantId, budgets, "backend", teamId),
     ])
   }
 
-  async createOrphanEnvironmentResources(params: {
+  async createOrphanProjectResources(params: {
     projectId: string
-    projectEnvironmentId: string
   }): Promise<void> {
-    const { projectId, projectEnvironmentId } = params
+    const { projectId } = params
 
     const budgets = await this.defaultsService.getGlobalBudgets()
     const teamId = await this.ensureProjectTeam(projectId, budgets)
 
     await Promise.all([
-      this.createProjectKey(projectId, null, budgets, "chat", teamId, projectEnvironmentId),
-      this.createProjectKey(projectId, null, budgets, "backend", teamId, projectEnvironmentId),
+      this.createProjectKey(projectId, null, budgets, "chat", teamId),
+      this.createProjectKey(projectId, null, budgets, "backend", teamId),
     ])
   }
 

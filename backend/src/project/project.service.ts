@@ -361,7 +361,7 @@ export class ProjectService implements OnApplicationBootstrap {
       })
     })
 
-    await this.createBifrostResources(id, id, tenantId)
+    await this.createBifrostResources(id, tenantId)
     await this.createGatewayKey(id, id, tenantId)
     this.spawnStartupWorker(id)
 
@@ -424,7 +424,7 @@ export class ProjectService implements OnApplicationBootstrap {
       })
     })
 
-    await this.createBifrostResources(id, id, tenantId)
+    await this.createBifrostResources(id, tenantId)
     await this.createGatewayKey(id, id, tenantId)
     await this.enqueueDuplicateJob({
       duplicateJobId,
@@ -1292,17 +1292,13 @@ export class ProjectService implements OnApplicationBootstrap {
     this.logger.log(`Environment ${envId} active on pod ${podName} (${podIp})`)
   }
 
-  private async createBifrostResources(projectId: string, environmentId: string, tenantId: string): Promise<void> {
+  private async createBifrostResources(projectId: string, tenantId: string): Promise<void> {
     if (!this.bifrostService.isEnabled()) return
 
     try {
-      await this.bifrostService.createEnvironmentResources({
-        projectId,
-        projectEnvironmentId: environmentId,
-        tenantId,
-      })
+      await this.bifrostService.createProjectResources({ projectId, tenantId })
     } catch (err) {
-      this.logger.warn(`Failed to create Bifrost resources for environment ${environmentId}: ${(err as Error).message}`)
+      this.logger.warn(`Failed to create Bifrost resources for project ${projectId}: ${(err as Error).message}`)
     }
   }
 

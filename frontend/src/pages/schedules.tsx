@@ -2,7 +2,8 @@ import { Show, For, createSignal, createMemo, createEffect } from "solid-js"
 import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-query"
 import { Link, useNavigate, useSearch } from "@tanstack/solid-router"
 import { scheduleApi, type Schedule, type ScheduleExecution, type UpdateScheduleDto } from "~/api/client"
-import { useEnvironments } from "~/api/environments"
+import { useEnvironments, useProjectEnvironments } from "~/api/environments"
+import { useProjects } from "~/api/projects"
 import {
   Calendar,
   Trash2,
@@ -10,6 +11,7 @@ import {
   Play,
   Clock,
   EllipsisVertical,
+  ChevronLeft,
 } from "~/components/icons"
 import { Button } from "~/components/ui/button"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs"
@@ -62,21 +64,29 @@ export default function SchedulesPage() {
   const search = useSearch({ from: "/schedules" })
   const navigate = useNavigate()
 
-  const environments = useEnvironments()
+  const scopedProjectEnvId = createMemo(() => search().projectEnvironmentId)
+  const scopedProjectId = createMemo(() => search().projectId)
+  const isScoped = createMemo(() => !!scopedProjectEnvId())
+
+  const environments = useEnvironments({ enabled: () => !isScoped() })
   const sortedEnvs = createMemo(() =>
     [...(environments.data ?? [])].sort((a, b) => {
       if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1
       return a.name.localeCompare(b.name)
     }),
   )
-  const activeEnvId = createMemo(() => {
+  const [selectedEnvId, setSelectedEnvId] = createSignal("")
+  createEffect(() => {
     const envs = sortedEnvs()
-    if (envs.length === 0) return ""
+    if (envs.length === 0) return
     const fromSearch = search().environmentId
-    return fromSearch && envs.some((e) => e.id === fromSearch) ? fromSearch : envs[0].id
+    setSelectedEnvId(fromSearch && envs.some((e) => e.id === fromSearch) ? fromSearch : envs[0].id)
   })
-  const selectEnv = (id: string) =>
+  const activeEnvId = selectedEnvId
+  const selectEnv = (id: string) => {
+    setSelectedEnvId(id)
     navigate({ to: "/schedules", search: { environmentId: id }, replace: true })
+  }
 
   const [editSchedule, setEditSchedule] = createSignal<Schedule | null>(null)
   const [deleteTarget, setDeleteTarget] = createSignal<Schedule | null>(null)
@@ -85,10 +95,32 @@ export default function SchedulesPage() {
   const [triggeredId, setTriggeredId] = createSignal<string | null>(null)
 
   const schedules = createQuery(() => ({
-    queryKey: ["schedules", activeEnvId()],
-    queryFn: () => scheduleApi.list(activeEnvId()),
-    enabled: !!activeEnvId(),
+    queryKey: isScoped()
+      ? ["schedules", "project-environment", scopedProjectEnvId()]
+      : ["schedules", "environment", activeEnvId()],
+    queryFn: () =>
+      isScoped()
+        ? scheduleApi.list({ projectEnvironmentId: scopedProjectEnvId() })
+        : scheduleApi.list({ environmentId: activeEnvId() }),
+    enabled: isScoped() ? !!scopedProjectEnvId() : !!activeEnvId(),
   }))
+
+  const projects = useProjects({ enabled: () => isScoped() })
+  const projectEnvironments = useProjectEnvironments(() => scopedProjectId() ?? "", {
+    enabled: () => isScoped() && !!scopedProjectId(),
+  })
+  const scopedEnvName = createMemo(
+    () =>
+      projectEnvironments.data?.find((e) => e.id === scopedProjectEnvId())?.name ??
+      schedules.data?.[0]?.environmentName ??
+      null,
+  )
+  const scopedProjectTitle = createMemo(
+    () =>
+      projects.data?.find((p) => p.id === scopedProjectId())?.title ??
+      schedules.data?.[0]?.projectTitle ??
+      null,
+  )
 
   const executions = createQuery(() => ({
     queryKey: ["executions", execSchedule()?.id],
@@ -131,116 +163,98 @@ export default function SchedulesPage() {
 
   return (
     <div class="w-full px-4 py-6">
+      <Show when={isScoped()}>
+        <Link
+          to="/schedules"
+          search={{ environmentId: undefined, projectEnvironmentId: undefined, projectId: undefined }}
+          class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3"
+        >
+          <ChevronLeft class="w-3.5 h-3.5" />
+          All schedules
+        </Link>
+      </Show>
+
       <div class="flex items-center gap-3 mb-1">
         <Calendar class="w-5 h-5 text-muted-foreground" />
         <h1 class="text-xl font-semibold">Schedules</h1>
-        <Show when={!schedules.isPending && !!activeEnvId()}>
+        <Show when={!schedules.isPending && (isScoped() || !!activeEnvId())}>
           <Badge variant="secondary" class="text-[10px] px-1.5 py-0">
             {count()}
           </Badge>
         </Show>
       </div>
-      <p class="text-xs text-muted-foreground mb-5 ml-8">
-        Automated tasks that run on a recurring schedule. Pick an environment to see its schedules.
-      </p>
 
-      <Show when={!environments.isPending} fallback={<Skeleton class="h-9 w-full" />}>
-        <Tabs value={activeEnvId()} onChange={selectEnv}>
-          <TabsList class="w-auto">
-            <For each={sortedEnvs()}>
-              {(env) => (
-                <TabsTrigger value={env.id} class="flex-none">
-                  {env.name}
-                </TabsTrigger>
-              )}
-            </For>
-          </TabsList>
-          <TabsContent value={activeEnvId()}>
-            <Show when={schedules.isPending}>
-              <div class="rounded-lg border border-border overflow-hidden bg-card divide-y divide-border">
-                <For each={[0, 1, 2]}>
-                  {() => (
-                    <div class="flex items-center gap-3 px-4 py-3">
-                      <Skeleton class="h-4 w-40" />
-                      <Skeleton class="h-4 w-32" />
-                      <Skeleton class="h-4 w-24" />
-                      <Skeleton class="h-4 w-16 ml-auto" />
-                    </div>
-                  )}
-                </For>
-              </div>
-            </Show>
+      <Show
+        when={isScoped()}
+        fallback={
+          <p class="text-xs text-muted-foreground mb-5 ml-8">
+            Automated tasks that run on a recurring schedule. Pick an environment to see its schedules.
+          </p>
+        }
+      >
+        <p class="text-xs text-muted-foreground mb-5 ml-8">
+          <Show when={scopedProjectTitle()} fallback="Automated tasks for this environment.">
+            {(title) => (
+              <>
+                Automated tasks for{" "}
+                <Link
+                  to="/projects/$projectId"
+                  params={{ projectId: scopedProjectId() ?? "" }}
+                  search={{ prompt: undefined }}
+                  class="text-primary hover:underline underline-offset-2"
+                >
+                  {title()}
+                </Link>
+                <Show when={scopedEnvName()}>{(name) => <> · {name()}</>}</Show>
+              </>
+            )}
+          </Show>
+        </p>
+      </Show>
 
-            <Show when={!schedules.isPending && count() === 0}>
-              <div class="rounded-lg border border-dashed border-border text-center py-16 text-muted-foreground">
-                <Calendar class="w-10 h-10 mx-auto mb-3 opacity-40" />
-                <p class="text-sm font-medium">No schedules in this environment</p>
-              </div>
-            </Show>
+      <Show when={isScoped()}>
+        <ScheduleTableSection
+          pending={schedules.isPending}
+          schedules={schedules.data}
+          showProject={false}
+          updating={updateMutation.isPending}
+          triggeredId={triggeredId()}
+          onToggle={toggleActive}
+          onRun={(s) => setRunTarget(s)}
+          onViewExecutions={(s) => setExecSchedule(s)}
+          onEdit={(s) => setEditSchedule(s)}
+          onDelete={(s) => setDeleteTarget(s)}
+        />
+      </Show>
 
-            <Show when={count() > 0}>
-              <div class="rounded-lg border border-border overflow-hidden bg-card">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Project</TableHead>
-                      <TableHead>Schedule</TableHead>
-                      <TableHead>Timezone</TableHead>
-                      <TableHead>Active</TableHead>
-                      <TableHead class="text-right pr-4">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <For each={schedules.data}>
-                      {(s) => (
-                        <TableRow>
-                          <TableCell class="font-medium">{s.name}</TableCell>
-                          <TableCell>
-                            <Link
-                              to="/projects/$projectId"
-                              params={{ projectId: s.projectId }}
-                              search={{ prompt: undefined }}
-                              class="text-xs text-primary hover:underline underline-offset-2"
-                            >
-                              {s.projectTitle ?? s.projectId.slice(0, 8)}
-                            </Link>
-                          </TableCell>
-                          <TableCell>
-                            <span class="text-xs" title={s.cronPattern}>
-                              {cronToHuman(s.cronPattern)}
-                            </span>
-                          </TableCell>
-                          <TableCell class="text-xs text-muted-foreground">{s.timeZone}</TableCell>
-                          <TableCell>
-                            <Switch
-                              checked={s.isActive}
-                              onChange={() => toggleActive(s)}
-                              disabled={updateMutation.isPending}
-                            >
-                              <SwitchControl>
-                                <SwitchThumb />
-                              </SwitchControl>
-                            </Switch>
-                          </TableCell>
-                          <TableCell class="text-right pr-2">
-                            <RowActions
-                              disabled={triggeredId() === s.id}
-                              onRun={() => setRunTarget(s)}
-                              onViewExecutions={() => setExecSchedule(s)}
-                              onEdit={() => setEditSchedule(s)}
-                              onDelete={() => setDeleteTarget(s)}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </For>
-                  </TableBody>
-                </Table>
-              </div>
-            </Show>
-          </TabsContent>
-        </Tabs>
+      <Show when={!isScoped()}>
+        <Show when={!environments.isPending} fallback={<Skeleton class="h-9 w-full" />}>
+          <Tabs value={activeEnvId()} onChange={selectEnv}>
+            <TabsList class="w-auto">
+              <For each={sortedEnvs()}>
+                {(env) => (
+                  <TabsTrigger value={env.id} class="flex-none">
+                    {env.name}
+                  </TabsTrigger>
+                )}
+              </For>
+            </TabsList>
+            <TabsContent value={activeEnvId()}>
+              <ScheduleTableSection
+                pending={schedules.isPending}
+                schedules={schedules.data}
+                showProject={true}
+                updating={updateMutation.isPending}
+                triggeredId={triggeredId()}
+                onToggle={toggleActive}
+                onRun={(s) => setRunTarget(s)}
+                onViewExecutions={(s) => setExecSchedule(s)}
+                onEdit={(s) => setEditSchedule(s)}
+                onDelete={(s) => setDeleteTarget(s)}
+              />
+            </TabsContent>
+          </Tabs>
+        </Show>
       </Show>
 
       <EditScheduleDialog
@@ -290,6 +304,112 @@ export default function SchedulesPage() {
         onClose={() => setExecSchedule(null)}
       />
     </div>
+  )
+}
+
+function ScheduleTableSection(props: {
+  pending: boolean
+  schedules: Schedule[] | undefined
+  showProject: boolean
+  updating: boolean
+  triggeredId: string | null
+  onToggle: (s: Schedule) => void
+  onRun: (s: Schedule) => void
+  onViewExecutions: (s: Schedule) => void
+  onEdit: (s: Schedule) => void
+  onDelete: (s: Schedule) => void
+}) {
+  const count = () => props.schedules?.length ?? 0
+  return (
+    <>
+      <Show when={props.pending}>
+        <div class="rounded-lg border border-border overflow-hidden bg-card divide-y divide-border">
+          <For each={[0, 1, 2]}>
+            {() => (
+              <div class="flex items-center gap-3 px-4 py-3">
+                <Skeleton class="h-4 w-40" />
+                <Skeleton class="h-4 w-32" />
+                <Skeleton class="h-4 w-24" />
+                <Skeleton class="h-4 w-16 ml-auto" />
+              </div>
+            )}
+          </For>
+        </div>
+      </Show>
+
+      <Show when={!props.pending && count() === 0}>
+        <div class="rounded-lg border border-dashed border-border text-center py-16 text-muted-foreground">
+          <Calendar class="w-10 h-10 mx-auto mb-3 opacity-40" />
+          <p class="text-sm font-medium">No schedules in this environment</p>
+        </div>
+      </Show>
+
+      <Show when={count() > 0}>
+        <div class="rounded-lg border border-border overflow-hidden bg-card">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <Show when={props.showProject}>
+                  <TableHead>Project</TableHead>
+                </Show>
+                <TableHead>Schedule</TableHead>
+                <TableHead>Timezone</TableHead>
+                <TableHead>Active</TableHead>
+                <TableHead class="text-right pr-4">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <For each={props.schedules}>
+                {(s) => (
+                  <TableRow>
+                    <TableCell class="font-medium">{s.name}</TableCell>
+                    <Show when={props.showProject}>
+                      <TableCell>
+                        <Link
+                          to="/projects/$projectId"
+                          params={{ projectId: s.projectId }}
+                          search={{ prompt: undefined }}
+                          class="text-xs text-primary hover:underline underline-offset-2"
+                        >
+                          {s.projectTitle ?? s.projectId.slice(0, 8)}
+                        </Link>
+                      </TableCell>
+                    </Show>
+                    <TableCell>
+                      <span class="text-xs" title={s.cronPattern}>
+                        {cronToHuman(s.cronPattern)}
+                      </span>
+                    </TableCell>
+                    <TableCell class="text-xs text-muted-foreground">{s.timeZone}</TableCell>
+                    <TableCell>
+                      <Switch
+                        checked={s.isActive}
+                        onChange={() => props.onToggle(s)}
+                        disabled={props.updating}
+                      >
+                        <SwitchControl>
+                          <SwitchThumb />
+                        </SwitchControl>
+                      </Switch>
+                    </TableCell>
+                    <TableCell class="text-right pr-2">
+                      <RowActions
+                        disabled={props.triggeredId === s.id}
+                        onRun={() => props.onRun(s)}
+                        onViewExecutions={() => props.onViewExecutions(s)}
+                        onEdit={() => props.onEdit(s)}
+                        onDelete={() => props.onDelete(s)}
+                      />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </For>
+            </TableBody>
+          </Table>
+        </div>
+      </Show>
+    </>
   )
 }
 
