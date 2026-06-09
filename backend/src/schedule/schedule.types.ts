@@ -5,6 +5,7 @@ export interface CreateScheduleDto {
   method?: string
   body?: unknown
   headers?: Record<string, string>
+  isActive?: boolean
 }
 
 export interface UpdateScheduleDto {

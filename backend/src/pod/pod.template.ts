@@ -1,4 +1,5 @@
 import * as k8s from "@kubernetes/client-node"
+import type { K8sResourceRequirements } from "./pod-classes"
 
 export interface PodTemplateOptions {
   podName: string
@@ -10,9 +11,11 @@ export interface PodTemplateOptions {
   storageMountPath: string
   subPath?: string
   projectId?: string
+  environmentId?: string
+  opsiforceEnv?: string
   appsHostname?: string
   imagePullPolicy: string
-  resources?: Record<string, unknown>
+  resources: K8sResourceRequirements
   nodeSelector?: Record<string, string>
   tolerations?: Array<Record<string, string>>
   affinity?: Record<string, unknown>
@@ -29,6 +32,7 @@ export interface PodTemplateOptions {
 
 export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
   const resolvedAgentName = options.agentName || "app-builder"
+  const routingId = options.environmentId ?? options.projectId
 
   const volumeMounts: k8s.V1VolumeMount[] = [
     {
@@ -50,6 +54,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
       labels: {
         app: "opsiforce-agent",
         ...(options.projectId ? { "opsiforce.io/project-id": options.projectId } : {}),
+        ...(options.environmentId ? { "opsiforce.io/environment-id": options.environmentId } : {}),
       },
     },
     spec: {
@@ -103,8 +108,9 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             { name: "XDG_CACHE_HOME", value: "/workspace/.xdg/cache" },
             { name: "XDG_STATE_HOME", value: "/workspace/.xdg/state" },
             { name: "AGENT_NAME", value: resolvedAgentName },
-            ...(options.projectId && options.appsHostname
-              ? [{ name: "APP_PUBLIC_URL", value: `https://${options.projectId}.${options.appsHostname}/` }]
+            ...(options.opsiforceEnv ? [{ name: "OPSIFORCE_ENV", value: options.opsiforceEnv }] : []),
+            ...(routingId && options.appsHostname
+              ? [{ name: "APP_PUBLIC_URL", value: `https://${routingId}.${options.appsHostname}/` }]
               : []),
             ...(options.bifrostApiKey && options.bifrostProxyUrl
               ? [
@@ -150,10 +156,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             initialDelaySeconds: 5,
             periodSeconds: 5,
           },
-          resources: options.resources ?? {
-            requests: { cpu: "200m", memory: "1312Mi" },
-            limits: { memory: "2Gi" },
-          },
+          resources: options.resources,
         },
       ],
       volumes: [buildStorageVolume(options)],

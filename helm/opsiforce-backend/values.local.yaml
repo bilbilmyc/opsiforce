@@ -36,12 +36,10 @@ config:
   agentName: "app-builder"
   agentWorkspaceUpdateOnStartup: "true"
   agentUpdateJobTimeoutMs: "1800000"
-  agentResources:
-    requests:
-      cpu: "500m"
-      memory: 2Gi
-    limits:
-      memory: 4Gi
+  podClassSmall:
+    cpuMillicores: 200
+    memoryRequestMib: 1312
+    memoryLimitMib: 2048
   agentNodeSelector: ~
   agentTolerations: ~
   agentAffinity: ~

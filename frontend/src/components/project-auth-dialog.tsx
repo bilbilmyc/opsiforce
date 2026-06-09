@@ -6,6 +6,8 @@ import { ProjectAuthTab } from "~/components/project-auth"
 
 export default function ProjectAuthDialog(props: {
   projectId: string
+  environmentId: string
+  environmentName?: string
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
@@ -15,8 +17,8 @@ export default function ProjectAuthDialog(props: {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent class="max-w-2xl">
-        <DialogTitle>App Auth</DialogTitle>
-        <DialogDescription>Configure how visitors sign in to your app.</DialogDescription>
+        <DialogTitle>App Auth{props.environmentName ? ` — ${props.environmentName}` : ""}</DialogTitle>
+        <DialogDescription>Configure how visitors sign in to this environment's app.</DialogDescription>
         <div class="mt-4">
           <Show when={props.open}>
             <Show
@@ -29,7 +31,7 @@ export default function ProjectAuthDialog(props: {
                 </div>
               }
             >
-              <ProjectAuthTab projectId={props.projectId} />
+              <ProjectAuthTab projectId={props.projectId} environmentId={props.environmentId} />
             </Show>
           </Show>
         </div>

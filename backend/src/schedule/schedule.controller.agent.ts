@@ -16,7 +16,7 @@ export class ScheduleAgentController {
 
   @Post()
   async upsert(@Body() dto: CreateScheduleDto, @Req() req: GatewayRequest) {
-    const { projectId, tenantId } = req.gatewayContext
+    const { projectId, projectEnvironmentId, tenantId } = req.gatewayContext
 
     if (!dto.name || !dto.cronPattern || !dto.targetPath) {
       throw new BadRequestException("Missing required fields: name, cronPattern, targetPath")
@@ -26,17 +26,19 @@ export class ScheduleAgentController {
       throw new BadRequestException("Schedules require a claimed project")
     }
 
-    return this.scheduleService.upsert(projectId, tenantId, dto)
+    return this.scheduleService.upsert(projectId, projectEnvironmentId ?? projectId, tenantId, dto)
   }
 
   @Get()
   async list(@Req() req: GatewayRequest) {
-    return this.scheduleService.findByProject(req.gatewayContext.projectId)
+    const { projectId, projectEnvironmentId } = req.gatewayContext
+    return this.scheduleService.findByEnvironment(projectEnvironmentId ?? projectId)
   }
 
   @Delete(":id")
   async remove(@Param("id") id: string, @Req() req: GatewayRequest) {
-    await this.scheduleService.removeById(req.gatewayContext.projectId, id)
+    const { projectId, projectEnvironmentId } = req.gatewayContext
+    await this.scheduleService.removeByEnvironment(projectEnvironmentId ?? projectId, id)
     return { success: true }
   }
 }

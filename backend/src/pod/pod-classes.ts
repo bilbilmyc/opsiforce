@@ -1,0 +1,89 @@
+export type PodPreset = "small" | "medium" | "large"
+
+export type PodClass = PodPreset | "custom"
+
+export interface PodResources {
+  cpuMillicores: number
+  memoryRequestMib: number
+  memoryLimitMib: number
+}
+
+export interface PodClassBounds {
+  min: PodResources
+  max: PodResources
+}
+
+export const POD_CLASS_DEFAULT: PodClass = "small"
+
+const PRESETS: Record<PodPreset, PodResources> = {
+  small: { cpuMillicores: 500, memoryRequestMib: 2048, memoryLimitMib: 4096 },
+  medium: { cpuMillicores: 1000, memoryRequestMib: 4096, memoryLimitMib: 8192 },
+  large: { cpuMillicores: 2000, memoryRequestMib: 8192, memoryLimitMib: 16384 },
+}
+
+export const CUSTOM_BOUNDS: PodClassBounds = {
+  min: { cpuMillicores: 250, memoryRequestMib: 1024, memoryLimitMib: 2048 },
+  max: { cpuMillicores: 4000, memoryRequestMib: 16384, memoryLimitMib: 24576 },
+}
+
+export function isPreset(podClass: PodClass): podClass is PodPreset {
+  return podClass === "small" || podClass === "medium" || podClass === "large"
+}
+
+export function resolvePreset(preset: PodPreset, smallOverride?: PodResources | null): PodResources {
+  if (preset === "small" && smallOverride) return smallOverride
+  return PRESETS[preset]
+}
+
+function clampValue(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return min
+  return Math.min(Math.max(Math.round(value), min), max)
+}
+
+export function clampCustom(input: PodResources): PodResources {
+  const cpuMillicores = clampValue(input.cpuMillicores, CUSTOM_BOUNDS.min.cpuMillicores, CUSTOM_BOUNDS.max.cpuMillicores)
+  const memoryRequestMib = clampValue(
+    input.memoryRequestMib,
+    CUSTOM_BOUNDS.min.memoryRequestMib,
+    CUSTOM_BOUNDS.max.memoryRequestMib,
+  )
+  const memoryLimitMib = clampValue(input.memoryLimitMib, CUSTOM_BOUNDS.min.memoryLimitMib, CUSTOM_BOUNDS.max.memoryLimitMib)
+  return {
+    cpuMillicores,
+    memoryRequestMib,
+    memoryLimitMib: Math.max(memoryLimitMib, memoryRequestMib),
+  }
+}
+
+export interface K8sResourceRequirements {
+  requests: { cpu: string; memory: string }
+  limits: { memory: string }
+}
+
+export function toK8sResources(resources: PodResources): K8sResourceRequirements {
+  return {
+    requests: { cpu: `${resources.cpuMillicores}m`, memory: `${resources.memoryRequestMib}Mi` },
+    limits: { memory: `${resources.memoryLimitMib}Mi` },
+  }
+}
+
+export interface PodClassPreset {
+  podClass: PodPreset
+  resources: PodResources
+}
+
+export interface PodClassCatalog {
+  presets: PodClassPreset[]
+  customBounds: PodClassBounds
+}
+
+export function buildPodClassCatalog(smallOverride?: PodResources | null): PodClassCatalog {
+  return {
+    presets: [
+      { podClass: "small", resources: resolvePreset("small", smallOverride) },
+      { podClass: "medium", resources: resolvePreset("medium") },
+      { podClass: "large", resources: resolvePreset("large") },
+    ],
+    customBounds: CUSTOM_BOUNDS,
+  }
+}

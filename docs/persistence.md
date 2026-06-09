@@ -138,17 +138,23 @@ The project identity is stable even though the pod identity changes.
 
 ## Resume behavior
 
-Resume is frontend-owned in the current implementation.
+Resume is frontend-owned and scoped to the **active environment**. Each environment is
+its own deployment with its own OpenCode session store, so resume always runs against the
+selected environment's proxy target, never the project id. The remembered session lives in
+`project_environments.session_id` (one pinned session per environment, Development included).
 
 ```
-1. Frontend asks the agent for sessions
-2. Child sessions are ignored
-3. Root sessions are sorted by updated time
-4. The newest root session is opened
-5. If no root session exists, frontend opens the default new-session route
+1. Frontend asks the active environment for its sessions (root sessions only)
+2. If the environment's pinned session_id still exists in that list, open it
+3. Otherwise open the oldest (first-created) root session and pin it as session_id
+4. If no root session exists (e.g. a freshly published environment), open the
+   default new-session route; the first chat the user starts becomes the pinned session
 ```
 
-Opsiforce does not currently use `projects.session_id` as the resume source of truth.
+Pinning the oldest session keeps the UI anchored to the canonical chat and ignores
+sessions created out-of-band (e.g. from a terminal inside the container), which are newer.
+Validating the pinned id against the live list is also what prevents a Development session
+id from leaking into a freshly published environment, where it would otherwise 404.
 
 ---
 

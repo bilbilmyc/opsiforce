@@ -1,180 +1,52 @@
 # Schedules
 
-Agents can register cron-scheduled HTTP callbacks against endpoints in the apps they build. The platform fires schedules internally (intra-cluster), waking suspended pods as needed.
+Agents can register recurring cron jobs against the apps they build — a daily report, a periodic sync, a health check. The platform stores each job, fires it on schedule from *inside* the cluster (waking a suspended pod if it has to), calls the app's own endpoint, and records every run with its status and latency.
 
-## Why
+## Per environment
 
-Agents build web apps with backend APIs. Users need recurring tasks — daily reports, periodic data syncs, health checks. Without scheduling, users must manually trigger these or set up external cron jobs that need auth bypass.
+A schedule belongs to **one ProjectEnvironment**, not to the project as a whole, and it fires only against that environment's running app: Development's schedules hit Development's pod, Production's hit Production's, independently. The agent registers schedules through the service gateway, and the gateway token already identifies which environment's pod is calling — so a schedule the agent creates while building in Development is owned by Development, and one created from a published environment's pod is owned by that environment. (Development is the environment that reuses the project id, so its schedules are keyed by the project id; published environments use their own ids — see [environments](environments.md) and the ADRs.)
 
-The schedule system lets the agent register cron jobs natively. The platform handles execution, pod lifecycle, timezone, and audit logging.
+Publishing carries schedules forward as a **one-time copy**: the publish dialog pre-checks Development's schedules, the user can uncheck any, and the chosen ones are recreated for the target environment. So the same-named schedule can legitimately exist in several environments at once — these are **intentional, independent copies**, each firing against its own app, not accidental duplicates. A name is unique only *within* an environment.
 
-## Architecture
+## Firing and wake-on-fire
 
-```
-Agent in pod
-  └─ POST $SERVICE_GATEWAY_URL/schedules
-        Authorization: Bearer $SERVICE_GATEWAY_API_KEY
-        { name, cronPattern, targetPath, method }
+Firing happens internally, never through the public ingress. When a job fires the worker resolves the owning environment; if that environment's pod is suspended it wakes it — the same flow as a user opening the project — waits for it to become ready, then calls the app's endpoint and records the response (status, latency, any error) as an execution. If the environment is disabled or failed, the worker records the reason instead of calling. Schedules fire in the **project's timezone**, captured from the user's browser so the agent never has to ask, and stamped on each schedule when it is created.
 
-opsiforce-backend (ClusterIP Service)
-  ├─ GatewayAuthGuard validates token → { projectId, tenantId }
-  ├─ ScheduleService:
-  │    reads user tz from Redis cache (project:<id>:user_tz)
-  │    writes project_schedules row
-  │    upserts BullMQ job scheduler
-  └─ BullMQ Worker on fire:
-       ├─ pod running → HTTP call to pod:3000<targetPath>
-       └─ pod not running → wake project → wait for ready → fire
-       records execution in schedule_executions
-```
+## Security
 
-The agent uses the same `SERVICE_GATEWAY_API_KEY` token used for the service gateway (email, etc). Schedule endpoints live at `/api/gateway/schedules` — sub-routes under the existing gateway prefix. No new env vars, tokens, or nginx rules.
+Schedules ride the same per-project **service-gateway token** the agent already uses for outbound calls: the token authenticates the caller and resolves its project and environment, so there are no new credentials. The schedule endpoints sit under the cluster-internal gateway prefix that the external proxy blocks, so they are unreachable from the internet, and firing calls the pod directly inside the cluster — never through the public ingress or the auth proxy. Managing schedules from the UI is tenant-scoped like the rest of the admin surface.
 
-## Security Model
+## Viewing and managing
 
-| Layer | What it does |
-|-------|-------------|
-| **Gateway token** | Existing per-project Bearer token. Validates caller, resolves project/tenant. |
-| **Cluster-internal only** | `/api/gateway` path is blocked at external nginx. Schedule endpoints are unreachable from the internet. |
-| **Intra-cluster firing** | BullMQ worker calls `pod-ip:3000` directly. Never goes through the public ingress or oauth2-proxy. |
-| **Wake-on-fire** | If the pod is suspended when a schedule fires, the worker wakes it using `ensureProjectById()` — same flow as a user opening the project. |
+Two views, both built around the per-environment model:
 
-## Request Flow
+- The tenant-wide **Schedules** page (top navigation) presents **one tab per environment** — Development, Production, and so on — and loads that environment's schedules **on demand** when you open its tab, with each row labelled by its project. Because environment names come from the tenant's shared registry, an environment tab reads coherently even across projects. From here you can edit the cron expression, toggle a schedule on or off, trigger a run immediately, view execution history, and delete.
+- A specific environment's tab opens directly from that environment's row in the project's **Environments** dialog — the same place its auth and Makara pin are managed. This is the only per-environment launcher; the project menu no longer carries a Schedules entry.
 
 ```
-1. Agent sends:
-   POST /api/gateway/schedules
-   Authorization: Bearer gw-a1b2c3d4-...
-   Body: { "name": "daily-report", "cronPattern": "0 9 * * *",
-           "targetPath": "/api/cron/daily-report", "method": "POST" }
-
-2. GatewayAuthGuard:
-   - Validates Bearer token → project_gateway_keys lookup
-   - Sets request.gatewayContext = { projectId, tenantId }
-
-3. ScheduleService.upsert():
-   - Reads timezone from Redis: GET project:<id>:user_tz → "America/New_York"
-   - INSERT INTO project_schedules ... ON CONFLICT DO UPDATE
-   - BullMQ: upsertJobScheduler("schedule:<uuid>", { pattern, tz })
-
-4. BullMQ fires at 9:00 AM America/New_York:
-   - ScheduleWorker loads schedule + project
-   - If pod not running: ensureProjectById() → wait for ready
-   - fetch("http://<pod-ip>:3000/api/cron/daily-report", { method: "POST" })
-   - INSERT INTO schedule_executions (status_code, latency_ms, ...)
+Agent in a pod
+  └─ POST $SERVICE_GATEWAY_URL/schedules        (token ⇒ project + environment)
+        │
+        ▼
+  backend stores the schedule, owned by that environment
+        │
+        ▼  cron fires (in the project's timezone)
+  worker wakes the environment's pod if suspended, then
+        │
+        ▼
+  calls the app's endpoint ⇒ records an execution
 ```
 
-## Timezone
+## Where the code lives
 
-Timezone is captured automatically from the user's browser — the agent never asks.
+- Backend: `backend/src/schedule/` — the agent-facing endpoints (gateway-guarded, environment-scoped), the tenant-facing admin endpoints, the service (database, BullMQ scheduler sync, timezone, execution recording), and the worker (wake-on-fire, the HTTP call, execution logging).
+- The schedule rows and their executions live in `backend/db/schema.ts` (`projectSchedules`, keyed per environment; `scheduleExecutions`).
+- Publishing mirrors Development's chosen schedules into the target environment in the publish worker (`backend/src/publish/`).
+- Frontend: the tenant-wide page is `frontend/src/pages/schedules.tsx` (one tab per environment, loaded on demand); the per-environment launcher lives in the Environments dialog under `frontend/src/components/project/environments/`.
+- The agent learns to use schedules from `agent-config/agents/app-builder/skills/schedules/SKILL.md`.
 
-1. Frontend adds `X-User-Timezone` header to every proxy request
-2. Backend caches it in Redis: `SET project:<id>:user_tz "America/New_York" EX 3600`
-3. On schedule creation, the service reads the cached tz and stores it on the schedule row
-4. If Redis key has expired, defaults to `UTC`
-5. Timezone is editable per-schedule via the UI
+## Future work
 
-## Database
-
-### project_schedules
-
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | text PK | UUID |
-| `project_id` | text FK | References `projects.id`, cascade delete |
-| `tenant_id` | text FK | References `tenants.id` |
-| `name` | text | Unique per project (upsert key) |
-| `cron_pattern` | text | 5-field cron expression |
-| `time_zone` | text | IANA timezone, default `UTC` |
-| `target_path` | text | App endpoint path |
-| `method` | text | HTTP method, default `POST` |
-| `body` | jsonb | Optional request body |
-| `headers` | jsonb | Optional extra headers |
-| `is_active` | boolean | Toggle, default `true` |
-| `created_at` | timestamp | |
-| `updated_at` | timestamp | |
-
-### schedule_executions
-
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | text PK | UUID |
-| `schedule_id` | text FK | References `project_schedules.id`, cascade delete |
-| `trigger` | text | `cron` or `manual` |
-| `fired_at` | timestamp | |
-| `status_code` | integer | HTTP response status, null on network error |
-| `latency_ms` | bigint | Total time including pod wake |
-| `error` | text | Error message, null on success |
-
-## API Endpoints
-
-### Agent (GatewayAuthGuard)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/gateway/schedules` | Create or upsert schedule by name |
-| GET | `/api/gateway/schedules` | List schedules for this project |
-| DELETE | `/api/gateway/schedules/:name` | Delete schedule by name |
-
-### UI (TenantGuard)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/schedules?projectId=` | All schedules for tenant (optional filter) |
-| GET | `/api/projects/:id/schedules` | Schedules for a project |
-| PATCH | `/api/projects/:id/schedules/:sid` | Edit schedule fields |
-| POST | `/api/projects/:id/schedules/:sid/run` | Manual trigger (Run Now) |
-| DELETE | `/api/projects/:id/schedules/:sid` | Delete schedule |
-| GET | `/api/projects/:id/schedules/:sid/executions` | Execution history |
-
-## Frontend
-
-- **Global `/schedules` page** — table of all schedules across projects. Full CRUD: edit, delete, toggle active, Run Now, view executions.
-- **Sidebar nav item** — "Schedules" in the user dropdown menu (near Billing).
-- **Per-project 3-dot menu** — "Schedules" item navigates to `/schedules?project={projectId}`.
-
-## Agent Skill
-
-`agent-config/agents/app-builder/skills/schedules/SKILL.md` teaches the agent:
-
-- How to use `SERVICE_GATEWAY_URL` + `SERVICE_GATEWAY_API_KEY` for schedule CRUD
-- Build the target endpoint first, then register the schedule
-- Cron pattern syntax and examples
-- Timezone is automatic — don't ask the user
-
-## Files
-
-| File | Role |
-|------|------|
-| `backend/db/migrations/0012_add-project-schedules.sql` | Migration |
-| `backend/db/schema.ts` | `projectSchedules` + `scheduleExecutions` tables |
-| `backend/src/schedule/schedule.module.ts` | NestJS module wiring |
-| `backend/src/schedule/schedule.controller.agent.ts` | Agent-facing endpoints (GatewayAuthGuard) |
-| `backend/src/schedule/schedule.controller.admin.ts` | UI-facing endpoints (TenantGuard) |
-| `backend/src/schedule/schedule.service.ts` | DB CRUD, BullMQ sync, Redis tz, execution recording |
-| `backend/src/schedule/schedule.worker.ts` | BullMQ worker — wake-on-fire, HTTP call, execution logging |
-| `backend/src/schedule/schedule.types.ts` | DTOs and constants |
-| `proxy/internal/server/server.go` | App preview proxy behavior; timezone still comes from `frontend/src/api/client.ts` |
-| `backend/src/project/project.service.ts` | Schedule cleanup on project delete |
-| `frontend/src/routes/schedules.tsx` | Route entry |
-| `frontend/src/pages/schedules.tsx` | Schedules page with table, edit dialog, executions modal |
-| `frontend/src/api/client.ts` | `scheduleApi` methods + `X-User-Timezone` header |
-| `agent-config/agents/app-builder/skills/schedules/SKILL.md` | Agent skill |
-
-## Comparison with Service Gateway
-
-| | Service Gateway | Schedules |
-|---|---|---|
-| **Purpose** | Fire-and-forget external API calls | Recurring cron-triggered HTTP callbacks |
-| **Auth** | Same (`GatewayAuthGuard`) | Same |
-| **Pattern** | Dispatch: `POST /api/gateway { service, payload }` | REST CRUD: `/api/gateway/schedules` |
-| **Storage** | `gateway_audit_logs` | `project_schedules` + `schedule_executions` |
-| **Execution** | Immediate (synchronous) | Deferred (BullMQ cron) |
-
-Both coexist under the `/api/gateway` prefix. Same token, same guard, same nginx rule.
-
-## Future Work
-
-- **Prompt mode** — schedule wakes the agent with a prompt instead of calling an endpoint
-- **Max schedules per project** — cap BullMQ load (e.g. 50)
-- **One-shot jobs** — "at" timestamp scheduling, not just cron
+- **Prompt mode** — a schedule wakes the agent with a prompt instead of calling an endpoint.
+- **Per-project cap** — a limit on the number of schedules, to bound worker load.
+- **One-shot jobs** — "run at a timestamp" in addition to recurring cron.

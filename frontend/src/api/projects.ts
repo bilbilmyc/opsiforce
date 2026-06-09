@@ -1,6 +1,7 @@
 import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
 import { createEffect, createSignal, onCleanup } from "solid-js"
 import { ApiError, api, type Project, type ProjectState } from "./client"
+import { environmentKeys } from "./environments"
 import { detectTimezone } from "~/lib/timezone"
 import { isMeaningfulSessionTitle } from "~/lib/session-title"
 
@@ -16,6 +17,7 @@ interface ProjectStatusErrorPayload {
 }
 
 export function useProjectStatus(projectId: () => string, options?: { enabled?: () => boolean }) {
+  const qc = useQueryClient()
   const [data, setData] = createSignal<ProjectState>()
   const [error, setError] = createSignal<unknown>()
 
@@ -25,6 +27,7 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
     if (status.status === "suspended") {
       fetch(`/api/proxy/${status.id}/ping`).catch(() => {})
     }
+    qc.invalidateQueries({ queryKey: environmentKeys.forProject(status.id) })
   }
 
   createEffect(() => {
@@ -146,9 +149,15 @@ export function useCreateUnassignedProject() {
 export function useSetAppPin() {
   const qc = useQueryClient()
   return createMutation(() => ({
-    mutationFn: (params: { projectId: string; isPinned: boolean }) =>
-      api.patch<Project>(`/projects/${params.projectId}/app/pin`, { isPinned: params.isPinned }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
+    mutationFn: (params: { projectId: string; isPinned: boolean; environmentId?: string }) =>
+      api.patch<Project>(`/projects/${params.projectId}/app/pin`, {
+        isPinned: params.isPinned,
+        ...(params.environmentId ? { environmentId: params.environmentId } : {}),
+      }),
+    onSuccess: (_data, params) => {
+      qc.invalidateQueries({ queryKey: projectKeys.all })
+      qc.invalidateQueries({ queryKey: environmentKeys.forProject(params.projectId) })
+    },
   }))
 }
 

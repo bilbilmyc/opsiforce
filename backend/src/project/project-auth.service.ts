@@ -9,10 +9,10 @@ const TRAEFIK_VERSION = "v1alpha1";
 const MIDDLEWARES_PLURAL = "middlewares";
 const INGRESSROUTES_PLURAL = "ingressroutes";
 
-const middlewareName = (projectId: string) =>
-  `opsiforce-project-${projectId}-oidc`;
-const ingressRouteName = (projectId: string) =>
-  `opsiforce-project-${projectId}`;
+const middlewareName = (routingId: string) =>
+  `opsiforce-project-${routingId}-oidc`;
+const ingressRouteName = (routingId: string) =>
+  `opsiforce-project-${routingId}`;
 
 interface TraefikOidcAssertClaim {
   Name: string;
@@ -104,12 +104,16 @@ export class ProjectAuthService {
     );
   }
 
-  private projectHost(projectId: string): string {
-    return `${projectId}.${this.appsHostname}`;
+  private projectHost(routingId: string): string {
+    return `${routingId}.${this.appsHostname}`;
+  }
+
+  callbackUrl(routingId: string): string {
+    return `https://${this.projectHost(routingId)}/oidc/callback`;
   }
 
   private buildMiddleware(
-    projectId: string,
+    routingId: string,
     config: ProjectAuthOidcConfig,
     extras: MiddlewareExtras = {},
   ) {
@@ -139,7 +143,7 @@ export class ProjectAuthService {
       LogLevel: "DEBUG",
       Secret: this.pluginSecret,
       Provider: provider,
-      CallbackUri: `https://${this.projectHost(projectId)}/oidc/callback`,
+      CallbackUri: this.callbackUrl(routingId),
       Scopes: (config.scope ?? "openid profile email")
         .split(/\s+/)
         .filter(Boolean),
@@ -162,7 +166,7 @@ export class ProjectAuthService {
     return {
       apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,
       kind: "Middleware",
-      metadata: { name: middlewareName(projectId), namespace: this.namespace },
+      metadata: { name: middlewareName(routingId), namespace: this.namespace },
       spec: { plugin: { "traefik-oidc-auth": plugin } },
     };
   }
@@ -195,7 +199,7 @@ export class ProjectAuthService {
   }
 
   private buildIngressRoute(
-    projectId: string,
+    routingId: string,
     middlewares: Array<{ name: string; namespace: string }>,
   ) {
     const serviceRef: {
@@ -212,7 +216,7 @@ export class ProjectAuthService {
       apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,
       kind: "IngressRoute",
       metadata: {
-        name: ingressRouteName(projectId),
+        name: ingressRouteName(routingId),
         namespace: this.namespace,
       },
       spec: {
@@ -220,7 +224,7 @@ export class ProjectAuthService {
         routes: [
           {
             kind: "Rule",
-            match: `Host(\`${this.projectHost(projectId)}\`)`,
+            match: `Host(\`${this.projectHost(routingId)}\`)`,
             priority: 100,
             middlewares,
             services: [serviceRef],
@@ -230,15 +234,20 @@ export class ProjectAuthService {
     };
   }
 
-  private oidcMiddlewareRef(projectId: string) {
-    return { name: middlewareName(projectId), namespace: this.namespace };
+  private oidcMiddlewareRef(routingId: string) {
+    return { name: middlewareName(routingId), namespace: this.namespace };
   }
 
   async getConfig(
-    projectId: string,
-  ): Promise<{ config?: ProjectAuthOidcConfig; bypassAuthPaths: string[] }> {
-    const plugin = await this.readPluginSpec(projectId);
-    if (!plugin) return { bypassAuthPaths: [] };
+    routingId: string,
+  ): Promise<{
+    config?: ProjectAuthOidcConfig;
+    bypassAuthPaths: string[];
+    callbackUrl: string;
+  }> {
+    const callbackUrl = this.callbackUrl(routingId);
+    const plugin = await this.readPluginSpec(routingId);
+    if (!plugin) return { bypassAuthPaths: [], callbackUrl };
     return {
       config: {
         clientId: plugin.Provider.ClientId,
@@ -248,11 +257,12 @@ export class ProjectAuthService {
         scope: plugin.Scopes?.join(" "),
       },
       bypassAuthPaths: pathsFromBypassRule(plugin.BypassAuthenticationRule),
+      callbackUrl,
     };
   }
 
   private async readPluginSpec(
-    projectId: string,
+    routingId: string,
   ): Promise<TraefikOidcPluginSpec | undefined> {
     try {
       const resp = await this.customApi.getNamespacedCustomObject({
@@ -260,7 +270,7 @@ export class ProjectAuthService {
         version: TRAEFIK_VERSION,
         namespace: this.namespace,
         plural: MIDDLEWARES_PLURAL,
-        name: middlewareName(projectId),
+        name: middlewareName(routingId),
       });
       return (
         resp as { spec?: { plugin?: Record<string, TraefikOidcPluginSpec> } }
@@ -269,7 +279,7 @@ export class ProjectAuthService {
       const status = (err as { code?: number })?.code;
       if (status === 404) return undefined;
       this.logger.error(
-        `Failed to read middleware for project ${projectId}`,
+        `Failed to read middleware for routing id ${routingId}`,
         err,
       );
       throw err;
@@ -277,25 +287,25 @@ export class ProjectAuthService {
   }
 
   async apply(
-    projectId: string,
+    routingId: string,
     config: ProjectAuthOidcConfig,
     bypassAuthPaths?: string[],
   ): Promise<void> {
-    const effectiveConfig = await this.preserveClientSecret(projectId, config);
+    const effectiveConfig = await this.preserveClientSecret(routingId, config);
     const extras: MiddlewareExtras = {
       headers: MANUAL_HEADERS,
       bypassAuthPaths,
     };
-    const mw = this.buildMiddleware(projectId, effectiveConfig, extras);
-    const ir = this.buildIngressRoute(projectId, [
-      this.oidcMiddlewareRef(projectId),
+    const mw = this.buildMiddleware(routingId, effectiveConfig, extras);
+    const ir = this.buildIngressRoute(routingId, [
+      this.oidcMiddlewareRef(routingId),
     ]);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
   }
 
   async applyMakara(
-    projectId: string,
+    routingId: string,
     tenantName: string,
     bypassAuthPaths?: string[],
   ): Promise<void> {
@@ -314,30 +324,63 @@ export class ProjectAuthService {
       tokenValidation: "AccessToken",
       bypassAuthPaths,
     };
-    const mw = this.buildMiddleware(projectId, config, extras);
-    const middlewares = [this.oidcMiddlewareRef(projectId)];
-    const ir = this.buildIngressRoute(projectId, middlewares);
+    const mw = this.buildMiddleware(routingId, config, extras);
+    const middlewares = [this.oidcMiddlewareRef(routingId)];
+    const ir = this.buildIngressRoute(routingId, middlewares);
+    await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
+    await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
+  }
+
+  async inheritAuth(
+    fromRoutingId: string,
+    toRoutingId: string,
+    makaraFallbackTenantName?: string,
+  ): Promise<void> {
+    const sourceSpec = await this.readPluginSpec(fromRoutingId);
+    if (!sourceSpec) {
+      if (makaraFallbackTenantName) {
+        await this.applyMakara(toRoutingId, makaraFallbackTenantName);
+        return;
+      }
+      throw new Error(
+        `Cannot inherit app auth: source middleware ${middlewareName(fromRoutingId)} not found`,
+      );
+    }
+
+    const clonedSpec: TraefikOidcPluginSpec = {
+      ...sourceSpec,
+      CallbackUri: this.callbackUrl(toRoutingId),
+    };
+    const mw = {
+      apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,
+      kind: "Middleware",
+      metadata: { name: middlewareName(toRoutingId), namespace: this.namespace },
+      spec: { plugin: { "traefik-oidc-auth": clonedSpec } },
+    };
+    const ir = this.buildIngressRoute(toRoutingId, [
+      this.oidcMiddlewareRef(toRoutingId),
+    ]);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
   }
 
   private async preserveClientSecret(
-    projectId: string,
+    routingId: string,
     config: ProjectAuthOidcConfig,
   ): Promise<ProjectAuthOidcConfig> {
     if (config.clientSecret?.trim()) return config;
-    const existing = await this.readPluginSpec(projectId);
+    const existing = await this.readPluginSpec(routingId);
     const preserved = existing?.Provider?.ClientSecret;
     if (!preserved) return config;
     return { ...config, clientSecret: preserved };
   }
 
-  async remove(projectId: string): Promise<void> {
+  async remove(routingId: string): Promise<void> {
     await this.deleteIfExists(
       INGRESSROUTES_PLURAL,
-      ingressRouteName(projectId),
+      ingressRouteName(routingId),
     );
-    await this.deleteIfExists(MIDDLEWARES_PLURAL, middlewareName(projectId));
+    await this.deleteIfExists(MIDDLEWARES_PLURAL, middlewareName(routingId));
   }
 
   private async upsert(

@@ -6,7 +6,7 @@ import { eq, lte } from "drizzle-orm"
 import { readdir, rm, rmdir } from "fs/promises"
 import path from "path"
 import { db } from "../../db"
-import { deletedProjects, projects } from "../../db/schema"
+import { deletedProjectEnvironments, deletedProjects, projectEnvironments } from "../../db/schema"
 
 export const WORKSPACE_CLEANUP_QUEUE = "workspace-cleanup"
 
@@ -29,32 +29,53 @@ export class WorkspaceCleanupProcessor extends WorkerHost {
 
   private async removeExpiredTombstones(): Promise<void> {
     const cutoff = new Date(Date.now() - this.retentionDays * 24 * 60 * 60 * 1000)
-    const expired = await db.select().from(deletedProjects).where(lte(deletedProjects.deletedAt, cutoff))
+    const [expiredEnvironments, expiredProjects] = await Promise.all([
+      db
+        .select({ id: deletedProjectEnvironments.id, directory: deletedProjectEnvironments.directory })
+        .from(deletedProjectEnvironments)
+        .where(lte(deletedProjectEnvironments.deletedAt, cutoff)),
+      db
+        .select({ id: deletedProjects.id, directory: deletedProjects.directory })
+        .from(deletedProjects)
+        .where(lte(deletedProjects.deletedAt, cutoff)),
+    ])
 
-    if (expired.length === 0) return
-    this.logger.log(`Found ${expired.length} expired workspace(s) to clean up`)
+    const total = expiredEnvironments.length + expiredProjects.length
+    if (total === 0) return
+    this.logger.log(`Found ${total} expired workspace(s) to clean up`)
 
-    for (const record of expired) {
-      const workspacePath = path.join(this.storageMountPath, record.directory)
-      await rm(workspacePath, { recursive: true, force: true }).catch((err) => {
-        this.logger.warn(`Failed to remove workspace ${record.directory}: ${(err as Error).message}`)
-      })
-      await db.delete(deletedProjects).where(eq(deletedProjects.id, record.id))
-      await this.pruneEmptyAncestors(path.dirname(record.directory))
+    for (const record of expiredEnvironments) {
+      await this.removeTombstoneDirectory(record.directory)
+      await db.delete(deletedProjectEnvironments).where(eq(deletedProjectEnvironments.id, record.id))
     }
 
-    this.logger.log(`Removed ${expired.length} expired workspace(s)`)
+    for (const record of expiredProjects) {
+      await this.removeTombstoneDirectory(record.directory)
+      await db.delete(deletedProjects).where(eq(deletedProjects.id, record.id))
+    }
+
+    this.logger.log(`Removed ${total} expired workspace(s)`)
+  }
+
+  private async removeTombstoneDirectory(directory: string): Promise<void> {
+    const workspacePath = path.join(this.storageMountPath, directory)
+    await rm(workspacePath, { recursive: true, force: true }).catch((err) => {
+      this.logger.warn(`Failed to remove workspace ${directory}: ${(err as Error).message}`)
+    })
+    await this.pruneEmptyAncestors(path.dirname(directory))
   }
 
   private async removeOrphanedDirectories(): Promise<void> {
-    const [activeRows, deletedRows] = await Promise.all([
-      db.select({ directory: projects.directory }).from(projects),
+    const [environmentRows, deletedEnvironmentRows, deletedProjectRows] = await Promise.all([
+      db.select({ directory: projectEnvironments.directory }).from(projectEnvironments),
+      db.select({ directory: deletedProjectEnvironments.directory }).from(deletedProjectEnvironments),
       db.select({ directory: deletedProjects.directory }).from(deletedProjects),
     ])
 
     const knownPaths = new Set<string>()
-    for (const row of activeRows) knownPaths.add(row.directory)
-    for (const row of deletedRows) knownPaths.add(row.directory)
+    for (const row of environmentRows) knownPaths.add(row.directory)
+    for (const row of deletedEnvironmentRows) knownPaths.add(row.directory)
+    for (const row of deletedProjectRows) knownPaths.add(row.directory)
 
     const keepPrefixes = new Set<string>()
     for (const p of knownPaths) {

@@ -1,4 +1,4 @@
-import { onCleanup, type Component } from "solid-js"
+import { Show, onCleanup, type Component } from "solid-js"
 import type { BaseRouterProps } from "@solidjs/router"
 import { AppBaseProviders, AppInterface } from "@opencode-ai/app/app"
 import { PlatformProvider } from "@opencode-ai/app/context/platform"
@@ -32,6 +32,7 @@ function OpenCodeEventBridge(props: { onReload: () => void; onTitle: (title: str
 
 export interface ProjectChatTabProps {
   projectId: string
+  environmentId: string
   router: Component<BaseRouterProps>
   currentTitle: string | null
   onPreviewReload: () => void
@@ -39,29 +40,35 @@ export interface ProjectChatTabProps {
 
 export default function ProjectChatTab(props: ProjectChatTabProps) {
   const syncTitle = useSyncProjectTitle()
-  const tunnelUrl = `${window.location.origin}/api/proxy/${props.projectId}`
-  const server: ServerConnection.Http = { type: "http", http: { url: tunnelUrl } }
-  const serverKey = ServerConnection.Key.make(tunnelUrl)
+  const tunnelUrl = () => `${window.location.origin}/api/proxy/${props.environmentId}`
 
   return (
     <>
-      <PlatformProvider value={platform}>
-        <AppBaseProviders>
-          <AppInterface
-            defaultServer={serverKey}
-            servers={[server]}
-            router={props.router}
-            disableHealthCheck
-          >
-            <OpencodeOverrides />
-            <OpenCodeEventBridge
-              onReload={props.onPreviewReload}
-              onTitle={(title) => syncTitle(props.projectId, title, props.currentTitle)}
-            />
-          </AppInterface>
-        </AppBaseProviders>
-      </PlatformProvider>
-      <FileUpload projectId={props.projectId} />
+      <Show when={tunnelUrl()} keyed>
+        {(url) => {
+          const server: ServerConnection.Http = { type: "http", http: { url } }
+          const serverKey = ServerConnection.Key.make(url)
+          return (
+            <PlatformProvider value={platform}>
+              <AppBaseProviders>
+                <AppInterface
+                  defaultServer={serverKey}
+                  servers={[server]}
+                  router={props.router}
+                  disableHealthCheck
+                >
+                  <OpencodeOverrides />
+                  <OpenCodeEventBridge
+                    onReload={props.onPreviewReload}
+                    onTitle={(title) => syncTitle(props.projectId, title, props.currentTitle)}
+                  />
+                </AppInterface>
+              </AppBaseProviders>
+            </PlatformProvider>
+          )
+        }}
+      </Show>
+      <FileUpload projectId={props.projectId} environmentId={props.environmentId} />
     </>
   )
 }

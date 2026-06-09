@@ -239,6 +239,62 @@
       "when": 1779562800100,
       "tag": "0033_pool-project-nullable-tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1780856074933,
+      "tag": "0034_add-project-environments",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1780856149025,
+      "tag": "0035_drop-project-runtime-columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1780866286885,
+      "tag": "0036_add-project-pod-settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1780893538704,
+      "tag": "0037_add-project-request-log-settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1780897033782,
+      "tag": "0038_add-key-environment-indexes",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1780921852379,
+      "tag": "0039_schedules-environment-not-null",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1780931678697,
+      "tag": "0040_one-active-publish-per-environment",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1780952474234,
+      "tag": "0041_add-publishing-project-status",
+      "breakpoints": true
     }
   ]
 }

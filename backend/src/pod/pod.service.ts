@@ -4,6 +4,7 @@ import * as k8s from "@kubernetes/client-node"
 import { loadKubeConfig } from "../common/k8s-client"
 import { buildPodSpec, PodTemplateOptions } from "./pod.template"
 import { PodCacheService } from "./pod.cache.service"
+import { resolvePreset, toK8sResources, type K8sResourceRequirements, type PodResources } from "./pod-classes"
 
 export interface TenantPodOptions {
   bifrostApiKey?: string
@@ -13,6 +14,8 @@ export interface TenantPodOptions {
   gatewayUrl?: string
   agentModel?: string
   agentName?: string
+  opsiforceEnv?: string
+  resources?: K8sResourceRequirements
 }
 
 export type PodFailureReason = "ImagePullBackOff" | "CrashLoopBackOff" | "Unschedulable"
@@ -50,7 +53,7 @@ export class PodService {
       storageMountPath: this.configService.getOrThrow<string>("storageMountPath"),
       appsHostname: this.configService.getOrThrow<string>("appsHostname"),
       imagePullPolicy: this.configService.getOrThrow<string>("agentContainerImagePullPolicy"),
-      resources: this.configService.get("agentResources"),
+      resources: this.smallResources(),
       nodeSelector: this.configService.get("agentNodeSelector"),
       tolerations: this.configService.get("agentTolerations"),
       affinity: this.configService.get("agentAffinity"),
@@ -59,16 +62,21 @@ export class PodService {
     }
   }
 
-  assignedPodName(projectId: string): string {
-    return `opsiforce-agent-${projectId.slice(0, 8)}`
+  private smallResources(): K8sResourceRequirements {
+    return toK8sResources(resolvePreset("small", this.configService.get<PodResources | null>("podClassSmall", null)))
+  }
+
+  assignedPodName(environmentId: string): string {
+    return `opsiforce-agent-${environmentId.slice(0, 8)}`
   }
 
   async createAssignedPod(
-    projectId: string,
+    environmentId: string,
     directory: string,
+    projectId: string,
     tenantOptions?: TenantPodOptions,
   ): Promise<{ podName: string; created: boolean }> {
-    const podName = this.assignedPodName(projectId)
+    const podName = this.assignedPodName(environmentId)
     const existing = await this.readPodIfExists(podName)
 
     if (existing) {
@@ -82,6 +90,7 @@ export class PodService {
       ...this.baseOptions(podName),
       subPath: directory,
       projectId,
+      environmentId,
       ...tenantOptions,
     }
 
@@ -170,22 +179,21 @@ export class PodService {
       return this.waitForReadyByPolling(podName, timeoutMs)
     }
 
-    if (synced) {
-      const initial = this.podCache.getPod(podName)
-      if (initial) {
-        const failure = this.inspectFailureReason(initial)
-        if (failure === "ImagePullBackOff") {
-          throw new PodStartupFailedError(podName, failure)
-        }
-        const podIp = initial.status?.podIP
-        if (this.isPodReady(initial) && podIp) {
-          return podIp
-        }
+    const initial = this.podCache.getPod(podName)
+    if (initial) {
+      const failure = this.inspectFailureReason(initial)
+      if (failure === "ImagePullBackOff") {
+        throw new PodStartupFailedError(podName, failure)
+      }
+      const podIp = initial.status?.podIP
+      if (!initial.metadata?.deletionTimestamp && this.isPodReady(initial) && podIp) {
+        return podIp
       }
     }
 
     return new Promise<string>((resolve, reject) => {
       let settled = false
+      let awaitingRecreate = !!initial?.metadata?.deletionTimestamp
       const timer = setTimeout(() => {
         const current = this.podCache.getPod(podName)
         const failure = current ? this.inspectFailureReason(current) : null
@@ -198,6 +206,10 @@ export class PodService {
 
       const inspect = (pod: k8s.V1Pod) => {
         if (pod.metadata?.name !== podName) return
+        if (pod.metadata?.deletionTimestamp) {
+          awaitingRecreate = true
+          return
+        }
         const failure = this.inspectFailureReason(pod)
         if (failure === "ImagePullBackOff") {
           finish(undefined, new PodStartupFailedError(podName, failure))
@@ -213,6 +225,10 @@ export class PodService {
       const offUpdate = this.podCache.onUpdate(inspect)
       const offDelete = this.podCache.onDelete((deletedName) => {
         if (deletedName !== podName) return
+        if (awaitingRecreate) {
+          awaitingRecreate = false
+          return
+        }
         finish(undefined, new Error(`Pod ${podName} was deleted before becoming ready`))
       })
 
@@ -346,18 +362,26 @@ export class PodService {
 
   private async waitForReadyByPolling(podName: string, timeoutMs: number): Promise<string> {
     const deadline = Date.now() + timeoutMs
-    let seen = false
+    let seenReady = false
+    let awaitingRecreate = false
     while (Date.now() < deadline) {
       const pod = await this.readPodIfExists(podName)
       if (pod) {
-        seen = true
         const failure = this.inspectFailureReason(pod)
         if (failure === "ImagePullBackOff") {
           throw new PodStartupFailedError(podName, failure)
         }
-        const podIp = pod.status?.podIP
-        if (this.isPodReady(pod) && podIp) return podIp
-      } else if (seen) {
+        if (pod.metadata?.deletionTimestamp) {
+          awaitingRecreate = true
+        } else {
+          seenReady = true
+          awaitingRecreate = false
+          const podIp = pod.status?.podIP
+          if (this.isPodReady(pod) && podIp) return podIp
+        }
+      } else if (awaitingRecreate) {
+        awaitingRecreate = false
+      } else if (seenReady) {
         throw new Error(`Pod ${podName} was deleted before becoming ready`)
       }
       await sleep(2000)

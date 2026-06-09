@@ -78,6 +78,30 @@ packageExtensions:
 
 If you need to verify the backend is responding, use `curl http://localhost:3100/api/health`.
 
+## App configuration & secrets
+
+Store **all** app config and secrets (API keys, tokens, base URLs, flags) as string keys in `app/opsiforce.env.json` (flat JSON object), and read them in the backend **from the file, not `process.env`**. Load once at boot with a helper:
+
+```ts
+import fs from "node:fs"
+import path from "node:path"
+
+const file = path.resolve(process.cwd(), "opsiforce.env.json")
+const values: Record<string, string> = fs.existsSync(file)
+  ? JSON.parse(fs.readFileSync(file, "utf8"))
+  : {}
+
+export const appConfig = (key: string): string | undefined => values[key]
+```
+
+Then `appConfig("STRIPE_API_KEY")`. This file — not `.env` — is the single source of truth: set **per environment** at publish (dev and prod values differ), never committed, re-read on the backend's next restart.
+
+**It's internal plumbing — don't surface it.** Confirm the capability in plain language ("the app now pulls live weather"); never volunteer the file or key names (e.g. *"stored in `opsiforce.env.json` as `WEATHER_API_BASE_URL`"*). The publish dialog lists these keys for the user automatically — name them only if they ask where config lives.
+
+Platform values — `APP_LLM_API_KEY` / `APP_LLM_BASE_URL`, `APP_PUBLIC_URL`, `SERVICE_GATEWAY_URL` — are real env vars: read those from `process.env`.
+
+When the app **goes to production** it runs **built, with no hot reload**, and database migrations run **automatically on boot** — so every schema change must be a new migration file (never edit an applied one).
+
 ## Sandbox environment — install freely
 
 You are running inside a **disposable sandboxed container**. You have full permission to install any tools you need to do your job. Do not refuse a task because a tool is missing — install it and continue.

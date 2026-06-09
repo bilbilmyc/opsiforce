@@ -1,5 +1,6 @@
 import { readFileSync } from "fs";
 import { join } from "path";
+import type { PodResources } from "../pod/pod-classes";
 
 function parseJsonEnv<T>(env: string | undefined, fallback: T): T {
   if (!env) return fallback;
@@ -20,6 +21,25 @@ function parseIntOrNull(env: string | undefined): number | null {
   const parsed = parseInt(env, 10);
   if (Number.isNaN(parsed) || parsed < 0) return null;
   return parsed;
+}
+
+function parsePodResourcesEnv(env: string | undefined): PodResources | null {
+  if (!env) return null;
+  try {
+    const { cpuMillicores, memoryRequestMib, memoryLimitMib } = JSON.parse(
+      env,
+    ) as Partial<PodResources>;
+    if (
+      typeof cpuMillicores === "number" &&
+      typeof memoryRequestMib === "number" &&
+      typeof memoryLimitMib === "number"
+    ) {
+      return { cpuMillicores, memoryRequestMib, memoryLimitMib };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 const platformVersion = JSON.parse(
@@ -62,10 +82,7 @@ export default () => {
     agentContainerImagePullPolicy:
       process.env.AGENT_CONTAINER_IMAGE_PULL_POLICY || "IfNotPresent",
     platformVersion: platformVersion,
-    agentResources: parseJsonEnv(process.env.AGENT_RESOURCES, {
-      requests: { cpu: "200m", memory: "1312Mi" },
-      limits: { memory: "2Gi" },
-    }),
+    podClassSmall: parsePodResourcesEnv(process.env.POD_CLASS_SMALL),
     agentNodeSelector: parseJsonEnv<Record<string, string>>(
       process.env.AGENT_NODE_SELECTOR,
       {},

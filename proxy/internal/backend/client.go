@@ -21,10 +21,20 @@ const (
 )
 
 type EnsureResponse struct {
-	State     string `json:"state"`
-	Upstream  string `json:"upstream"`
-	PodName   string `json:"podName"`
-	Directory string `json:"directory"`
+	State     string         `json:"state"`
+	Upstream  string         `json:"upstream"`
+	PodName   string         `json:"podName"`
+	Directory string         `json:"directory"`
+	Logging   *LoggingConfig `json:"logging"`
+}
+
+// LoggingConfig is the per-project request-logging policy resolved by the
+// control plane. It is nil when the backend does not supply one (older
+// backends or non-app surfaces), in which case the proxy falls back to its
+// own defaults.
+type LoggingConfig struct {
+	Mode      string `json:"mode"`
+	BodyLimit int    `json:"bodyLimit"`
 }
 
 type StatusError struct {

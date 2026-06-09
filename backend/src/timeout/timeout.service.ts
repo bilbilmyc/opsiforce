@@ -3,7 +3,7 @@ import { ConfigService } from "@nestjs/config"
 import Redis from "ioredis"
 import { eq } from "drizzle-orm"
 import { db } from "../../db"
-import { projectSettings } from "../../db/schema"
+import { projectEnvironments, projectSettings } from "../../db/schema"
 
 const AGENT_KEY_PREFIX = "opsiforce:timeout:"
 const APP_KEY_PREFIX = "opsiforce:app-timeout:"
@@ -24,61 +24,62 @@ export class TimeoutService implements OnModuleDestroy {
     await this.redis.quit()
   }
 
-  private async getProjectTtl(projectId: string): Promise<{ agentTtl: number; appTtl: number }> {
-    const [project] = await db
+  private async getEnvironmentTtl(envId: string): Promise<{ agentTtl: number; appTtl: number }> {
+    const [settings] = await db
       .select({
         timeoutIdle: projectSettings.timeoutIdle,
         appTimeoutIdle: projectSettings.appTimeoutIdle,
       })
-      .from(projectSettings)
-      .where(eq(projectSettings.projectId, projectId))
+      .from(projectEnvironments)
+      .innerJoin(projectSettings, eq(projectSettings.projectId, projectEnvironments.projectId))
+      .where(eq(projectEnvironments.id, envId))
 
-    if (!project) {
-      throw new Error(`Project ${projectId} not found`)
+    if (!settings) {
+      throw new Error(`Project environment ${envId} not found`)
     }
 
     return {
-      agentTtl: Math.ceil(project.timeoutIdle / 1000),
-      appTtl: Math.ceil(project.appTimeoutIdle / 1000),
+      agentTtl: Math.ceil(settings.timeoutIdle / 1000),
+      appTtl: Math.ceil(settings.appTimeoutIdle / 1000),
     }
   }
 
-  async touch(projectId: string): Promise<void> {
-    const { agentTtl } = await this.getProjectTtl(projectId)
+  async touch(envId: string): Promise<void> {
+    const { agentTtl } = await this.getEnvironmentTtl(envId)
     await this.redis.setex(
-      `${AGENT_KEY_PREFIX}${projectId}`,
+      `${AGENT_KEY_PREFIX}${envId}`,
       agentTtl,
       Date.now().toString(),
     )
   }
 
-  async touchApp(projectId: string): Promise<void> {
-    const { appTtl } = await this.getProjectTtl(projectId)
+  async touchApp(envId: string): Promise<void> {
+    const { appTtl } = await this.getEnvironmentTtl(envId)
     await this.redis.setex(
-      `${APP_KEY_PREFIX}${projectId}`,
+      `${APP_KEY_PREFIX}${envId}`,
       appTtl,
       Date.now().toString(),
     )
   }
 
-  async isFullyExpired(projectId: string): Promise<boolean> {
-    const agentTtl = await this.redis.ttl(`${AGENT_KEY_PREFIX}${projectId}`)
-    const appTtl = await this.redis.ttl(`${APP_KEY_PREFIX}${projectId}`)
+  async isFullyExpired(envId: string): Promise<boolean> {
+    const agentTtl = await this.redis.ttl(`${AGENT_KEY_PREFIX}${envId}`)
+    const appTtl = await this.redis.ttl(`${APP_KEY_PREFIX}${envId}`)
     return agentTtl <= 0 && appTtl <= 0
   }
 
-  async clear(projectId: string): Promise<void> {
+  async clear(envId: string): Promise<void> {
     await this.redis.del(
-      `${AGENT_KEY_PREFIX}${projectId}`,
-      `${APP_KEY_PREFIX}${projectId}`,
+      `${AGENT_KEY_PREFIX}${envId}`,
+      `${APP_KEY_PREFIX}${envId}`,
     )
   }
 
-  parseExpiredKey(key: string): { projectId: string; type: "agent" | "app" } | null {
+  parseExpiredKey(key: string): { envId: string; type: "agent" | "app" } | null {
     const agentMatch = key.match(/^opsiforce:timeout:(.+)/)
-    if (agentMatch) return { projectId: agentMatch[1], type: "agent" }
+    if (agentMatch) return { envId: agentMatch[1], type: "agent" }
     const appMatch = key.match(/^opsiforce:app-timeout:(.+)/)
-    if (appMatch) return { projectId: appMatch[1], type: "app" }
+    if (appMatch) return { envId: appMatch[1], type: "app" }
     return null
   }
 

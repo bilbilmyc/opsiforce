@@ -35,6 +35,79 @@ var (
 	disabledBody   = []byte(`{"error":"Project is disabled"}`)
 )
 
+const (
+	logModeOff      = "off"
+	logModeMetadata = "metadata"
+	logModeFull     = "full"
+)
+
+// logConfig is the effective request-logging policy for a single app request,
+// resolved from the control-plane response with proxy-level fallbacks.
+type logConfig struct {
+	mode      string
+	bodyLimit int
+}
+
+// captureBody reports whether request/response bodies should be captured for
+// this request. Bodies are only captured in "full" mode and only when a
+// positive byte budget is configured; in every other case the proxy streams
+// without buffering for logging.
+func (c logConfig) captureBody() bool {
+	return c.mode == logModeFull && c.bodyLimit > 0
+}
+
+// logSettings resolves the per-project logging policy delivered by the control
+// plane. A nil policy (older backend, or a non-logging surface) falls back to
+// full logging with the proxy's default body limit, so behaviour is unchanged
+// until a project explicitly opts into something lighter.
+func (s *Server) logSettings(cfg *backend.LoggingConfig) logConfig {
+	resolved := logConfig{mode: logModeFull, bodyLimit: s.cfg.RequestLogBodyLimit}
+
+	if cfg != nil {
+		if cfg.Mode != "" {
+			resolved.mode = cfg.Mode
+		}
+		resolved.bodyLimit = cfg.BodyLimit
+	}
+
+	if resolved.bodyLimit < 0 {
+		resolved.bodyLimit = 0
+	}
+
+	return resolved
+}
+
+// capturingReader tees up to limit bytes of a streamed response into an
+// in-memory buffer while passing every byte through to the client untouched.
+// This lets the proxy log a bounded prefix of a response without ever
+// buffering the whole body — preserving streaming (SSE, chunked) and capping
+// per-request memory at limit bytes.
+type capturingReader struct {
+	src     io.Reader
+	capture []byte
+	limit   int
+}
+
+func newCapturingReader(src io.Reader, limit int) *capturingReader {
+	return &capturingReader{src: src, limit: limit}
+}
+
+func (c *capturingReader) Read(p []byte) (int, error) {
+	n, err := c.src.Read(p)
+	if n > 0 && len(c.capture) < c.limit {
+		remaining := c.limit - len(c.capture)
+		if remaining > n {
+			remaining = n
+		}
+		c.capture = append(c.capture, p[:remaining]...)
+	}
+	return n, err
+}
+
+func (c *capturingReader) captured() string {
+	return string(c.capture)
+}
+
 type Server struct {
 	cfg        config.Config
 	backend    *backend.Client
@@ -162,14 +235,17 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logCfg := s.logSettings(ensured.Logging)
+	captureBody := logCfg.captureBody()
+
 	startedAt := time.Now()
-	requestBody, requestBodyText, err := s.readRequestBody(r)
+	requestBody, requestBodyText, err := s.readRequestBody(r, captureBody, logCfg.bodyLimit)
 	if err != nil {
 		writeJSONStatus(w, http.StatusBadRequest, badGatewayBody)
 		return
 	}
 
-	responseResult, err := s.roundTripAppRequest(r, targetURL, requestBody)
+	responseResult, err := s.roundTripAppRequest(r, targetURL, requestBody, captureBody, logCfg.bodyLimit)
 	if err != nil {
 		s.sendFailureResponse(w, r.Context(), projectID)
 		return
@@ -183,15 +259,32 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {
 	writeHeaderMap(w.Header(), responseResult.headers)
 	w.WriteHeader(responseResult.statusCode)
 
+	responseBodyText := responseResult.responseBody
 	if len(responseResult.body) > 0 {
 		_, _ = w.Write(responseResult.body)
 	} else if responseResult.stream != nil {
 		defer responseResult.stream.Close()
-		size, _ := copyBuffer(w, responseResult.stream, s.bufferPool)
-		responseResult.responseSize = size
+		// In full mode capture the body for any response that is text or carries no
+		// Content-Type (most untyped app responses are JSON/text); explicitly binary
+		// content types are streamed without capture to keep the log text-only.
+		if captureBody && (responseResult.contentType == "" || isTextContent(responseResult.contentType)) {
+			capturer := newCapturingReader(responseResult.stream, logCfg.bodyLimit)
+			size, copyErr := copyBuffer(w, capturer, s.bufferPool)
+			responseResult.responseSize = size
+			responseBodyText = capturer.captured()
+			if copyErr != nil {
+				slog.Debug("app response stream interrupted", "projectId", projectID, "error", copyErr.Error())
+			}
+		} else {
+			size, copyErr := copyBuffer(w, responseResult.stream, s.bufferPool)
+			responseResult.responseSize = size
+			if copyErr != nil {
+				slog.Debug("app response stream interrupted", "projectId", projectID, "error", copyErr.Error())
+			}
+		}
 	}
 
-	if s.logger != nil {
+	if logCfg.mode != logModeOff && s.logger != nil {
 		s.logger.Log(ensured.Directory, requestlog.Entry{
 			Method:          r.Method,
 			URL:             r.URL.RequestURI(),
@@ -203,7 +296,7 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {
 			RequestHeaders:  jsonHeader(r.Header),
 			ResponseHeaders: jsonHeader(responseResult.headers),
 			RequestBody:     requestBodyText,
-			ResponseBody:    responseResult.responseBody,
+			ResponseBody:    responseBodyText,
 		})
 	}
 }
@@ -313,6 +406,7 @@ type appProxyResult struct {
 	headers      http.Header
 	body         []byte
 	stream       io.ReadCloser
+	contentType  string
 	responseSize int64
 	responseBody string
 }
@@ -321,6 +415,8 @@ func (s *Server) roundTripAppRequest(
 	r *http.Request,
 	targetURL *url.URL,
 	requestBody []byte,
+	captureBody bool,
+	bodyLimit int,
 ) (appProxyResult, error) {
 	outgoing := r.Clone(r.Context())
 	outgoing.URL = targetURL
@@ -354,13 +450,16 @@ func (s *Server) roundTripAppRequest(
 			return appProxyResult{restart: true}, nil
 		}
 
-		return appProxyResult{
+		result := appProxyResult{
 			statusCode:   resp.StatusCode,
 			headers:      headers,
 			body:         body,
 			responseSize: int64(len(body)),
-			responseBody: string(body),
-		}, nil
+		}
+		if captureBody {
+			result.responseBody = truncate(string(body), bodyLimit)
+		}
+		return result, nil
 	}
 
 	contentType := resp.Header.Get("Content-Type")
@@ -374,35 +473,23 @@ func (s *Server) roundTripAppRequest(
 		}
 
 		rewritten := bytes.ReplaceAll(body, []byte(upstreamPath), nil)
-		return appProxyResult{
+		result := appProxyResult{
 			statusCode:   resp.StatusCode,
 			headers:      headers,
 			body:         rewritten,
 			responseSize: int64(len(rewritten)),
-			responseBody: string(body),
-		}, nil
-	}
-
-	if isTextContent(contentType) && (resp.ContentLength <= 0 || resp.ContentLength < s.cfg.ResponseBufferLimit) {
-		defer resp.Body.Close()
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return appProxyResult{}, err
 		}
-
-		return appProxyResult{
-			statusCode:   resp.StatusCode,
-			headers:      headers,
-			body:         body,
-			responseSize: int64(len(body)),
-			responseBody: string(body),
-		}, nil
+		if captureBody {
+			result.responseBody = truncate(string(body), bodyLimit)
+		}
+		return result, nil
 	}
 
 	return appProxyResult{
-		statusCode: resp.StatusCode,
-		headers:    headers,
-		stream:     resp.Body,
+		statusCode:  resp.StatusCode,
+		headers:     headers,
+		stream:      resp.Body,
+		contentType: contentType,
 	}, nil
 }
 
@@ -489,8 +576,15 @@ func (s *Server) serveReverseProxy(
 	proxy.ServeHTTP(w, r)
 }
 
-func (s *Server) readRequestBody(r *http.Request) ([]byte, string, error) {
+func (s *Server) readRequestBody(r *http.Request, captureBody bool, bodyLimit int) ([]byte, string, error) {
 	if !hasRequestBody(r.Method) {
+		return nil, "", nil
+	}
+
+	// When body capture is disabled (logging off or metadata-only) there is no
+	// reason to buffer the request: stream it straight through so large uploads
+	// and long-lived requests never accumulate in proxy memory.
+	if !captureBody {
 		return nil, "", nil
 	}
 
@@ -505,7 +599,7 @@ func (s *Server) readRequestBody(r *http.Request) ([]byte, string, error) {
 
 	r.Body = io.NopCloser(bytes.NewReader(body))
 
-	return body, truncate(string(body), s.cfg.RequestLogBodyLimit), nil
+	return body, truncate(string(body), bodyLimit), nil
 }
 
 func extractAgentProject(path string) (string, string, bool) {
@@ -821,6 +915,22 @@ func truncate(value string, limit int) string {
 	return value[:limit]
 }
 
+// sensitiveLogHeaders are never written to the request log in clear text. They
+// carry credentials or session material that must not be persisted to the
+// per-project SQLite log.
+var sensitiveLogHeaders = map[string]struct{}{
+	"authorization":               {},
+	"proxy-authorization":         {},
+	"cookie":                      {},
+	"set-cookie":                  {},
+	"x-api-key":                   {},
+	"x-forwarded-access-token":    {},
+	"x-forwarded-id-token":        {},
+	"x-forwarded-refresh-token":   {},
+	"x-auth-request-access-token": {},
+	"x-proxy-control-token":       {},
+}
+
 func jsonHeader(headers http.Header) string {
 	if len(headers) == 0 {
 		return ""
@@ -828,6 +938,10 @@ func jsonHeader(headers http.Header) string {
 
 	payload := make(map[string]string, len(headers))
 	for key := range headers {
+		if _, redacted := sensitiveLogHeaders[strings.ToLower(key)]; redacted {
+			payload[key] = "[redacted]"
+			continue
+		}
 		payload[key] = headers.Get(key)
 	}
 

@@ -7,6 +7,7 @@ export type PinDialogAction = "pin" | "unpin" | null
 
 export interface PinAppDialogsProps {
   projectId: string
+  environmentId?: string
   action: PinDialogAction
   onActionChange: (action: PinDialogAction) => void
 }
@@ -34,7 +35,7 @@ export default function PinAppDialogs(props: PinAppDialogsProps) {
         confirmLabel="Pin"
         onConfirm={() =>
           setAppPin.mutate(
-            { projectId: props.projectId, isPinned: true },
+            { projectId: props.projectId, isPinned: true, environmentId: props.environmentId },
             {
               onSuccess: () => toast.success("App pinned to Makara"),
               onError: (err) => toast.error(err instanceof Error ? err.message : "Failed to pin"),

@@ -10,6 +10,7 @@ import { PodModule } from "../pod/pod.module"
 import { BifrostModule } from "../bifrost/bifrost.module"
 import { GatewayModule } from "../gateway/gateway.module"
 import { TimeoutModule } from "../timeout/timeout.module"
+import { EnvironmentModule } from "../environment/environment.module"
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { TimeoutModule } from "../timeout/timeout.module"
     forwardRef(() => BifrostModule),
     GatewayModule,
     TimeoutModule,
+    EnvironmentModule,
   ],
   providers: [ProjectPoolService, ProjectPoolProcessor, ProjectPoolTeardownProcessor],
   exports: [ProjectPoolService],

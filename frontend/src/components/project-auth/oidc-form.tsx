@@ -1,5 +1,6 @@
-import { For } from "solid-js";
+import { For, Show, createSignal } from "solid-js";
 import type { ProjectAuthOidcConfig } from "~/api/client";
+import { Check, Copy } from "~/components/icons";
 import { FieldWithTooltip, TextInput } from "./field-with-tooltip";
 
 type FieldKey = keyof ProjectAuthOidcConfig;
@@ -55,11 +56,19 @@ export interface OidcFormProps {
   onChange: (next: ProjectAuthOidcConfig) => void;
   disabled?: boolean;
   secretAlreadySet?: boolean;
+  callbackUrl?: string;
 }
 
 export function OidcForm(props: OidcFormProps) {
   const left = FIELDS.filter((f) => f.column === "left");
   const right = FIELDS.filter((f) => f.column === "right");
+  const [copied, setCopied] = createSignal(false);
+
+  const copyCallback = (url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
 
   const fieldValue = (key: FieldDef["key"]) =>
     (props.value[key] as string | undefined) ?? "";
@@ -86,17 +95,47 @@ export function OidcForm(props: OidcFormProps) {
   );
 
   return (
-    <form
-      class="grid grid-cols-2 gap-x-3 gap-y-3"
-      autocomplete="off"
-      onSubmit={(e) => e.preventDefault()}
-    >
-      <div class="space-y-3">
-        <For each={left}>{renderField}</For>
-      </div>
-      <div class="space-y-3">
-        <For each={right}>{renderField}</For>
-      </div>
-    </form>
+    <div class="space-y-3">
+      <form
+        class="grid grid-cols-2 gap-x-3 gap-y-3"
+        autocomplete="off"
+        onSubmit={(e) => e.preventDefault()}
+      >
+        <div class="space-y-3">
+          <For each={left}>{renderField}</For>
+        </div>
+        <div class="space-y-3">
+          <For each={right}>{renderField}</For>
+        </div>
+      </form>
+
+      <Show when={props.callbackUrl}>
+        {(url) => (
+          <FieldWithTooltip
+            label="Callback URL"
+            tooltip="Add this redirect URI to your identity provider's allowed redirect URIs, or sign-in will fail."
+          >
+            <div class="flex items-center gap-2">
+              <input
+                readOnly
+                value={url()}
+                spellcheck={false}
+                class="flex h-9 w-full rounded-md border border-input bg-muted/40 px-3 py-1 text-sm text-muted-foreground focus-visible:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => copyCallback(url())}
+                class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label="Copy callback URL"
+              >
+                <Show when={copied()} fallback={<Copy class="h-3.5 w-3.5" />}>
+                  <Check class="h-3.5 w-3.5 text-green-500" />
+                </Show>
+              </button>
+            </div>
+          </FieldWithTooltip>
+        )}
+      </Show>
+    </div>
   );
 }

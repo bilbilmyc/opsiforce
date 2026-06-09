@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "uq_project_publish_jobs_one_active" ON "project_publish_jobs" USING btree ("project_id","environment_id") WHERE "project_publish_jobs"."status" in ('queued', 'committing', 'swapping', 'building', 'migrating');

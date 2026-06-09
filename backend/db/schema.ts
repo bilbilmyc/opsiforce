@@ -12,7 +12,6 @@ import {
   uniqueIndex,
   unique,
   primaryKey,
-  check,
 } from "drizzle-orm/pg-core"
 
 export const projectStatusEnum = pgEnum("project_status", [
@@ -23,17 +22,30 @@ export const projectStatusEnum = pgEnum("project_status", [
   "failed",
   "pending",
   "claiming",
+  "publishing",
 ])
 
 export const keyTypeEnum = pgEnum("key_type", ["chat", "backend"])
 
 export const projectAuthModeEnum = pgEnum("project_auth_mode", ["public", "manual", "makara"])
 
+export const requestLogModeEnum = pgEnum("request_log_mode", ["off", "metadata", "full"])
+
 export const projectDuplicateStatusEnum = pgEnum("project_duplicate_status", [
   "queued",
   "copying",
   "starting",
   "completed",
+  "failed",
+])
+
+export const projectPublishStatusEnum = pgEnum("project_publish_status", [
+  "queued",
+  "committing",
+  "building",
+  "migrating",
+  "swapping",
+  "done",
   "failed",
 ])
 
@@ -46,6 +58,8 @@ export const agentUpdateStatusEnum = pgEnum("agent_update_status", [
 ])
 
 export const workspaceTypeEnum = pgEnum("workspace_type", ["private", "shared"])
+
+export const podClassEnum = pgEnum("pod_class", ["small", "medium", "large", "custom"])
 
 export const tenants = pgTable("tenants", {
   id: text("id").primaryKey(),
@@ -128,21 +142,60 @@ export const projects = pgTable(
       .notNull(),
     title: text("title"),
     description: text("description"),
+    disabled: boolean("disabled").notNull().default(false),
+    bifrostProjectId: text("bifrost_project_id"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+)
+
+export const environments = pgTable(
+  "environments",
+  {
+    id: text("id").primaryKey(),
+    tenantId: tenantIdField,
+    name: text("name").notNull(),
+    description: text("description"),
+    isDefault: boolean("is_default").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    unique("environments_tenant_id_name_unique").on(table.tenantId, table.name),
+    uniqueIndex("environments_one_default_per_tenant")
+      .on(table.tenantId)
+      .where(sql`${table.isDefault}`),
+  ],
+)
+
+export const projectEnvironments = pgTable(
+  "project_environments",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    environmentId: text("environment_id").references(() => environments.id),
+    isDefault: boolean("is_default").notNull().default(false),
     directory: text("directory").notNull(),
     status: projectStatusEnum("status").notNull().default("starting"),
     podIp: text("pod_ip"),
     sessionId: text("session_id"),
     platformVersion: text("platform_version").notNull(),
-    bifrostProjectId: text("bifrost_project_id"),
+    authMode: projectAuthModeEnum("auth_mode").notNull().default("public"),
+    deployedCommitSha: text("deployed_commit_sha"),
     lastActiveAt: timestamp("last_active_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
-    check(
-      "projects_pool_tenant_null",
-      sql`(${table.status}::text = 'pending' AND ${table.tenantId} IS NULL) OR (${table.status}::text <> 'pending' AND ${table.tenantId} IS NOT NULL)`,
+    unique("project_environments_project_id_environment_id_unique").on(
+      table.projectId,
+      table.environmentId,
     ),
+    index("idx_project_environments_project").on(table.projectId),
+    index("idx_project_environments_status").on(table.status),
+    index("idx_project_environments_environment").on(table.environmentId),
   ],
 )
 
@@ -153,7 +206,18 @@ export const projectSettings = pgTable("project_settings", {
   timeoutIdle: bigint("timeout_idle", { mode: "number" }).notNull(),
   appTimeoutIdle: bigint("app_timeout_idle", { mode: "number" }).notNull(),
   timezone: text("timezone").notNull().default("UTC"),
-  authMode: projectAuthModeEnum("auth_mode").notNull().default("public"),
+  requestLogMode: requestLogModeEnum("request_log_mode").notNull().default("full"),
+  requestLogBodyLimit: integer("request_log_body_limit").notNull().default(10240),
+})
+
+export const projectPodSettings = pgTable("project_pod_settings", {
+  projectId: text("project_id")
+    .primaryKey()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  podClass: podClassEnum("pod_class").notNull().default("small"),
+  cpuMillicores: integer("cpu_millicores").notNull(),
+  memoryRequestMib: integer("memory_request_mib").notNull(),
+  memoryLimitMib: integer("memory_limit_mib").notNull(),
 })
 
 export const projectApps = pgTable(
@@ -166,6 +230,9 @@ export const projectApps = pgTable(
     description: text("description"),
     iconUrl: text("icon_url"),
     isPinned: boolean("is_pinned").notNull().default(false),
+    pinnedEnvironmentId: text("pinned_environment_id").references(() => projectEnvironments.id, {
+      onDelete: "set null",
+    }),
     pinnedById: text("pinned_by_id").references(() => users.id, { onDelete: "set null" }),
     pinnedAt: timestamp("pinned_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -183,6 +250,9 @@ export const projectAgentUpdates = pgTable(
     projectId: text("project_id")
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
+    projectEnvironmentId: text("project_environment_id").references(() => projectEnvironments.id, {
+      onDelete: "cascade",
+    }),
     agentId: text("agent_id")
       .references(() => agents.id)
       .notNull(),
@@ -221,6 +291,9 @@ export const projectVirtualKeys = pgTable("project_virtual_keys", {
   projectId: text("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
+  projectEnvironmentId: text("project_environment_id").references(() => projectEnvironments.id, {
+    onDelete: "cascade",
+  }),
   tenantId: text("tenant_id").references(() => tenants.id),
   keyType: keyTypeEnum("key_type").notNull().default("chat"),
   bifrostKeyId: text("bifrost_key_id").notNull(),
@@ -228,11 +301,19 @@ export const projectVirtualKeys = pgTable("project_virtual_keys", {
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-})
+}, (table) => [index("idx_project_virtual_keys_environment").on(table.projectEnvironmentId)])
 
 export const deletedProjects = pgTable("deleted_projects", {
   id: text("id").primaryKey(),
   tenantId: text("tenant_id").notNull(),
+  directory: text("directory").notNull(),
+  deletedAt: timestamp("deleted_at").defaultNow().notNull(),
+})
+
+export const deletedProjectEnvironments = pgTable("deleted_project_environments", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id").notNull(),
+  tenantId: text("tenant_id"),
   directory: text("directory").notNull(),
   deletedAt: timestamp("deleted_at").defaultNow().notNull(),
 })
@@ -262,23 +343,62 @@ export const projectDuplicateJobs = pgTable(
   ],
 )
 
+export const projectPublishJobs = pgTable(
+  "project_publish_jobs",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    projectEnvironmentId: text("project_environment_id")
+      .references(() => projectEnvironments.id, { onDelete: "cascade" })
+      .notNull(),
+    environmentId: text("environment_id")
+      .references(() => environments.id)
+      .notNull(),
+    tenantId: text("tenant_id").notNull(),
+    status: projectPublishStatusEnum("status").notNull().default("queued"),
+    commitSha: text("commit_sha"),
+    previousCommitSha: text("previous_commit_sha"),
+    error: text("error"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_project_publish_jobs_project").on(table.projectId),
+    index("idx_project_publish_jobs_environment").on(table.projectEnvironmentId),
+    index("idx_project_publish_jobs_status").on(table.status),
+    uniqueIndex("uq_project_publish_jobs_one_active")
+      .on(table.projectId, table.environmentId)
+      .where(sql`${table.status} in ('queued', 'committing', 'swapping', 'building', 'migrating')`),
+  ],
+)
+
 export const projectGatewayKeys = pgTable("project_gateway_keys", {
   id: text("id").primaryKey(),
   projectId: text("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
+  projectEnvironmentId: text("project_environment_id").references(() => projectEnvironments.id, {
+    onDelete: "cascade",
+  }),
   tenantId: text("tenant_id").references(() => tenants.id),
   token: text("token").notNull().unique(),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-})
+}, (table) => [index("idx_project_gateway_keys_environment").on(table.projectEnvironmentId)])
 
 export const gatewayAuditLogs = pgTable("gateway_audit_logs", {
   id: text("id").primaryKey(),
   projectId: text("project_id")
     .references(() => projects.id, { onDelete: "cascade" })
     .notNull(),
+  projectEnvironmentId: text("project_environment_id").references(() => projectEnvironments.id, {
+    onDelete: "cascade",
+  }),
   tenantId: text("tenant_id")
     .references(() => tenants.id)
     .notNull(),
@@ -322,6 +442,11 @@ export const projectSchedules = pgTable(
     projectId: text("project_id")
       .references(() => projects.id, { onDelete: "cascade" })
       .notNull(),
+    projectEnvironmentId: text("project_environment_id")
+      .references(() => projectEnvironments.id, {
+        onDelete: "cascade",
+      })
+      .notNull(),
     tenantId: text("tenant_id")
       .references(() => tenants.id)
       .notNull(),
@@ -336,7 +461,12 @@ export const projectSchedules = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (table) => [unique("project_schedules_project_id_name_unique").on(table.projectId, table.name)],
+  (table) => [
+    unique("project_schedules_environment_id_name_unique").on(
+      table.projectEnvironmentId,
+      table.name,
+    ),
+  ],
 )
 
 export const scheduleExecutions = pgTable(

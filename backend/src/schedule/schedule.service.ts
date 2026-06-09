@@ -4,7 +4,14 @@ import crypto from "crypto"
 import { InjectQueue } from "@nestjs/bullmq"
 import { Queue } from "bullmq"
 import { db } from "../../db"
-import { projectSchedules, scheduleExecutions, projects, projectSettings } from "../../db/schema"
+import {
+  projectSchedules,
+  scheduleExecutions,
+  projects,
+  projectSettings,
+  projectEnvironments,
+  environments,
+} from "../../db/schema"
 import type { CreateScheduleDto, UpdateScheduleDto, ScheduleJobData, ScheduleTrigger } from "./schedule.types"
 import { SCHEDULE_QUEUE_NAME } from "./schedule.types"
 
@@ -16,7 +23,12 @@ export class ScheduleService {
     @InjectQueue(SCHEDULE_QUEUE_NAME) private readonly queue: Queue<ScheduleJobData>,
   ) {}
 
-  async upsert(projectId: string, tenantId: string, dto: CreateScheduleDto) {
+  async upsert(
+    projectId: string,
+    projectEnvironmentId: string,
+    tenantId: string,
+    dto: CreateScheduleDto,
+  ) {
     const [settings] = await db
       .select({ timezone: projectSettings.timezone })
       .from(projectSettings)
@@ -29,6 +41,7 @@ export class ScheduleService {
       .values({
         id: crypto.randomUUID(),
         projectId,
+        projectEnvironmentId,
         tenantId,
         name: dto.name,
         cronPattern: dto.cronPattern,
@@ -37,9 +50,10 @@ export class ScheduleService {
         method: dto.method || "POST",
         body: dto.body ?? null,
         headers: dto.headers ?? null,
+        isActive: dto.isActive ?? true,
       })
       .onConflictDoUpdate({
-        target: [projectSchedules.projectId, projectSchedules.name],
+        target: [projectSchedules.projectEnvironmentId, projectSchedules.name],
         set: {
           cronPattern: dto.cronPattern,
           targetPath: dto.targetPath,
@@ -47,6 +61,7 @@ export class ScheduleService {
           body: dto.body ?? null,
           headers: dto.headers ?? null,
           timeZone: tz,
+          ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
           updatedAt: new Date(),
         },
       })
@@ -54,26 +69,29 @@ export class ScheduleService {
 
     await this.syncJobScheduler(row.id, row.cronPattern, row.timeZone, row.isActive)
 
-    this.logger.log(`Upserted schedule "${dto.name}" for project ${projectId}`)
+    this.logger.log(`Upserted schedule "${dto.name}" for environment ${projectEnvironmentId}`)
     return row
   }
 
-  async findByProject(projectId: string) {
+  async findByEnvironment(projectEnvironmentId: string) {
     return db
       .select()
       .from(projectSchedules)
-      .where(eq(projectSchedules.projectId, projectId))
+      .where(eq(projectSchedules.projectEnvironmentId, projectEnvironmentId))
       .orderBy(desc(projectSchedules.createdAt))
   }
 
-  async findByTenant(tenantId: string, projectId?: string) {
+  async findByTenant(tenantId: string, environmentId?: string) {
     const conditions = [eq(projectSchedules.tenantId, tenantId)]
-    if (projectId) conditions.push(eq(projectSchedules.projectId, projectId))
+    if (environmentId) {
+      conditions.push(eq(projectEnvironments.environmentId, environmentId))
+    }
 
     return db
       .select({
         id: projectSchedules.id,
         projectId: projectSchedules.projectId,
+        projectEnvironmentId: projectSchedules.projectEnvironmentId,
         tenantId: projectSchedules.tenantId,
         name: projectSchedules.name,
         cronPattern: projectSchedules.cronPattern,
@@ -86,9 +104,13 @@ export class ScheduleService {
         createdAt: projectSchedules.createdAt,
         updatedAt: projectSchedules.updatedAt,
         projectTitle: projects.title,
+        environmentName: environments.name,
+        isDefault: projectEnvironments.isDefault,
       })
       .from(projectSchedules)
       .innerJoin(projects, eq(projects.id, projectSchedules.projectId))
+      .leftJoin(projectEnvironments, eq(projectEnvironments.id, projectSchedules.projectEnvironmentId))
+      .leftJoin(environments, eq(environments.id, projectEnvironments.environmentId))
       .where(and(...conditions))
       .orderBy(desc(projectSchedules.createdAt))
   }
@@ -145,17 +167,22 @@ export class ScheduleService {
     this.logger.log(`Deleted schedule ${scheduleId}`)
   }
 
-  async removeById(projectId: string, scheduleId: string) {
+  async removeByEnvironment(projectEnvironmentId: string, scheduleId: string) {
     const [schedule] = await db
       .select()
       .from(projectSchedules)
-      .where(and(eq(projectSchedules.projectId, projectId), eq(projectSchedules.id, scheduleId)))
+      .where(
+        and(
+          eq(projectSchedules.projectEnvironmentId, projectEnvironmentId),
+          eq(projectSchedules.id, scheduleId),
+        ),
+      )
 
     if (!schedule) throw new NotFoundException(`Schedule ${scheduleId} not found`)
 
     await this.removeJobScheduler(schedule.id)
     await db.delete(projectSchedules).where(eq(projectSchedules.id, schedule.id))
-    this.logger.log(`Deleted schedule ${scheduleId} for project ${projectId}`)
+    this.logger.log(`Deleted schedule ${scheduleId} for environment ${projectEnvironmentId}`)
   }
 
   async removeAllForProject(projectId: string) {
@@ -168,6 +195,18 @@ export class ScheduleService {
 
     await db.delete(projectSchedules).where(eq(projectSchedules.projectId, projectId))
     this.logger.log(`Removed all schedules for project ${projectId}`)
+  }
+
+  async removeAllForEnvironment(projectEnvironmentId: string): Promise<void> {
+    const rows = await db
+      .select({ id: projectSchedules.id })
+      .from(projectSchedules)
+      .where(eq(projectSchedules.projectEnvironmentId, projectEnvironmentId))
+
+    await Promise.all(rows.map((row) => this.removeJobScheduler(row.id).catch(() => {})))
+
+    await db.delete(projectSchedules).where(eq(projectSchedules.projectEnvironmentId, projectEnvironmentId))
+    this.logger.log(`Removed all schedules for environment ${projectEnvironmentId}`)
   }
 
   async triggerNow(scheduleId: string) {

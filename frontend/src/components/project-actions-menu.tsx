@@ -1,17 +1,15 @@
 import { For, Show, createMemo, createSignal } from "solid-js"
 import { createMutation, useQueryClient } from "@tanstack/solid-query"
-import { useNavigate } from "@tanstack/solid-router"
 import { toast } from "solid-sonner"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
 import { api, type Project } from "~/api/client"
+import { useRestartProjectEnvironment } from "~/api/environments"
 import { PUBLIC_LABEL, useMoveProject, useWorkspaces } from "~/api/workspaces"
 import {
-  AppWindow,
   ArrowRightLeft,
   Ban,
   Box,
-  Calendar,
   ChevronRight,
   CirclePlay,
   Copy,
@@ -19,11 +17,8 @@ import {
   FolderKanban,
   Globe,
   Pencil,
-  Pin,
-  PinOff,
   RotateCcw,
   Settings,
-  ShieldCheck,
   Trash2,
 } from "~/components/icons"
 import {
@@ -37,16 +32,14 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu"
 import ProjectSettings from "./project-settings"
-import ProjectAuthDialog from "./project-auth-dialog"
 import ConfirmDialog from "./ui/confirm-dialog"
-import PinAppDialogs, { type PinDialogAction } from "./project/pin-app-dialogs"
-import EditAppDialog from "./project/edit-app-dialog"
 
 export default function ProjectActionsMenu(props: {
   projectId: string
   status: Project["status"]
   workspaceId: string | null
   project?: Project
+  activeEnvironmentId?: string
   showRename?: boolean
   onRename?: () => void
   onSettings?: () => void
@@ -56,31 +49,23 @@ export default function ProjectActionsMenu(props: {
   onTriggerClick?: (e: MouseEvent) => void
 }) {
   const qc = useQueryClient()
-  const navigate = useNavigate()
   const { hasPermission } = usePermissions()
 
   const canSeeSettings = () =>
     hasPermission(Permission.manageProjectBudgetSettings) ||
-    hasPermission(Permission.manageProjectTimeoutSettings)
-  const canManageAuth = () => hasPermission(Permission.manageProjectAuthSettings)
+    hasPermission(Permission.manageProjectTimeoutSettings) ||
+    hasPermission(Permission.manageProjectLoggingSettings) ||
+    hasPermission(Permission.manageProjectPodSettings)
   const canDisable = () => hasPermission(Permission.disableProject)
   const canRestart = () => hasPermission(Permission.restartProject)
   const canDuplicate = () => hasPermission(Permission.duplicateProject)
   const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces)
-  const canPinApps = () => hasPermission(Permission.pinApps)
-  const canEditAppDetails = () => hasPermission(Permission.editAppDetails)
   const isDisabled = () => props.status === "disabled"
-  const isPinned = () => props.project?.isPinned === true
-  const hasApp = () => props.project?.hasApp === true
-  const showAppSubmenu = () => hasApp()
 
   const [settingsOpen, setSettingsOpen] = createSignal(false)
   const [confirmAction, setConfirmAction] = createSignal<
     "delete" | "duplicate" | "disable" | "restart" | null
   >(null)
-  const [pinAction, setPinAction] = createSignal<PinDialogAction>(null)
-  const [editAppOpen, setEditAppOpen] = createSignal(false)
-  const [authOpen, setAuthOpen] = createSignal(false)
 
   const workspaces = useWorkspaces()
   const move = useMoveProject()
@@ -140,6 +125,21 @@ export default function ProjectActionsMenu(props: {
       qc.refetchQueries({ queryKey: ["projects", props.projectId] })
     },
   }))
+
+  const restartEnvironment = useRestartProjectEnvironment()
+
+  const isDevelopmentActive = () =>
+    !props.activeEnvironmentId || props.activeEnvironmentId === props.projectId
+
+  const handleRestart = () => {
+    if (isDevelopmentActive()) {
+      restartProject.mutate(undefined as never)
+      return
+    }
+    const environmentId = props.activeEnvironmentId
+    if (!environmentId) return
+    restartEnvironment.mutate({ projectId: props.projectId, environmentId })
+  }
 
   return (
     <>
@@ -217,59 +217,6 @@ export default function ProjectActionsMenu(props: {
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
-          <Show when={showAppSubmenu()}>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <AppWindow class="w-3.5 h-3.5 text-muted-foreground" />
-                App
-                <ChevronRight class="ml-auto w-3.5 h-3.5 text-muted-foreground" />
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent>
-                <Show when={canPinApps()}>
-                  <Show
-                    when={isPinned()}
-                    fallback={
-                      <DropdownMenuItem onSelect={() => setPinAction("pin")}>
-                        <Pin class="w-3.5 h-3.5 text-muted-foreground" />
-                        Pin to Makara
-                      </DropdownMenuItem>
-                    }
-                  >
-                    <DropdownMenuItem onSelect={() => setPinAction("unpin")}>
-                      <PinOff class="w-3.5 h-3.5 text-muted-foreground" />
-                      Unpin from Makara
-                    </DropdownMenuItem>
-                  </Show>
-                </Show>
-                <Show when={canEditAppDetails()}>
-                  <DropdownMenuItem onSelect={() => setEditAppOpen(true)}>
-                    <Pencil class="w-3.5 h-3.5 text-muted-foreground" />
-                    Edit
-                  </DropdownMenuItem>
-                </Show>
-                <Show when={canManageAuth()}>
-                  <DropdownMenuItem onSelect={() => setAuthOpen(true)}>
-                    <ShieldCheck class="w-3.5 h-3.5 text-muted-foreground" />
-                    Auth
-                  </DropdownMenuItem>
-                </Show>
-                <Show when={canPinApps() || canEditAppDetails() || canManageAuth()}>
-                  <DropdownMenuSeparator />
-                </Show>
-                <DropdownMenuItem
-                  onSelect={() =>
-                    navigate({
-                      to: "/schedules",
-                      search: { project: props.projectId },
-                    })
-                  }
-                >
-                  <Calendar class="w-3.5 h-3.5 text-muted-foreground" />
-                  Schedules
-                </DropdownMenuItem>
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-          </Show>
           <Show when={showMove()}>
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
@@ -302,7 +249,12 @@ export default function ProjectActionsMenu(props: {
       </DropdownMenu>
 
       <Show when={!props.onSettings}>
-        <ProjectSettings projectId={props.projectId} open={settingsOpen()} onOpenChange={setSettingsOpen} />
+        <ProjectSettings
+          projectId={props.projectId}
+          activeEnvironmentId={props.activeEnvironmentId}
+          open={settingsOpen()}
+          onOpenChange={setSettingsOpen}
+        />
       </Show>
 
       <ConfirmDialog
@@ -349,27 +301,7 @@ export default function ProjectActionsMenu(props: {
         description="Are you sure you want to restart this project? Project data will be preserved."
         confirmLabel="Restart"
         variant="destructive"
-        onConfirm={() => restartProject.mutate(undefined as never)}
-      />
-
-      <PinAppDialogs
-        projectId={props.projectId}
-        action={pinAction()}
-        onActionChange={setPinAction}
-      />
-
-      <EditAppDialog
-        projectId={props.projectId}
-        open={editAppOpen()}
-        onOpenChange={setEditAppOpen}
-        initialName={props.project?.appName ?? null}
-        initialDescription={props.project?.appDescription ?? null}
-      />
-
-      <ProjectAuthDialog
-        projectId={props.projectId}
-        open={authOpen()}
-        onOpenChange={setAuthOpen}
+        onConfirm={handleRestart}
       />
     </>
   )

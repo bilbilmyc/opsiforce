@@ -136,8 +136,8 @@ func handleTask(rootPath string, cache map[string]*cachedDB, task task) error {
 		task.entry.DurationMillis,
 		nullIfEmpty(task.entry.RequestHeaders),
 		nullIfEmpty(task.entry.ResponseHeaders),
-		nullIfEmpty(truncate(task.entry.RequestBody)),
-		nullIfEmpty(truncate(task.entry.ResponseBody)),
+		nullIfEmpty(task.entry.RequestBody),
+		nullIfEmpty(task.entry.ResponseBody),
 	)
 	return err
 }
@@ -239,12 +239,4 @@ func nullIfEmpty(value string) any {
 
 func IsClosed(err error) bool {
 	return errors.Is(err, sql.ErrConnDone)
-}
-
-func truncate(value string) string {
-	if len(value) <= 10*1024 {
-		return value
-	}
-
-	return value[:10*1024]
 }

@@ -223,7 +223,9 @@ function streamingMultipartBody(
   })
 }
 
-const FileUpload: Component<{ projectId: string }> = (props) => {
+const FileUpload: Component<{ projectId: string; environmentId: string }> = (props) => {
+  const uploadUrl = () =>
+    `/api/projects/${props.projectId}/upload?environmentId=${encodeURIComponent(props.environmentId)}`
   const [uploading, setUploading] = createSignal(false)
   const [totalFiles, setTotalFiles] = createSignal(0)
   const [preparedFiles, setPreparedFiles] = createSignal(0)
@@ -328,7 +330,7 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
       makeProgressReporter(totalData),
     )
 
-    return fetch(`/api/projects/${props.projectId}/upload`, {
+    return fetch(uploadUrl(), {
       method: "POST",
       headers,
       body,
@@ -382,7 +384,7 @@ const FileUpload: Component<{ projectId: string }> = (props) => {
       xhr.onerror = () => reject(new Error("Network error during upload"))
       xhr.ontimeout = () => reject(new Error("Upload timed out"))
 
-      xhr.open("POST", `/api/projects/${props.projectId}/upload`)
+      xhr.open("POST", uploadUrl())
       xhr.setRequestHeader("x-upload-events", "summary")
       if (tenant) xhr.setRequestHeader("x-tenant-name", tenant)
       xhr.send(buildUploadFormData(files))

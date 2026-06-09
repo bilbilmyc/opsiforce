@@ -348,14 +348,16 @@ const upload = useMutation({
 
 ## Calling external APIs — go through the backend
 
-External API calls must originate from the **backend**, never the frontend. Frontend code is public, so any `process.env.X` or token in the bundle is exposed.
+External API calls must originate from the **backend**, never the frontend. Frontend code is public, so any secret in the bundle is exposed. Read the API key from `opsiforce.env.json` via your `appConfig` helper (see agent.md → App configuration & secrets), not from `process.env`.
 
 ```typescript
 // backend/src/weather/weather.service.ts
+import { appConfig } from "../config"
+
 @Injectable()
 export class WeatherService {
   async getWeather(city: string) {
-    const res = await fetch(`https://api.example.com/weather?q=${city}&key=${process.env.WEATHER_KEY}`)
+    const res = await fetch(`https://api.example.com/weather?q=${city}&key=${appConfig("WEATHER_KEY")}`)
     if (!res.ok) throw new BadRequestException("Weather API error")
     return res.json()
   }

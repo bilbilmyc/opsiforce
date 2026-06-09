@@ -10,13 +10,19 @@ import {
   type OpenCodeSession,
   type ProjectStatus,
 } from "~/api/client"
+import type { ProjectEnvironmentStatus } from "~/api/environments"
 import { useSyncProjectTitle } from "~/api/projects"
 import { createDirectoryRouter } from "./platform"
 
+type ConnectionStatus = ProjectStatus | ProjectEnvironmentStatus
+
 export interface OpenCodeConnectionOptions {
   projectId: string
-  status: Accessor<ProjectStatus | undefined>
+  environmentId: Accessor<string>
+  status: Accessor<ConnectionStatus | undefined>
+  rememberedSessionId: Accessor<string | null | undefined>
   currentTitle: Accessor<string | null | undefined>
+  onResolveSession: (environmentId: string, sessionId: string) => void
   initialPrompt?: string
 }
 
@@ -25,13 +31,14 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
   const syncProjectTitle = useSyncProjectTitle()
 
   let connecting = false
-  let prevStatus: ProjectStatus | undefined
+  let prevStatus: ConnectionStatus | undefined
+  let prevEnvId: string | undefined
 
   const syncTitle = (title: string) => syncProjectTitle(options.projectId, title, options.currentTitle())
 
-  async function resolveDirectory(): Promise<string | undefined> {
+  async function resolveDirectory(environmentId: string): Promise<string | undefined> {
     try {
-      const res = await fetch(`/api/proxy/${options.projectId}/path`)
+      const res = await fetch(`/api/proxy/${environmentId}/path`)
       if (!res.ok) return undefined
       const payload = (await res.json()) as { directory?: string }
       return payload.directory
@@ -40,49 +47,52 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
     }
   }
 
-  async function resolveOriginalSessionId(): Promise<string | undefined> {
+  async function resolveSessionId(environmentId: string): Promise<string | undefined> {
     try {
-      const sessions = await api.get<OpenCodeSession[]>(
-        `/proxy/${options.projectId}/session`,
-      )
-      if (!Array.isArray(sessions) || sessions.length === 0) return undefined
-      const sorted = sessions
-        .filter((s) => !s.parentID)
-        .sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))
-      const head = sorted[0]
-      if (!head) return undefined
-      syncTitle(head.title)
-      return head.id
+      const sessions = await api.get<OpenCodeSession[]>(`/proxy/${environmentId}/session`)
+      const roots = Array.isArray(sessions) ? sessions.filter((s) => !s.parentID) : []
+      if (roots.length === 0) return undefined
+      const remembered = options.rememberedSessionId()
+      const pinned = remembered ? roots.find((s) => s.id === remembered) : undefined
+      const chosen =
+        pinned ?? [...roots].sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))[0]
+      if (!chosen) return undefined
+      syncTitle(chosen.title)
+      if (chosen.id !== remembered) options.onResolveSession(environmentId, chosen.id)
+      return chosen.id
     } catch {
       return undefined
     }
   }
 
-  async function startFromInitialPrompt(): Promise<string | undefined> {
-    if (!options.initialPrompt) return undefined
+  async function startFromInitialPrompt(environmentId: string): Promise<string | undefined> {
+    if (!options.initialPrompt || environmentId !== options.projectId) return undefined
     try {
-      const session = await api.post<OpenCodeSession>(
-        `/proxy/${options.projectId}/session`,
-      )
+      const session = await api.post<OpenCodeSession>(`/proxy/${environmentId}/session`)
       if (!session?.id) return undefined
       await api.post(
-        `/proxy/${options.projectId}/session/${session.id}/prompt_async`,
+        `/proxy/${environmentId}/session/${session.id}/prompt_async`,
         { parts: [{ type: "text", text: options.initialPrompt }] },
       )
+      options.onResolveSession(environmentId, session.id)
       return session.id
     } catch {
       return undefined
     }
   }
 
-  async function connect() {
-    const directory = await resolveDirectory()
+  async function connect(environmentId: string) {
+    const isActiveEnv = () => environmentId === options.environmentId()
+    const directory = await resolveDirectory(environmentId)
+    if (!isActiveEnv()) return
     if (!directory) {
       connecting = false
       return
     }
-    const existingSessionId = await resolveOriginalSessionId()
-    const sessionId = existingSessionId ?? (await startFromInitialPrompt())
+    const existingSessionId = await resolveSessionId(environmentId)
+    if (!isActiveEnv()) return
+    const sessionId = existingSessionId ?? (await startFromInitialPrompt(environmentId))
+    if (!isActiveEnv()) return
     setRouter(() => createDirectoryRouter(directory, sessionId))
   }
 
@@ -93,7 +103,14 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
 
   createEffect(() => {
     const status = options.status()
+    const envId = options.environmentId()
     if (!status) return
+
+    if (envId !== prevEnvId) {
+      reset()
+      prevEnvId = envId
+      prevStatus = undefined
+    }
 
     if (status === "disabled") {
       reset()
@@ -107,7 +124,7 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
 
     if (status === "active" && !connecting) {
       connecting = true
-      connect()
+      connect(envId)
     }
 
     prevStatus = status

@@ -73,6 +73,33 @@ export interface Tenant {
 
 export type ProjectStatus = "starting" | "active" | "suspended" | "disabled" | "failed"
 
+export type RequestLogMode = "off" | "metadata" | "full"
+
+export type PodClass = "small" | "medium" | "large" | "custom"
+
+export interface PodResources {
+  cpuMillicores: number
+  memoryRequestMib: number
+  memoryLimitMib: number
+}
+
+export interface PodClassPreset {
+  podClass: "small" | "medium" | "large"
+  resources: PodResources
+}
+
+export interface PodClassCatalog {
+  presets: PodClassPreset[]
+  customBounds: { min: PodResources; max: PodResources }
+}
+
+export interface UpdateProjectPodClassDto {
+  podClass: PodClass
+  cpuMillicores?: number
+  memoryRequestMib?: number
+  memoryLimitMib?: number
+}
+
 export interface Project {
   id: string
   tenantId: string
@@ -85,6 +112,12 @@ export interface Project {
   timeoutIdle: number
   appTimeoutIdle: number
   timezone: string
+  requestLogMode: RequestLogMode
+  requestLogBodyLimit: number
+  podClass: PodClass
+  cpuMillicores: number
+  memoryRequestMib: number
+  memoryLimitMib: number
   authMode: ProjectAuthMode
   isPinned: boolean
   pinnedAt: string | null
@@ -93,6 +126,14 @@ export interface Project {
   appDescription: string | null
   lastActiveAt: string | null
   createdAt: string
+  disabled: boolean
+  pinnedEnvironmentId: string | null
+}
+
+export const podClassApi = {
+  catalog: () => api.get<PodClassCatalog>("/pod-classes"),
+  update: (projectId: string, dto: UpdateProjectPodClassDto) =>
+    api.put<Project>(`/projects/${projectId}/pod-class`, dto),
 }
 
 export interface ProjectState {
@@ -136,6 +177,7 @@ export interface ProjectAuthResponse {
   mode: ProjectAuthMode
   config?: ProjectAuthOidcConfig
   bypassAuthPaths?: string[]
+  callbackUrl: string
 }
 
 export interface UpdateProjectAuthDto {
@@ -195,6 +237,7 @@ export const userApi = {
 export interface Schedule {
   id: string
   projectId: string
+  projectEnvironmentId: string
   tenantId: string
   name: string
   cronPattern: string
@@ -207,6 +250,8 @@ export interface Schedule {
   createdAt: string
   updatedAt: string
   projectTitle?: string | null
+  environmentName?: string | null
+  isDefault?: boolean
 }
 
 export interface ScheduleExecution {
@@ -229,8 +274,8 @@ export interface UpdateScheduleDto {
 }
 
 export const scheduleApi = {
-  list: (projectId?: string) => api.get<Schedule[]>(projectId ? `/schedules?projectId=${projectId}` : "/schedules"),
-  listByProject: (projectId: string) => api.get<Schedule[]>(`/projects/${projectId}/schedules`),
+  list: (environmentId?: string) =>
+    api.get<Schedule[]>(environmentId ? `/schedules?environmentId=${environmentId}` : "/schedules"),
   update: (projectId: string, scheduleId: string, dto: UpdateScheduleDto) =>
     api.patch<Schedule>(`/projects/${projectId}/schedules/${scheduleId}`, dto),
   remove: (projectId: string, scheduleId: string) => api.delete<void>(`/projects/${projectId}/schedules/${scheduleId}`),
