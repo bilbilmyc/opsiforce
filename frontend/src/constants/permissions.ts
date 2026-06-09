@@ -20,4 +20,5 @@ export const Permission = {
   manageEnvironments: "can_manage_environments",
   publishProject: "can_publish_project",
   deleteEnvironment: "can_delete_environment",
+  manageUsers: "can_manage_users",
 } as const;

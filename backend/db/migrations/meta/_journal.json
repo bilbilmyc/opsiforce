@@ -295,6 +295,13 @@
       "when": 1780952474234,
       "tag": "0041_add-publishing-project-status",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1780997993952,
+      "tag": "0042_add-user-last-access-time",
+      "breakpoints": true
     }
   ]
 }

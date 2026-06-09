@@ -93,5 +93,6 @@ spec:
                 - --redirect-url={{ .Values.oauth2Proxy.redirectUrl }}
                 - --skip-auth-route=GET=^/assets/.*$
                 - --skip-auth-route=GET=^/favicon/.*$
+                - --skip-auth-route=GET=^/ms-assets/.*$
                 - --skip-auth-route=GET=^/manifest.webmanifest$
                 - --cookie-refresh=4m

@@ -15,6 +15,8 @@ proxy:
   agentService: "http://proxy-agent:3005"
   backendService: "http://opsiforce-backend:3001"
   frontendService: "http://host.minikube.internal:8084"
+  keycloakMsApiBackend: "http://local-keycloakms-proxy-keycloak-ms-proxy-oauth2-proxy.local.svc.cluster.local:4180"
+  keycloakMsAssetsBackend: "http://local-keycloakms-proxy-keycloak-ms-proxy-oauth2-proxy.local.svc.cluster.local:4180"
 
 appProxy:
   backendService: "proxy-app"

@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, Patch, Post, Req, UnauthorizedException }
 import { FastifyRequest } from "fastify"
 import { RequirePermission } from "../permission/permission.guard"
 import { Perms } from "../permission/permission.constants"
-import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
+import { CurrentTenant, Public, type TenantContext } from "../tenant/tenant.decorator"
 import { CurrentUser, type UserContext } from "./user.decorator"
 import {
   UserService,
@@ -19,6 +19,16 @@ export class UserController {
   @RequirePermission(Perms.manageWorkspaces)
   listUsers(@CurrentTenant() tenant: TenantContext): Promise<UserRecord[]> {
     return this.userService.listByTenant(tenant.tenantId)
+  }
+
+  @Public()
+  @Post("last-access-times")
+  async getLastAccessTimes(
+    @Body() body: { keycloakUserIds?: string[] },
+  ): Promise<{ lastAccessTimes: Record<string, string | null> }> {
+    const keycloakUserIds = Array.isArray(body?.keycloakUserIds) ? body.keycloakUserIds : []
+    const lastAccessTimes = await this.userService.getLastAccessTimes(keycloakUserIds)
+    return { lastAccessTimes }
   }
 
   @Post("me")
