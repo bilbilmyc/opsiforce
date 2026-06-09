@@ -8,8 +8,12 @@ export class ScheduleAdminController {
   constructor(private readonly scheduleService: ScheduleService) {}
 
   @Get("schedules")
-  findAll(@CurrentTenant() tenant: TenantContext, @Query("environmentId") environmentId?: string) {
-    return this.scheduleService.findByTenant(tenant.tenantId, environmentId)
+  findAll(
+    @CurrentTenant() tenant: TenantContext,
+    @Query("environmentId") environmentId?: string,
+    @Query("projectEnvironmentId") projectEnvironmentId?: string,
+  ) {
+    return this.scheduleService.findByTenant(tenant.tenantId, { environmentId, projectEnvironmentId })
   }
 
   @Patch("projects/:projectId/schedules/:scheduleId")

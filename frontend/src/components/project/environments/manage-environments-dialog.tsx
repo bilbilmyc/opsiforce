@@ -56,7 +56,10 @@ export default function ManageEnvironmentsDialog(props: ManageEnvironmentsDialog
 
   const openSchedules = (env: ProjectEnvironment) => {
     props.onOpenChange(false)
-    navigate({ to: "/schedules", search: { environmentId: env.environmentId } })
+    navigate({
+      to: "/schedules",
+      search: { projectEnvironmentId: env.id, projectId: env.projectId },
+    })
   }
 
   const confirmRestart = () => {

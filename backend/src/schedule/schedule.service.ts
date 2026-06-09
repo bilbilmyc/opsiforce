@@ -81,10 +81,16 @@ export class ScheduleService {
       .orderBy(desc(projectSchedules.createdAt))
   }
 
-  async findByTenant(tenantId: string, environmentId?: string) {
+  async findByTenant(
+    tenantId: string,
+    filter?: { environmentId?: string; projectEnvironmentId?: string },
+  ) {
     const conditions = [eq(projectSchedules.tenantId, tenantId)]
-    if (environmentId) {
-      conditions.push(eq(projectEnvironments.environmentId, environmentId))
+    if (filter?.environmentId) {
+      conditions.push(eq(projectEnvironments.environmentId, filter.environmentId))
+    }
+    if (filter?.projectEnvironmentId) {
+      conditions.push(eq(projectSchedules.projectEnvironmentId, filter.projectEnvironmentId))
     }
 
     return db

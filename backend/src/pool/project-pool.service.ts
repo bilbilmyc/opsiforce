@@ -531,7 +531,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
 
     try {
       if (this.bifrostService.isEnabled()) {
-        await this.bifrostService.createOrphanEnvironmentResources({ projectId: id, projectEnvironmentId: id })
+        await this.bifrostService.createOrphanProjectResources({ projectId: id })
       }
       await this.gatewayKeyService.createKey(id, id, null)
 
