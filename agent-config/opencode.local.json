@@ -31,24 +31,22 @@
       }
     },
     "openai": {
-      "whitelist": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex"],
+      "whitelist": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
       "models": {
         "gpt-5.5": {
+          "limit": { "context": 290400, "output": 32000 },
           "options": {
             "reasoningEffort": "high"
           }
         },
         "gpt-5.4": {
+          "limit": { "context": 290400, "output": 32000 },
           "options": {
             "reasoningEffort": "high"
           }
         },
         "gpt-5.4-mini": {
-          "options": {
-            "reasoningEffort": "high"
-          }
-        },
-        "gpt-5.3-codex": {
+          "limit": { "context": 290400, "output": 32000 },
           "options": {
             "reasoningEffort": "high"
           }
