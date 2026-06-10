@@ -2,14 +2,11 @@ import { Body, Controller, Get, Patch } from "@nestjs/common"
 import { DefaultsService } from "./defaults.service"
 import { RequirePermission } from "../permission/permission.guard"
 import { CurrentTenant, type TenantContext } from "../tenant/tenant.decorator"
-import { AVAILABLE_MODELS } from "./model-registry"
 import type {
   TimeoutDefaults,
   BudgetDefaults,
-  AgentDefaultsResponse,
   UpdateTimeoutDefaultsDto,
   UpdateBudgetDefaultsDto,
-  UpdateAgentDefaultsDto,
 } from "./defaults.types"
 
 const MANAGE_PLATFORM = "can_manage_platform_defaults"
@@ -43,20 +40,6 @@ export class DefaultsController {
     return this.defaultsService.updateGlobalBudgets(body)
   }
 
-  @Get("global/agent")
-  @RequirePermission(MANAGE_PLATFORM)
-  async getGlobalAgent(): Promise<AgentDefaultsResponse> {
-    const agent = await this.defaultsService.getGlobalAgent()
-    return { ...agent, availableModels: AVAILABLE_MODELS }
-  }
-
-  @Patch("global/agent")
-  @RequirePermission(MANAGE_PLATFORM)
-  async updateGlobalAgent(@Body() body: UpdateAgentDefaultsDto): Promise<AgentDefaultsResponse> {
-    const agent = await this.defaultsService.updateGlobalAgent(body)
-    return { ...agent, availableModels: AVAILABLE_MODELS }
-  }
-
   @Get("tenant/timeouts")
   @RequirePermission(MANAGE_TENANT)
   getTenantTimeouts(@CurrentTenant() tenant: TenantContext): Promise<TimeoutDefaults> {
@@ -85,22 +68,5 @@ export class DefaultsController {
     @Body() body: UpdateBudgetDefaultsDto,
   ): Promise<BudgetDefaults> {
     return this.defaultsService.updateTenantBudgets(tenant.tenantId, body)
-  }
-
-  @Get("tenant/agent")
-  @RequirePermission(MANAGE_TENANT)
-  async getTenantAgent(@CurrentTenant() tenant: TenantContext): Promise<AgentDefaultsResponse> {
-    const agent = await this.defaultsService.getTenantAgent(tenant.tenantId)
-    return { ...agent, availableModels: AVAILABLE_MODELS }
-  }
-
-  @Patch("tenant/agent")
-  @RequirePermission(MANAGE_TENANT)
-  async updateTenantAgent(
-    @CurrentTenant() tenant: TenantContext,
-    @Body() body: UpdateAgentDefaultsDto,
-  ): Promise<AgentDefaultsResponse> {
-    const agent = await this.defaultsService.updateTenantAgent(tenant.tenantId, body)
-    return { ...agent, availableModels: AVAILABLE_MODELS }
   }
 }

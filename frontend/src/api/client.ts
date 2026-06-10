@@ -310,13 +310,3 @@ export interface BudgetDefaults {
   defaultBackendBudget: number
   defaultBackendBudgetDuration: string
 }
-
-export interface ModelOption {
-  value: string
-  label: string
-}
-
-export interface AgentDefaults {
-  defaultModel: string
-  availableModels: ModelOption[]
-}
