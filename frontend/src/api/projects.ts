@@ -22,25 +22,19 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
   const [data, setData] = createSignal<ProjectState>()
   const [error, setError] = createSignal<unknown>()
 
-  let lastInvalidatedStatus: ProjectState["status"] | undefined
-
   const applyStatus = (status: ProjectState) => {
     setData(status)
     setError(undefined)
     if (status.status === "suspended") {
       fetch(`/api/proxy/${status.id}/ping`).catch(() => {})
     }
-    if (status.status !== lastInvalidatedStatus) {
-      lastInvalidatedStatus = status.status
-      qc.invalidateQueries({ queryKey: environmentKeys.forProject(status.id) })
-    }
+    qc.invalidateQueries({ queryKey: environmentKeys.forProject(status.id) })
   }
 
   createEffect(() => {
     const id = projectId()
     const enabled = options?.enabled?.() ?? true
     if (!enabled) return
-    lastInvalidatedStatus = undefined
 
     let closed = false
     const events = new EventSource(statusEventsUrl(id))
