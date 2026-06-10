@@ -1,5 +1,4 @@
 import { Show, For } from "solid-js"
-import { createQuery } from "@tanstack/solid-query"
 import { useNavigate } from "@tanstack/solid-router"
 import { api, type Tenant } from "~/api/client"
 import { createTenantState } from "~/lib/tenant-state"
@@ -11,12 +10,13 @@ import {
 } from "~/components/ui/dropdown-menu"
 import { SidebarMenu, SidebarMenuItem } from "~/components/ui/sidebar"
 import { Building2, ChevronsUpDown } from "~/components/icons"
+import { createAppQuery } from "~/lib/create-app-query"
 
 export default function TenantSelector() {
   const [currentTenant, setTenant] = createTenantState()
   const navigate = useNavigate()
 
-  const tenantsQuery = createQuery(() => ({
+  const tenantsQuery = createAppQuery(() => ({
     queryKey: ["tenants"],
     queryFn: () => api.get<Tenant[]>("/tenants"),
   }))

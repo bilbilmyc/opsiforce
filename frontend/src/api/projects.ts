@@ -1,4 +1,5 @@
-import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
+import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { createEffect, createSignal, onCleanup } from "solid-js"
 import { ApiError, api, type Project, type ProjectState } from "./client"
 import { environmentKeys } from "./environments"
@@ -95,11 +96,10 @@ function statusEventsUrl(projectId: string): string {
 }
 
 export function useProjects(options?: { enabled?: () => boolean }) {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: projectKeys.list(),
     queryFn: () => api.get<Project[]>("/projects"),
     enabled: options?.enabled ? options.enabled() : true,
-    reconcile: "id",
   }))
 }
 

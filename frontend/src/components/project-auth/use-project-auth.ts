@@ -1,4 +1,5 @@
-import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { api, type ProjectAuthResponse, type UpdateProjectAuthDto } from "~/api/client"
 import { environmentKeys } from "~/api/environments"
 
@@ -10,7 +11,7 @@ export function useProjectAuth(projectId: () => string, environmentId: () => str
 
   const authUrl = () => `/projects/${projectId()}/environments/${environmentId()}/auth`
 
-  const query = createQuery(() => ({
+  const query = createAppQuery(() => ({
     queryKey: projectAuthQueryKey(projectId(), environmentId()),
     queryFn: () => api.get<ProjectAuthResponse>(authUrl()),
     refetchOnWindowFocus: false,

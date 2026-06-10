@@ -20,6 +20,8 @@ import { Toaster } from "solid-sonner";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
+      staleTime: 0,
+      refetchOnWindowFocus: true,
       retry: (failureCount, error) => {
         if (error instanceof ApiError && error.status === 404) return false;
         return failureCount < 3;

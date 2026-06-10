@@ -1,4 +1,5 @@
-import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
+import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { createEffect, createSignal, onCleanup } from "solid-js"
 import { api } from "./client"
 import { projectKeys } from "./projects"
@@ -65,7 +66,7 @@ export const publishKeys = {
 }
 
 export function usePublishTargets(projectId: () => string, options?: { enabled?: () => boolean }) {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: publishKeys.targets(projectId()),
     queryFn: () => api.get<PublishTarget[]>(`/projects/${projectId()}/publish/targets`),
     enabled: options?.enabled ? options.enabled() : true,
@@ -77,7 +78,7 @@ export function usePublishForm(
   environmentId: () => string | null,
   options?: { enabled?: () => boolean },
 ) {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: publishKeys.form(projectId(), environmentId() ?? ""),
     queryFn: () =>
       api.get<PublishForm>(`/projects/${projectId()}/publish/form?environmentId=${environmentId()}`),

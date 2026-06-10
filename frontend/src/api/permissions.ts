@@ -1,8 +1,8 @@
-import { createQuery } from "@tanstack/solid-query"
 import { api } from "./client"
+import { createAppQuery } from "~/lib/create-app-query"
 
 export function usePermissions() {
-  const query = createQuery(() => ({
+  const query = createAppQuery(() => ({
     queryKey: ["permissions"],
     queryFn: () => api.get<string[]>("/permissions"),
   }))

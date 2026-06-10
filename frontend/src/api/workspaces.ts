@@ -1,4 +1,5 @@
-import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
+import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { toast } from "solid-sonner"
 import { api, type Project, type User, type Workspace } from "./client"
 import { detectTimezone } from "~/lib/timezone"
@@ -13,17 +14,15 @@ export const workspaceKeys = {
 }
 
 export function useWorkspaces(scope: "member" | "all" = "member") {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: workspaceKeys.list(scope),
     queryFn: () =>
       api.get<Workspace[]>(scope === "all" ? "/workspaces?scope=all" : "/workspaces"),
-    reconcile: "id",
-    refetchOnWindowFocus: false
   }))
 }
 
 export function useWorkspace(workspaceId: () => string | null) {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: workspaceKeys.detail(workspaceId() ?? ""),
     queryFn: () => api.get<Workspace>(`/workspaces/${workspaceId()}`),
     enabled: !!workspaceId(),
@@ -31,7 +30,7 @@ export function useWorkspace(workspaceId: () => string | null) {
 }
 
 export function useWorkspaceMembers(workspaceId: () => string | null) {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: workspaceKeys.members(workspaceId() ?? ""),
     queryFn: () => api.get<User[]>(`/workspaces/${workspaceId()}/members`),
     enabled: !!workspaceId(),
@@ -39,7 +38,7 @@ export function useWorkspaceMembers(workspaceId: () => string | null) {
 }
 
 export function useWorkspaceProjects(workspaceId: () => string | null) {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: workspaceKeys.projects(workspaceId() ?? ""),
     queryFn: () => api.get<Project[]>(`/workspaces/${workspaceId()}/projects`),
     enabled: !!workspaceId(),

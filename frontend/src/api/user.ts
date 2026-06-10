@@ -1,5 +1,5 @@
-import { createQuery } from "@tanstack/solid-query"
 import { userApi, type User } from "./client"
+import { createAppQuery } from "~/lib/create-app-query"
 
 const MAKARA_GROUP_PREFIX = "role:makara_tenant_name_"
 
@@ -11,7 +11,7 @@ interface UserInfo {
 }
 
 export function useUserInfo() {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: ["userinfo"],
     queryFn: async () => {
       const res = await fetch("/oauth2/userinfo")
@@ -34,7 +34,7 @@ export function parseMakaraTenants(groups: string[]): string[] {
 }
 
 export function useCurrentUser() {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: ["currentUser"],
     queryFn: () => userApi.me(),
   }))
