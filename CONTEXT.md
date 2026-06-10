@@ -46,6 +46,16 @@ _Avoid_: Publish, Share, Expose (non-canonical)
 The CPU/memory size of a Project's agent pod, chosen as a class — Small, Medium, Large, or Custom. A project-level policy: one choice applies to every one of the Project's ProjectEnvironment pods (Development and any published target alike).
 _Avoid_: Pod class (the internal identifier — never user-facing); Environment size (collides with Environment); Tier, Machine size, Compute (non-canonical — say Resources)
 
+### Agents
+
+**Agent**:
+The AI coding assistant a user converses with inside a ProjectEnvironment's pod. The platform ships one — **app-builder** — as the default. An Agent is a profile: identity, instructions, skills, and the Model it runs on.
+_Avoid_: Bot, Assistant (non-canonical)
+
+**Agent Model**:
+The LLM an Agent runs on. A platform-level property of the Agent profile, uniform across every tenant and Project — not a tenant- or project-configurable setting. Changing it is a platform rollout, not a default anyone tunes.
+_Avoid_: Default model (it is **not** a configurable default — Defaults covers timeouts and budgets only)
+
 ### Schedules
 
 **Schedule**:

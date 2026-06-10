@@ -4,21 +4,16 @@ import { db } from "../../db"
 import {
   globalTimeoutDefaults,
   globalBudgetDefaults,
-  globalAgentDefaults,
   tenantTimeoutDefaults,
   tenantBudgetDefaults,
-  tenantAgentDefaults,
 } from "../../db/schema"
 import { assertPositiveMs } from "../common/validation"
 import type {
   TimeoutDefaults,
   BudgetDefaults,
-  AgentDefaults,
   UpdateTimeoutDefaultsDto,
   UpdateBudgetDefaultsDto,
-  UpdateAgentDefaultsDto,
 } from "./defaults.types"
-import { isValidModel } from "./model-registry"
 
 const GLOBAL_ID = "default"
 
@@ -59,15 +54,6 @@ export class DefaultsService {
     return pickBudgetFields(row)
   }
 
-  async getGlobalAgent(): Promise<AgentDefaults> {
-    const [row] = await db
-      .select()
-      .from(globalAgentDefaults)
-      .where(eq(globalAgentDefaults.id, GLOBAL_ID))
-    if (!row) throw new NotFoundException("Global agent defaults not initialized")
-    return { defaultModel: row.defaultModel }
-  }
-
   async updateGlobalTimeouts(patch: UpdateTimeoutDefaultsDto): Promise<TimeoutDefaults> {
     const updates = cleanTimeoutPatch(patch)
     if (Object.keys(updates).length > 0) {
@@ -88,17 +74,6 @@ export class DefaultsService {
         .where(eq(globalBudgetDefaults.id, GLOBAL_ID))
     }
     return this.getGlobalBudgets()
-  }
-
-  async updateGlobalAgent(patch: UpdateAgentDefaultsDto): Promise<AgentDefaults> {
-    const updates = cleanAgentPatch(patch)
-    if (Object.keys(updates).length > 0) {
-      await db
-        .update(globalAgentDefaults)
-        .set({ ...updates, updatedAt: new Date() })
-        .where(eq(globalAgentDefaults.id, GLOBAL_ID))
-    }
-    return this.getGlobalAgent()
   }
 
   async getTenantTimeouts(tenantId: string): Promise<TimeoutDefaults> {
@@ -124,15 +99,6 @@ export class DefaultsService {
     return this.getGlobalBudgets()
   }
 
-  async getTenantAgent(tenantId: string): Promise<AgentDefaults> {
-    const [row] = await db
-      .select()
-      .from(tenantAgentDefaults)
-      .where(eq(tenantAgentDefaults.tenantId, tenantId))
-    if (row) return { defaultModel: row.defaultModel }
-    return this.getGlobalAgent()
-  }
-
   async updateTenantTimeouts(tenantId: string, patch: UpdateTimeoutDefaultsDto): Promise<TimeoutDefaults> {
     const updates = cleanTimeoutPatch(patch)
     if (Object.keys(updates).length > 0) {
@@ -155,28 +121,15 @@ export class DefaultsService {
     return this.getTenantBudgets(tenantId)
   }
 
-  async updateTenantAgent(tenantId: string, patch: UpdateAgentDefaultsDto): Promise<AgentDefaults> {
-    const updates = cleanAgentPatch(patch)
-    if (Object.keys(updates).length > 0) {
-      await db
-        .update(tenantAgentDefaults)
-        .set({ ...updates, updatedAt: new Date() })
-        .where(eq(tenantAgentDefaults.tenantId, tenantId))
-    }
-    return this.getTenantAgent(tenantId)
-  }
-
   async seedTenantDefaults(tenantId: string): Promise<void> {
-    const [globals, budgets, agent] = await Promise.all([
+    const [globals, budgets] = await Promise.all([
       this.getGlobalTimeouts(),
       this.getGlobalBudgets(),
-      this.getGlobalAgent(),
     ])
 
     await Promise.all([
       db.insert(tenantTimeoutDefaults).values({ tenantId, ...globals }).onConflictDoNothing(),
       db.insert(tenantBudgetDefaults).values({ tenantId, ...budgets }).onConflictDoNothing(),
-      db.insert(tenantAgentDefaults).values({ tenantId, ...agent }).onConflictDoNothing(),
     ])
   }
 }
@@ -222,17 +175,6 @@ function cleanBudgetPatch(patch: UpdateBudgetDefaultsDto): Partial<BudgetDefault
       throw new BadRequestException(`${key} must be a non-empty string`)
     }
     updates[key] = val
-  }
-  return updates
-}
-
-function cleanAgentPatch(patch: UpdateAgentDefaultsDto): Partial<AgentDefaults> {
-  const updates: Partial<AgentDefaults> = {}
-  if (patch.defaultModel !== undefined) {
-    if (!isValidModel(patch.defaultModel)) {
-      throw new BadRequestException(`Invalid model: ${patch.defaultModel}`)
-    }
-    updates.defaultModel = patch.defaultModel
   }
   return updates
 }

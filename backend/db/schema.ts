@@ -518,12 +518,6 @@ export const globalBudgetDefaults = pgTable("global_budget_defaults", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
 
-export const globalAgentDefaults = pgTable("global_agent_defaults", {
-  id: text("id").primaryKey(),
-  defaultModel: text("default_model").notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-})
-
 export const tenantTimeoutDefaults = pgTable("tenant_timeout_defaults", {
   tenantId: text("tenant_id")
     .primaryKey()
@@ -557,13 +551,5 @@ export const tenantBudgetDefaults = pgTable("tenant_budget_defaults", {
     mode: "number",
   }).notNull(),
   defaultBackendBudgetDuration: text("default_backend_budget_duration").notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-})
-
-export const tenantAgentDefaults = pgTable("tenant_agent_defaults", {
-  tenantId: text("tenant_id")
-    .primaryKey()
-    .references(() => tenants.id, { onDelete: "cascade" }),
-  defaultModel: text("default_model").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
