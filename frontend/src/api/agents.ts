@@ -1,5 +1,5 @@
-import { createQuery } from "@tanstack/solid-query"
 import { api, type Agent } from "./client"
+import { createAppQuery } from "~/lib/create-app-query"
 
 export const agentKeys = {
   all: ["agents"] as const,
@@ -7,7 +7,7 @@ export const agentKeys = {
 }
 
 export function useAgents() {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: agentKeys.list(),
     queryFn: () => api.get<Agent[]>("/agents"),
     refetchOnWindowFocus: false,

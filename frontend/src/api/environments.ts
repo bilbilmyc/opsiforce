@@ -1,4 +1,5 @@
-import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
+import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { api } from "./client"
 import { projectKeys } from "./projects"
 
@@ -52,11 +53,10 @@ export const environmentKeys = {
 }
 
 export function useEnvironments(options?: { enabled?: () => boolean }) {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: environmentKeys.registry(),
     queryFn: () => api.get<Environment[]>("/environments"),
     enabled: options?.enabled ? options.enabled() : true,
-    reconcile: "id",
   }))
 }
 
@@ -86,11 +86,10 @@ export function useDeleteEnvironment() {
 }
 
 export function useProjectEnvironments(projectId: () => string, options?: { enabled?: () => boolean }) {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: environmentKeys.forProject(projectId()),
     queryFn: () => api.get<ProjectEnvironment[]>(`/projects/${projectId()}/environments`),
     enabled: options?.enabled ? options.enabled() : true,
-    reconcile: "id",
   }))
 }
 

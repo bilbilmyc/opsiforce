@@ -1,4 +1,5 @@
-import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
+import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { createEffect, createSignal, onCleanup } from "solid-js"
 import { ApiError, api, type Project, type ProjectState } from "./client"
 import { environmentKeys } from "./environments"
@@ -21,19 +22,25 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
   const [data, setData] = createSignal<ProjectState>()
   const [error, setError] = createSignal<unknown>()
 
+  let lastInvalidatedStatus: ProjectState["status"] | undefined
+
   const applyStatus = (status: ProjectState) => {
     setData(status)
     setError(undefined)
     if (status.status === "suspended") {
       fetch(`/api/proxy/${status.id}/ping`).catch(() => {})
     }
-    qc.invalidateQueries({ queryKey: environmentKeys.forProject(status.id) })
+    if (status.status !== lastInvalidatedStatus) {
+      lastInvalidatedStatus = status.status
+      qc.invalidateQueries({ queryKey: environmentKeys.forProject(status.id) })
+    }
   }
 
   createEffect(() => {
     const id = projectId()
     const enabled = options?.enabled?.() ?? true
     if (!enabled) return
+    lastInvalidatedStatus = undefined
 
     let closed = false
     const events = new EventSource(statusEventsUrl(id))
@@ -95,11 +102,10 @@ function statusEventsUrl(projectId: string): string {
 }
 
 export function useProjects(options?: { enabled?: () => boolean }) {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: projectKeys.list(),
     queryFn: () => api.get<Project[]>("/projects"),
     enabled: options?.enabled ? options.enabled() : true,
-    reconcile: "id",
   }))
 }
 

@@ -1,5 +1,6 @@
 import { Show, createMemo, createSignal, type JSX } from "solid-js"
-import { createQuery, useQueryClient } from "@tanstack/solid-query"
+import { useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { toast } from "solid-sonner"
 import {
   api,
@@ -66,11 +67,11 @@ function DefaultsForm(props: { scope: Scope }) {
   const base = () => `/defaults/${props.scope}`
   const keyPrefix = () => ["defaults", props.scope] as const
 
-  const timeouts = createQuery(() => ({
+  const timeouts = createAppQuery(() => ({
     queryKey: [...keyPrefix(), "timeouts"],
     queryFn: () => api.get<TimeoutDefaults>(`${base()}/timeouts`),
   }))
-  const budgets = createQuery(() => ({
+  const budgets = createAppQuery(() => ({
     queryKey: [...keyPrefix(), "budgets"],
     queryFn: () => api.get<BudgetDefaults>(`${base()}/budgets`),
   }))

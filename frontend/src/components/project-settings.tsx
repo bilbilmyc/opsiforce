@@ -1,6 +1,7 @@
 import { For, Show, createSignal, createEffect, createMemo } from "solid-js"
 import { toast } from "solid-sonner"
-import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { api, podClassApi, type Project, type PodClass, type UpdateProjectPodClassDto, type RequestLogMode } from "~/api/client"
 import { usePermissions } from "~/api/permissions"
 import { useRestartProjectEnvironment } from "~/api/environments"
@@ -71,7 +72,7 @@ export default function ProjectSettings(props: {
   const restartEnvironment = useRestartProjectEnvironment()
   const restartTargetEnvId = () => props.activeEnvironmentId ?? props.projectId
 
-  const podClasses = createQuery(() => ({
+  const podClasses = createAppQuery(() => ({
     queryKey: ["pod-classes"],
     queryFn: () => podClassApi.catalog(),
     enabled: props.open && canPod(),
@@ -81,19 +82,19 @@ export default function ProjectSettings(props: {
     podClassDraft() === "custom" &&
     (parseFloat(memLimitGibDraft()) || 0) < (parseFloat(memRequestGibDraft()) || 0)
 
-  const project = createQuery(() => ({
+  const project = createAppQuery(() => ({
     queryKey: ["projects", props.projectId],
     queryFn: () => api.get<Project>(`/projects/${props.projectId}`),
     enabled: props.open,
   }))
 
-  const budgets = createQuery(() => ({
+  const budgets = createAppQuery(() => ({
     queryKey: ["projects", props.projectId, "budgets"],
     queryFn: () => api.get<BudgetEntry[]>(`/usage/projects/${props.projectId}/budgets`),
     enabled: props.open,
   }))
 
-  const projectBudget = createQuery(() => ({
+  const projectBudget = createAppQuery(() => ({
     queryKey: ["projects", props.projectId, "budget"],
     queryFn: () => api.get<BudgetConfig>(`/usage/projects/${props.projectId}/budget`),
     enabled: props.open,

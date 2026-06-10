@@ -1,5 +1,6 @@
 import { Show, For, createSignal, createMemo, createEffect } from "solid-js"
-import { createQuery, createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { Link, useNavigate, useSearch } from "@tanstack/solid-router"
 import { scheduleApi, type Schedule, type ScheduleExecution, type UpdateScheduleDto } from "~/api/client"
 import { useEnvironments, useProjectEnvironments } from "~/api/environments"
@@ -94,7 +95,7 @@ export default function SchedulesPage() {
   const [execSchedule, setExecSchedule] = createSignal<Schedule | null>(null)
   const [triggeredId, setTriggeredId] = createSignal<string | null>(null)
 
-  const schedules = createQuery(() => ({
+  const schedules = createAppQuery(() => ({
     queryKey: isScoped()
       ? ["schedules", "project-environment", scopedProjectEnvId()]
       : ["schedules", "environment", activeEnvId()],
@@ -122,7 +123,7 @@ export default function SchedulesPage() {
       null,
   )
 
-  const executions = createQuery(() => ({
+  const executions = createAppQuery(() => ({
     queryKey: ["executions", execSchedule()?.id],
     queryFn: () => {
       const s = execSchedule()

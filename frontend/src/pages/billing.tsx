@@ -1,5 +1,6 @@
 import { Show, For, createSignal, createEffect } from "solid-js"
-import { createQuery, useQueryClient } from "@tanstack/solid-query"
+import { useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { api, type Project } from "~/api/client"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
@@ -45,12 +46,12 @@ export default function BillingPage() {
   const [saving, setSaving] = createSignal(false)
   const [settingsProjectId, setSettingsProjectId] = createSignal<string | null>(null)
 
-  const tenantBudget = createQuery(() => ({
+  const tenantBudget = createAppQuery(() => ({
     queryKey: ["tenant", "budget"],
     queryFn: () => api.get<TenantBudget>("/usage/tenant/budget"),
   }))
 
-  const projectList = createQuery(() => ({
+  const projectList = createAppQuery(() => ({
     queryKey: ["projects"],
     queryFn: () => api.get<Project[]>("/projects"),
   }))
@@ -231,7 +232,7 @@ function ProjectRow(props: {
   canSeeSettings: boolean
   onSettings: () => void
 }) {
-  const budget = createQuery(() => ({
+  const budget = createAppQuery(() => ({
     queryKey: ["projects", props.project.id, "budget"],
     queryFn: () => api.get<BudgetConfig & { currentUsage: number }>(`/usage/projects/${props.project.id}/budget`),
   }))

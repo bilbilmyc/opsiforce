@@ -1,4 +1,5 @@
-import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
+import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { api, type User, type WorkspacePreferences } from "./client"
 
 export const userKeys = {
@@ -9,7 +10,7 @@ export const userKeys = {
 
 /** List users. Admin-only (backend gates with can_manage_workspaces). */
 export function useUsers(enabled: () => boolean) {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: userKeys.list(),
     queryFn: () => api.get<User[]>("/users"),
     enabled: enabled(),
@@ -17,7 +18,7 @@ export function useUsers(enabled: () => boolean) {
 }
 
 export function useWorkspacePreferences() {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: userKeys.workspacePreferences(),
     queryFn: () => api.get<WorkspacePreferences>("/users/me/workspace-preferences"),
   }))

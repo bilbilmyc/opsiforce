@@ -1,4 +1,5 @@
-import { createMutation, createQuery, useQueryClient } from "@tanstack/solid-query"
+import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { createAppQuery } from "~/lib/create-app-query"
 import { api } from "./client"
 import { projectKeys } from "./projects"
 
@@ -15,7 +16,7 @@ export const tenantSettingsKeys = {
 }
 
 export function useTenantSettings() {
-  return createQuery(() => ({
+  return createAppQuery(() => ({
     queryKey: tenantSettingsKeys.all,
     queryFn: () => api.get<TenantSettings>("/tenant-settings"),
   }))
