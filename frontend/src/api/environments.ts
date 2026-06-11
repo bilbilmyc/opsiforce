@@ -18,6 +18,7 @@ export interface Environment {
   name: string
   description: string | null
   isDefault: boolean
+  isProtected: boolean
   createdAt: string
   updatedAt: string
 }

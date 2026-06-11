@@ -1,34 +1,8 @@
 import { For, Show } from "solid-js"
 import { Check, LoaderCircle, X } from "~/components/icons"
 import { cn } from "~/lib/cn"
-import type { PublishJob, PublishJobStatus } from "~/api/publish"
-
-interface Step {
-  key: Exclude<PublishJobStatus, "done" | "failed">
-  label: string
-  detail: string
-}
-
-const STEPS: Step[] = [
-  { key: "queued", label: "Queued", detail: "Waiting for a build slot" },
-  { key: "committing", label: "Committing", detail: "Snapshotting the Development files" },
-  { key: "swapping", label: "Swapping", detail: "Switching the environment to the new version" },
-  { key: "building", label: "Building", detail: "Restarting the app and installing dependencies" },
-  {
-    key: "migrating",
-    label: "Migrating",
-    detail: "Applying database migrations and waiting for the app to start",
-  },
-]
-
-const ORDER: PublishJobStatus[] = [
-  "queued",
-  "committing",
-  "swapping",
-  "building",
-  "migrating",
-  "done",
-]
+import type { PublishJob } from "~/api/publish"
+import { PUBLISH_STEPS, publishStepIndex } from "./publish-steps"
 
 type StepState = "done" | "active" | "pending" | "failed"
 
@@ -40,10 +14,7 @@ export interface PublishProgressProps {
 export default function PublishProgress(props: PublishProgressProps) {
   const isFailed = () => props.job.status === "failed"
   const isDone = () => props.job.status === "done"
-  const currentIndex = () => {
-    const idx = ORDER.indexOf(props.job.status)
-    return idx === -1 ? 0 : idx
-  }
+  const currentIndex = () => publishStepIndex(props.job.status)
 
   const stepState = (index: number): StepState => {
     if (isDone()) return "done"
@@ -82,10 +53,10 @@ export default function PublishProgress(props: PublishProgressProps) {
       </Show>
 
       <ol class="relative space-y-1">
-        <For each={STEPS}>
+        <For each={PUBLISH_STEPS}>
           {(step, index) => {
             const state = () => stepState(index())
-            const isLast = index() === STEPS.length - 1
+            const isLast = index() === PUBLISH_STEPS.length - 1
             return (
               <li class="relative flex gap-3 pb-1">
                 <div class="relative flex flex-col items-center">

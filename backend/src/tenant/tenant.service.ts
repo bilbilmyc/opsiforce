@@ -5,6 +5,7 @@ import { db } from "../../db"
 import { tenantSettings, tenants } from "../../db/schema"
 import { BifrostService } from "../bifrost/bifrost.service"
 import { DefaultsService } from "../defaults/defaults.service"
+import { EnvironmentService } from "../environment/environment.service"
 
 export const OPSIFORCE_TENANT_GROUP_PREFIX = "role:opsiforce_tenant_name_"
 export const MAKARA_TENANT_GROUP_PREFIX = "role:makara_tenant_name_"
@@ -16,6 +17,7 @@ export class TenantService {
   constructor(
     private readonly bifrostService: BifrostService,
     private readonly defaultsService: DefaultsService,
+    private readonly environmentService: EnvironmentService,
   ) {}
 
   parseGroupsByPrefix(groupsHeader: string, prefix: string): string[] {
@@ -77,6 +79,9 @@ export class TenantService {
     if (created) {
       await this.defaultsService.seedTenantDefaults(tenant.id).catch((err) => {
         this.logger.warn(`Failed to seed defaults for tenant ${tenant.name}: ${(err as Error).message}`)
+      })
+      await this.environmentService.ensureDefaultForTenant(tenant.id).catch((err) => {
+        this.logger.warn(`Failed to seed environments for tenant ${tenant.name}: ${(err as Error).message}`)
       })
     }
     return this.ensureBifrostCustomer(tenant)

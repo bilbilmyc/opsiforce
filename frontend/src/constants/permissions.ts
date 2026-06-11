@@ -18,6 +18,7 @@ export const Permission = {
   editAppDetails: "can_edit_app_details",
   manageMakaraIntegration: "can_manage_makara_integration",
   manageEnvironments: "can_manage_environments",
+  manageEnvironmentVariables: "can_manage_environment_variables",
   publishProject: "can_publish_project",
   deleteEnvironment: "can_delete_environment",
   manageUsers: "can_manage_users",

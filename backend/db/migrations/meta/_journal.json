@@ -309,6 +309,13 @@
       "when": 1781082407013,
       "tag": "0043_drop-agent-defaults-tables",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1781117614628,
+      "tag": "0044_add-protected-environments",
+      "breakpoints": true
     }
   ]
 }

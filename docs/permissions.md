@@ -39,7 +39,11 @@ Frontend (usePermissions hook)
 | `opsiforce_can_view_queue_dashboard` | — (backend-only) | BullMQ queue dashboard at `/api/admin/queues` |
 | `opsiforce_can_manage_workspaces` | `Permission.manageWorkspaces` | Create/edit/delete workspaces; add & remove members; unassign projects (move to/from the admin-only Unassigned bucket); see the top "+" create-unassigned-project button; access `/settings/workspaces`; see `GET /users` (member picker) |
 | `opsiforce_can_move_projects_between_workspaces` | `Permission.moveProjectsBetweenWorkspaces` | Drag a project between two workspaces the user is a member of (neither source nor destination may be the Unassigned bucket). Does **not** imply `manage_workspaces` |
-| `opsiforce_can_pin_apps` | `Permission.pinApps` | Pin a project's app so it appears in Makara's side panel for the tenant. Requires the project to use `public` or `makara` auth mode. |
+| `opsiforce_can_pin_apps` | `Permission.pinApps` | Pin a project's app so it appears in Makara's side panel for the tenant. Requires the project to use `public` or `makara` auth mode. Users without it see no trace of pinning (menu items, badges, dialog copy). |
+| `opsiforce_can_manage_environments` | `Permission.manageEnvironments` | CRUD on the tenant's environment registry (publish targets). Protected environments (Development, Production) can never be renamed or deleted. |
+| `opsiforce_can_manage_environment_variables` | `Permission.manageEnvironmentVariables` | The per-environment Environment variables editor (view/edit `opsiforce.env.json`, optional app restart to apply) |
+| `opsiforce_can_publish_project` | `Permission.publishProject` | The per-row Publish buttons and publish endpoints |
+| `opsiforce_can_delete_environment` | `Permission.deleteEnvironment` | Delete a published project environment from the Environments dialog |
 | `opsiforce_can_list_pinned_apps_internal` | — (service-account only) | **Never assign to humans.** Granted in Pulumi to the `keycloak-ms-admin` service account so Makara backend can list pinned apps via `GET /api/internal/apps/pinned`. |
 
 ---
@@ -62,6 +66,10 @@ Groups bundle permissions for easy user assignment. Managed via Pulumi in `packa
 | `opsiforce_manage_workspaces` | `can_manage_workspaces` | Workspace admin (create/edit/delete, members, Unassigned) |
 | `opsiforce_move_projects_between_workspaces` | `can_move_projects_between_workspaces` | Reassign projects between workspaces the user belongs to |
 | `opsiforce_pin_apps` | `can_pin_apps` | Pin/unpin apps to Makara's side panel |
+| `opsiforce_manage_environments` | `can_manage_environments` | Tenant environment registry CRUD |
+| `opsiforce_manage_environment_variables` | `can_manage_environment_variables` | Per-environment variables editor |
+| `opsiforce_publish_project` | `can_publish_project` | Publish a project to an environment |
+| `opsiforce_delete_environment` | `can_delete_environment` | Delete a published project environment |
 
 ---
 

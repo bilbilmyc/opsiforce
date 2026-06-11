@@ -28,6 +28,8 @@ export interface PodTemplateOptions {
   gatewayApiKey?: string
   gatewayUrl?: string
   agentModel?: string
+  controlToken?: string
+  controlPort?: number
 }
 
 export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
@@ -108,6 +110,12 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             { name: "XDG_CACHE_HOME", value: "/workspace/.xdg/cache" },
             { name: "XDG_STATE_HOME", value: "/workspace/.xdg/state" },
             { name: "AGENT_NAME", value: resolvedAgentName },
+            ...(options.controlToken
+              ? [
+                  { name: "OPSIFORCE_CONTROL_TOKEN", value: options.controlToken },
+                  ...(options.controlPort ? [{ name: "CONTROL_PORT", value: String(options.controlPort) }] : []),
+                ]
+              : []),
             ...(options.opsiforceEnv ? [{ name: "OPSIFORCE_ENV", value: options.opsiforceEnv }] : []),
             ...(routingId && options.appsHostname
               ? [{ name: "APP_PUBLIC_URL", value: `https://${routingId}.${options.appsHostname}/` }]

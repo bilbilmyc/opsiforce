@@ -157,6 +157,7 @@ export const environments = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     isDefault: boolean("is_default").notNull().default(false),
+    isProtected: boolean("is_protected").notNull().default(false),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

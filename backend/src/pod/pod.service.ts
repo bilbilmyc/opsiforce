@@ -16,6 +16,7 @@ export interface TenantPodOptions {
   agentName?: string
   opsiforceEnv?: string
   resources?: K8sResourceRequirements
+  controlToken?: string
 }
 
 export type PodFailureReason = "ImagePullBackOff" | "CrashLoopBackOff" | "Unschedulable"
@@ -52,6 +53,7 @@ export class PodService {
       cephfsPvcName: this.configService.getOrThrow<string>("cephfsPvcName"),
       storageMountPath: this.configService.getOrThrow<string>("storageMountPath"),
       appsHostname: this.configService.getOrThrow<string>("appsHostname"),
+      controlPort: this.configService.getOrThrow<number>("agentControlPort"),
       imagePullPolicy: this.configService.getOrThrow<string>("agentContainerImagePullPolicy"),
       resources: this.smallResources(),
       nodeSelector: this.configService.get("agentNodeSelector"),

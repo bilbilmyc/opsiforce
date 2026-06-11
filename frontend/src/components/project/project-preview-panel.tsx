@@ -103,7 +103,9 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             <span class="text-xs font-medium text-muted-foreground truncate">
               {props.appName || "App"}
             </span>
-            <PinBadge isPinned={isPinnedHere()} compact />
+            <Show when={canPinApps()}>
+              <PinBadge isPinned={isPinnedHere()} compact />
+            </Show>
             <Show when={showEditAction()}>
               <ToolbarButton onClick={() => setEditAppOpen(true)} tooltip="Edit app details">
                 <Pencil class="w-3 h-3" />
