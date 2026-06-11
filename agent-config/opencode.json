@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugin": ["opencode-large-image-optimizer"],
+  "plugin": ["file:///opt/opencode/plugins/image-normalize.ts"],
   "default_agent": "app-builder",
   "agent": {
     "build": {

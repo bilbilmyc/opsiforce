@@ -33,8 +33,7 @@ RUN ln -s /usr/bin/python3 /usr/local/bin/python
 RUN pip3 install --no-cache-dir --break-system-packages \
     requests Pillow datasette==1.0a28 datasette-write-ui==0.0.1a14
 
-RUN npm install -g bun opencode-ai@1.3.2 agent-browser \
-    opencode-large-image-optimizer@1.1.0 sharp@^0.33.0
+RUN npm install -g bun opencode-ai@1.3.2 agent-browser
 
 RUN corepack enable && corepack prepare yarn@4.12.0 --activate
 
@@ -44,6 +43,10 @@ RUN mkdir -p /workspace /opt/opencode /opt/agents
 WORKDIR /workspace
 
 COPY ${OPENCODE_CONFIG} /opt/opencode/opencode.json
+
+COPY agent-config/plugins/package.json agent-config/plugins/package-lock.json /opt/opencode/plugins/
+RUN npm ci --omit=dev --prefix /opt/opencode/plugins
+COPY agent-config/plugins/image-normalize.ts /opt/opencode/plugins/image-normalize.ts
 
 COPY agent-config/agents/ /opt/agents/
 COPY agent-config/agents.json /opt/agents/agents.json

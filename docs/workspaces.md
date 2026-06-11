@@ -151,4 +151,4 @@ The member picker (in shared-workspace settings) lists users from the current te
 
 - [Permissions](./permissions.md) — full detail on Keycloak groups and the permission strings referenced above.
 - [Overview](./overview.md) — high-level opsiforce architecture.
-- [Agents](./agents.md) — per-project agent association and pod startup.
+- [Agents](./agent-system.md) — per-project agent association and pod startup.

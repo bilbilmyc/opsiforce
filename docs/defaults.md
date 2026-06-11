@@ -19,7 +19,7 @@ If a tenant has no row (shouldn't happen after migration 0014 backfills), reads 
 - **Timeouts** — agent idle timeout and app idle timeout.
 - **Budgets** — spending caps at tenant, project, chat-key, and backend-key levels, each with its own reset period.
 
-The agent **model** is deliberately *not* configurable here. It lives with the agent profile in `agent-config/agents.json` (see [Agents](agents.md)), is the same for every tenant, and changing it is a code/config rollout rather than a tunable default. See [ADR-0008](adr/0008-agent-model-owned-by-agent-config.md).
+The agent **model** is deliberately *not* configurable here. It lives with the agent profile in `agent-config/agents.json` (see [Agents](agent-system.md)), is the same for every tenant, and changing it is a code/config rollout rather than a tunable default. See [ADR-0008](adr/0008-agent-model-owned-by-agent-config.md).
 
 ## Who can edit
 
