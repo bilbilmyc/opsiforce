@@ -81,7 +81,8 @@ export default function PublishJobsHost(props: ParentProps<PublishJobsHostProps>
   })
 
   const viewEnvironment = (environmentId: string) => {
-    props.onViewEnvironment?.(environmentId)
+    const projectEnvironmentId = tracked[environmentId]?.job?.projectEnvironmentId
+    if (projectEnvironmentId) props.onViewEnvironment?.(projectEnvironmentId)
     dismiss(environmentId)
   }
 
