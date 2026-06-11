@@ -1,5 +1,5 @@
 import { Show } from "solid-js"
-import { Check, ExternalLink, LoaderCircle, X } from "~/components/icons"
+import { Check, ExternalLink, Layers, LoaderCircle, X } from "~/components/icons"
 import { PUBLISH_STEPS, publishStepIndex } from "./publish-steps"
 import type { TrackedPublish } from "./publish-jobs-context"
 
@@ -7,6 +7,7 @@ export interface PublishProgressCardProps {
   entry: TrackedPublish
   onExpand: () => void
   onDismiss: () => void
+  onViewEnvironment: () => void
 }
 
 export default function PublishProgressCard(props: PublishProgressCardProps) {
@@ -82,20 +83,32 @@ export default function PublishProgressCard(props: PublishProgressCardProps) {
                 <p class="text-xs font-semibold text-foreground">
                   {props.entry.environmentName} is live
                 </p>
-                <Show when={appUrl()}>
-                  {(url) => (
-                    <a
-                      href={url()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Open app
-                      <ExternalLink class="h-3 w-3" />
-                    </a>
-                  )}
-                </Show>
+                <div class="mt-0.5 flex items-center gap-3">
+                  <Show when={appUrl()}>
+                    {(url) => (
+                      <a
+                        href={url()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        Open app
+                        <ExternalLink class="h-3 w-3" />
+                      </a>
+                    )}
+                  </Show>
+                  <button
+                    class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      props.onViewEnvironment()
+                    }}
+                  >
+                    <Layers class="h-3 w-3" />
+                    View environment
+                  </button>
+                </div>
               </Show>
             }
           >

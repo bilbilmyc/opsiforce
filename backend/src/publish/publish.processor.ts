@@ -3,7 +3,7 @@ import { Logger } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { Job } from "bullmq"
 import path from "node:path"
-import { rm } from "node:fs/promises"
+import { mkdir, rename, rm } from "node:fs/promises"
 import { and, eq, inArray } from "drizzle-orm"
 import { db } from "../../db"
 import { projectPublishJobs, projectSchedules } from "../../db/schema"
@@ -74,8 +74,7 @@ export class PublishProcessor extends WorkerHost {
         await this.git.resetHard(prodDir, sha)
         await this.gatewayKeyService.createKey(data.projectId, data.projectEnvironmentId, data.tenantId)
       } else {
-        await this.git.fetchOrigin(prodDir)
-        await this.git.resetHard(prodDir, sha)
+        await this.syncIncremental(devDir, prodDir, sha)
         previousEnvVars = await this.publishService.readEnvFile(prodEnv.directory)
       }
 
@@ -149,6 +148,32 @@ export class PublishProcessor extends WorkerHost {
 
       await this.setStatus(data.publishJobId, PublishStatus.Failed, { error: message, completedAt: new Date() })
     }
+  }
+
+  private async syncIncremental(devDir: string, prodDir: string, sha: string): Promise<void> {
+    if (await this.git.isRepo(prodDir)) {
+      try {
+        await this.git.fetchOrigin(prodDir)
+        await this.git.resetHard(prodDir, sha)
+        return
+      } catch (err) {
+        this.logger.warn(`Incremental sync of ${prodDir} failed, rebuilding its git directory: ${(err as Error).message}`)
+      }
+    } else {
+      this.logger.warn(`Unhealthy git repository at ${prodDir}, rebuilding its git directory`)
+    }
+    await this.rebuildGitDir(devDir, prodDir)
+    await this.git.resetHard(prodDir, sha)
+  }
+
+  private async rebuildGitDir(devDir: string, prodDir: string): Promise<void> {
+    const cloneDir = path.join(path.dirname(prodDir), `.${path.basename(prodDir)}.git-rebuild`)
+    await rm(cloneDir, { recursive: true, force: true })
+    await this.git.cloneNoCheckout(devDir, cloneDir)
+    await rm(path.join(prodDir, ".git"), { recursive: true, force: true })
+    await mkdir(prodDir, { recursive: true })
+    await rename(path.join(cloneDir, ".git"), path.join(prodDir, ".git"))
+    await rm(cloneDir, { recursive: true, force: true })
   }
 
   private async reconcileSchedules(

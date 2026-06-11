@@ -1,6 +1,7 @@
 import { Show } from "solid-js"
 import {
   Calendar,
+  Check,
   EllipsisVertical,
   Pin,
   PinOff,
@@ -10,6 +11,7 @@ import {
   SlidersHorizontal,
   Trash2,
 } from "~/components/icons"
+import { cn } from "~/lib/cn"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +27,8 @@ import type { ProjectEnvironment } from "~/api/environments"
 
 export interface EnvManageRowProps {
   environment: ProjectEnvironment
+  active: boolean
+  onSelect: () => void
   hasApp: boolean
   canManageAuth: boolean
   canPin: boolean
@@ -55,25 +59,46 @@ export default function EnvManageRow(props: EnvManageRowProps) {
   const appUrl = () => `https://${env().id}.${import.meta.env.VITE_WEBAPP_DOMAIN}/`
 
   return (
-    <div class="rounded-md px-2.5 py-2 transition-colors hover:bg-accent/50">
-      <div class="flex items-center justify-between gap-3">
-        <div class="flex min-w-0 items-center gap-2">
-          <span class="truncate text-xs font-semibold text-foreground">{env().name}</span>
-          <EnvAppLinkButtons
-            appUrl={appUrl()}
-            enabled={appRunning()}
-            disabledReason={
-              isDevelopment()
-                ? "No app is running here yet"
-                : "Publish first — no app is running here yet"
-            }
-          />
-          <EnvStatusDot status={env().status} withLabel />
-          <Show when={props.canPin}>
-            <PinBadge isPinned={env().isPinned} compact />
-          </Show>
-        </div>
-        <div class="flex shrink-0 items-center gap-1.5">
+    <div
+      class={cn(
+        "col-span-full grid cursor-pointer grid-cols-subgrid items-center rounded-md border border-transparent px-2.5 py-2 transition-colors hover:bg-accent/50",
+        props.active && "bg-accent/40",
+      )}
+      role="button"
+      tabIndex={0}
+      onClick={() => props.onSelect()}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return
+        if (e.key === "Enter" || e.key === " ") props.onSelect()
+      }}
+    >
+      <span class="flex min-w-0 items-center gap-1.5">
+        <Check class={cn("h-3.5 w-3.5 shrink-0 text-primary", !props.active && "invisible")} />
+        <span class="truncate text-xs font-semibold text-foreground" title={env().name}>
+          {env().name}
+        </span>
+      </span>
+      <span class="contents" onClick={(e) => e.stopPropagation()}>
+        <EnvAppLinkButtons
+          appUrl={appUrl()}
+          enabled={appRunning()}
+          disabledReason={
+            isDevelopment()
+              ? "No app is running here yet"
+              : "Publish first — no app is running here yet"
+          }
+        />
+      </span>
+      <div class="flex min-w-0 items-center gap-2">
+        <EnvStatusDot status={env().status} withLabel />
+        <Show when={props.canPin}>
+          <PinBadge isPinned={env().isPinned} compact />
+        </Show>
+      </div>
+      <div
+        class="flex shrink-0 items-center gap-1.5 justify-self-end"
+        onClick={(e) => e.stopPropagation()}
+      >
           <Show when={showPublish()}>
             <Button size="sm" variant="outline" class="h-7 px-2.5" onClick={() => props.onPublish()}>
               <Rocket class="h-3.5 w-3.5" />
@@ -134,8 +159,7 @@ export default function EnvManageRow(props: EnvManageRowProps) {
                 </DropdownMenuItem>
               </Show>
             </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        </DropdownMenu>
       </div>
     </div>
   )

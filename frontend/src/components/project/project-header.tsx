@@ -5,7 +5,6 @@ import { useProjects } from "~/api/projects"
 import { Code as CodeIcon, Database, MessageSquare } from "~/components/icons"
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs"
 import ProjectActionsMenu from "~/components/project-actions-menu"
-import EnvSwitcher from "~/components/project/environments/env-switcher"
 import EnvironmentsPopover from "~/components/project/environments/environments-popover"
 import type { Project, ProjectStatus } from "~/api/client"
 import type { ProjectEnvironment } from "~/api/environments"
@@ -34,7 +33,6 @@ export default function ProjectHeader(props: ProjectHeaderProps) {
   const hasExtraTabs = () => canViewCode() || canViewDb()
   const projects = useProjects()
   const project = () => projects.data?.find((p) => p.id === props.projectId)
-  const hasMultipleEnvironments = () => props.environments.length > 1
 
   const handleEnvironmentDeleted = (environmentId: string) => {
     if (props.activeEnvironmentId === environmentId) {
@@ -71,20 +69,16 @@ export default function ProjectHeader(props: ProjectHeaderProps) {
             </TabsList>
           </Tabs>
         </Show>
-        <Show when={hasMultipleEnvironments()}>
-          <EnvSwitcher
-            environments={props.environments}
-            activeEnvironmentId={props.activeEnvironmentId}
-            onChange={props.onActiveEnvironmentChange}
-          />
-        </Show>
+        <EnvironmentsPopover
+          projectId={props.projectId}
+          environments={props.environments}
+          activeEnvironmentId={props.activeEnvironmentId}
+          onActiveEnvironmentChange={props.onActiveEnvironmentChange}
+          onEnvironmentDeleted={handleEnvironmentDeleted}
+        />
       </div>
 
       <div class="flex items-center gap-1.5 shrink-0">
-        <EnvironmentsPopover
-          projectId={props.projectId}
-          onEnvironmentDeleted={handleEnvironmentDeleted}
-        />
         <ProjectActionsMenu
           projectId={props.projectId}
           status={props.status}

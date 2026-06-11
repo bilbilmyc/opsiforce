@@ -14,6 +14,7 @@ import PublishProgressDialog from "./publish-progress-dialog"
 export interface PublishJobsHostProps {
   projectId: string
   onJobDone?: (job: PublishJob) => void
+  onViewEnvironment?: (environmentId: string) => void
 }
 
 export default function PublishJobsHost(props: ParentProps<PublishJobsHostProps>) {
@@ -79,6 +80,11 @@ export default function PublishJobsHost(props: ParentProps<PublishJobsHostProps>
     sources.clear()
   })
 
+  const viewEnvironment = (environmentId: string) => {
+    props.onViewEnvironment?.(environmentId)
+    dismiss(environmentId)
+  }
+
   const entries = () => Object.values(tracked)
   const expandedEntry = () => {
     const id = expandedId()
@@ -98,6 +104,7 @@ export default function PublishJobsHost(props: ParentProps<PublishJobsHostProps>
                   entry={entry}
                   onExpand={() => setExpandedId(entry.environmentId)}
                   onDismiss={() => dismiss(entry.environmentId)}
+                  onViewEnvironment={() => viewEnvironment(entry.environmentId)}
                 />
               </Show>
             )}
@@ -111,6 +118,7 @@ export default function PublishJobsHost(props: ParentProps<PublishJobsHostProps>
             entry={entry()}
             onMinimize={() => setExpandedId(null)}
             onDismiss={() => dismiss(entry().environmentId)}
+            onViewEnvironment={() => viewEnvironment(entry().environmentId)}
           />
         )}
       </Show>

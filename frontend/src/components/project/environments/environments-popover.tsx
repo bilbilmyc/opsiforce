@@ -12,18 +12,22 @@ import {
 } from "~/api/environments"
 import { usePublishTargets, type PublishTarget } from "~/api/publish"
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover"
-import { Layers } from "~/components/icons"
+import { ChevronsUpDown, Layers } from "~/components/icons"
 import ConfirmDialog from "~/components/ui/confirm-dialog"
 import Skeleton from "~/components/ui/skeleton"
 import ProjectAuthDialog from "~/components/project-auth-dialog"
 import PinAppDialogs, { type PinDialogAction } from "../pin-app-dialogs"
 import EnvManageRow from "./env-manage-row"
 import EnvTargetRow from "./env-target-row"
+import EnvStatusDot from "./env-status-dot"
 import PublishDialog from "./publish-dialog"
 import EnvironmentVariablesDialog from "./environment-variables-dialog"
 
 export interface EnvironmentsPopoverProps {
   projectId: string
+  environments: ProjectEnvironment[]
+  activeEnvironmentId: string
+  onActiveEnvironmentChange: (environmentId: string) => void
   onEnvironmentDeleted?: (environmentId: string) => void
 }
 
@@ -77,10 +81,14 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   const loading = () => environments.isPending || (canPublish() && targets.isPending)
 
+  const activeEnvironment = createMemo(() =>
+    props.environments.find((e) => e.id === props.activeEnvironmentId),
+  )
+
   const description = () =>
     canPin()
-      ? "Publish the app, manage auth and variables, pin to the Makara catalog, or open schedules."
-      : "Publish the app, manage auth and variables, or open schedules."
+      ? "Click an environment to view it. Publish the app, manage auth and variables, pin to the Makara catalog, or open schedules."
+      : "Click an environment to view it. Publish the app, manage auth and variables, or open schedules."
 
   const openSchedules = (env: ProjectEnvironment) => {
     setOpen(false)
@@ -121,6 +129,11 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   const rowProps = (env: ProjectEnvironment, target: PublishTarget | null) => ({
     environment: env,
+    active: env.id === props.activeEnvironmentId,
+    onSelect: () => {
+      props.onActiveEnvironmentChange(env.id)
+      setOpen(false)
+    },
     hasApp: hasApp(),
     canManageAuth: canManageAuth(),
     canPin: canPin(),
@@ -147,12 +160,26 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   return (
     <>
-      <Popover open={open()} onOpenChange={setOpen} placement="bottom-end">
-        <PopoverTrigger class="inline-flex h-7 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-1 focus-visible:ring-ring">
-          <Layers class="h-3.5 w-3.5" />
-          Environments
+      <Popover open={open()} onOpenChange={setOpen} placement="bottom-start">
+        <PopoverTrigger
+          class="flex h-8 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-xs transition-colors hover:bg-accent focus:outline-none focus:ring-1 focus:ring-ring"
+          aria-label="Environments"
+        >
+          <Layers class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <Show
+            when={activeEnvironment()}
+            fallback={<span class="font-medium text-foreground">Environments</span>}
+          >
+            {(env) => (
+              <span class="flex min-w-0 items-center gap-2">
+                <EnvStatusDot status={env().status} />
+                <span class="truncate font-medium text-foreground">{env().name}</span>
+              </span>
+            )}
+          </Show>
+          <ChevronsUpDown class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </PopoverTrigger>
-        <PopoverContent class="w-[26rem] p-0">
+        <PopoverContent class="w-120 p-0">
           <div class="border-b border-border px-4 pb-3 pt-3.5">
             <p class="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Layers class="h-4 w-4 text-muted-foreground" />
@@ -161,11 +188,11 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
             <p class="mt-1 text-xs text-muted-foreground">{description()}</p>
           </div>
 
-          <div class="max-h-[55vh] space-y-0.5 overflow-y-auto p-1.5">
+          <div class="grid max-h-[55vh] grid-cols-[fit-content(12rem)_auto_1fr_auto] gap-x-2 gap-y-0.5 overflow-y-auto p-1.5">
             <Show
               when={!loading()}
               fallback={
-                <div class="space-y-1.5 p-1">
+                <div class="col-span-full space-y-1.5 p-1">
                   <Skeleton class="h-11 w-full" />
                   <Skeleton class="h-11 w-full" />
                 </div>

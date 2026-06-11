@@ -33,6 +33,12 @@ export class GitService {
     await run("git", [...BASE_CONFIG, "clone", "--local", srcDir, destDir], { maxBuffer: 32 * 1024 * 1024 })
   }
 
+  async cloneNoCheckout(srcDir: string, destDir: string): Promise<void> {
+    await run("git", [...BASE_CONFIG, "clone", "--local", "--no-checkout", srcDir, destDir], {
+      maxBuffer: 32 * 1024 * 1024,
+    })
+  }
+
   async fetchOrigin(dir: string): Promise<void> {
     await this.git(dir, ["fetch", "origin", "--prune"])
   }

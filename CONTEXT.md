@@ -34,6 +34,10 @@ _Avoid_: Project (when you mean the built application)
 The act of materializing or updating a non-Development ProjectEnvironment from the Development one's files, so the App runs in a chosen Environment. Publishing over an already-running environment is a **Publish update**.
 _Avoid_: Deploy, Release, Promote, Redeploy
 
+**Active environment**:
+The one ProjectEnvironment the project workspace is currently showing — chat, code, DB, and the app pane all follow it. Chosen by clicking an environment in the Environments panel, or via **View environment** after a Publish completes; defaults to Development. Viewing changes nothing about the environment itself — it only re-points the workspace.
+_Avoid_: Current env, Selected env (spell out "environment"); conflating with Development (the default, not a synonym)
+
 **Environment Variables**:
 The per-ProjectEnvironment configuration values (string keys and values) the App reads when it starts — API keys, base URLs, flags. Each ProjectEnvironment carries its own set; values are set at publish or edited directly per environment, and changes take effect only when the App restarts.
 _Avoid_: Secrets (they may hold secrets but are not only secrets); the pod's process env (platform plumbing, a different thing)
