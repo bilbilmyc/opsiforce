@@ -1536,6 +1536,7 @@ export class ProjectService implements OnApplicationBootstrap {
       gatewayUrl: this.configService.get<string>("gatewayUrl", ""),
       opsiforceEnv: current.isDefault ? undefined : "production",
       resources: podResources,
+      controlToken: crypto.randomBytes(32).toString("hex"),
     }
 
     try {

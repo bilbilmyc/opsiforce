@@ -15,6 +15,7 @@ import ProjectDisabled from "~/components/project/project-disabled"
 import ProjectFailed from "~/components/project/project-failed"
 import ProjectDuplicateProgress from "~/components/project/project-duplicate-progress"
 import EnvProdBanner from "~/components/project/environments/env-prod-banner"
+import PublishJobsHost from "~/components/project/environments/publish-jobs-host"
 import { useOpenCodeConnection } from "~/components/project/use-opencode-connection"
 
 export default function ProjectView(props: { projectId: string; initialPrompt?: string }) {
@@ -95,8 +96,14 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
   }
 
   return (
-    <div class="h-full w-full flex flex-col overflow-hidden">
-      <Show when={statusQuery.data}>
+    <PublishJobsHost
+      projectId={props.projectId}
+      onJobDone={(job) => {
+        if (job.projectEnvironmentId === activeEnvironmentId()) reloadPreview()
+      }}
+    >
+      <div class="h-full w-full flex flex-col overflow-hidden">
+        <Show when={statusQuery.data}>
         {(data) => (
           <ProjectHeader
             projectId={props.projectId}
@@ -186,6 +193,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
           )}
         </Show>
       </div>
-    </div>
+      </div>
+    </PublishJobsHost>
   )
 }

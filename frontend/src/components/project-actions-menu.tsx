@@ -9,7 +9,6 @@ import { PUBLIC_LABEL, useMoveProject, useWorkspaces } from "~/api/workspaces"
 import {
   ArrowRightLeft,
   Ban,
-  Box,
   ChevronRight,
   CirclePlay,
   Copy,
@@ -33,6 +32,11 @@ import {
 } from "~/components/ui/dropdown-menu"
 import ProjectSettings from "./project-settings"
 import ConfirmDialog from "./ui/confirm-dialog"
+
+interface PendingMove {
+  toWorkspaceId: string | null
+  toName: string
+}
 
 export default function ProjectActionsMenu(props: {
   projectId: string
@@ -66,6 +70,7 @@ export default function ProjectActionsMenu(props: {
   const [confirmAction, setConfirmAction] = createSignal<
     "delete" | "duplicate" | "disable" | "restart" | null
   >(null)
+  const [pendingMove, setPendingMove] = createSignal<PendingMove | null>(null)
 
   const workspaces = useWorkspaces()
   const move = useMoveProject()
@@ -80,13 +85,17 @@ export default function ProjectActionsMenu(props: {
   const showMove = () =>
     moveTargets().length > 0 || (canManageWorkspaces() && props.workspaceId !== null)
 
-  const handleMove = (toWorkspaceId: string | null, toName: string) => {
+  const projectTitle = () => props.project?.title?.trim() || "Untitled project"
+
+  const confirmMove = () => {
+    const target = pendingMove()
+    if (!target) return
     move.mutate({
       projectId: props.projectId,
       fromWorkspaceId: props.workspaceId,
-      toWorkspaceId,
+      toWorkspaceId: target.toWorkspaceId,
       fromName: currentWorkspaceName(),
-      toName,
+      toName: target.toName,
     })
   }
 
@@ -155,69 +164,53 @@ export default function ProjectActionsMenu(props: {
           <EllipsisVertical class="w-4 h-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent onClick={(e: MouseEvent) => e.stopPropagation()}>
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <Box class="w-3.5 h-3.5 text-muted-foreground" />
-              Project
-              <ChevronRight class="ml-auto w-3.5 h-3.5 text-muted-foreground" />
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              <Show when={props.showRename && props.onRename}>
-                <DropdownMenuItem onSelect={() => props.onRename?.()}>
-                  <Pencil class="w-3.5 h-3.5 text-muted-foreground" />
-                  Rename
+          <Show when={props.showRename && props.onRename}>
+            <DropdownMenuItem onSelect={() => props.onRename?.()}>
+              <Pencil class="w-3.5 h-3.5 text-muted-foreground" />
+              Rename
+            </DropdownMenuItem>
+          </Show>
+          <Show when={canDuplicate()}>
+            <DropdownMenuItem onSelect={() => setConfirmAction("duplicate")}>
+              <Copy class="w-3.5 h-3.5 text-muted-foreground" />
+              Duplicate
+            </DropdownMenuItem>
+          </Show>
+          <Show when={canRestart() && !isDisabled()}>
+            <DropdownMenuItem onSelect={() => setConfirmAction("restart")}>
+              <RotateCcw class="w-3.5 h-3.5 text-muted-foreground" />
+              Restart
+            </DropdownMenuItem>
+          </Show>
+          <Show when={canDisable()}>
+            <Show
+              when={isDisabled()}
+              fallback={
+                <DropdownMenuItem onSelect={() => setConfirmAction("disable")}>
+                  <Ban class="w-3.5 h-3.5 text-muted-foreground" />
+                  Disable
                 </DropdownMenuItem>
-              </Show>
-              <Show when={canDuplicate()}>
-                <DropdownMenuItem onSelect={() => setConfirmAction("duplicate")}>
-                  <Copy class="w-3.5 h-3.5 text-muted-foreground" />
-                  Duplicate
-                </DropdownMenuItem>
-              </Show>
-              <Show when={canRestart() && !isDisabled()}>
-                <DropdownMenuItem onSelect={() => setConfirmAction("restart")}>
-                  <RotateCcw class="w-3.5 h-3.5 text-muted-foreground" />
-                  Restart
-                </DropdownMenuItem>
-              </Show>
-              <Show when={canDisable()}>
-                <Show
-                  when={isDisabled()}
-                  fallback={
-                    <DropdownMenuItem onSelect={() => setConfirmAction("disable")}>
-                      <Ban class="w-3.5 h-3.5 text-muted-foreground" />
-                      Disable
-                    </DropdownMenuItem>
-                  }
-                >
-                  <DropdownMenuItem onSelect={() => enableProject.mutate(undefined as never)}>
-                    <CirclePlay class="w-3.5 h-3.5 text-muted-foreground" />
-                    Enable
-                  </DropdownMenuItem>
-                </Show>
-              </Show>
-              <Show when={canSeeSettings()}>
-                <DropdownMenuItem
-                  onSelect={() => {
-                    if (props.onSettings) props.onSettings()
-                    else setSettingsOpen(true)
-                  }}
-                >
-                  <Settings class="w-3.5 h-3.5 text-muted-foreground" />
-                  Settings
-                </DropdownMenuItem>
-              </Show>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                class="text-destructive data-[highlighted]:text-destructive"
-                onSelect={() => setConfirmAction("delete")}
-              >
-                <Trash2 class="w-3.5 h-3.5" />
-                Delete
+              }
+            >
+              <DropdownMenuItem onSelect={() => enableProject.mutate(undefined as never)}>
+                <CirclePlay class="w-3.5 h-3.5 text-muted-foreground" />
+                Enable
               </DropdownMenuItem>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
+            </Show>
+          </Show>
+          <Show when={canSeeSettings()}>
+            <DropdownMenuItem
+              onSelect={() => {
+                if (props.onSettings) props.onSettings()
+                else setSettingsOpen(true)
+              }}
+            >
+              <Settings class="w-3.5 h-3.5 text-muted-foreground" />
+              Settings
+            </DropdownMenuItem>
+          </Show>
           <Show when={showMove()}>
+            <DropdownMenuSeparator />
             <DropdownMenuSub>
               <DropdownMenuSubTrigger>
                 <ArrowRightLeft class="w-3.5 h-3.5 text-muted-foreground" />
@@ -227,7 +220,9 @@ export default function ProjectActionsMenu(props: {
               <DropdownMenuSubContent>
                 <For each={moveTargets()}>
                   {(ws) => (
-                    <DropdownMenuItem onSelect={() => handleMove(ws.id, ws.name)}>
+                    <DropdownMenuItem
+                      onSelect={() => setPendingMove({ toWorkspaceId: ws.id, toName: ws.name })}
+                    >
                       <FolderKanban class="w-3.5 h-3.5 text-muted-foreground" />
                       {ws.name}
                     </DropdownMenuItem>
@@ -237,7 +232,9 @@ export default function ProjectActionsMenu(props: {
                   <Show when={moveTargets().length > 0}>
                     <DropdownMenuSeparator />
                   </Show>
-                  <DropdownMenuItem onSelect={() => handleMove(null, PUBLIC_LABEL)}>
+                  <DropdownMenuItem
+                    onSelect={() => setPendingMove({ toWorkspaceId: null, toName: PUBLIC_LABEL })}
+                  >
                     <Globe class="w-3.5 h-3.5 text-muted-foreground" />
                     {PUBLIC_LABEL}
                   </DropdownMenuItem>
@@ -245,6 +242,14 @@ export default function ProjectActionsMenu(props: {
               </DropdownMenuSubContent>
             </DropdownMenuSub>
           </Show>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            class="text-destructive data-[highlighted]:text-destructive"
+            onSelect={() => setConfirmAction("delete")}
+          >
+            <Trash2 class="w-3.5 h-3.5" />
+            Delete
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
@@ -256,6 +261,21 @@ export default function ProjectActionsMenu(props: {
           onOpenChange={setSettingsOpen}
         />
       </Show>
+
+      <ConfirmDialog
+        open={pendingMove() !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingMove(null)
+        }}
+        title="Move project"
+        description={
+          pendingMove()
+            ? `Move "${projectTitle()}" from ${currentWorkspaceName()} to ${pendingMove()?.toName}?`
+            : ""
+        }
+        confirmLabel="Move"
+        onConfirm={confirmMove}
+      />
 
       <ConfirmDialog
         open={confirmAction() === "delete"}

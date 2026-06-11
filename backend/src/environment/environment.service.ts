@@ -8,8 +8,11 @@ import {
   DEVELOPMENT_ENVIRONMENT_NAME,
   EnvironmentResponse,
   EnvironmentRow,
+  PRODUCTION_ENVIRONMENT_NAME,
   UpdateEnvironmentDto,
 } from "./environment.types"
+
+const RESERVED_ENVIRONMENT_NAMES = [DEVELOPMENT_ENVIRONMENT_NAME, PRODUCTION_ENVIRONMENT_NAME]
 
 const NAME_MIN_LENGTH = 1
 const NAME_MAX_LENGTH = 60
@@ -34,6 +37,8 @@ export class EnvironmentService {
   }
 
   async ensureDefaultForTenant(tenantId: string): Promise<EnvironmentRow> {
+    await this.ensureProductionForTenant(tenantId)
+
     const existing = await this.getDefaultForTenant(tenantId)
     if (existing) return existing
 
@@ -45,6 +50,7 @@ export class EnvironmentService {
         name: DEVELOPMENT_ENVIRONMENT_NAME,
         description: "Default working environment",
         isDefault: true,
+        isProtected: true,
       })
       .onConflictDoNothing()
       .returning()
@@ -54,6 +60,26 @@ export class EnvironmentService {
     const fallback = await this.getDefaultForTenant(tenantId)
     if (!fallback) throw new Error(`Failed to ensure Development environment for tenant ${tenantId}`)
     return fallback
+  }
+
+  private async ensureProductionForTenant(tenantId: string): Promise<void> {
+    const rows = await db
+      .select({ name: environments.name })
+      .from(environments)
+      .where(eq(environments.tenantId, tenantId))
+    if (rows.some((r) => r.name.toLowerCase() === PRODUCTION_ENVIRONMENT_NAME.toLowerCase())) return
+
+    await db
+      .insert(environments)
+      .values({
+        id: crypto.randomUUID(),
+        tenantId,
+        name: PRODUCTION_ENVIRONMENT_NAME,
+        description: "Live environment for published apps",
+        isDefault: false,
+        isProtected: true,
+      })
+      .onConflictDoNothing()
   }
 
   async findForTenant(tenantId: string, id: string): Promise<EnvironmentRow> {
@@ -69,9 +95,7 @@ export class EnvironmentService {
     const name = this.validateName(dto.name)
     const description = this.validateDescription(dto.description)
 
-    if (name.toLowerCase() === DEVELOPMENT_ENVIRONMENT_NAME.toLowerCase()) {
-      throw new BadRequestException(`'${DEVELOPMENT_ENVIRONMENT_NAME}' is a reserved environment name`)
-    }
+    this.assertNameNotReserved(name)
 
     await this.assertNameAvailable(tenantId, name, null)
 
@@ -84,16 +108,14 @@ export class EnvironmentService {
 
   async update(tenantId: string, id: string, dto: UpdateEnvironmentDto): Promise<EnvironmentResponse> {
     const current = await this.findForTenant(tenantId, id)
-    if (current.isDefault) {
-      throw new BadRequestException("The Development environment cannot be modified")
+    if (current.isProtected) {
+      throw new BadRequestException(`The ${current.name} environment is protected and cannot be modified`)
     }
 
     const patch: Partial<EnvironmentRow> = {}
     if (dto.name !== undefined) {
       const name = this.validateName(dto.name)
-      if (name.toLowerCase() === DEVELOPMENT_ENVIRONMENT_NAME.toLowerCase()) {
-        throw new BadRequestException(`'${DEVELOPMENT_ENVIRONMENT_NAME}' is a reserved environment name`)
-      }
+      this.assertNameNotReserved(name)
       await this.assertNameAvailable(tenantId, name, id)
       patch.name = name
     }
@@ -111,8 +133,8 @@ export class EnvironmentService {
 
   async remove(tenantId: string, id: string): Promise<void> {
     const current = await this.findForTenant(tenantId, id)
-    if (current.isDefault) {
-      throw new BadRequestException("The Development environment cannot be deleted")
+    if (current.isProtected) {
+      throw new BadRequestException(`The ${current.name} environment is protected and cannot be deleted`)
     }
 
     const [instance] = await db
@@ -127,6 +149,11 @@ export class EnvironmentService {
     }
 
     await db.delete(environments).where(and(eq(environments.id, id), eq(environments.tenantId, tenantId)))
+  }
+
+  private assertNameNotReserved(name: string): void {
+    const reserved = RESERVED_ENVIRONMENT_NAMES.find((r) => r.toLowerCase() === name.toLowerCase())
+    if (reserved) throw new BadRequestException(`'${reserved}' is a reserved environment name`)
   }
 
   private async assertNameAvailable(tenantId: string, name: string, excludeId: string | null): Promise<void> {
@@ -164,6 +191,7 @@ function toResponse(row: EnvironmentRow): EnvironmentResponse {
     name: row.name,
     description: row.description,
     isDefault: row.isDefault,
+    isProtected: row.isProtected,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }

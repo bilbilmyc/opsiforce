@@ -68,7 +68,7 @@ export default function TenantEnvironmentsSection(props: { active: boolean }) {
       <div class="mt-4 space-y-3">
         <p class="text-xs text-muted-foreground">
           Environments are the publish targets offered to every project in this tenant.
-          Development is always available and cannot be changed.
+          Development and Production are always available and cannot be renamed or deleted.
         </p>
 
         <div class="space-y-2">

@@ -6,9 +6,11 @@ COPY proxy/go.mod proxy/go.sum ./
 RUN go mod download
 
 COPY proxy/cmd/agent-log-writer ./cmd/agent-log-writer
+COPY proxy/cmd/agent-control ./cmd/agent-control
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/log-writer ./cmd/agent-log-writer
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/agent-control ./cmd/agent-control
 
 FROM node:24.14-slim
 
@@ -57,7 +59,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=log-writer-builder /out/log-writer /usr/local/bin/log-writer
-RUN chmod +x /usr/local/bin/log-writer
+COPY --from=log-writer-builder /out/agent-control /usr/local/bin/agent-control
+RUN chmod +x /usr/local/bin/log-writer /usr/local/bin/agent-control
 
 ENV OPENCODE_ENABLE_EXA=true
 ENV NODE_OPTIONS=--max-http-header-size=131072
@@ -65,6 +68,6 @@ ENV NODE_OPTIONS=--max-http-header-size=131072
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s \
   CMD wget -q --spider http://localhost:4096/global/health || exit 1
 
-EXPOSE 4096 3000 8080 8081
+EXPOSE 4096 3000 8080 8081 4910
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

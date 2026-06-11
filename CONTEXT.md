@@ -11,7 +11,7 @@ The durable shell a user owns — identity, ownership, and cross-environment pol
 _Avoid_: App (a Project is not the thing that gets built; see App)
 
 **Environment**:
-A tenant-scoped, named target a Project can run in (name + description). Each tenant has an immutable **Development** by default; admins add others (e.g. Production, Staging). The set of Environments is the list of publish targets offered to every Project in the tenant.
+A tenant-scoped, named target a Project can run in (name + description). Every tenant has two protected Environments — **Development** and **Production** — created with the tenant; admins add others (e.g. Staging). A protected Environment cannot be renamed or deleted. The set of Environments is the list of publish targets offered to every Project in the tenant.
 _Avoid_: Tier, Target, Deployment target
 
 **ProjectEnvironment**:
@@ -19,16 +19,28 @@ A per-Project instance of an Environment — the thing that actually runs. It ow
 _Avoid_: Instance, Deployment, Env
 
 **Development**:
-The single immutable default Environment present in every tenant. Every Project's working ProjectEnvironment is bound to it. It is never the destination of a publish and cannot be renamed or deleted.
+The default protected Environment present in every tenant. Every Project's working ProjectEnvironment is bound to it. It is never the destination of a publish and cannot be renamed or deleted.
 _Avoid_: Dev env, working copy
+
+**Production**:
+The second protected Environment present in every tenant — the conventional target for publishing the App's live version. Beyond being guaranteed to exist and protected from rename/delete, it behaves like any other publish target.
+_Avoid_: Prod (non-canonical in user-facing copy); Live
 
 **App**:
 The application the agent builds inside a ProjectEnvironment, served at its public URL. Distinct from the Project (the shell) — one Project produces one App, which can run in several ProjectEnvironments.
 _Avoid_: Project (when you mean the built application)
 
 **Publish**:
-The act of materializing or updating a non-Development ProjectEnvironment from the Development one's files, so the App runs in a chosen Environment.
-_Avoid_: Deploy, Release, Promote
+The act of materializing or updating a non-Development ProjectEnvironment from the Development one's files, so the App runs in a chosen Environment. Publishing over an already-running environment is a **Publish update**.
+_Avoid_: Deploy, Release, Promote, Redeploy
+
+**Environment Variables**:
+The per-ProjectEnvironment configuration values (string keys and values) the App reads when it starts — API keys, base URLs, flags. Each ProjectEnvironment carries its own set; values are set at publish or edited directly per environment, and changes take effect only when the App restarts.
+_Avoid_: Secrets (they may hold secrets but are not only secrets); the pod's process env (platform plumbing, a different thing)
+
+**Restart (environment)**:
+Recreating a ProjectEnvironment's pod from scratch — the row-level Restart action. Distinct from the lighter **App restart** that applying Environment Variables performs, which restarts only the App's processes inside the running pod.
+_Avoid_: Reboot; conflating with App restart
 
 **App Auth**:
 Per-ProjectEnvironment control over how visitors sign in to the App at that environment's URL — one of **public** (anyone), **manual** (the owner's own OIDC provider), or **makara** (the platform's Keycloak, scoped to the tenant). Each ProjectEnvironment carries its own; a newly published environment is **seeded once** from Development's setting at first publish, then managed independently per environment.

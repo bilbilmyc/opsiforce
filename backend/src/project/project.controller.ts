@@ -34,6 +34,8 @@ import { RequirePermission } from "../permission/permission.guard"
 import { Perms } from "../permission/permission.constants"
 import { ProjectEventsService } from "./project-events.service"
 import { AppService } from "./app.service"
+import { EnvironmentVariablesService } from "../environment-variables/environment-variables.service"
+import type { UpdateEnvironmentVariablesDto } from "../environment-variables/environment-variables.types"
 
 @Controller("projects")
 export class ProjectController {
@@ -42,6 +44,7 @@ export class ProjectController {
     private readonly userService: UserService,
     private readonly projectEventsService: ProjectEventsService,
     private readonly appService: AppService,
+    private readonly environmentVariablesService: EnvironmentVariablesService,
   ) {}
 
   /**
@@ -305,6 +308,35 @@ export class ProjectController {
   ) {
     await this.gate(id, tenant, user)
     return this.projectService.restart(id, tenant.tenantId, environmentId)
+  }
+
+  @Get(":id/environments/:environmentId/variables")
+  @RequirePermission(Perms.manageEnvironmentVariables)
+  async getEnvironmentVariables(
+    @Param("id") id: string,
+    @Param("environmentId") environmentId: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    return this.environmentVariablesService.getVariables(id, environmentId)
+  }
+
+  @Put(":id/environments/:environmentId/variables")
+  @RequirePermission(Perms.manageEnvironmentVariables)
+  async updateEnvironmentVariables(
+    @Param("id") id: string,
+    @Param("environmentId") environmentId: string,
+    @Body() dto: UpdateEnvironmentVariablesDto,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+  ) {
+    await this.gate(id, tenant, user)
+    const result = await this.environmentVariablesService.updateVariables(id, environmentId, dto)
+    if (result.restart === "pod") {
+      await this.projectService.restart(id, tenant.tenantId, environmentId)
+    }
+    return result
   }
 
   @Patch(":id/environments/:environmentId/session")

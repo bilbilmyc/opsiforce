@@ -546,6 +546,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
         agentModel: this.agentModelByName.get(agentName),
         gatewayApiKey: gatewayApiKey ?? undefined,
         gatewayUrl: this.gatewayUrl,
+        controlToken: crypto.randomBytes(32).toString("hex"),
       })
 
       const podName = this.podService.assignedPodName(id)

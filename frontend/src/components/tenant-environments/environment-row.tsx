@@ -15,7 +15,7 @@ export default function EnvironmentRow(props: EnvironmentRowProps) {
   const [name, setName] = createSignal("")
   const [description, setDescription] = createSignal("")
 
-  const isLocked = () => props.environment.isDefault
+  const isLocked = () => props.environment.isProtected
 
   const startEdit = () => {
     setName(props.environment.name)
@@ -50,7 +50,7 @@ export default function EnvironmentRow(props: EnvironmentRowProps) {
                 <Show when={isLocked()}>
                   <span class="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     <Lock class="h-2.5 w-2.5" />
-                    Default
+                    Protected
                   </span>
                 </Show>
               </div>

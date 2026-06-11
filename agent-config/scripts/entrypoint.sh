@@ -30,4 +30,6 @@ guard dbviewer datasette serve \
   --setting sql_time_limit_ms "${DB_VIEWER_SQL_TIME_LIMIT_MS}" \
   --metadata /opt/opencode/datasette-metadata.yml &
 
+guard control agent-control &
+
 wait -n

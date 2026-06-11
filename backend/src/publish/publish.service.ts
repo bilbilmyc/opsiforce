@@ -4,10 +4,9 @@ import { InjectQueue } from "@nestjs/bullmq"
 import { Queue } from "bullmq"
 import { and, desc, eq, inArray } from "drizzle-orm"
 import crypto from "crypto"
-import path from "node:path"
-import { readFile } from "node:fs/promises"
 import { db } from "../../db"
 import { projectPublishJobs, projectSchedules } from "../../db/schema"
+import { readEnvJson } from "../common/env-file"
 import { EnvironmentService } from "../environment/environment.service"
 import { ProjectEnvironmentService } from "../project-environment/project-environment.service"
 import { ProjectStatus } from "../project/project.types"
@@ -210,20 +209,7 @@ export class PublishService {
   }
 
   async readEnvFile(directory: string): Promise<Record<string, string>> {
-    const target = path.join(this.storageMountPath, directory, "app", "opsiforce.env.json")
-    try {
-      const raw = await readFile(target, "utf8")
-      const parsed: unknown = JSON.parse(raw)
-      if (!parsed || typeof parsed !== "object") return {}
-      const result: Record<string, string> = {}
-      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-        if (typeof value === "string") result[key] = value
-        else if (value !== null && value !== undefined) result[key] = String(value)
-      }
-      return result
-    } catch {
-      return {}
-    }
+    return readEnvJson(this.storageMountPath, directory)
   }
 }
 
