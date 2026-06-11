@@ -10,6 +10,12 @@ const SUPPORTED_MIMES = new Set(["image/png", "image/jpeg", "image/jpg", "image/
 const DATA_URL_PATTERN = /^data:([^;,]+);base64,(.+)$/s
 
 type ImageRef = { mime: string; url: string }
+type ToolResultContent = {
+  type: string
+  mimeType?: string
+  data?: string
+  resource?: { mimeType?: string; blob?: string }
+}
 type TransformOutput = Parameters<NonNullable<Hooks["experimental.chat.messages.transform"]>>[1]
 type MessagePart = TransformOutput["messages"][number]["parts"][number]
 type ToolExecuteOutput = Parameters<NonNullable<Hooks["tool.execute.after"]>>[1]
@@ -80,6 +86,33 @@ async function tryNormalizeRef(ref: ImageRef, log: Logger) {
   }
 }
 
+async function tryNormalizeBase64(mime: string, base64: string, log: Logger) {
+  const ref = { mime, url: `data:${mime};base64,${base64}` }
+  const original = ref.url
+  await tryNormalizeRef(ref, log)
+  if (ref.url === original) return undefined
+  return { mime: ref.mime, base64: ref.url.slice(ref.url.indexOf(",") + 1) }
+}
+
+async function normalizeToolContent(items: ToolResultContent[], log: Logger) {
+  for (const item of items) {
+    if (item.type === "image" && item.mimeType && item.data) {
+      const resized = await tryNormalizeBase64(item.mimeType, item.data, log)
+      if (resized) {
+        item.mimeType = resized.mime
+        item.data = resized.base64
+      }
+    }
+    if (item.type === "resource" && item.resource?.mimeType && item.resource.blob) {
+      const resized = await tryNormalizeBase64(item.resource.mimeType, item.resource.blob, log)
+      if (resized) {
+        item.resource.mimeType = resized.mime
+        item.resource.blob = resized.base64
+      }
+    }
+  }
+}
+
 async function normalizeParts(parts: MessagePart[], log: Logger) {
   for (const part of parts) {
     if (part.type === "file") {
@@ -114,10 +147,14 @@ export const ImageNormalizePlugin: Plugin = async ({ client }) => {
     "chat.message": (_input, output) => neverThrow(() => normalizeParts(output.parts, log), log),
     "tool.execute.after": (_input, output) =>
       neverThrow(async () => {
-        const { attachments } = output as ToolExecuteOutput & { attachments?: ImageRef[] }
+        const { attachments, content } = output as ToolExecuteOutput & {
+          attachments?: ImageRef[]
+          content?: ToolResultContent[]
+        }
         for (const attachment of attachments ?? []) {
           await tryNormalizeRef(attachment, log)
         }
+        await normalizeToolContent(content ?? [], log)
       }, log),
     "experimental.chat.messages.transform": (_input, output) =>
       neverThrow(async () => {

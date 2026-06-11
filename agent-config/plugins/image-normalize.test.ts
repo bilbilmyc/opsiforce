@@ -81,6 +81,23 @@ test("tool.execute.after resizes output attachments in place", async () => {
   expect(await dims(attachment.url)).toMatchObject({ width: 2000, height: 429 })
 })
 
+test("tool.execute.after resizes MCP content images and resources in place", async () => {
+  const rawBase64 = async (width: number, height: number) => (await makePng(width, height)).split(",")[1]
+  const content = [
+    { type: "text", text: "screenshot below" },
+    { type: "image", mimeType: "image/png", data: await rawBase64(3000, 1000) },
+    { type: "image", mimeType: "image/png", data: await rawBase64(800, 600) },
+    { type: "resource", resource: { uri: "screen://1", mimeType: "image/png", blob: await rawBase64(2600, 2600) } },
+  ]
+  const smallData = content[2].data
+  const output = { title: "t", output: "o", metadata: {}, content }
+  await hooks["tool.execute.after"]?.({ tool: "mcp_screenshot", sessionID: "s", callID: "c", args: {} }, output as never)
+  expect(await dims(`data:image/png;base64,${content[1].data}`)).toMatchObject({ width: 2000, height: 667 })
+  expect(content[2].data).toBe(smallData)
+  expect(await dims(`data:image/png;base64,${content[3].resource?.blob}`)).toMatchObject({ width: 2000, height: 2000 })
+  expect(content[0]).toEqual({ type: "text", text: "screenshot below" })
+})
+
 test("chat.message falls back to jpeg ladder when png exceeds byte cap", async () => {
   const part = filePart("image/png", await makePng(2400, 2400, true))
   await hooks["chat.message"]?.({ sessionID: "s" }, { message: {} as never, parts: [part] })
@@ -101,7 +118,13 @@ test("malformed message shapes never throw into the pipeline", async () => {
   await hooks["chat.message"]?.({ sessionID: "s" }, { message: {}, parts: [{ type: "file" }] } as never)
   await hooks["tool.execute.after"]?.(
     { tool: "read", sessionID: "s", callID: "c", args: {} },
-    { title: "t", output: "o", metadata: {}, attachments: [{}] } as never,
+    {
+      title: "t",
+      output: "o",
+      metadata: {},
+      attachments: [{}],
+      content: [{ type: "image" }, { type: "resource" }, { type: "resource", resource: {} }, null],
+    } as never,
   )
   expect(logged.some((line) => line.message === "image normalization hook failed")).toBe(true)
 })
