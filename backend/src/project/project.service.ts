@@ -230,15 +230,16 @@ export class ProjectService implements OnApplicationBootstrap {
       (env) => !env.disabled,
     )
     for (const env of stranded) {
+      const recoveredStatus = env.deployedCommitSha === null ? ProjectStatus.Failed : ProjectStatus.Starting
       await this.projectEnvironmentService
-        .patch(env.id, { status: ProjectStatus.Starting, podIp: null }, ProjectStatus.Publishing)
+        .patch(env.id, { status: recoveredStatus, podIp: null }, ProjectStatus.Publishing)
         .catch((err) => {
           this.logger.warn(`Failed to recover publishing environment ${env.id}: ${(err as Error).message}`)
         })
     }
     if (stranded.length > 0) {
       this.logger.warn(
-        `Recovered ${stranded.length} environment(s) stranded mid-publish after restart; their publish jobs were marked failed`,
+        `Recovered ${stranded.length} environment(s) stranded mid-publish after restart; their publish jobs were marked failed and never-deployed environments were marked failed`,
       )
     }
 
