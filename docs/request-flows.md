@@ -10,7 +10,7 @@ How requests move through Opsiforce for project startup, recovery, and timeout.
 flowchart LR
   Browser["Browser / frontend"] --> Edge["Local nginx entrypoint or public edge proxy"]
   Edge -->|"/api/proxy/:projectId/*"| Agent["Runtime proxy: agent (3005)"]
-  Edge -->|"{projectId}.apps..."| App["Runtime proxy: app (3002)"]
+  Edge -->|"{envId}-{slug}.apps..."| App["Runtime proxy: app (3002)"]
   Edge -->|"{projectId}.code..."| VSCode["Runtime proxy: vscode (3003)"]
   Edge -->|"{projectId}.db..."| DB["Runtime proxy: db (3004)"]
 

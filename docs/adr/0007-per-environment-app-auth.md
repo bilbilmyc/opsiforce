@@ -25,6 +25,7 @@ Status: accepted
 
 - No schema migration: `auth_mode` and `pinned_environment_id` already exist, and OIDC config stays in the middleware.
 - Deleting a non-Development environment must now `remove` its middleware + IngressRoute (previously only Development had one, and it is never deleted); deleting the **pinned** environment now **unpins** rather than silently repointing the catalog to Development (which may not be `public`).
-- The makara-reapply job (run when a tenant's Makara name changes) must fan out to **every** `makara` environment by routing id, not just the first one it finds.
+- The makara-reapply job — since renamed `makara-auth-sync` (run when a tenant's Makara name changes) — must fan out to **every** `makara` environment by routing id, not just the first one it finds.
 - The `*` redirect URI on `opsiforce-apps` is a pre-existing open-redirect smell this feature relies on but does not fix — flagged for the security review.
 - The project-scoped `GET/PUT /projects/:id/auth` endpoint is replaced by `/projects/:id/environments/:envId/auth`; Development is addressed as `envId == projectId`.
+- Partially superseded by ADR 0012 on hostnames: an environment now answers on two hosts (`{envId}-{slug}` and bare `{envId}`), the auth IngressRoute matches both, and the middleware's callback became the relative `/oidc/callback` — so `manual` owners register one callback URL per hostname (the Auth dialog lists both).

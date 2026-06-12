@@ -54,7 +54,7 @@ export class MakaraAuthSyncProcessor extends WorkerHost {
     }
 
     for (const env of makaraEnvs) {
-      const { bypassAuthPaths } = await this.projectAuthService.getConfig(env.id, env.slug)
+      const { bypassAuthPaths } = await this.projectAuthService.getConfig(env.id)
       await this.projectAuthService.applyMakara(env.id, env.slug, currentName, bypassAuthPaths)
     }
 

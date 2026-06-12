@@ -15,6 +15,8 @@ const middlewareName = (routingId: string) =>
 const ingressRouteName = (routingId: string) =>
   `opsiforce-project-${routingId}`;
 
+const OIDC_CALLBACK_PATH = "/oidc/callback";
+
 interface TraefikOidcAssertClaim {
   Name: string;
   AnyOf?: string[];
@@ -111,13 +113,20 @@ export class ProjectAuthService {
     return appCanonicalHost(routingId, slug, this.appsHostname);
   }
 
-  callbackUrl(routingId: string, slug: EnvironmentSlug): string {
-    return `https://${this.projectHost(routingId, slug)}/oidc/callback`;
+  private projectHosts(routingId: string, slug: EnvironmentSlug): string[] {
+    const canonical = this.projectHost(routingId, slug);
+    const bare = this.projectHost(routingId, null);
+    return canonical === bare ? [canonical] : [canonical, bare];
+  }
+
+  callbackUrls(routingId: string, slug: EnvironmentSlug): string[] {
+    return this.projectHosts(routingId, slug).map(
+      (host) => `https://${host}${OIDC_CALLBACK_PATH}`,
+    );
   }
 
   private buildMiddleware(
     routingId: string,
-    slug: EnvironmentSlug,
     config: ProjectAuthOidcConfig,
     extras: MiddlewareExtras = {},
   ) {
@@ -147,7 +156,7 @@ export class ProjectAuthService {
       LogLevel: "DEBUG",
       Secret: this.pluginSecret,
       Provider: provider,
-      CallbackUri: this.callbackUrl(routingId, slug),
+      CallbackUri: OIDC_CALLBACK_PATH,
       Scopes: (config.scope ?? "openid profile email")
         .split(/\s+/)
         .filter(Boolean),
@@ -217,6 +226,10 @@ export class ProjectAuthService {
       port: this.webappServicePort,
     };
 
+    const match = this.projectHosts(routingId, slug)
+      .map((host) => `Host(\`${host}\`)`)
+      .join(" || ");
+
     return {
       apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,
       kind: "IngressRoute",
@@ -229,7 +242,7 @@ export class ProjectAuthService {
         routes: [
           {
             kind: "Rule",
-            match: `Host(\`${this.projectHost(routingId, slug)}\`)`,
+            match,
             priority: 100,
             middlewares,
             services: [serviceRef],
@@ -243,17 +256,12 @@ export class ProjectAuthService {
     return { name: middlewareName(routingId), namespace: this.namespace };
   }
 
-  async getConfig(
-    routingId: string,
-    slug: EnvironmentSlug,
-  ): Promise<{
+  async getConfig(routingId: string): Promise<{
     config?: ProjectAuthOidcConfig;
     bypassAuthPaths: string[];
-    callbackUrl: string;
   }> {
-    const callbackUrl = this.callbackUrl(routingId, slug);
     const plugin = await this.readPluginSpec(routingId);
-    if (!plugin) return { bypassAuthPaths: [], callbackUrl };
+    if (!plugin) return { bypassAuthPaths: [] };
     return {
       config: {
         clientId: plugin.Provider.ClientId,
@@ -263,7 +271,6 @@ export class ProjectAuthService {
         scope: plugin.Scopes?.join(" "),
       },
       bypassAuthPaths: pathsFromBypassRule(plugin.BypassAuthenticationRule),
-      callbackUrl,
     };
   }
 
@@ -303,7 +310,7 @@ export class ProjectAuthService {
       headers: MANUAL_HEADERS,
       bypassAuthPaths,
     };
-    const mw = this.buildMiddleware(routingId, slug, effectiveConfig, extras);
+    const mw = this.buildMiddleware(routingId, effectiveConfig, extras);
     const ir = this.buildIngressRoute(routingId, slug, [
       this.oidcMiddlewareRef(routingId),
     ]);
@@ -332,7 +339,7 @@ export class ProjectAuthService {
       tokenValidation: "AccessToken",
       bypassAuthPaths,
     };
-    const mw = this.buildMiddleware(routingId, slug, config, extras);
+    const mw = this.buildMiddleware(routingId, config, extras);
     const middlewares = [this.oidcMiddlewareRef(routingId)];
     const ir = this.buildIngressRoute(routingId, slug, middlewares);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
@@ -366,7 +373,7 @@ export class ProjectAuthService {
   ): Promise<void> {
     const clonedSpec: TraefikOidcPluginSpec = {
       ...sourceSpec,
-      CallbackUri: this.callbackUrl(routingId, slug),
+      CallbackUri: OIDC_CALLBACK_PATH,
     };
     const mw = {
       apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,

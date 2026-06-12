@@ -56,18 +56,18 @@ export interface OidcFormProps {
   onChange: (next: ProjectAuthOidcConfig) => void;
   disabled?: boolean;
   secretAlreadySet?: boolean;
-  callbackUrl?: string;
+  callbackUrls?: string[];
 }
 
 export function OidcForm(props: OidcFormProps) {
   const left = FIELDS.filter((f) => f.column === "left");
   const right = FIELDS.filter((f) => f.column === "right");
-  const [copied, setCopied] = createSignal(false);
+  const [copiedUrl, setCopiedUrl] = createSignal<string | null>(null);
 
   const copyCallback = (url: string) => {
     navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    setCopiedUrl(url);
+    setTimeout(() => setCopiedUrl(null), 1500);
   };
 
   const fieldValue = (key: FieldDef["key"]) =>
@@ -109,32 +109,36 @@ export function OidcForm(props: OidcFormProps) {
         </div>
       </form>
 
-      <Show when={props.callbackUrl}>
-        {(url) => (
-          <FieldWithTooltip
-            label="Callback URL"
-            tooltip="Add this redirect URI to your identity provider's allowed redirect URIs, or sign-in will fail."
-          >
-            <div class="flex items-center gap-2">
-              <input
-                readOnly
-                value={url()}
-                spellcheck={false}
-                class="flex h-9 w-full rounded-md border border-input bg-muted/40 px-3 py-1 text-sm text-muted-foreground focus-visible:outline-none"
-              />
-              <button
-                type="button"
-                onClick={() => copyCallback(url())}
-                class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                aria-label="Copy callback URL"
-              >
-                <Show when={copied()} fallback={<Copy class="h-3.5 w-3.5" />}>
-                  <Check class="h-3.5 w-3.5 text-green-500" />
-                </Show>
-              </button>
-            </div>
-          </FieldWithTooltip>
-        )}
+      <Show when={props.callbackUrls?.length}>
+        <FieldWithTooltip
+          label="Callback URLs"
+          tooltip="Add every redirect URI below to your identity provider's allowed redirect URIs — the app answers on each of these hostnames, and sign-in fails on any host whose callback is not registered."
+        >
+          <div class="space-y-2">
+            <For each={props.callbackUrls}>
+              {(url) => (
+                <div class="flex items-center gap-2">
+                  <input
+                    readOnly
+                    value={url}
+                    spellcheck={false}
+                    class="flex h-9 w-full rounded-md border border-input bg-muted/40 px-3 py-1 text-sm text-muted-foreground focus-visible:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => copyCallback(url)}
+                    class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    aria-label="Copy callback URL"
+                  >
+                    <Show when={copiedUrl() === url} fallback={<Copy class="h-3.5 w-3.5" />}>
+                      <Check class="h-3.5 w-3.5 text-green-500" />
+                    </Show>
+                  </button>
+                </div>
+              )}
+            </For>
+          </div>
+        </FieldWithTooltip>
       </Show>
     </div>
   );

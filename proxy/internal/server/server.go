@@ -221,7 +221,7 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if redirected := redirectToCanonicalHost(w, r, ensured.CanonicalHost); redirected {
+	if redirected := redirectToCanonicalHost(w, r, projectID, ensured); redirected {
 		return
 	}
 
@@ -673,24 +673,23 @@ func firstHostLabel(host string) string {
 }
 
 // redirectToCanonicalHost issues a permanent redirect when the request arrived
-// on a resolvable but non-canonical host (legacy bare env id or a wrong slug).
-// Aliases never serve content: the per-environment auth IngressRoute matches
-// only the exact canonical host, so serving an alias would bypass it.
-func redirectToCanonicalHost(w http.ResponseWriter, r *http.Request, canonicalHost string) bool {
-	if canonicalHost == "" {
+// on a host that may not serve this environment. The canonical slugged host
+// and the legacy bare env-id host both serve — the per-environment auth
+// IngressRoute matches both, so neither bypasses the auth gate. Anything else
+// (a wrong slug) redirects to canonical.
+func redirectToCanonicalHost(w http.ResponseWriter, r *http.Request, envID string, ensured backend.EnsureResponse) bool {
+	if ensured.CanonicalHost == "" {
 		return false
 	}
 
-	requestHost := r.Host
-	if parsedHost, _, err := net.SplitHostPort(requestHost); err == nil {
-		requestHost = parsedHost
-	}
+	requestLabel := firstHostLabel(r.Host)
+	canonicalLabel := strings.Split(ensured.CanonicalHost, ".")[0]
 
-	if strings.EqualFold(requestHost, canonicalHost) {
+	if strings.EqualFold(requestLabel, canonicalLabel) || strings.EqualFold(requestLabel, envID) {
 		return false
 	}
 
-	w.Header().Set("Location", "https://"+canonicalHost+r.URL.RequestURI())
+	w.Header().Set("Location", "https://"+ensured.CanonicalHost+r.URL.RequestURI())
 	w.WriteHeader(http.StatusPermanentRedirect)
 	return true
 }

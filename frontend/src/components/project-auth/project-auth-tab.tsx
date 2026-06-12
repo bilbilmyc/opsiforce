@@ -154,7 +154,7 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
               onChange={setDraftConfig}
               disabled={props.disabled || mutation.isPending}
               secretAlreadySet={serverHasExistingConfig()}
-              callbackUrl={query.data?.callbackUrl}
+              callbackUrls={query.data?.callbackUrls}
             />
           </div>
         </Show>

@@ -813,11 +813,11 @@ export class ProjectService implements OnApplicationBootstrap {
 
   async getAuth(projectId: string, environmentId: string, tenantId: string): Promise<ProjectAuthResponse> {
     const env = await this.resolveProjectEnvironment(projectId, environmentId, tenantId)
-    const callbackUrl = this.projectAuthService.callbackUrl(env.id, env.environmentSlug)
-    if (env.authMode === "public") return { mode: "public", callbackUrl }
-    const { config, bypassAuthPaths } = await this.projectAuthService.getConfig(env.id, env.environmentSlug)
-    if (env.authMode === "makara") return { mode: "makara", bypassAuthPaths, callbackUrl }
-    return { mode: "manual", config, bypassAuthPaths, callbackUrl }
+    const callbackUrls = this.projectAuthService.callbackUrls(env.id, env.environmentSlug)
+    if (env.authMode === "public") return { mode: "public", callbackUrls }
+    const { config, bypassAuthPaths } = await this.projectAuthService.getConfig(env.id)
+    if (env.authMode === "makara") return { mode: "makara", bypassAuthPaths, callbackUrls }
+    return { mode: "manual", config, bypassAuthPaths, callbackUrls }
   }
 
   async updateAuth(
