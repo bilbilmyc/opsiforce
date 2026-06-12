@@ -96,29 +96,29 @@ export default function PublishProgressCard(props: PublishProgressCardProps) {
                 <p class="text-xs font-semibold text-foreground">
                   {props.entry.environmentName} is live
                 </p>
-                <div class="mt-0.5 flex items-center gap-3">
+                <div class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                   <Show when={appUrl()}>
                     {(url) => (
                       <a
                         href={url()}
                         target="_blank"
                         rel="noopener noreferrer"
-                        class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                        class="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-primary hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
+                        <ExternalLink class="h-3 w-3 shrink-0" />
                         Open app
-                        <ExternalLink class="h-3 w-3" />
                       </a>
                     )}
                   </Show>
                   <button
-                    class="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                    class="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-primary hover:underline"
                     onClick={(e) => {
                       e.stopPropagation()
                       props.onViewEnvironment()
                     }}
                   >
-                    <Layers class="h-3 w-3" />
+                    <Layers class="h-3 w-3 shrink-0" />
                     View environment
                   </button>
                 </div>
