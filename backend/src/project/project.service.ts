@@ -31,6 +31,7 @@ import { ProjectPoolService } from "../pool/project-pool.service"
 import { TimeoutService } from "../timeout/timeout.service"
 import { BifrostService } from "../bifrost/bifrost.service"
 import { assertPositiveMs } from "../common/validation"
+import { restoreEnvJsonBackup } from "../common/env-file"
 import { writeJsonAtomic } from "../common/fs"
 import { DefaultsService } from "../defaults/defaults.service"
 import { GatewayKeyService } from "../gateway/gateway-key.service"
@@ -259,9 +260,10 @@ export class ProjectService implements OnApplicationBootstrap {
 
   private async rollBackStrandedPublish(env: ProjectEnvironmentContext): Promise<ProjectStatus> {
     if (env.deployedCommitSha === null) return ProjectStatus.Failed
-    const prodDir = path.join(this.configService.getOrThrow<string>("storageMountPath"), env.directory)
+    const storageMountPath = this.configService.getOrThrow<string>("storageMountPath")
     try {
-      await this.gitService.resetHard(prodDir, env.deployedCommitSha)
+      await this.gitService.resetHard(path.join(storageMountPath, env.directory), env.deployedCommitSha)
+      await restoreEnvJsonBackup(storageMountPath, env.directory)
       return ProjectStatus.Starting
     } catch (err) {
       this.logger.warn(

@@ -19,6 +19,7 @@ import { ScheduleService } from "../schedule/schedule.service"
 import { ProxyService } from "../proxy/proxy.service"
 import { PodStartupFailedError } from "../pod/pod.service"
 import { writeJsonAtomic } from "../common/fs"
+import { clearEnvJsonBackup, writeEnvJsonBackup } from "../common/env-file"
 
 const POD_READY_TIMEOUT_MS = 180 * 1000
 const APP_READY_TIMEOUT_MS = 10 * 60 * 1000
@@ -49,6 +50,7 @@ export class PublishProcessor extends WorkerHost {
   async process(job: Job<PublishJobData>): Promise<void> {
     const data = job.data
     let prodDir: string | null = null
+    let prodDirectory: string | null = null
     let previousSha: string | null = null
     let previousEnvVars: Record<string, string> | null = null
     let deployStarted = false
@@ -71,6 +73,7 @@ export class PublishProcessor extends WorkerHost {
 
       const prodEnv = await this.projectEnvironmentService.findById(data.projectEnvironmentId)
       prodDir = path.join(this.storageMountPath, prodEnv.directory)
+      prodDirectory = prodEnv.directory
       previousSha = prodEnv.deployedCommitSha
 
       phase = PublishStatus.Swapping
@@ -82,8 +85,10 @@ export class PublishProcessor extends WorkerHost {
         await this.git.resetHard(prodDir, sha)
         await this.gatewayKeyService.createKey(data.projectId, data.projectEnvironmentId, data.tenantId)
       } else {
+        await clearEnvJsonBackup(this.storageMountPath, prodEnv.directory)
         await this.syncIncremental(devDir, prodDir, sha)
         previousEnvVars = await this.publishService.readEnvFile(prodEnv.directory)
+        await writeEnvJsonBackup(this.storageMountPath, prodEnv.directory, previousEnvVars)
       }
 
       await this.writeEnvFile(prodEnv.directory, data.variables, data.isFirstPublish)
@@ -121,13 +126,14 @@ export class PublishProcessor extends WorkerHost {
       }
 
       await this.projectService.finishPublishDeploy(data.projectEnvironmentId, podIp, sha)
+      await clearEnvJsonBackup(this.storageMountPath, prodEnv.directory).catch(() => undefined)
       await this.setStatus(data.publishJobId, PublishStatus.Done, { completedAt: new Date() })
       this.logger.log(`Published ${data.projectId} to environment ${data.environmentId} (${data.projectEnvironmentId})`)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       this.logger.warn(`Publish ${data.publishJobId} failed: ${message}`)
 
-      if (!data.isFirstPublish && prodDir && previousSha) {
+      if (!data.isFirstPublish && prodDir && prodDirectory && previousSha) {
         try {
           await this.git.resetHard(prodDir, previousSha)
           if (previousEnvVars) {
@@ -140,6 +146,7 @@ export class PublishProcessor extends WorkerHost {
             )
             await this.projectService.finishPublishDeploy(data.projectEnvironmentId, rolledBackIp, previousSha)
           }
+          await clearEnvJsonBackup(this.storageMountPath, prodDirectory).catch(() => undefined)
         } catch (rollbackErr) {
           this.logger.warn(
             `Rollback of ${data.projectEnvironmentId} to ${previousSha} failed: ${(rollbackErr as Error).message}`,
