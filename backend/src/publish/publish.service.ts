@@ -12,7 +12,7 @@ import { Queue } from "bullmq"
 import { and, desc, eq, inArray } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
-import { projectPublishJobs, projectSchedules } from "../../db/schema"
+import { projectEnvironments, projectPublishJobs, projectSchedules } from "../../db/schema"
 import { readEnvJson } from "../common/env-file"
 import { EnvironmentService } from "../environment/environment.service"
 import { ProjectEnvironmentService } from "../project-environment/project-environment.service"
@@ -53,6 +53,32 @@ export class PublishService implements OnApplicationBootstrap {
   }
 
   async onApplicationBootstrap(): Promise<void> {
+    const alreadyDeployed = await db
+      .select({ id: projectPublishJobs.id })
+      .from(projectPublishJobs)
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projectPublishJobs.projectEnvironmentId))
+      .where(
+        and(
+          eq(projectPublishJobs.status, PublishStatus.Migrating),
+          eq(projectEnvironments.status, ProjectStatus.Active),
+          eq(projectEnvironments.deployedCommitSha, projectPublishJobs.commitSha),
+        ),
+      )
+    if (alreadyDeployed.length > 0) {
+      await db
+        .update(projectPublishJobs)
+        .set({ status: PublishStatus.Done, completedAt: new Date(), updatedAt: new Date() })
+        .where(
+          inArray(
+            projectPublishJobs.id,
+            alreadyDeployed.map((row) => row.id),
+          ),
+        )
+      this.logger.warn(
+        `Marked ${alreadyDeployed.length} interrupted publish job(s) as done on startup: their deploys had already completed`,
+      )
+    }
+
     const stranded = await db
       .update(projectPublishJobs)
       .set({

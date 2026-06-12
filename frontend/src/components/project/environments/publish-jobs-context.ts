@@ -14,6 +14,7 @@ export interface TrackedPublish {
 
 export interface PublishJobsApi {
   start: (input: StartPublishInput) => void
+  entries: () => TrackedPublish[]
 }
 
 export const PublishJobsContext = createContext<PublishJobsApi>()

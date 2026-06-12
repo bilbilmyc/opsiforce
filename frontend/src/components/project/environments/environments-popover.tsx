@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal } from "solid-js"
+import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js"
 import { useNavigate } from "@tanstack/solid-router"
 import { toast } from "solid-sonner"
 import { usePermissions } from "~/api/permissions"
@@ -12,11 +12,12 @@ import {
 } from "~/api/environments"
 import { usePublishTargets, type PublishTarget } from "~/api/publish"
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover"
-import { ChevronsUpDown, Layers } from "~/components/icons"
+import { Check, ChevronsUpDown, Layers, LoaderCircle } from "~/components/icons"
 import ConfirmDialog from "~/components/ui/confirm-dialog"
 import Skeleton from "~/components/ui/skeleton"
 import ProjectAuthDialog from "~/components/project-auth-dialog"
 import PinAppDialogs, { type PinDialogAction } from "../pin-app-dialogs"
+import { usePublishJobs } from "./publish-jobs-context"
 import EnvManageRow from "./env-manage-row"
 import EnvTargetRow from "./env-target-row"
 import EnvStatusDot from "./env-status-dot"
@@ -42,6 +43,16 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   const navigate = useNavigate()
   const [open, setOpen] = createSignal(false)
+
+  const publishJobs = usePublishJobs()
+  const publishIndicator = createMemo(() => {
+    const jobs = publishJobs.entries()
+    if (jobs.length === 0) return null
+    const statuses = jobs.map((entry) => entry.job?.status)
+    if (statuses.some((status) => status !== "done" && status !== "failed")) return "running"
+    if (statuses.some((status) => status === "failed")) return "failed"
+    return "done"
+  })
 
   const environments = useProjectEnvironments(() => props.projectId, {
     enabled: open,
@@ -165,7 +176,17 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
           class="flex h-8 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-xs transition-colors hover:bg-accent focus:outline-none focus:ring-1 focus:ring-ring"
           aria-label="Environments"
         >
-          <Layers class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <Switch fallback={<Layers class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}>
+            <Match when={publishIndicator() === "running"}>
+              <LoaderCircle class="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+            </Match>
+            <Match when={publishIndicator() === "failed"}>
+              <span class="h-2 w-2 shrink-0 rounded-full bg-destructive" />
+            </Match>
+            <Match when={publishIndicator() === "done"}>
+              <Check class="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+            </Match>
+          </Switch>
           <Show
             when={activeEnvironment()}
             fallback={<span class="font-medium text-foreground">Environments</span>}

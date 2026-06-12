@@ -93,7 +93,7 @@ export default function PublishJobsHost(props: ParentProps<PublishJobsHostProps>
   }
 
   return (
-    <PublishJobsContext.Provider value={{ start }}>
+    <PublishJobsContext.Provider value={{ start, entries }}>
       {props.children}
 
       <Show when={entries().length > 0}>

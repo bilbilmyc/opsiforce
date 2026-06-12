@@ -78,6 +78,9 @@ export class PublishProcessor extends WorkerHost {
 
       phase = PublishStatus.Swapping
       await this.setStatus(data.publishJobId, PublishStatus.Swapping, { previousCommitSha: previousSha })
+      await clearEnvJsonBackup(this.storageMountPath, prodEnv.directory)
+      await this.projectService.beginPublishDeploy(data.projectEnvironmentId)
+      deployStarted = true
 
       if (data.isFirstPublish) {
         await rm(prodDir, { recursive: true, force: true })
@@ -85,7 +88,6 @@ export class PublishProcessor extends WorkerHost {
         await this.git.resetHard(prodDir, sha)
         await this.gatewayKeyService.createKey(data.projectId, data.projectEnvironmentId, data.tenantId)
       } else {
-        await clearEnvJsonBackup(this.storageMountPath, prodEnv.directory)
         await this.syncIncremental(devDir, prodDir, sha)
         previousEnvVars = await this.publishService.readEnvFile(prodEnv.directory)
         await writeEnvJsonBackup(this.storageMountPath, prodEnv.directory, previousEnvVars)
@@ -103,8 +105,6 @@ export class PublishProcessor extends WorkerHost {
 
       phase = PublishStatus.Building
       await this.setStatus(data.publishJobId, PublishStatus.Building)
-      await this.projectService.beginPublishDeploy(data.projectEnvironmentId)
-      deployStarted = true
       const podIp = await this.projectService.recreatePodForDeploy(
         data.projectEnvironmentId,
         POD_READY_TIMEOUT_MS,
