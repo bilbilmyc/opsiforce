@@ -239,7 +239,7 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
   }
 
   private parseSummaryFromLogs(logs: string): AgentWorkspaceMigrationSummary {
-    const lines = logs.split("\n").map((line) => line.trim()).filter(Boolean).reverse()
+    const lines = logs.split("\n").map((line) => line.trim()).filter(Boolean).toReversed()
     for (const line of lines) {
       if (!line.startsWith("{") || !line.endsWith("}")) continue
       const parsed = JSON.parse(line) as AgentWorkspaceMigrationSummary

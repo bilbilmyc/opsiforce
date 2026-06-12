@@ -1,6 +1,6 @@
 import { For, Show, createSignal, createEffect, createMemo } from "solid-js"
 import { toast } from "solid-sonner"
-import { createMutation, useQueryClient } from "@tanstack/solid-query"
+import { useQueryClient } from "@tanstack/solid-query"
 import { createAppQuery } from "~/lib/create-app-query"
 import { api, podClassApi, type Project, type PodClass, type UpdateProjectPodClassDto, type RequestLogMode } from "~/api/client"
 import { usePermissions } from "~/api/permissions"

@@ -1,14 +1,11 @@
-import { Show, createEffect, createSignal } from "solid-js"
+import { Show, createEffect, createSignal, on } from "solid-js"
 import Spinner from "~/components/ui/spinner"
 
 export default function ProjectDbTab(props: { environmentId: string }) {
   const [loading, setLoading] = createSignal(true)
   const url = () => `https://${props.environmentId}.${import.meta.env.VITE_DB_DOMAIN}/`
 
-  createEffect(() => {
-    props.environmentId
-    setLoading(true)
-  })
+  createEffect(on(() => props.environmentId, () => setLoading(true)))
 
   return (
     <div class="flex-1 min-w-0 flex flex-col relative">

@@ -14,8 +14,8 @@ import type {
   UpdateProjectBudgetRequest,
 } from "./bifrost.types"
 
-const VALID_KEY_TYPES: KeyType[] = ["chat", "backend"]
-const VALID_DURATIONS = ["1m", "1h", "1d", "1w", "1M", "1Y"]
+const VALID_KEY_TYPES = new Set<KeyType>(["chat", "backend"])
+const VALID_DURATIONS = new Set(["1m", "1h", "1d", "1w", "1M", "1Y"])
 
 function toBudgetResponse(budget: BifrostBudget | null) {
   return {
@@ -57,10 +57,10 @@ export class UsageController {
     if (!this.bifrostService.isEnabled()) {
       throw new BadRequestException("Bifrost is not enabled")
     }
-    if (!VALID_KEY_TYPES.includes(body.keyType)) {
+    if (!VALID_KEY_TYPES.has(body.keyType)) {
       throw new BadRequestException(`Invalid keyType: ${body.keyType}`)
     }
-    if (!VALID_DURATIONS.includes(body.budgetDuration)) {
+    if (!VALID_DURATIONS.has(body.budgetDuration)) {
       throw new BadRequestException(`Invalid budgetDuration: ${body.budgetDuration}`)
     }
     if (typeof body.maxBudget !== "number" || body.maxBudget < 0) {
@@ -95,7 +95,7 @@ export class UsageController {
     if (typeof body.maxBudget !== "number" || body.maxBudget < 0) {
       throw new BadRequestException("maxBudget must be a non-negative number")
     }
-    if (!VALID_DURATIONS.includes(body.budgetDuration)) {
+    if (!VALID_DURATIONS.has(body.budgetDuration)) {
       throw new BadRequestException(`Invalid budgetDuration: ${body.budgetDuration}`)
     }
     if (!project.bifrostProjectId) {
@@ -133,7 +133,7 @@ export class UsageController {
     if (!this.bifrostService.isEnabled()) {
       throw new BadRequestException("Bifrost is not enabled")
     }
-    if (!VALID_DURATIONS.includes(body.budgetDuration)) {
+    if (!VALID_DURATIONS.has(body.budgetDuration)) {
       throw new BadRequestException(`Invalid budgetDuration: ${body.budgetDuration}`)
     }
     if (typeof body.tenantBudget !== "number" || body.tenantBudget < 0) {

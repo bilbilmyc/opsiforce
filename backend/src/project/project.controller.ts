@@ -125,7 +125,7 @@ export class ProjectController {
         reply.raw.write(`data: ${JSON.stringify(status)}\n\n`)
 
         const shouldPoll =
-          status.status === ProjectStatus.Active && (status.app === null || status.app.exists === false)
+          status.status === ProjectStatus.Active && (status.app === null || ! status.app.exists)
         if (shouldPoll && !polling) {
           this.appService.startPolling(id)
           polling = true

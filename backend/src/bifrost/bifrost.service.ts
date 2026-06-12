@@ -105,9 +105,7 @@ export class BifrostService {
   }
 
   async updateCustomerBudget(customerId: string, budget?: BifrostBudget): Promise<void> {
-    await this.request("PUT", `/api/governance/customers/${customerId}`, {
-      ...(budget ? { budget } : {}),
-    })
+    await this.request("PUT", `/api/governance/customers/${customerId}`, (budget ? { budget } : {}))
   }
 
   async getCustomerBudget(customerId: string): Promise<BifrostBudget | null> {
@@ -156,9 +154,7 @@ export class BifrostService {
   }
 
   async updateTeamBudget(teamId: string, budget?: BifrostBudget): Promise<void> {
-    await this.request("PUT", `/api/governance/teams/${teamId}`, {
-      ...(budget ? { budgets: [budget] } : {}),
-    })
+    await this.request("PUT", `/api/governance/teams/${teamId}`, (budget ? { budgets: [budget] } : {}))
   }
 
   async updateProjectResourceBudgets(projectId: string, teamId: string, budgets: BudgetDefaults): Promise<void> {

@@ -541,7 +541,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       ])
 
       await this.podService.createAssignedPod(id, directory, id, {
-        ...(bifrostOptions ?? {}),
+        ...bifrostOptions,
         agentName,
         agentModel: this.agentModelByName.get(agentName),
         gatewayApiKey: gatewayApiKey ?? undefined,

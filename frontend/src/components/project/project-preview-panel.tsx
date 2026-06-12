@@ -1,4 +1,4 @@
-import { Show, createEffect, createSignal, onMount } from "solid-js"
+import { Show, createEffect, createSignal, on, onMount } from "solid-js"
 import {
   Check,
   Copy,
@@ -54,15 +54,13 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
   const previewUrl = () => `https://${props.environmentId}.${previewDomain}/`
   const publicUrl = () => appPublicUrl(props.environmentId, props.environmentSlug)
 
-  createEffect(() => {
-    props.environmentId
-    setIframeLoading(true)
-  })
+  createEffect(on(() => props.environmentId, () => setIframeLoading(true)))
 
   function reload() {
     const iframe = document.getElementById("webapp-preview") as HTMLIFrameElement | null
     if (!iframe) return
     setIframeLoading(true)
+    // oxlint-disable-next-line no-self-assign -- reassigning src forces the iframe to reload
     iframe.src = iframe.src
   }
 

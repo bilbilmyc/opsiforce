@@ -1,4 +1,4 @@
-import { userApi, type User } from "./client"
+import { userApi } from "./client"
 import { createAppQuery } from "~/lib/create-app-query"
 
 const MAKARA_GROUP_PREFIX = "role:makara_tenant_name_"

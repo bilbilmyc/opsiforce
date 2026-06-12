@@ -5,10 +5,10 @@
   "scripts": {
     "build": "nest build",
     "start": "NODE_OPTIONS='--max-http-header-size=128000' yarn node dist/src/main.js",
-    "lint": "eslint src/",
-    "lint:fix": "eslint src/ --fix",
-    "prettier": "prettier --write src/",
+    "lint": "oxlint --type-aware --fix src",
+    "format": "oxfmt -c ../.oxfmtrc.json src",
     "ts": "tsc --noEmit",
+    "check": "yarn lint && yarn ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx ./db/migrate.ts",
     "db:studio": "drizzle-kit studio",
@@ -56,6 +56,9 @@
     "concurrently": "^9.2.1",
     "drizzle-kit": "^0.31.10",
     "env-cmd": "^11.0.0",
+    "oxfmt": "^0.54.0",
+    "oxlint": "^1.69.0",
+    "oxlint-tsgolint": "^0.23.0",
     "typescript": "^5.9.3"
   }
 }

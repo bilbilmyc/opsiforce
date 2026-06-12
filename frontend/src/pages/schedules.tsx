@@ -71,7 +71,7 @@ export default function SchedulesPage() {
 
   const environments = useEnvironments({ enabled: () => !isScoped() })
   const sortedEnvs = createMemo(() =>
-    [...(environments.data ?? [])].sort((a, b) => {
+    [...(environments.data ?? [])].toSorted((a, b) => {
       if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1
       return a.name.localeCompare(b.name)
     }),

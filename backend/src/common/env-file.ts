@@ -39,7 +39,7 @@ export async function readEnvJson(storageMountPath: string, directory: string): 
     const result: Record<string, string> = {}
     for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
       if (typeof value === "string") result[key] = value
-      else if (value !== null && value !== undefined) result[key] = String(value)
+      else if (typeof value === "number" || typeof value === "boolean") result[key] = String(value)
     }
     return result
   } catch {

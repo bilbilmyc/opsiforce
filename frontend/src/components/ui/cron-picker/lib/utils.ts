@@ -31,7 +31,7 @@ export const range = (start: number, end: number): number[] => {
   return array
 }
 
-export const sort = (array: number[]) => [...array].sort((a, b) => a - b)
+export const sort = (array: number[]) => [...array].toSorted((a, b) => a - b)
 
 export const flatten = (arrays: number[][]) => ([] as number[]).concat.apply([], arrays)
 

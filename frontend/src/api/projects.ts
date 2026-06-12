@@ -137,7 +137,7 @@ export function useCreateUnassignedProject() {
     mutationFn: (dto: { title?: string; description?: string } | void) =>
       api.post<Project>("/projects", {
         timezone: detectTimezone(),
-        ...(dto ?? {}),
+        ...dto,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: projectKeys.all })

@@ -114,7 +114,7 @@ export function useCreateProjectInWorkspace() {
     }) =>
       api.post<Project>(`/workspaces/${params.workspaceId}/projects`, {
         timezone: detectTimezone(),
-        ...(params.dto ?? {}),
+        ...params.dto,
       }),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ["projects"] })

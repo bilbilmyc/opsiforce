@@ -47,9 +47,9 @@ export default function MultiSelect(props: Props) {
     const values = selectedValues()
     if (values.length === 0) return null
     if (props.options.alt) {
-      return [...values].sort((a, b) => Number(a) - Number(b)).map(formatOption)
+      return [...values].toSorted((a, b) => Number(a) - Number(b)).map(formatOption)
     }
-    return createRanges([...values].map(Number).sort((a, b) => a - b))
+    return createRanges([...values].map(Number).toSorted((a, b) => a - b))
   })
 
   return (

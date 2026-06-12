@@ -640,7 +640,7 @@ export class ProjectService implements OnApplicationBootstrap {
     const pinnedEnvironmentId = pinnedRow?.isPinned ? pinnedRow.pinnedEnvironmentId ?? projectId : null
 
     return envs
-      .sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.createdAt.getTime() - b.createdAt.getTime())
+      .toSorted((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.createdAt.getTime() - b.createdAt.getTime())
       .map((env) => ({
         id: env.id,
         projectId: env.projectId,
@@ -745,7 +745,7 @@ export class ProjectService implements OnApplicationBootstrap {
       })
     }
     if (!isPreset(dto.podClass)) {
-      throw new BadRequestException(`Unknown pod class: ${dto.podClass}`)
+      throw new BadRequestException(`Unknown pod class: ${String(dto.podClass)}`)
     }
     return resolvePreset(dto.podClass, this.podClassSmallOverride())
   }
@@ -828,7 +828,7 @@ export class ProjectService implements OnApplicationBootstrap {
   ): Promise<ProjectAuthResponse> {
     const env = await this.resolveProjectEnvironment(projectId, environmentId, tenantId)
     if (dto.mode !== "public" && dto.mode !== "manual" && dto.mode !== "makara") {
-      throw new BadRequestException(`Unknown auth mode: ${dto.mode}`)
+      throw new BadRequestException(`Unknown auth mode: ${String(dto.mode)}`)
     }
 
     if (dto.mode === "manual") {
@@ -1631,7 +1631,7 @@ export class ProjectService implements OnApplicationBootstrap {
     }
 
     const tenantOptions = {
-      ...(bifrostOptions ?? {}),
+      ...bifrostOptions,
       agentName,
       agentModel: this.agentModelByName.get(agentName),
       gatewayApiKey: gatewayApiKey ?? undefined,

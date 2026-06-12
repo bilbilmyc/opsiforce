@@ -40,7 +40,7 @@ export class EnvironmentService {
       .select()
       .from(environments)
       .where(eq(environments.tenantId, tenantId))
-    return rows.sort((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name)).map(toResponse)
+    return rows.toSorted((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name)).map(toResponse)
   }
 
   async getDefaultForTenant(tenantId: string): Promise<EnvironmentRow | null> {

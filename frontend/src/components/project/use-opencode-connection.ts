@@ -55,7 +55,7 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
       const remembered = options.rememberedSessionId()
       const pinned = remembered ? roots.find((s) => s.id === remembered) : undefined
       const chosen =
-        pinned ?? [...roots].sort((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))[0]
+        pinned ?? roots.toSorted((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))[0]
       if (!chosen) return undefined
       syncTitle(chosen.title)
       if (chosen.id !== remembered) options.onResolveSession(environmentId, chosen.id)

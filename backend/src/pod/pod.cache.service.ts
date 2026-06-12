@@ -71,7 +71,7 @@ export class PodCacheService implements OnApplicationBootstrap, OnModuleDestroy 
         labelSelector: POD_LABEL_SELECTOR,
       })
 
-    const informer = k8s.makeInformer(this.kc, path, listFn, POD_LABEL_SELECTOR) as PodInformer
+    const informer = k8s.makeInformer(this.kc, path, listFn, POD_LABEL_SELECTOR)
     this.informer = informer
 
     informer.on("add", (pod) => this.handleAdd(pod))
