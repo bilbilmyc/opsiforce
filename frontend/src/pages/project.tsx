@@ -188,6 +188,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
             <ProjectPreviewPanel
               projectId={props.projectId}
               environmentId={activeEnvironmentId()}
+              environmentSlug={activeEnvironment()?.slug ?? null}
               appName={meta().name ?? undefined}
               onReloadRef={onReloadRef}
             />

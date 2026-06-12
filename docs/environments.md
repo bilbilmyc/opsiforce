@@ -23,7 +23,7 @@ A subtle but load-bearing detail: the **Development ProjectEnvironment reuses th
 
 An app's public hostname tells you which environment you're looking at: `{envId}-{slug}.apps…`, where the slug comes from the Environment registry — `dev` and `prod` for the protected environments, a slugified form of the name for custom ones, prefilled in the create dialog where the admin can adjust it that one time before saving (it must be unique in the tenant), then immutable. The slug never changes on rename, so published URLs outlive renames. Existing environments were backfilled by the migration that introduced the slug.
 
-The environment id is still the routing key (the slug is a validated, readable discriminator), and the canonical host is always the suffixed one — including Development. Anything else that resolves, like a legacy bare `{envId}` host or a wrong suffix, redirects permanently to the canonical host instead of serving content; serving aliases would slip past the per-environment auth gate, which matches the exact canonical host. The internal `.preview.`, vscode, and db hostnames are unaffected and keep bare env-id labels. The rationale and trade-offs are in ADR 0011.
+The environment id is still the routing key (the slug is a validated, readable discriminator), and the canonical host is always the suffixed one — including Development. Anything else that resolves, like a legacy bare `{envId}` host or a wrong suffix, redirects permanently to the canonical host instead of serving content; serving aliases would slip past the per-environment auth gate, which matches the exact canonical host. The internal `.preview.`, vscode, and db hostnames are unaffected and keep bare env-id labels. The rationale and trade-offs are in ADR 0012.
 
 ## What moved, what stayed
 
@@ -71,4 +71,4 @@ Four permissions gate the new surfaces (defined in the Keycloak configurator and
 - Publishing: `backend/src/publish/` — the publish service, the git helper, the staged BullMQ worker, and the SSE status stream (`publish.controller.ts`, which the worker feeds via `ProjectEventsService`).
 - Per-environment app auth: `backend/src/project/project-auth.service.ts` builds the Traefik middleware/IngressRoute keyed by routing id (the environment id); the publish worker seeds it from Development on first publish; the per-environment Auth and Pin UI lives under `frontend/src/components/project/environments/`.
 - The agent app template's production startup and per-environment config live in `agent-config/agents/app-builder/template/app/`.
-- The design rationale is captured in `docs/adr/0001`–`0011`; the glossary is in `CONTEXT.md`.
+- The design rationale is captured in `docs/adr/0001`–`0012`; the glossary is in `CONTEXT.md`.

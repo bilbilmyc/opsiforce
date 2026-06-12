@@ -1,4 +1,5 @@
 import * as k8s from "@kubernetes/client-node"
+import { appPublicUrl } from "../common/app-host"
 import type { K8sResourceRequirements } from "./pod-classes"
 
 export interface PodTemplateOptions {
@@ -12,6 +13,7 @@ export interface PodTemplateOptions {
   subPath?: string
   projectId?: string
   environmentId?: string
+  environmentSlug?: string | null
   opsiforceEnv?: string
   appsHostname?: string
   imagePullPolicy: string
@@ -118,7 +120,12 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
               : []),
             ...(options.opsiforceEnv ? [{ name: "OPSIFORCE_ENV", value: options.opsiforceEnv }] : []),
             ...(routingId && options.appsHostname
-              ? [{ name: "APP_PUBLIC_URL", value: `https://${routingId}.${options.appsHostname}/` }]
+              ? [
+                  {
+                    name: "APP_PUBLIC_URL",
+                    value: appPublicUrl(routingId, options.environmentSlug, options.appsHostname),
+                  },
+                ]
               : []),
             ...(options.bifrostApiKey && options.bifrostProxyUrl
               ? [

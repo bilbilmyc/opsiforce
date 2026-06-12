@@ -3,6 +3,11 @@ import { toast } from "solid-sonner"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
 import {
+  ENVIRONMENT_SLUG_MAX_LENGTH,
+  ENVIRONMENT_SLUG_PATTERN,
+  slugifyEnvironmentName,
+} from "~/lib/app-url"
+import {
   useCreateEnvironment,
   useDeleteEnvironment,
   useEnvironments,
@@ -24,20 +29,42 @@ export default function TenantEnvironmentsSection(props: { active: boolean }) {
 
   const [creating, setCreating] = createSignal(false)
   const [name, setName] = createSignal("")
+  const [slug, setSlug] = createSignal("")
+  const [slugEdited, setSlugEdited] = createSignal(false)
   const [description, setDescription] = createSignal("")
   const [pendingDelete, setPendingDelete] = createSignal<Environment | null>(null)
 
   const resetForm = () => {
     setName("")
+    setSlug("")
+    setSlugEdited(false)
     setDescription("")
     setCreating(false)
   }
 
+  const onNameInput = (value: string) => {
+    setName(value)
+    if (!slugEdited()) setSlug(slugifyEnvironmentName(value))
+  }
+
+  const slugValid = () => ENVIRONMENT_SLUG_PATTERN.test(slug())
+  const slugTaken = () => environments.data?.some((env) => env.slug === slug()) === true
+  const slugError = () => {
+    if (!slug()) return "A URL slug is required"
+    if (!slugValid()) return "Lowercase letters, digits, and dashes only; no leading or trailing dash"
+    if (slugTaken()) return `'${slug()}' is already used by another environment`
+    return null
+  }
+  const canSubmit = () => name().trim().length > 0 && slugError() === null
+
   const submitCreate = async () => {
-    const trimmed = name().trim()
-    if (!trimmed) return
+    if (!canSubmit()) return
     try {
-      await create.mutateAsync({ name: trimmed, description: description().trim() || undefined })
+      await create.mutateAsync({
+        name: name().trim(),
+        slug: slug(),
+        description: description().trim() || undefined,
+      })
       toast.success("Environment created")
       resetForm()
     } catch (err) {
@@ -100,14 +127,49 @@ export default function TenantEnvironmentsSection(props: { active: boolean }) {
             <input
               type="text"
               value={name()}
-              onInput={(e) => setName(e.currentTarget.value)}
+              onInput={(e) => onNameInput(e.currentTarget.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && name().trim()) submitCreate()
+                if (e.key === "Enter" && canSubmit()) submitCreate()
               }}
               class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              placeholder="e.g. Production"
+              placeholder="e.g. Staging"
               autofocus
             />
+            <div class="space-y-1">
+              <input
+                type="text"
+                value={slug()}
+                maxLength={ENVIRONMENT_SLUG_MAX_LENGTH}
+                onInput={(e) => {
+                  setSlugEdited(true)
+                  setSlug(e.currentTarget.value)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && canSubmit()) submitCreate()
+                }}
+                class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 font-mono text-xs shadow-sm transition-colors placeholder:font-sans placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                placeholder="URL slug, e.g. staging"
+              />
+              <Show
+                when={slug() && slugError() === null}
+                fallback={
+                  <Show when={slug()}>
+                    <p class="text-xs text-destructive">{slugError()}</p>
+                  </Show>
+                }
+              >
+                <p class="break-all text-xs text-muted-foreground">
+                  App URLs will look like{" "}
+                  <span class="font-mono">
+                    {"<app-id>"}-{slug()}.{import.meta.env.VITE_WEBAPP_DOMAIN}
+                  </span>
+                </p>
+              </Show>
+              <p class="text-xs text-muted-foreground">
+                The slug becomes part of every app URL in this environment and cannot be changed
+                later.
+              </p>
+            </div>
             <input
               type="text"
               value={description()}
@@ -119,7 +181,7 @@ export default function TenantEnvironmentsSection(props: { active: boolean }) {
               <Button size="sm" variant="outline" onClick={resetForm}>
                 Cancel
               </Button>
-              <Button size="sm" onClick={submitCreate} loading={create.isPending} disabled={!name().trim()}>
+              <Button size="sm" onClick={submitCreate} loading={create.isPending} disabled={!canSubmit()}>
                 Create
               </Button>
             </div>

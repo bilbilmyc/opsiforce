@@ -16,6 +16,7 @@ export type ProjectEnvironmentStatus =
 export interface Environment {
   id: string
   name: string
+  slug: string
   description: string | null
   isDefault: boolean
   isProtected: boolean
@@ -28,6 +29,7 @@ export interface ProjectEnvironment {
   projectId: string
   environmentId: string
   name: string
+  slug: string | null
   isDefault: boolean
   status: ProjectEnvironmentStatus
   authMode: string
@@ -39,6 +41,7 @@ export interface ProjectEnvironment {
 
 export interface CreateEnvironmentDto {
   name: string
+  slug: string
   description?: string
 }
 

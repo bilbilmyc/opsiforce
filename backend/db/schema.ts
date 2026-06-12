@@ -155,6 +155,7 @@ export const environments = pgTable(
     id: text("id").primaryKey(),
     tenantId: tenantIdField,
     name: text("name").notNull(),
+    slug: text("slug").notNull(),
     description: text("description"),
     isDefault: boolean("is_default").notNull().default(false),
     isProtected: boolean("is_protected").notNull().default(false),
@@ -163,6 +164,7 @@ export const environments = pgTable(
   },
   (table) => [
     unique("environments_tenant_id_name_unique").on(table.tenantId, table.name),
+    unique("environments_tenant_id_slug_unique").on(table.tenantId, table.slug),
     uniqueIndex("environments_one_default_per_tenant")
       .on(table.tenantId)
       .where(sql`${table.isDefault}`),

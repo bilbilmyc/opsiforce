@@ -12,7 +12,7 @@ spec:
   entryPoints:
     - websecure
   routes:
-    - match: HostRegexp(`[a-f0-9-]+\.{{ .Values.appProxy.appsHostname | replace "." "\\." }}`)
+    - match: HostRegexp(`[a-z0-9-]+\.{{ .Values.appProxy.appsHostname | replace "." "\\." }}`)
       kind: Rule
       services:
         - name: {{ .Values.appProxy.backendService }}

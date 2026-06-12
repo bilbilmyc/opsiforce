@@ -100,7 +100,12 @@ export class PublishProcessor extends WorkerHost {
           devEnv.authMode === "makara"
             ? await this.projectService.findMakaraTenantName(data.tenantId)
             : undefined
-        await this.projectAuthService.inheritAuth(devEnv.id, data.projectEnvironmentId, makaraFallbackTenantName)
+        await this.projectAuthService.inheritAuth(
+          devEnv.id,
+          data.projectEnvironmentId,
+          prodEnv.environmentSlug,
+          makaraFallbackTenantName,
+        )
       }
 
       phase = PublishStatus.Building

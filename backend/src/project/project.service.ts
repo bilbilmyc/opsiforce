@@ -646,6 +646,7 @@ export class ProjectService implements OnApplicationBootstrap {
         projectId: env.projectId,
         environmentId: env.environmentId,
         name: env.isDefault ? "Development" : env.environmentName ?? "Environment",
+        slug: env.environmentSlug,
         isDefault: env.isDefault,
         status: env.disabled ? ProjectStatus.Disabled : env.status,
         authMode: env.authMode,
@@ -812,9 +813,9 @@ export class ProjectService implements OnApplicationBootstrap {
 
   async getAuth(projectId: string, environmentId: string, tenantId: string): Promise<ProjectAuthResponse> {
     const env = await this.resolveProjectEnvironment(projectId, environmentId, tenantId)
-    const callbackUrl = this.projectAuthService.callbackUrl(env.id)
+    const callbackUrl = this.projectAuthService.callbackUrl(env.id, env.environmentSlug)
     if (env.authMode === "public") return { mode: "public", callbackUrl }
-    const { config, bypassAuthPaths } = await this.projectAuthService.getConfig(env.id)
+    const { config, bypassAuthPaths } = await this.projectAuthService.getConfig(env.id, env.environmentSlug)
     if (env.authMode === "makara") return { mode: "makara", bypassAuthPaths, callbackUrl }
     return { mode: "manual", config, bypassAuthPaths, callbackUrl }
   }
@@ -831,10 +832,10 @@ export class ProjectService implements OnApplicationBootstrap {
     }
 
     if (dto.mode === "manual") {
-      await this.projectAuthService.apply(env.id, dto.config ?? {}, dto.bypassAuthPaths)
+      await this.projectAuthService.apply(env.id, env.environmentSlug, dto.config ?? {}, dto.bypassAuthPaths)
     } else if (dto.mode === "makara") {
       const makaraTenantName = await this.findMakaraTenantName(tenantId)
-      await this.projectAuthService.applyMakara(env.id, makaraTenantName, dto.bypassAuthPaths)
+      await this.projectAuthService.applyMakara(env.id, env.environmentSlug, makaraTenantName, dto.bypassAuthPaths)
     } else {
       await this.projectAuthService.remove(env.id)
     }
@@ -1636,6 +1637,7 @@ export class ProjectService implements OnApplicationBootstrap {
       gatewayApiKey: gatewayApiKey ?? undefined,
       gatewayUrl: this.configService.get<string>("gatewayUrl", ""),
       opsiforceEnv: env.isDefault ? undefined : "production",
+      environmentSlug: env.environmentSlug,
       resources: podResources,
       controlToken: crypto.randomBytes(32).toString("hex"),
     }

@@ -1,5 +1,6 @@
 import { Show } from "solid-js"
 import { cn } from "~/lib/cn"
+import { appPublicUrl } from "~/lib/app-url"
 import { Check, ExternalLink, Layers, LoaderCircle, X } from "~/components/icons"
 import { PUBLISH_STEPS, publishStepIndex } from "./publish-steps"
 import type { TrackedPublish } from "./publish-jobs-context"
@@ -28,7 +29,7 @@ export default function PublishProgressCard(props: PublishProgressCardProps) {
   const appUrl = () => {
     const current = job()
     if (!current) return null
-    return `https://${current.projectEnvironmentId}.${import.meta.env.VITE_WEBAPP_DOMAIN}/`
+    return appPublicUrl(current.projectEnvironmentId, props.entry.environmentSlug)
   }
 
   const progressPercent = () => {

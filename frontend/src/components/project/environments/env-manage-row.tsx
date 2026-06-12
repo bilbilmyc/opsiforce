@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "~/components/icons"
 import { cn } from "~/lib/cn"
+import { appPublicUrl } from "~/lib/app-url"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,7 +57,7 @@ export default function EnvManageRow(props: EnvManageRowProps) {
   const showPublish = () => props.canPublish && !isDevelopment() && props.hasApp
 
   const appRunning = () => (isDevelopment() ? props.hasApp : env().deployedCommitSha !== null)
-  const appUrl = () => `https://${env().id}.${import.meta.env.VITE_WEBAPP_DOMAIN}/`
+  const appUrl = () => appPublicUrl(env().id, env().slug)
 
   return (
     <div

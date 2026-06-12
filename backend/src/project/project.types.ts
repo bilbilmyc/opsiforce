@@ -115,6 +115,7 @@ export interface ProjectEnvironmentSummary {
   projectId: string
   environmentId: string | null
   name: string
+  slug: string | null
   isDefault: boolean
   status: ProjectStatus
   authMode: ProjectAuthMode

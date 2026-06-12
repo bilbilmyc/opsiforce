@@ -31,6 +31,7 @@ export interface ProjectEnvironmentContext {
   requestLogMode: RequestLogMode
   requestLogBodyLimit: number
   environmentName: string | null
+  environmentSlug: string | null
   environmentIsDefault: boolean
 }
 

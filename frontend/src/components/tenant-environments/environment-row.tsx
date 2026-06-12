@@ -47,6 +47,12 @@ export default function EnvironmentRow(props: EnvironmentRowProps) {
             <div class="min-w-0">
               <div class="flex items-center gap-1.5">
                 <span class="text-xs font-medium text-foreground">{props.environment.name}</span>
+                <span
+                  class="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                  title="URL slug — appears in every app URL of this environment"
+                >
+                  {props.environment.slug}
+                </span>
                 <Show when={isLocked()}>
                   <span class="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                     <Lock class="h-2.5 w-2.5" />

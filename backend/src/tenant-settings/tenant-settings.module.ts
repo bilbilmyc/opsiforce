@@ -5,17 +5,17 @@ import { BullMQAdapter } from "@bull-board/api/bullMQAdapter"
 import { ProjectModule } from "../project/project.module"
 import { TenantSettingsController } from "./tenant-settings.controller"
 import { TenantSettingsService } from "./tenant-settings.service"
-import { MakaraReapplyProcessor } from "./makara-reapply.processor"
-import { TENANT_MAKARA_REAPPLY_QUEUE } from "./tenant-settings.types"
+import { MakaraAuthSyncProcessor } from "./makara-auth-sync.processor"
+import { MAKARA_AUTH_SYNC_QUEUE } from "./tenant-settings.types"
 
 @Module({
   imports: [
-    BullModule.registerQueue({ name: TENANT_MAKARA_REAPPLY_QUEUE }),
-    BullBoardModule.forFeature({ name: TENANT_MAKARA_REAPPLY_QUEUE, adapter: BullMQAdapter }),
+    BullModule.registerQueue({ name: MAKARA_AUTH_SYNC_QUEUE }),
+    BullBoardModule.forFeature({ name: MAKARA_AUTH_SYNC_QUEUE, adapter: BullMQAdapter }),
     forwardRef(() => ProjectModule),
   ],
   controllers: [TenantSettingsController],
-  providers: [TenantSettingsService, MakaraReapplyProcessor],
+  providers: [TenantSettingsService, MakaraAuthSyncProcessor],
   exports: [TenantSettingsService],
 })
 export class TenantSettingsModule {}

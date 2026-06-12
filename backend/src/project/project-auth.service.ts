@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as k8s from "@kubernetes/client-node";
+import { appCanonicalHost } from "../common/app-host";
 import { loadKubeConfig } from "../common/k8s-client";
 import { ProjectAuthOidcConfig } from "./project.types";
 
@@ -71,6 +72,8 @@ function pathsFromBypassRule(rule: string | undefined): string[] {
     .filter((p) => p.length > 0);
 }
 
+type EnvironmentSlug = string | null;
+
 @Injectable()
 export class ProjectAuthService {
   private readonly logger = new Logger(ProjectAuthService.name);
@@ -104,16 +107,17 @@ export class ProjectAuthService {
     );
   }
 
-  private projectHost(routingId: string): string {
-    return `${routingId}.${this.appsHostname}`;
+  private projectHost(routingId: string, slug: EnvironmentSlug): string {
+    return appCanonicalHost(routingId, slug, this.appsHostname);
   }
 
-  callbackUrl(routingId: string): string {
-    return `https://${this.projectHost(routingId)}/oidc/callback`;
+  callbackUrl(routingId: string, slug: EnvironmentSlug): string {
+    return `https://${this.projectHost(routingId, slug)}/oidc/callback`;
   }
 
   private buildMiddleware(
     routingId: string,
+    slug: EnvironmentSlug,
     config: ProjectAuthOidcConfig,
     extras: MiddlewareExtras = {},
   ) {
@@ -143,7 +147,7 @@ export class ProjectAuthService {
       LogLevel: "DEBUG",
       Secret: this.pluginSecret,
       Provider: provider,
-      CallbackUri: this.callbackUrl(routingId),
+      CallbackUri: this.callbackUrl(routingId, slug),
       Scopes: (config.scope ?? "openid profile email")
         .split(/\s+/)
         .filter(Boolean),
@@ -200,6 +204,7 @@ export class ProjectAuthService {
 
   private buildIngressRoute(
     routingId: string,
+    slug: EnvironmentSlug,
     middlewares: Array<{ name: string; namespace: string }>,
   ) {
     const serviceRef: {
@@ -224,7 +229,7 @@ export class ProjectAuthService {
         routes: [
           {
             kind: "Rule",
-            match: `Host(\`${this.projectHost(routingId)}\`)`,
+            match: `Host(\`${this.projectHost(routingId, slug)}\`)`,
             priority: 100,
             middlewares,
             services: [serviceRef],
@@ -240,12 +245,13 @@ export class ProjectAuthService {
 
   async getConfig(
     routingId: string,
+    slug: EnvironmentSlug,
   ): Promise<{
     config?: ProjectAuthOidcConfig;
     bypassAuthPaths: string[];
     callbackUrl: string;
   }> {
-    const callbackUrl = this.callbackUrl(routingId);
+    const callbackUrl = this.callbackUrl(routingId, slug);
     const plugin = await this.readPluginSpec(routingId);
     if (!plugin) return { bypassAuthPaths: [], callbackUrl };
     return {
@@ -288,6 +294,7 @@ export class ProjectAuthService {
 
   async apply(
     routingId: string,
+    slug: EnvironmentSlug,
     config: ProjectAuthOidcConfig,
     bypassAuthPaths?: string[],
   ): Promise<void> {
@@ -296,8 +303,8 @@ export class ProjectAuthService {
       headers: MANUAL_HEADERS,
       bypassAuthPaths,
     };
-    const mw = this.buildMiddleware(routingId, effectiveConfig, extras);
-    const ir = this.buildIngressRoute(routingId, [
+    const mw = this.buildMiddleware(routingId, slug, effectiveConfig, extras);
+    const ir = this.buildIngressRoute(routingId, slug, [
       this.oidcMiddlewareRef(routingId),
     ]);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
@@ -306,6 +313,7 @@ export class ProjectAuthService {
 
   async applyMakara(
     routingId: string,
+    slug: EnvironmentSlug,
     tenantName: string,
     bypassAuthPaths?: string[],
   ): Promise<void> {
@@ -324,9 +332,9 @@ export class ProjectAuthService {
       tokenValidation: "AccessToken",
       bypassAuthPaths,
     };
-    const mw = this.buildMiddleware(routingId, config, extras);
+    const mw = this.buildMiddleware(routingId, slug, config, extras);
     const middlewares = [this.oidcMiddlewareRef(routingId)];
-    const ir = this.buildIngressRoute(routingId, middlewares);
+    const ir = this.buildIngressRoute(routingId, slug, middlewares);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
   }
@@ -334,12 +342,13 @@ export class ProjectAuthService {
   async inheritAuth(
     fromRoutingId: string,
     toRoutingId: string,
+    toSlug: EnvironmentSlug,
     makaraFallbackTenantName?: string,
   ): Promise<void> {
     const sourceSpec = await this.readPluginSpec(fromRoutingId);
     if (!sourceSpec) {
       if (makaraFallbackTenantName) {
-        await this.applyMakara(toRoutingId, makaraFallbackTenantName);
+        await this.applyMakara(toRoutingId, toSlug, makaraFallbackTenantName);
         return;
       }
       throw new Error(
@@ -347,18 +356,26 @@ export class ProjectAuthService {
       );
     }
 
+    await this.applyClonedSpec(toRoutingId, toSlug, sourceSpec);
+  }
+
+  private async applyClonedSpec(
+    routingId: string,
+    slug: EnvironmentSlug,
+    sourceSpec: TraefikOidcPluginSpec,
+  ): Promise<void> {
     const clonedSpec: TraefikOidcPluginSpec = {
       ...sourceSpec,
-      CallbackUri: this.callbackUrl(toRoutingId),
+      CallbackUri: this.callbackUrl(routingId, slug),
     };
     const mw = {
       apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,
       kind: "Middleware",
-      metadata: { name: middlewareName(toRoutingId), namespace: this.namespace },
+      metadata: { name: middlewareName(routingId), namespace: this.namespace },
       spec: { plugin: { "traefik-oidc-auth": clonedSpec } },
     };
-    const ir = this.buildIngressRoute(toRoutingId, [
-      this.oidcMiddlewareRef(toRoutingId),
+    const ir = this.buildIngressRoute(routingId, slug, [
+      this.oidcMiddlewareRef(routingId),
     ]);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);

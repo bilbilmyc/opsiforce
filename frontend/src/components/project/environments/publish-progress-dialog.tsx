@@ -8,6 +8,7 @@ import {
 import { Button } from "~/components/ui/button"
 import Skeleton from "~/components/ui/skeleton"
 import { ExternalLink, Layers, Rocket } from "~/components/icons"
+import { appPublicUrl } from "~/lib/app-url"
 import PublishProgress from "./publish-progress"
 import type { TrackedPublish } from "./publish-jobs-context"
 
@@ -27,7 +28,7 @@ export default function PublishProgressDialog(props: PublishProgressDialogProps)
   const appUrl = () => {
     const current = job()
     if (!current || current.status !== "done") return null
-    return `https://${current.projectEnvironmentId}.${import.meta.env.VITE_WEBAPP_DOMAIN}/`
+    return appPublicUrl(current.projectEnvironmentId, props.entry.environmentSlug)
   }
 
   return (
