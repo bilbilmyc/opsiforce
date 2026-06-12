@@ -3,13 +3,15 @@ kind: ConfigMap
 metadata:
   name: {{ include "opsiforce-proxy.fullname" . }}
 data:
-  nginx.conf: |
+  nginx.conf.template: |
     user nginx;
     worker_processes  1;
     events {
       worker_connections  10240;
     }
     http {
+      resolver ${NGINX_LOCAL_RESOLVERS} valid=30s ipv6=off;
+
       client_max_body_size 0;
       client_body_timeout 3600s;
       send_timeout 3600s;
@@ -72,6 +74,7 @@ data:
             return 403;
           }
           location /ms-api {
+            set $keycloak_ms_api_backend {{ .Values.proxy.keycloakMsApiBackend }};
             proxy_http_version 1.1;
             proxy_buffering off;
             proxy_request_buffering off;
@@ -84,9 +87,10 @@ data:
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
             proxy_ssl_server_name on;
-            proxy_pass {{ .Values.proxy.keycloakMsApiBackend }};
+            proxy_pass $keycloak_ms_api_backend;
           }
           location /ms-assets {
+            set $keycloak_ms_assets_backend {{ .Values.proxy.keycloakMsAssetsBackend }};
             proxy_http_version 1.1;
             proxy_buffering off;
             proxy_set_header Host $proxy_host;
@@ -95,7 +99,7 @@ data:
             proxy_set_header X-Forwarded-Proto $scheme;
             proxy_read_timeout 86400s;
             proxy_ssl_server_name on;
-            proxy_pass {{ .Values.proxy.keycloakMsAssetsBackend }};
+            proxy_pass $keycloak_ms_assets_backend;
           }
           location /api/proxy {
             proxy_http_version 1.1;

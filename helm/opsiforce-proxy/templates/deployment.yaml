@@ -30,12 +30,17 @@ spec:
               configMap:
                 name: {{ include "opsiforce-proxy.fullname" . }}
                 items:
-                  - key: nginx.conf
-                    path: nginx.conf
+                  - key: nginx.conf.template
+                    path: nginx.conf.template
           containers:
           - name: {{ .Chart.Name }}
             image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
             imagePullPolicy: {{ .Values.image.pullPolicy }}
+            env:
+              - name: NGINX_ENTRYPOINT_LOCAL_RESOLVERS
+                value: "true"
+              - name: NGINX_ENVSUBST_OUTPUT_DIR
+                value: /etc/nginx
             lifecycle:
               preStop:
                 exec:
@@ -52,8 +57,8 @@ spec:
                 {{- toYaml .Values.resources | nindent 16 }}
             volumeMounts:
               - name: nginx-conf
-                mountPath: /etc/nginx/nginx.conf
-                subPath: nginx.conf
+                mountPath: /etc/nginx/templates/nginx.conf.template
+                subPath: nginx.conf.template
                 readOnly: true
           - name: opsiforce-oauth2-proxy
             image: {{ .Values.oauth2Proxy.image }}

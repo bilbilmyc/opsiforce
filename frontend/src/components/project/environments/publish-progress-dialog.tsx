@@ -7,7 +7,7 @@ import {
 } from "~/components/ui/dialog"
 import { Button } from "~/components/ui/button"
 import Skeleton from "~/components/ui/skeleton"
-import { ExternalLink, Rocket } from "~/components/icons"
+import { ExternalLink, Layers, Rocket } from "~/components/icons"
 import PublishProgress from "./publish-progress"
 import type { TrackedPublish } from "./publish-jobs-context"
 
@@ -15,6 +15,7 @@ export interface PublishProgressDialogProps {
   entry: TrackedPublish
   onMinimize: () => void
   onDismiss: () => void
+  onViewEnvironment: () => void
 }
 
 export default function PublishProgressDialog(props: PublishProgressDialogProps) {
@@ -52,14 +53,20 @@ export default function PublishProgressDialog(props: PublishProgressDialogProps)
         <div class="mt-5 flex justify-end gap-2">
           <Show when={appUrl()}>
             {(url) => (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => window.open(url(), "_blank", "noopener,noreferrer")}
-              >
-                <ExternalLink class="h-3.5 w-3.5" />
-                Open app
-              </Button>
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => window.open(url(), "_blank", "noopener,noreferrer")}
+                >
+                  <ExternalLink class="h-3.5 w-3.5" />
+                  Open app
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => props.onViewEnvironment()}>
+                  <Layers class="h-3.5 w-3.5" />
+                  View environment
+                </Button>
+              </>
             )}
           </Show>
           <Show

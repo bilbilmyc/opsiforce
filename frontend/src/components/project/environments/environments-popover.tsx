@@ -1,4 +1,4 @@
-import { For, Show, createMemo, createSignal } from "solid-js"
+import { For, Match, Show, Switch, createMemo, createSignal } from "solid-js"
 import { useNavigate } from "@tanstack/solid-router"
 import { toast } from "solid-sonner"
 import { usePermissions } from "~/api/permissions"
@@ -12,18 +12,23 @@ import {
 } from "~/api/environments"
 import { usePublishTargets, type PublishTarget } from "~/api/publish"
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover"
-import { Layers } from "~/components/icons"
+import { Check, ChevronsUpDown, Layers, LoaderCircle } from "~/components/icons"
 import ConfirmDialog from "~/components/ui/confirm-dialog"
 import Skeleton from "~/components/ui/skeleton"
 import ProjectAuthDialog from "~/components/project-auth-dialog"
 import PinAppDialogs, { type PinDialogAction } from "../pin-app-dialogs"
+import { usePublishJobs } from "./publish-jobs-context"
 import EnvManageRow from "./env-manage-row"
 import EnvTargetRow from "./env-target-row"
+import EnvStatusDot from "./env-status-dot"
 import PublishDialog from "./publish-dialog"
 import EnvironmentVariablesDialog from "./environment-variables-dialog"
 
 export interface EnvironmentsPopoverProps {
   projectId: string
+  environments: ProjectEnvironment[]
+  activeEnvironmentId: string
+  onActiveEnvironmentChange: (environmentId: string) => void
   onEnvironmentDeleted?: (environmentId: string) => void
 }
 
@@ -38,6 +43,16 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   const navigate = useNavigate()
   const [open, setOpen] = createSignal(false)
+
+  const publishJobs = usePublishJobs()
+  const publishIndicator = createMemo(() => {
+    const jobs = publishJobs.entries()
+    if (jobs.length === 0) return null
+    const statuses = jobs.map((entry) => entry.job?.status)
+    if (statuses.some((status) => status !== "done" && status !== "failed")) return "running"
+    if (statuses.some((status) => status === "failed")) return "failed"
+    return "done"
+  })
 
   const environments = useProjectEnvironments(() => props.projectId, {
     enabled: open,
@@ -77,10 +92,14 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   const loading = () => environments.isPending || (canPublish() && targets.isPending)
 
+  const activeEnvironment = createMemo(() =>
+    props.environments.find((e) => e.id === props.activeEnvironmentId),
+  )
+
   const description = () =>
     canPin()
-      ? "Publish the app, manage auth and variables, pin to the Makara catalog, or open schedules."
-      : "Publish the app, manage auth and variables, or open schedules."
+      ? "Click an environment to view it. Publish the app, manage auth and variables, pin to the Makara catalog, or open schedules."
+      : "Click an environment to view it. Publish the app, manage auth and variables, or open schedules."
 
   const openSchedules = (env: ProjectEnvironment) => {
     setOpen(false)
@@ -121,6 +140,11 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   const rowProps = (env: ProjectEnvironment, target: PublishTarget | null) => ({
     environment: env,
+    active: env.id === props.activeEnvironmentId,
+    onSelect: () => {
+      props.onActiveEnvironmentChange(env.id)
+      setOpen(false)
+    },
     hasApp: hasApp(),
     canManageAuth: canManageAuth(),
     canPin: canPin(),
@@ -147,12 +171,36 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   return (
     <>
-      <Popover open={open()} onOpenChange={setOpen} placement="bottom-end">
-        <PopoverTrigger class="inline-flex h-7 items-center gap-2 rounded-md px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-1 focus-visible:ring-ring">
-          <Layers class="h-3.5 w-3.5" />
-          Environments
+      <Popover open={open()} onOpenChange={setOpen} placement="bottom-start">
+        <PopoverTrigger
+          class="flex h-8 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-xs transition-colors hover:bg-accent focus:outline-none focus:ring-1 focus:ring-ring"
+          aria-label="Environments"
+        >
+          <Switch fallback={<Layers class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}>
+            <Match when={publishIndicator() === "running"}>
+              <LoaderCircle class="h-3.5 w-3.5 shrink-0 animate-spin text-primary" />
+            </Match>
+            <Match when={publishIndicator() === "failed"}>
+              <span class="h-2 w-2 shrink-0 rounded-full bg-destructive" />
+            </Match>
+            <Match when={publishIndicator() === "done"}>
+              <Check class="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+            </Match>
+          </Switch>
+          <Show
+            when={activeEnvironment()}
+            fallback={<span class="font-medium text-foreground">Environments</span>}
+          >
+            {(env) => (
+              <span class="flex min-w-0 items-center gap-2">
+                <EnvStatusDot status={env().status} />
+                <span class="truncate font-medium text-foreground">{env().name}</span>
+              </span>
+            )}
+          </Show>
+          <ChevronsUpDown class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         </PopoverTrigger>
-        <PopoverContent class="w-[26rem] p-0">
+        <PopoverContent class="w-120 p-0">
           <div class="border-b border-border px-4 pb-3 pt-3.5">
             <p class="flex items-center gap-2 text-sm font-semibold text-foreground">
               <Layers class="h-4 w-4 text-muted-foreground" />
@@ -161,11 +209,11 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
             <p class="mt-1 text-xs text-muted-foreground">{description()}</p>
           </div>
 
-          <div class="max-h-[55vh] space-y-0.5 overflow-y-auto p-1.5">
+          <div class="grid max-h-[55vh] grid-cols-[fit-content(12rem)_auto_1fr_auto] gap-x-2 gap-y-0.5 overflow-y-auto p-1.5">
             <Show
               when={!loading()}
               fallback={
-                <div class="space-y-1.5 p-1">
+                <div class="col-span-full space-y-1.5 p-1">
                   <Skeleton class="h-11 w-full" />
                   <Skeleton class="h-11 w-full" />
                 </div>

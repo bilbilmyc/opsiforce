@@ -1,11 +1,18 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common"
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+  type OnApplicationBootstrap,
+} from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
 import { InjectQueue } from "@nestjs/bullmq"
 import { Queue } from "bullmq"
 import { and, desc, eq, inArray } from "drizzle-orm"
 import crypto from "crypto"
 import { db } from "../../db"
-import { projectPublishJobs, projectSchedules } from "../../db/schema"
+import { projectEnvironments, projectPublishJobs, projectSchedules } from "../../db/schema"
 import { readEnvJson } from "../common/env-file"
 import { EnvironmentService } from "../environment/environment.service"
 import { ProjectEnvironmentService } from "../project-environment/project-environment.service"
@@ -29,7 +36,8 @@ const ACTIVE_PUBLISH_STATUSES = [
 ]
 
 @Injectable()
-export class PublishService {
+export class PublishService implements OnApplicationBootstrap {
+  private readonly logger = new Logger(PublishService.name)
   private readonly storageMountPath: string
   private readonly platformVersion: string
 
@@ -42,6 +50,48 @@ export class PublishService {
   ) {
     this.storageMountPath = this.configService.getOrThrow<string>("storageMountPath")
     this.platformVersion = this.configService.get<string>("platformVersion", "0.1.0")
+  }
+
+  async onApplicationBootstrap(): Promise<void> {
+    const alreadyDeployed = await db
+      .select({ id: projectPublishJobs.id })
+      .from(projectPublishJobs)
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projectPublishJobs.projectEnvironmentId))
+      .where(
+        and(
+          eq(projectPublishJobs.status, PublishStatus.Migrating),
+          eq(projectEnvironments.status, ProjectStatus.Active),
+          eq(projectEnvironments.deployedCommitSha, projectPublishJobs.commitSha),
+        ),
+      )
+    if (alreadyDeployed.length > 0) {
+      await db
+        .update(projectPublishJobs)
+        .set({ status: PublishStatus.Done, completedAt: new Date(), updatedAt: new Date() })
+        .where(
+          inArray(
+            projectPublishJobs.id,
+            alreadyDeployed.map((row) => row.id),
+          ),
+        )
+      this.logger.warn(
+        `Marked ${alreadyDeployed.length} interrupted publish job(s) as done on startup: their deploys had already completed`,
+      )
+    }
+
+    const stranded = await db
+      .update(projectPublishJobs)
+      .set({
+        status: PublishStatus.Failed,
+        error: "Publish interrupted by a server restart",
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(inArray(projectPublishJobs.status, ACTIVE_PUBLISH_STATUSES))
+      .returning({ id: projectPublishJobs.id })
+    if (stranded.length > 0) {
+      this.logger.warn(`Marked ${stranded.length} interrupted publish job(s) as failed on startup`)
+    }
   }
 
   async listTargets(projectId: string, tenantId: string): Promise<PublishTarget[]> {
@@ -153,22 +203,47 @@ export class PublishService {
       throw err
     }
 
-    await this.queue.add(
-      "publish",
-      {
-        publishJobId,
-        projectId,
-        projectEnvironmentId,
-        environmentId: dto.environmentId,
-        tenantId,
-        isFirstPublish,
-        variables: dto.variables ?? {},
-        scheduleIds: dto.scheduleIds ?? [],
-      },
-      { jobId: publishJobId, attempts: 1, removeOnComplete: true, removeOnFail: 1000 },
-    )
+    try {
+      await this.queue.add(
+        "publish",
+        {
+          publishJobId,
+          projectId,
+          projectEnvironmentId,
+          environmentId: dto.environmentId,
+          tenantId,
+          isFirstPublish,
+          variables: dto.variables ?? {},
+          scheduleIds: dto.scheduleIds ?? [],
+        },
+        { jobId: publishJobId, attempts: 1, removeOnComplete: true, removeOnFail: 1000 },
+      )
+    } catch (err) {
+      await this.abandonJob(publishJobId, existing ? null : projectEnvironmentId)
+      throw err
+    }
 
     return this.toJobResponse(publishJobId)
+  }
+
+  private async abandonJob(jobId: string, createdEnvironmentId: string | null): Promise<void> {
+    await db
+      .update(projectPublishJobs)
+      .set({
+        status: PublishStatus.Failed,
+        error: "Failed to enqueue publish job",
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(projectPublishJobs.id, jobId))
+      .catch((err) => {
+        this.logger.warn(`Failed to abandon publish job ${jobId}: ${(err as Error).message}`)
+      })
+    if (createdEnvironmentId) {
+      await this.projectEnvironmentService
+        .patch(createdEnvironmentId, { status: ProjectStatus.Failed, podIp: null })
+        .catch(() => undefined)
+    }
   }
 
   private async hasActiveJob(projectId: string, environmentId: string): Promise<boolean> {
@@ -213,16 +288,28 @@ export class PublishService {
   }
 }
 
+interface PostgresErrorFields {
+  code?: string
+  constraint_name?: string
+}
+
+function postgresError(err: unknown): PostgresErrorFields {
+  const direct = err as PostgresErrorFields & { cause?: unknown }
+  if (direct?.code) return direct
+  return (direct?.cause as PostgresErrorFields | undefined) ?? {}
+}
+
+function isUniqueViolation(err: unknown, constraint: string): boolean {
+  const pg = postgresError(err)
+  return pg.code === "23505" && pg.constraint_name === constraint
+}
+
 function isActivePublishConflict(err: unknown): boolean {
-  const code = (err as { code?: string })?.code
-  const constraint = (err as { constraint_name?: string })?.constraint_name
-  return code === "23505" && constraint === "uq_project_publish_jobs_one_active"
+  return isUniqueViolation(err, "uq_project_publish_jobs_one_active")
 }
 
 function isProjectEnvironmentConflict(err: unknown): boolean {
-  const code = (err as { code?: string })?.code
-  const constraint = (err as { constraint_name?: string })?.constraint_name
-  return code === "23505" && constraint === "project_environments_project_id_environment_id_unique"
+  return isUniqueViolation(err, "project_environments_project_id_environment_id_unique")
 }
 
 function toResponse(row: typeof projectPublishJobs.$inferSelect): PublishJobResponse {

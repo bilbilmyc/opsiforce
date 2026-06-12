@@ -58,7 +58,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
 
   createEffect(() => {
     const list = environments.data
-    if (!list) return
+    if (!list || environments.isFetching) return
     const exists = list.some((e) => e.id === activeEnvironmentId())
     if (!exists) untrack(() => setActiveEnvironmentId(props.projectId))
   })
@@ -101,6 +101,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
       onJobDone={(job) => {
         if (job.projectEnvironmentId === activeEnvironmentId()) reloadPreview()
       }}
+      onViewEnvironment={setActiveEnvironmentId}
     >
       <div class="h-full w-full flex flex-col overflow-hidden">
         <Show when={statusQuery.data}>

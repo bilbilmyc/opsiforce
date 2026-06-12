@@ -1,5 +1,6 @@
 import { Show } from "solid-js"
-import { Check, ExternalLink, LoaderCircle, X } from "~/components/icons"
+import { cn } from "~/lib/cn"
+import { Check, ExternalLink, Layers, LoaderCircle, X } from "~/components/icons"
 import { PUBLISH_STEPS, publishStepIndex } from "./publish-steps"
 import type { TrackedPublish } from "./publish-jobs-context"
 
@@ -7,6 +8,7 @@ export interface PublishProgressCardProps {
   entry: TrackedPublish
   onExpand: () => void
   onDismiss: () => void
+  onViewEnvironment: () => void
 }
 
 export default function PublishProgressCard(props: PublishProgressCardProps) {
@@ -29,9 +31,20 @@ export default function PublishProgressCard(props: PublishProgressCardProps) {
     return `https://${current.projectEnvironmentId}.${import.meta.env.VITE_WEBAPP_DOMAIN}/`
   }
 
+  const progressPercent = () => {
+    const current = job()
+    const index = current ? publishStepIndex(current.status) : 0
+    return ((index + 1) / PUBLISH_STEPS.length) * 100
+  }
+
   return (
     <div
-      class="pointer-events-auto w-72 cursor-pointer rounded-lg border border-border bg-popover p-3 shadow-lg transition-shadow hover:shadow-xl animate-in fade-in-0 slide-in-from-bottom-2"
+      class={cn(
+        "pointer-events-auto relative w-72 cursor-pointer rounded-lg border bg-popover p-3 shadow-lg transition-shadow hover:shadow-xl animate-in fade-in-0 slide-in-from-bottom-2",
+        isFailed() && "border-destructive/50",
+        isDone() && "border-emerald-500/50",
+        !isTerminal() && "border-primary/40",
+      )}
       role="button"
       tabIndex={0}
       onClick={() => props.onExpand()}
@@ -39,6 +52,7 @@ export default function PublishProgressCard(props: PublishProgressCardProps) {
         if (e.key === "Enter" || e.key === " ") props.onExpand()
       }}
     >
+      <span class="pointer-events-none absolute inset-0 rounded-lg animate-publish-arrive" />
       <div class="flex items-start gap-2.5">
         <Show
           when={!isTerminal()}
@@ -82,20 +96,32 @@ export default function PublishProgressCard(props: PublishProgressCardProps) {
                 <p class="text-xs font-semibold text-foreground">
                   {props.entry.environmentName} is live
                 </p>
-                <Show when={appUrl()}>
-                  {(url) => (
-                    <a
-                      href={url()}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      Open app
-                      <ExternalLink class="h-3 w-3" />
-                    </a>
-                  )}
-                </Show>
+                <div class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <Show when={appUrl()}>
+                    {(url) => (
+                      <a
+                        href={url()}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-primary hover:underline"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <ExternalLink class="h-3 w-3 shrink-0" />
+                        Open app
+                      </a>
+                    )}
+                  </Show>
+                  <button
+                    class="inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium text-primary hover:underline"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      props.onViewEnvironment()
+                    }}
+                  >
+                    <Layers class="h-3 w-3 shrink-0" />
+                    View environment
+                  </button>
+                </div>
               </Show>
             }
           >
@@ -119,6 +145,15 @@ export default function PublishProgressCard(props: PublishProgressCardProps) {
           </button>
         </Show>
       </div>
+
+      <Show when={!isTerminal()}>
+        <div class="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            class="h-full rounded-full bg-primary transition-all duration-500"
+            style={{ width: `${progressPercent()}%` }}
+          />
+        </div>
+      </Show>
     </div>
   )
 }

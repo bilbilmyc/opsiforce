@@ -47,7 +47,7 @@ export default function PublishProgress(props: PublishProgressProps) {
             <p class="font-medium text-emerald-700">
               {props.environmentName} is live
             </p>
-            <p class="mt-0.5 text-muted-foreground">The app is now running the new build.</p>
+            <p class="mt-0.5 text-muted-foreground">Your app is now running the latest version.</p>
           </div>
         </div>
       </Show>
