@@ -4,11 +4,13 @@ import type { PublishJob } from "~/api/publish"
 export interface StartPublishInput {
   environmentId: string
   environmentName: string
+  environmentSlug: string
 }
 
 export interface TrackedPublish {
   environmentId: string
   environmentName: string
+  environmentSlug: string
   job: PublishJob | null
 }
 

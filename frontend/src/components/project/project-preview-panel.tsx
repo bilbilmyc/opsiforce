@@ -11,6 +11,7 @@ import {
 import { ToolbarButton } from "~/components/ui/toolbar-button"
 import { ResizeHandle } from "~/components/ui/resize-handle"
 import { createResizablePanel } from "~/lib/create-resizable-panel"
+import { appPublicUrl } from "~/lib/app-url"
 import { usePermissions } from "~/api/permissions"
 import { Permission } from "~/constants/permissions"
 import { useProjects } from "~/api/projects"
@@ -20,6 +21,7 @@ import EditAppDialog from "./edit-app-dialog"
 export interface ProjectPreviewPanelProps {
   projectId: string
   environmentId: string
+  environmentSlug: string | null
   appName?: string
   onReloadRef?: (reload: () => void) => void
 }
@@ -49,9 +51,8 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
   })
 
   const previewDomain = import.meta.env.VITE_WEBAPP_PREVIEW_DOMAIN
-  const publicDomain = import.meta.env.VITE_WEBAPP_DOMAIN
   const previewUrl = () => `https://${props.environmentId}.${previewDomain}/`
-  const publicUrl = () => `https://${props.environmentId}.${publicDomain}/`
+  const publicUrl = () => appPublicUrl(props.environmentId, props.environmentSlug)
 
   createEffect(() => {
     props.environmentId

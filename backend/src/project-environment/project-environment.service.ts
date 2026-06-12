@@ -44,6 +44,7 @@ const contextFields = {
   requestLogMode: projectSettings.requestLogMode,
   requestLogBodyLimit: projectSettings.requestLogBodyLimit,
   environmentName: environments.name,
+  environmentSlug: environments.slug,
   environmentIsDefault: environments.isDefault,
 }
 

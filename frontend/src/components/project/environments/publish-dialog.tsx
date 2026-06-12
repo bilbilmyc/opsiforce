@@ -71,7 +71,11 @@ export default function PublishDialog(props: PublishDialogProps) {
         projectId: projectId(),
         dto: { environmentId: id, variables: variables(), scheduleIds: selectedScheduleIds },
       })
-      publishJobs.start({ environmentId: id, environmentName: target.name })
+      publishJobs.start({
+        environmentId: id,
+        environmentName: target.name,
+        environmentSlug: target.slug,
+      })
       close()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to start publish")

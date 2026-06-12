@@ -6,8 +6,8 @@ import { db } from "../../db"
 import { projectEnvironments, projects, tenantSettings } from "../../db/schema"
 import { MAKARA_TENANT_GROUP_PREFIX, TenantService } from "../tenant/tenant.service"
 import {
-  TENANT_MAKARA_REAPPLY_QUEUE,
-  type MakaraReapplyJobData,
+  MAKARA_AUTH_SYNC_QUEUE,
+  type MakaraAuthSyncJobData,
   type TenantSettingsResponse,
   type UpdateTenantSettingsDto,
 } from "./tenant-settings.types"
@@ -18,8 +18,8 @@ export class TenantSettingsService {
 
   constructor(
     private readonly tenantService: TenantService,
-    @InjectQueue(TENANT_MAKARA_REAPPLY_QUEUE)
-    private readonly reapplyQueue: Queue<MakaraReapplyJobData>,
+    @InjectQueue(MAKARA_AUTH_SYNC_QUEUE)
+    private readonly makaraAuthSyncQueue: Queue<MakaraAuthSyncJobData>,
   ) {}
 
   async get(tenantId: string): Promise<TenantSettingsResponse> {
@@ -57,12 +57,12 @@ export class TenantSettingsService {
         set: { makaraTenantName: submitted },
       })
 
-    await this.enqueueReapplies(tenantId, submitted)
+    await this.enqueueMakaraAuthSync(tenantId, submitted)
 
     return { makaraTenantName: submitted }
   }
 
-  private async enqueueReapplies(tenantId: string, makaraTenantName: string): Promise<void> {
+  private async enqueueMakaraAuthSync(tenantId: string, makaraTenantName: string): Promise<void> {
     const rows = await db
       .selectDistinct({ projectId: projects.id })
       .from(projects)
@@ -71,19 +71,19 @@ export class TenantSettingsService {
 
     if (rows.length === 0) return
 
-    await this.reapplyQueue.addBulk(
+    await this.makaraAuthSyncQueue.addBulk(
       rows.map((row) => ({
-        name: "reapply",
+        name: "sync-project-makara-auth",
         data: { projectId: row.projectId, makaraTenantName },
         opts: {
-          jobId: `tenant__${tenantId}__project__${row.projectId}__makara-reapply`,
+          jobId: `tenant__${tenantId}__project__${row.projectId}__makara-auth-sync`,
           removeOnComplete: 100,
           removeOnFail: 1000,
         },
       })),
     )
     this.logger.log(
-      `Enqueued ${rows.length} Makara reapply job(s) for tenant ${tenantId} → ${makaraTenantName}`,
+      `Enqueued ${rows.length} Makara auth sync job(s) for tenant ${tenantId} → ${makaraTenantName}`,
     )
   }
 }

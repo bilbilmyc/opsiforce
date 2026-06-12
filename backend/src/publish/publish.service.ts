@@ -103,6 +103,7 @@ export class PublishService implements OnApplicationBootstrap {
       return {
         environmentId: env.id,
         name: env.name,
+        slug: env.slug,
         description: env.description,
         projectEnvironmentId: instance?.id ?? null,
         status: instance ? instance.status : null,

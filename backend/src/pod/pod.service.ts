@@ -15,6 +15,7 @@ export interface TenantPodOptions {
   agentModel?: string
   agentName?: string
   opsiforceEnv?: string
+  environmentSlug?: string | null
   resources?: K8sResourceRequirements
   controlToken?: string
 }

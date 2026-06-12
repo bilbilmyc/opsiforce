@@ -177,7 +177,7 @@ export interface ProjectAuthResponse {
   mode: ProjectAuthMode
   config?: ProjectAuthOidcConfig
   bypassAuthPaths?: string[]
-  callbackUrl: string
+  callbackUrls: string[]
 }
 
 export interface UpdateProjectAuthDto {

@@ -37,8 +37,8 @@ admins can only pick a Makara tenant they actually belong to. The backend
 re-validates the same membership against `X-Forwarded-Groups` on save.
 
 When the mapping changes, every project in the tenant currently using Makara
-auth is re-applied in the background: a fan-out of one job per project is
-enqueued on the `tenant-makara-reapply` BullMQ queue, with a deterministic job
+auth is re-synced in the background: a fan-out of one job per project is
+enqueued on the `makara-auth-sync` BullMQ queue, with a deterministic job
 id so rapid resaves collapse into one effective run per project. Each job
 rebuilds that project's Traefik middleware with the new Makara name; failures
 are logged and don't block siblings.

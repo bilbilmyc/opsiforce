@@ -21,11 +21,12 @@ const (
 )
 
 type EnsureResponse struct {
-	State     string         `json:"state"`
-	Upstream  string         `json:"upstream"`
-	PodName   string         `json:"podName"`
-	Directory string         `json:"directory"`
-	Logging   *LoggingConfig `json:"logging"`
+	State         string         `json:"state"`
+	CanonicalHost string         `json:"canonicalHost"`
+	Upstream      string         `json:"upstream"`
+	PodName       string         `json:"podName"`
+	Directory     string         `json:"directory"`
+	Logging       *LoggingConfig `json:"logging"`
 }
 
 // LoggingConfig is the per-project request-logging policy resolved by the

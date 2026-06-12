@@ -59,6 +59,7 @@ export default function PublishJobsHost(props: ParentProps<PublishJobsHostProps>
     setTracked(input.environmentId, {
       environmentId: input.environmentId,
       environmentName: input.environmentName,
+      environmentSlug: input.environmentSlug,
       job: null,
     })
     setExpandedId(input.environmentId)

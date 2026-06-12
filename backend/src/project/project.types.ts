@@ -115,6 +115,7 @@ export interface ProjectEnvironmentSummary {
   projectId: string
   environmentId: string | null
   name: string
+  slug: string | null
   isDefault: boolean
   status: ProjectStatus
   authMode: ProjectAuthMode
@@ -154,7 +155,7 @@ export interface ProjectAuthResponse {
   mode: ProjectAuthMode
   config?: ProjectAuthOidcConfig
   bypassAuthPaths?: string[]
-  callbackUrl: string
+  callbackUrls: string[]
 }
 
 export interface UpdateProjectAuthDto {

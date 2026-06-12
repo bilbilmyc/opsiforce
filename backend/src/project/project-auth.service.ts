@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as k8s from "@kubernetes/client-node";
+import { appCanonicalHost } from "../common/app-host";
 import { loadKubeConfig } from "../common/k8s-client";
 import { ProjectAuthOidcConfig } from "./project.types";
 
@@ -13,6 +14,8 @@ const middlewareName = (routingId: string) =>
   `opsiforce-project-${routingId}-oidc`;
 const ingressRouteName = (routingId: string) =>
   `opsiforce-project-${routingId}`;
+
+const OIDC_CALLBACK_PATH = "/oidc/callback";
 
 interface TraefikOidcAssertClaim {
   Name: string;
@@ -71,6 +74,8 @@ function pathsFromBypassRule(rule: string | undefined): string[] {
     .filter((p) => p.length > 0);
 }
 
+type EnvironmentSlug = string | null;
+
 @Injectable()
 export class ProjectAuthService {
   private readonly logger = new Logger(ProjectAuthService.name);
@@ -104,12 +109,20 @@ export class ProjectAuthService {
     );
   }
 
-  private projectHost(routingId: string): string {
-    return `${routingId}.${this.appsHostname}`;
+  private projectHost(routingId: string, slug: EnvironmentSlug): string {
+    return appCanonicalHost(routingId, slug, this.appsHostname);
   }
 
-  callbackUrl(routingId: string): string {
-    return `https://${this.projectHost(routingId)}/oidc/callback`;
+  private projectHosts(routingId: string, slug: EnvironmentSlug): string[] {
+    const canonical = this.projectHost(routingId, slug);
+    const bare = this.projectHost(routingId, null);
+    return canonical === bare ? [canonical] : [canonical, bare];
+  }
+
+  callbackUrls(routingId: string, slug: EnvironmentSlug): string[] {
+    return this.projectHosts(routingId, slug).map(
+      (host) => `https://${host}${OIDC_CALLBACK_PATH}`,
+    );
   }
 
   private buildMiddleware(
@@ -143,7 +156,7 @@ export class ProjectAuthService {
       LogLevel: "DEBUG",
       Secret: this.pluginSecret,
       Provider: provider,
-      CallbackUri: this.callbackUrl(routingId),
+      CallbackUri: OIDC_CALLBACK_PATH,
       Scopes: (config.scope ?? "openid profile email")
         .split(/\s+/)
         .filter(Boolean),
@@ -200,6 +213,7 @@ export class ProjectAuthService {
 
   private buildIngressRoute(
     routingId: string,
+    slug: EnvironmentSlug,
     middlewares: Array<{ name: string; namespace: string }>,
   ) {
     const serviceRef: {
@@ -211,6 +225,10 @@ export class ProjectAuthService {
       namespace: this.namespace,
       port: this.webappServicePort,
     };
+
+    const match = this.projectHosts(routingId, slug)
+      .map((host) => `Host(\`${host}\`)`)
+      .join(" || ");
 
     return {
       apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,
@@ -224,7 +242,7 @@ export class ProjectAuthService {
         routes: [
           {
             kind: "Rule",
-            match: `Host(\`${this.projectHost(routingId)}\`)`,
+            match,
             priority: 100,
             middlewares,
             services: [serviceRef],
@@ -238,16 +256,12 @@ export class ProjectAuthService {
     return { name: middlewareName(routingId), namespace: this.namespace };
   }
 
-  async getConfig(
-    routingId: string,
-  ): Promise<{
+  async getConfig(routingId: string): Promise<{
     config?: ProjectAuthOidcConfig;
     bypassAuthPaths: string[];
-    callbackUrl: string;
   }> {
-    const callbackUrl = this.callbackUrl(routingId);
     const plugin = await this.readPluginSpec(routingId);
-    if (!plugin) return { bypassAuthPaths: [], callbackUrl };
+    if (!plugin) return { bypassAuthPaths: [] };
     return {
       config: {
         clientId: plugin.Provider.ClientId,
@@ -257,7 +271,6 @@ export class ProjectAuthService {
         scope: plugin.Scopes?.join(" "),
       },
       bypassAuthPaths: pathsFromBypassRule(plugin.BypassAuthenticationRule),
-      callbackUrl,
     };
   }
 
@@ -288,6 +301,7 @@ export class ProjectAuthService {
 
   async apply(
     routingId: string,
+    slug: EnvironmentSlug,
     config: ProjectAuthOidcConfig,
     bypassAuthPaths?: string[],
   ): Promise<void> {
@@ -297,7 +311,7 @@ export class ProjectAuthService {
       bypassAuthPaths,
     };
     const mw = this.buildMiddleware(routingId, effectiveConfig, extras);
-    const ir = this.buildIngressRoute(routingId, [
+    const ir = this.buildIngressRoute(routingId, slug, [
       this.oidcMiddlewareRef(routingId),
     ]);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
@@ -306,6 +320,7 @@ export class ProjectAuthService {
 
   async applyMakara(
     routingId: string,
+    slug: EnvironmentSlug,
     tenantName: string,
     bypassAuthPaths?: string[],
   ): Promise<void> {
@@ -326,7 +341,7 @@ export class ProjectAuthService {
     };
     const mw = this.buildMiddleware(routingId, config, extras);
     const middlewares = [this.oidcMiddlewareRef(routingId)];
-    const ir = this.buildIngressRoute(routingId, middlewares);
+    const ir = this.buildIngressRoute(routingId, slug, middlewares);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
   }
@@ -334,12 +349,13 @@ export class ProjectAuthService {
   async inheritAuth(
     fromRoutingId: string,
     toRoutingId: string,
+    toSlug: EnvironmentSlug,
     makaraFallbackTenantName?: string,
   ): Promise<void> {
     const sourceSpec = await this.readPluginSpec(fromRoutingId);
     if (!sourceSpec) {
       if (makaraFallbackTenantName) {
-        await this.applyMakara(toRoutingId, makaraFallbackTenantName);
+        await this.applyMakara(toRoutingId, toSlug, makaraFallbackTenantName);
         return;
       }
       throw new Error(
@@ -347,18 +363,26 @@ export class ProjectAuthService {
       );
     }
 
+    await this.applyClonedSpec(toRoutingId, toSlug, sourceSpec);
+  }
+
+  private async applyClonedSpec(
+    routingId: string,
+    slug: EnvironmentSlug,
+    sourceSpec: TraefikOidcPluginSpec,
+  ): Promise<void> {
     const clonedSpec: TraefikOidcPluginSpec = {
       ...sourceSpec,
-      CallbackUri: this.callbackUrl(toRoutingId),
+      CallbackUri: OIDC_CALLBACK_PATH,
     };
     const mw = {
       apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,
       kind: "Middleware",
-      metadata: { name: middlewareName(toRoutingId), namespace: this.namespace },
+      metadata: { name: middlewareName(routingId), namespace: this.namespace },
       spec: { plugin: { "traefik-oidc-auth": clonedSpec } },
     };
-    const ir = this.buildIngressRoute(toRoutingId, [
-      this.oidcMiddlewareRef(toRoutingId),
+    const ir = this.buildIngressRoute(routingId, slug, [
+      this.oidcMiddlewareRef(routingId),
     ]);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);

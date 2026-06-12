@@ -2,7 +2,8 @@ import { BadRequestException, Controller, Get, Headers, NotFoundException } from
 import { ConfigService } from "@nestjs/config"
 import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { db } from "../../db"
-import { projectApps, projectEnvironments, projects } from "../../db/schema"
+import { environments, projectApps, projectEnvironments, projects } from "../../db/schema"
+import { appPublicUrl } from "../common/app-host"
 import { RequirePermission } from "../permission/permission.guard"
 import { Perms } from "../permission/permission.constants"
 import { Public } from "../tenant/tenant.decorator"
@@ -41,6 +42,7 @@ export class InternalAppsController {
     const rows = await db
       .select({
         routingId: projectEnvironments.id,
+        environmentSlug: environments.slug,
         name: projectApps.name,
         description: projectApps.description,
         pinnedAt: projectApps.pinnedAt,
@@ -52,6 +54,7 @@ export class InternalAppsController {
         projectEnvironments,
         eq(projectEnvironments.id, sql`coalesce(${projectApps.pinnedEnvironmentId}, ${projects.id})`),
       )
+      .leftJoin(environments, eq(environments.id, projectEnvironments.environmentId))
       .where(
         and(
           eq(projects.tenantId, tenant.id),
@@ -67,7 +70,7 @@ export class InternalAppsController {
       projectId: row.routingId,
       name: row.name ?? row.projectTitle,
       description: row.description,
-      appUrl: `https://${row.routingId}.${appsHostname}/`,
+      appUrl: appPublicUrl(row.routingId, row.environmentSlug, appsHostname),
       pinnedAt: row.pinnedAt ? row.pinnedAt.toISOString() : null,
     }))
   }

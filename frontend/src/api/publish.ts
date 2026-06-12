@@ -17,6 +17,7 @@ export type PublishJobStatus =
 export interface PublishTarget {
   environmentId: string
   name: string
+  slug: string
   description: string | null
   projectEnvironmentId: string | null
   status: ProjectEnvironmentStatus | null

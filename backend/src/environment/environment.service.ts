@@ -6,9 +6,11 @@ import { environments, projectEnvironments } from "../../db/schema"
 import {
   CreateEnvironmentDto,
   DEVELOPMENT_ENVIRONMENT_NAME,
+  DEVELOPMENT_ENVIRONMENT_SLUG,
   EnvironmentResponse,
   EnvironmentRow,
   PRODUCTION_ENVIRONMENT_NAME,
+  PRODUCTION_ENVIRONMENT_SLUG,
   UpdateEnvironmentDto,
 } from "./environment.types"
 
@@ -17,6 +19,19 @@ const RESERVED_ENVIRONMENT_NAMES = [DEVELOPMENT_ENVIRONMENT_NAME, PRODUCTION_ENV
 const NAME_MIN_LENGTH = 1
 const NAME_MAX_LENGTH = 60
 const DESCRIPTION_MAX_LENGTH = 500
+const SLUG_MAX_LENGTH = 26
+const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/
+
+export function slugifyEnvironmentName(name: string): string {
+  return name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, SLUG_MAX_LENGTH)
+    .replace(/-+$/, "")
+}
 
 @Injectable()
 export class EnvironmentService {
@@ -48,6 +63,7 @@ export class EnvironmentService {
         id: crypto.randomUUID(),
         tenantId,
         name: DEVELOPMENT_ENVIRONMENT_NAME,
+        slug: DEVELOPMENT_ENVIRONMENT_SLUG,
         description: "Default working environment",
         isDefault: true,
         isProtected: true,
@@ -75,6 +91,7 @@ export class EnvironmentService {
         id: crypto.randomUUID(),
         tenantId,
         name: PRODUCTION_ENVIRONMENT_NAME,
+        slug: PRODUCTION_ENVIRONMENT_SLUG,
         description: "Live environment for published apps",
         isDefault: false,
         isProtected: true,
@@ -93,15 +110,21 @@ export class EnvironmentService {
 
   async create(tenantId: string, dto: CreateEnvironmentDto): Promise<EnvironmentResponse> {
     const name = this.validateName(dto.name)
+    const slug = dto.slug !== undefined ? this.validateSlug(dto.slug) : slugifyEnvironmentName(name)
     const description = this.validateDescription(dto.description)
 
     this.assertNameNotReserved(name)
 
+    if (!slug) {
+      throw new BadRequestException("'slug' is required when the name has no latin letters or digits")
+    }
+
     await this.assertNameAvailable(tenantId, name, null)
+    await this.assertSlugAvailable(tenantId, slug)
 
     const [created] = await db
       .insert(environments)
-      .values({ id: crypto.randomUUID(), tenantId, name, description, isDefault: false })
+      .values({ id: crypto.randomUUID(), tenantId, name, slug, description, isDefault: false })
       .returning()
     return toResponse(created)
   }
@@ -165,6 +188,29 @@ export class EnvironmentService {
     if (clash) throw new BadRequestException(`An environment named '${name}' already exists`)
   }
 
+  private async assertSlugAvailable(tenantId: string, slug: string): Promise<void> {
+    const [clash] = await db
+      .select({ id: environments.id })
+      .from(environments)
+      .where(and(eq(environments.tenantId, tenantId), eq(environments.slug, slug)))
+      .limit(1)
+    if (clash) throw new BadRequestException(`An environment with URL slug '${slug}' already exists`)
+  }
+
+  private validateSlug(value: unknown): string {
+    if (typeof value !== "string") throw new BadRequestException("'slug' must be a string")
+    const trimmed = value.trim()
+    if (trimmed.length < 1 || trimmed.length > SLUG_MAX_LENGTH) {
+      throw new BadRequestException(`'slug' must be 1-${SLUG_MAX_LENGTH} characters`)
+    }
+    if (!SLUG_PATTERN.test(trimmed)) {
+      throw new BadRequestException(
+        "'slug' may only contain lowercase letters, digits, and dashes, and cannot start or end with a dash",
+      )
+    }
+    return trimmed
+  }
+
   private validateName(value: unknown): string {
     if (typeof value !== "string") throw new BadRequestException("'name' must be a string")
     const trimmed = value.trim()
@@ -189,6 +235,7 @@ function toResponse(row: EnvironmentRow): EnvironmentResponse {
   return {
     id: row.id,
     name: row.name,
+    slug: row.slug,
     description: row.description,
     isDefault: row.isDefault,
     isProtected: row.isProtected,

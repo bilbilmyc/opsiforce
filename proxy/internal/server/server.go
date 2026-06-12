@@ -26,7 +26,9 @@ import (
 	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/requestlog"
 )
 
-var projectIDPattern = regexp.MustCompile(`^[a-f0-9-]+$`)
+var projectIDPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
+
+const environmentIDLength = 36
 
 var (
 	restartingBody = []byte(`{"error":"Pod is restarting, please retry"}`)
@@ -207,15 +209,19 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	projectID := extractProjectIDFromHost(r.Host)
+	projectID, hostLabel := extractAppHostLabel(r.Host)
 	if projectID == "" {
 		writeJSONStatus(w, http.StatusBadRequest, []byte(`{"error":"Invalid subdomain"}`))
 		return
 	}
 
-	ensured, err := s.resolve(r.Context(), projectID, backend.SurfaceApp, r.Header, "")
+	ensured, err := s.resolveLabeled(r.Context(), projectID, hostLabel, backend.SurfaceApp, r.Header, "")
 	if err != nil {
 		s.writeEnsureError(w, err)
+		return
+	}
+
+	if redirected := redirectToCanonicalHost(w, r, projectID, ensured); redirected {
 		return
 	}
 
@@ -348,7 +354,18 @@ func (s *Server) resolve(
 	headers http.Header,
 	authKey string,
 ) (backend.EnsureResponse, error) {
-	cacheKey := fmt.Sprintf("%s|%s|%s", projectID, surface, authKey)
+	return s.resolveLabeled(ctx, projectID, projectID, surface, headers, authKey)
+}
+
+func (s *Server) resolveLabeled(
+	ctx context.Context,
+	projectID string,
+	hostLabel string,
+	surface backend.Surface,
+	headers http.Header,
+	authKey string,
+) (backend.EnsureResponse, error) {
+	cacheKey := fmt.Sprintf("%s|%s|%s", hostLabel, surface, authKey)
 
 	return s.cache.GetOrLoad(ctx, cacheKey, projectID, s.cacheTTL, func(ctx context.Context) (backend.EnsureResponse, error) {
 		return s.backend.Ensure(ctx, projectID, surface, headers)
@@ -622,16 +639,59 @@ func extractAgentProject(path string) (string, string, bool) {
 }
 
 func extractProjectIDFromHost(host string) string {
-	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
-		host = parsedHost
-	}
-
-	subdomain := strings.Split(host, ".")[0]
+	subdomain := firstHostLabel(host)
 	if !projectIDPattern.MatchString(subdomain) {
 		return ""
 	}
 
 	return subdomain
+}
+
+// extractAppHostLabel parses the public app host label, which is either a bare
+// 36-char environment uuid or "{envId}-{slug}". The uuid's fixed length is the
+// parsing rule (ADR 0012); anything that doesn't fit it is treated as a whole
+// label and fails resolution downstream.
+func extractAppHostLabel(host string) (string, string) {
+	label := firstHostLabel(host)
+	if !projectIDPattern.MatchString(label) {
+		return "", ""
+	}
+
+	if len(label) > environmentIDLength && label[environmentIDLength] == '-' {
+		return label[:environmentIDLength], label
+	}
+
+	return label, label
+}
+
+func firstHostLabel(host string) string {
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		host = parsedHost
+	}
+
+	return strings.Split(host, ".")[0]
+}
+
+// redirectToCanonicalHost issues a permanent redirect when the request arrived
+// on a host that may not serve this environment. The canonical slugged host
+// and the legacy bare env-id host both serve — the per-environment auth
+// IngressRoute matches both, so neither bypasses the auth gate. Anything else
+// (a wrong slug) redirects to canonical.
+func redirectToCanonicalHost(w http.ResponseWriter, r *http.Request, envID string, ensured backend.EnsureResponse) bool {
+	if ensured.CanonicalHost == "" {
+		return false
+	}
+
+	requestLabel := firstHostLabel(r.Host)
+	canonicalLabel := strings.Split(ensured.CanonicalHost, ".")[0]
+
+	if strings.EqualFold(requestLabel, canonicalLabel) || strings.EqualFold(requestLabel, envID) {
+		return false
+	}
+
+	w.Header().Set("Location", "https://"+ensured.CanonicalHost+r.URL.RequestURI())
+	w.WriteHeader(http.StatusPermanentRedirect)
+	return true
 }
 
 func buildTargetURL(upstream string, requestPath string, rawQuery string) (*url.URL, error) {

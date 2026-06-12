@@ -11,6 +11,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common"
 import { ConfigService } from "@nestjs/config"
+import { appCanonicalHost } from "../common/app-host"
 import { ProjectService, type EnsureEnvironmentResult } from "../project/project.service"
 import { RequestLogMode } from "../project/project.types"
 import { ProjectEnvironmentService } from "../project-environment/project-environment.service"
@@ -33,6 +34,7 @@ interface ProxyLoggingConfig {
 
 interface EnsureProxyResponse {
   state: EnsureEnvironmentResult["state"]
+  canonicalHost?: string
   upstream?: string
   podName?: string | null
   directory?: string
@@ -44,6 +46,7 @@ interface EnsureProxyResponse {
 export class ProxyController {
   private readonly logger = new Logger(ProxyController.name)
   private readonly proxyControlToken: string
+  private readonly appsHostname: string
 
   constructor(
     private readonly configService: ConfigService,
@@ -54,6 +57,7 @@ export class ProxyController {
     private readonly agentUpdateService: AgentUpdateService,
   ) {
     this.proxyControlToken = this.configService.getOrThrow<string>("proxyControlToken")
+    this.appsHostname = this.configService.getOrThrow<string>("appsHostname")
   }
 
   @Post("projects/:environmentId/ensure")
@@ -91,7 +95,7 @@ export class ProxyController {
       }
     }
 
-    return this.toEnsureResponse(surface, ensured)
+    return this.toEnsureResponse(surface, ensured, env)
   }
 
   @Post("projects/:environmentId/failure")
@@ -103,9 +107,18 @@ export class ProxyController {
     return { restart: await this.projectService.handleProxyFailureByEnvId(environmentId) }
   }
 
-  private toEnsureResponse(surface: ProxySurface, ensured: EnsureEnvironmentResult): EnsureProxyResponse {
+  private toEnsureResponse(
+    surface: ProxySurface,
+    ensured: EnsureEnvironmentResult,
+    resolved: ProjectEnvironmentContext,
+  ): EnsureProxyResponse {
+    const canonical =
+      surface === "app"
+        ? { canonicalHost: appCanonicalHost(resolved.id, resolved.environmentSlug, this.appsHostname) }
+        : {}
+
     if (ensured.state !== "ready") {
-      return { state: ensured.state }
+      return { state: ensured.state, ...canonical }
     }
 
     const env = ensured.env
@@ -113,6 +126,7 @@ export class ProxyController {
 
     return {
       state: ensured.state,
+      ...canonical,
       upstream,
       podName: this.proxyService.getAssignedPodName(env.id),
       directory: env.directory,
