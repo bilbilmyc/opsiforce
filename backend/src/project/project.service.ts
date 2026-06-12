@@ -38,6 +38,7 @@ import { ScheduleService } from "../schedule/schedule.service"
 import { AgentService } from "../agent/agent.service"
 import { readAgentConfig } from "../agent/agent-config"
 import { EnvironmentService } from "../environment/environment.service"
+import { GitService } from "../publish/git.service"
 import { ProjectEnvironmentService } from "../project-environment/project-environment.service"
 import type { ProjectEnvironmentContext } from "../project-environment/project-environment.types"
 import {
@@ -206,6 +207,7 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly appService: AppService,
     private readonly agentService: AgentService,
     private readonly environmentService: EnvironmentService,
+    private readonly gitService: GitService,
     private readonly projectEnvironmentService: ProjectEnvironmentService,
     @InjectQueue(PROJECT_DUPLICATE_QUEUE)
     private readonly duplicateQueue: Queue<ProjectDuplicateJobData>,
@@ -230,7 +232,7 @@ export class ProjectService implements OnApplicationBootstrap {
       (env) => !env.disabled,
     )
     for (const env of stranded) {
-      const recoveredStatus = env.deployedCommitSha === null ? ProjectStatus.Failed : ProjectStatus.Starting
+      const recoveredStatus = await this.rollBackStrandedPublish(env)
       await this.projectEnvironmentService
         .patch(env.id, { status: recoveredStatus, podIp: null }, ProjectStatus.Publishing)
         .catch((err) => {
@@ -239,7 +241,7 @@ export class ProjectService implements OnApplicationBootstrap {
     }
     if (stranded.length > 0) {
       this.logger.warn(
-        `Recovered ${stranded.length} environment(s) stranded mid-publish after restart; their publish jobs were marked failed and never-deployed environments were marked failed`,
+        `Recovered ${stranded.length} environment(s) stranded mid-publish after restart; their publish jobs were marked failed, deployed environments were rolled back to their last deployed commit, never-deployed ones were marked failed`,
       )
     }
 
@@ -252,6 +254,20 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (active.length > 0) {
       this.logger.log(`Resumed startup workers for ${active.length} environment(s) in 'starting' state`)
+    }
+  }
+
+  private async rollBackStrandedPublish(env: ProjectEnvironmentContext): Promise<ProjectStatus> {
+    if (env.deployedCommitSha === null) return ProjectStatus.Failed
+    const prodDir = path.join(this.configService.getOrThrow<string>("storageMountPath"), env.directory)
+    try {
+      await this.gitService.resetHard(prodDir, env.deployedCommitSha)
+      return ProjectStatus.Starting
+    } catch (err) {
+      this.logger.warn(
+        `Failed to roll back stranded environment ${env.id} to deployed commit ${env.deployedCommitSha}: ${(err as Error).message}`,
+      )
+      return ProjectStatus.Failed
     }
   }
 
