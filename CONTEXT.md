@@ -14,6 +14,10 @@ _Avoid_: App (a Project is not the thing that gets built; see App)
 A tenant-scoped, named target a Project can run in (name + description). Every tenant has two protected Environments — **Development** and **Production** — created with the tenant; admins add others (e.g. Staging). A protected Environment cannot be renamed or deleted. The set of Environments is the list of publish targets offered to every Project in the tenant.
 _Avoid_: Tier, Target, Deployment target
 
+**Environment Slug**:
+The short, immutable, URL-safe identifier an Environment carries alongside its name, shown as the environment suffix in an App's public URL. Fixed for the protected Environments (`dev` for Development, `prod` for Production); for a custom Environment it is prefilled from the whole name at creation and editable that one time before saving (it must be unique within the tenant), then immutable — renames never change it, so published URLs outlive renames. The slug is an identifier, not user-facing copy, so the "avoid Prod" rule does not apply to it.
+_Avoid_: Suffix (its position in the URL, not the concept); Short name; Code
+
 **ProjectEnvironment**:
 A per-Project instance of an Environment — the thing that actually runs. It owns the runtime state (its files, pod, URLs, and service-gateway key); it shares the Project's LLM virtual keys rather than owning its own. Every Project has one bound to Development; publishing creates additional ones bound to other Environments.
 _Avoid_: Instance, Deployment, Env
@@ -29,6 +33,10 @@ _Avoid_: Prod (non-canonical in user-facing copy); Live
 **App**:
 The application the agent builds inside a ProjectEnvironment, served at its public URL. Distinct from the Project (the shell) — one Project produces one App, which can run in several ProjectEnvironments.
 _Avoid_: Project (when you mean the built application)
+
+**App Details**:
+The App's human-facing identity — its name and description. First published by the agent when the App goes live, mirrored by the platform, and re-curated by humans afterwards; the running App reads its own name from it at runtime, and Makara's catalog shows the mirrored copy.
+_Avoid_: App metadata (vague); Project title (the Project shell's label — a different thing)
 
 **Publish**:
 The act of materializing or updating a non-Development ProjectEnvironment from the Development one's files, so the App runs in a chosen Environment. Publishing over an already-running environment is a **Publish update**.
