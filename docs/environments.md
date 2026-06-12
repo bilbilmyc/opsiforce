@@ -6,7 +6,7 @@ Until now a project was a single running thing: one pod, one app URL, one workin
 
 There are two distinct concepts, and keeping them separate is the whole point:
 
-- An **Environment** is a tenant-scoped registry row — just a `name` + `description`. It is the *set of publish targets* offered to every project in the tenant. Each tenant is born with two **protected** environments — **Development** and **Production** — that can never be renamed or deleted (an `is_protected` flag, enforced in the service and reflected as a lock in the registry UI); tenant admins add others (Staging, …). Renaming a custom environment once renames it for every project, because projects reference the registry by id.
+- An **Environment** is a tenant-scoped registry row — a `name`, a `description`, and an immutable URL **slug** (see Public URLs below). It is the *set of publish targets* offered to every project in the tenant. Each tenant is born with two **protected** environments — **Development** and **Production** — that can never be renamed or deleted (an `is_protected` flag, enforced in the service and reflected as a lock in the registry UI); tenant admins add others (Staging, …). Renaming a custom environment once renames it for every project, because projects reference the registry by id.
 - A **ProjectEnvironment** is a per-project *instance* bound to one Environment. It owns all the runtime state that used to live on the project: its workspace directory, pod, status, pod IP, its service-gateway key, auth mode, and schedules. It does *not* own LLM virtual keys — those are project-scoped and shared across every environment (see below).
 
 ```
@@ -18,6 +18,12 @@ Project ── ProjectEnvironment(Development)   ProjectEnvironment(Production)
 ```
 
 A subtle but load-bearing detail: the **Development ProjectEnvironment reuses the project's id**. Public routing keys off an opaque id in the subdomain (`{id}.apps…`, `…code`, `…db`), pods are named from it, and the workspace directory is `projects/{id}`. By giving Development the same id as its project, every existing URL, pod, and directory stays valid — the migration that introduced this feature was metadata-only. Published environments get fresh uuids and their own directories. This asymmetry (Development ids look like project ids, others are random) is intentional; see the ADRs.
+
+## Public URLs
+
+An app's public hostname tells you which environment you're looking at: `{envId}-{slug}.apps…`, where the slug comes from the Environment registry — `dev` and `prod` for the protected environments, a slugified form of the name for custom ones, prefilled in the create dialog where the admin can adjust it that one time before saving (it must be unique in the tenant), then immutable. The slug never changes on rename, so published URLs outlive renames. Existing environments were backfilled by the migration that introduced the slug.
+
+The environment id is still the routing key (the slug is a validated, readable discriminator), and the canonical host is always the suffixed one — including Development. Anything else that resolves, like a legacy bare `{envId}` host or a wrong suffix, redirects permanently to the canonical host instead of serving content; serving aliases would slip past the per-environment auth gate, which matches the exact canonical host. The internal `.preview.`, vscode, and db hostnames are unaffected and keep bare env-id labels. The rationale and trade-offs are in ADR 0011.
 
 ## What moved, what stayed
 
@@ -65,4 +71,4 @@ Four permissions gate the new surfaces (defined in the Keycloak configurator and
 - Publishing: `backend/src/publish/` — the publish service, the git helper, the staged BullMQ worker, and the SSE status stream (`publish.controller.ts`, which the worker feeds via `ProjectEventsService`).
 - Per-environment app auth: `backend/src/project/project-auth.service.ts` builds the Traefik middleware/IngressRoute keyed by routing id (the environment id); the publish worker seeds it from Development on first publish; the per-environment Auth and Pin UI lives under `frontend/src/components/project/environments/`.
 - The agent app template's production startup and per-environment config live in `agent-config/agents/app-builder/template/app/`.
-- The design rationale is captured in `docs/adr/0001`–`0009`; the glossary is in `CONTEXT.md`.
+- The design rationale is captured in `docs/adr/0001`–`0011`; the glossary is in `CONTEXT.md`.

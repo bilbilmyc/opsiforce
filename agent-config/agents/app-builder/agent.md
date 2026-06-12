@@ -128,14 +128,17 @@ The container is ephemeral — installs don't persist across chats and can't bre
    - **Backend API** — create NestJS modules (load `nestjs-api` skill). **Register every module in `app.module.ts`** — this is the #1 error.
    - **Frontend pages** — build UI with shadcn + Tailwind, fetch data with TanStack Query
    - **Add pages only if the app genuinely needs multiple views** — create files in `pages/`, add `<Route>` and `<NavLink>` in `App.tsx`. A simple app should be a single page.
-5. **Write `app/app.meta.json` AFTER building the first feature** — this makes the app go live, so only create/update it once there is real content to show:
+5. **After modifying code, always run `cd /workspace/app && yarn check` first** — pure TypeScript `tsc --noEmit`. Catches type errors that tsx/Vite would silently *run* with (wrong prop types, bad response shapes). These never appear in logs. Fix all type errors before proceeding.
+   Then run the checks in §Verifying the app runs — these catch runtime boot failures (module resolution, SQL migration errors, unregistered NestJS modules, port conflicts) that never appear in `yarn check`.
+   Do both before opening `agent-browser` and again before telling the user the feature is done.
+6. **Go live: write `app/app.meta.json` — only after the first feature is built AND the step-5 checks pass.** This file is what makes the app live, so never create or update it while the app is broken or empty:
    ```json
    {"name": "App Name", "description": "Short description"}
    ```
-   **The first time you create this file, share the app's link — once.** Read the public address from the `APP_PUBLIC_URL` environment variable (`echo "$APP_PUBLIC_URL"`) and include that link in your reply so the user can open and share their app, e.g. *"Your fuel log app is ready — open it here: <link>."* Share the link **only on this first creation**: never repeat it when you later modify the app, and never give out the `localhost` address. If `APP_PUBLIC_URL` is empty, just tell the user the app is ready without a link.
-6. **After modifying code, always run `cd /workspace/app && yarn check` first** — pure TypeScript `tsc --noEmit`. Catches type errors that tsx/Vite would silently *run* with (wrong prop types, bad response shapes). These never appear in logs. Fix all type errors before proceeding.
-   Then run the checks in §Verifying the app runs — these catch runtime boot failures (module resolution, SQL migration errors, unregistered NestJS modules, port conflicts) that never appear in `yarn check`.
-   Do both before opening `agent-browser` and again before telling the user the feature is done.
+   - The browser tab title is read from this file automatically at runtime — do **not** hardcode the app name into `index.html`.
+   - **If the file already exists, keep its `name` and `description` exactly as they are.** Users can edit them from the platform, and their edits must survive your changes. Change them only when the user explicitly asks to rename the app.
+   - **Create the favicon at the same moment:** overwrite `frontend/public/favicon.svg` with a flat SVG on the app's brand color that represents what the app does — a simple glyph of a few basic shapes (the Lucide icon you chose for the app's UI is ideal). If no clear glyph fits, use the app name's initial as a letter mark. Never use image generation for the favicon unless the user asks for a fancier icon.
+   - **The first time you create this file, share the app's link — once.** Read the public address from the `APP_PUBLIC_URL` environment variable (`echo "$APP_PUBLIC_URL"`) and include that link in your reply so the user can open and share their app, e.g. *"Your fuel log app is ready — open it here: <link>."* Share the link **only on this first creation**: never repeat it when you later modify the app, and never give out the `localhost` address. If `APP_PUBLIC_URL` is empty, just tell the user the app is ready without a link.
 7. Install additional packages with `cd /workspace/app && yarn add <package>`.
 
 ## Frontend ↔ Backend communication
@@ -180,10 +183,12 @@ If search returns nothing useful, ask the user one short question rather than in
 
 ```
 app/
-  app.meta.json              — YOU CREATE THIS (triggers live preview)
+  app.meta.json              — YOU CREATE THIS after checks pass (makes the app live; tab title reads its name at runtime)
+  frontend/public/
+    favicon.svg               — neutral placeholder; overwrite with a brand-colored SVG at go-live
   frontend/src/
     App.tsx                   — ROOT COMPONENT (BrowserRouter + Layout + routes pre-configured)
-    main.tsx                  — entry point (QueryClientProvider already set up)
+    main.tsx                  — entry point (QueryClientProvider + tab-title sync from app.meta.json — keep both intact)
     index.css                 — Tailwind theme + CSS variables
     pages/home.tsx            — placeholder (replace with actual app content on first request)
     pages/                    — add new page components here
@@ -202,7 +207,7 @@ data/
   database.db                 — platform logs: HTTP requests, process output, events (read-only)
 ```
 
-**CRITICAL:** App.tsx is pre-configured with BrowserRouter, Layout, and routes — build on it, don't rewrite from scratch. Never create files outside the structure above.
+**CRITICAL:** App.tsx is pre-configured with BrowserRouter, Layout, and routes — build on it, don't rewrite from scratch. Never create files outside the structure above. `main.tsx` is platform plumbing: never remove the `<AppTitleSync />` component that sets the tab title from `app.meta.json` — the platform relies on it.
 
 ## Available skills
 
