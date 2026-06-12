@@ -16,9 +16,8 @@ import { ProjectAuthService } from "../project/project-auth.service"
 import { ProjectEnvironmentService } from "../project-environment/project-environment.service"
 import { GatewayKeyService } from "../gateway/gateway-key.service"
 import { ScheduleService } from "../schedule/schedule.service"
-import { PodService } from "../pod/pod.service"
 import { ProxyService } from "../proxy/proxy.service"
-import { ProjectStatus } from "../project/project.types"
+import { PodStartupFailedError } from "../pod/pod.service"
 import { writeJsonAtomic } from "../common/fs"
 
 const POD_READY_TIMEOUT_MS = 180 * 1000
@@ -40,7 +39,6 @@ export class PublishProcessor extends WorkerHost {
     private readonly projectEnvironmentService: ProjectEnvironmentService,
     private readonly gatewayKeyService: GatewayKeyService,
     private readonly scheduleService: ScheduleService,
-    private readonly podService: PodService,
     private readonly proxyService: ProxyService,
     private readonly projectEvents: ProjectEventsService,
   ) {
@@ -53,8 +51,17 @@ export class PublishProcessor extends WorkerHost {
     let prodDir: string | null = null
     let previousSha: string | null = null
     let previousEnvVars: Record<string, string> | null = null
+    let deployStarted = false
+    let phase: PublishStatus = PublishStatus.Queued
+
+    const existing = await this.publishService.getJob(data.publishJobId).catch(() => null)
+    if (!existing || existing.status === PublishStatus.Done || existing.status === PublishStatus.Failed) {
+      this.logger.warn(`Skipping publish ${data.publishJobId}: already ${existing?.status ?? "missing"}`)
+      return
+    }
 
     try {
+      phase = PublishStatus.Committing
       await this.setStatus(data.publishJobId, PublishStatus.Committing, { startedAt: new Date() })
 
       const devEnv = await this.projectEnvironmentService.findDefaultByProjectId(data.projectId)
@@ -66,6 +73,7 @@ export class PublishProcessor extends WorkerHost {
       prodDir = path.join(this.storageMountPath, prodEnv.directory)
       previousSha = prodEnv.deployedCommitSha
 
+      phase = PublishStatus.Swapping
       await this.setStatus(data.publishJobId, PublishStatus.Swapping, { previousCommitSha: previousSha })
 
       if (data.isFirstPublish) {
@@ -88,21 +96,16 @@ export class PublishProcessor extends WorkerHost {
         await this.projectAuthService.inheritAuth(devEnv.id, data.projectEnvironmentId, makaraFallbackTenantName)
       }
 
+      phase = PublishStatus.Building
       await this.setStatus(data.publishJobId, PublishStatus.Building)
-      if (data.isFirstPublish) {
-        await this.projectEnvironmentService.patch(
-          data.projectEnvironmentId,
-          { status: ProjectStatus.Starting, podIp: null },
-          ProjectStatus.Publishing,
-        )
-        await this.projectService.requestStartupForId(data.projectEnvironmentId)
-      } else {
-        await this.projectService.reassignPodById(data.projectEnvironmentId)
-      }
+      await this.projectService.beginPublishDeploy(data.projectEnvironmentId)
+      deployStarted = true
+      const podIp = await this.projectService.recreatePodForDeploy(
+        data.projectEnvironmentId,
+        POD_READY_TIMEOUT_MS,
+      )
 
-      const podName = this.podService.assignedPodName(data.projectEnvironmentId)
-      const podIp = await this.podService.waitForReady(podName, POD_READY_TIMEOUT_MS)
-
+      phase = PublishStatus.Migrating
       await this.setStatus(data.publishJobId, PublishStatus.Migrating)
       const appReady = await this.waitForAppReady(data.projectEnvironmentId, podIp, APP_READY_TIMEOUT_MS)
       if (!appReady) {
@@ -117,7 +120,7 @@ export class PublishProcessor extends WorkerHost {
         )
       }
 
-      await this.projectEnvironmentService.patch(data.projectEnvironmentId, { deployedCommitSha: sha })
+      await this.projectService.finishPublishDeploy(data.projectEnvironmentId, podIp, sha)
       await this.setStatus(data.publishJobId, PublishStatus.Done, { completedAt: new Date() })
       this.logger.log(`Published ${data.projectId} to environment ${data.environmentId} (${data.projectEnvironmentId})`)
     } catch (err) {
@@ -130,23 +133,33 @@ export class PublishProcessor extends WorkerHost {
           if (previousEnvVars) {
             await this.restoreEnvFile(prodDir, previousEnvVars)
           }
-          await this.projectService.reassignPodById(data.projectEnvironmentId)
+          if (deployStarted) {
+            const rolledBackIp = await this.projectService.recreatePodForDeploy(
+              data.projectEnvironmentId,
+              POD_READY_TIMEOUT_MS,
+            )
+            await this.projectService.finishPublishDeploy(data.projectEnvironmentId, rolledBackIp, previousSha)
+          }
         } catch (rollbackErr) {
           this.logger.warn(
             `Rollback of ${data.projectEnvironmentId} to ${previousSha} failed: ${(rollbackErr as Error).message}`,
           )
+          if (deployStarted) {
+            await this.projectService.failPublishDeploy(data.projectEnvironmentId).catch(() => undefined)
+          }
         }
       } else if (data.isFirstPublish) {
-        await this.projectEnvironmentService
-          .patch(data.projectEnvironmentId, { status: ProjectStatus.Failed, podIp: null })
-          .catch((patchErr) => {
-            this.logger.warn(
-              `Failed to mark environment ${data.projectEnvironmentId} as failed: ${(patchErr as Error).message}`,
-            )
-          })
+        await this.projectService.failPublishDeploy(data.projectEnvironmentId).catch((patchErr) => {
+          this.logger.warn(
+            `Failed to mark environment ${data.projectEnvironmentId} as failed: ${(patchErr as Error).message}`,
+          )
+        })
       }
 
-      await this.setStatus(data.publishJobId, PublishStatus.Failed, { error: message, completedAt: new Date() })
+      await this.setStatus(data.publishJobId, PublishStatus.Failed, {
+        error: userFacingPublishError(err, phase),
+        completedAt: new Date(),
+      })
     }
   }
 
@@ -272,4 +285,36 @@ function isStringRecord(value: unknown): value is Record<string, string> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+const PHASE_FAILURE_MESSAGE: Partial<Record<PublishStatus, string>> = {
+  [PublishStatus.Committing]: "Couldn't save the latest changes from Development. Please try again.",
+  [PublishStatus.Swapping]: "Couldn't prepare the new version of your app. Please try again.",
+  [PublishStatus.Building]: "The app couldn't start. Please try again in a few minutes.",
+  [PublishStatus.Migrating]: "The app started but didn't come online in time. Please try again.",
+}
+
+function userFacingPublishError(err: unknown, phase: PublishStatus): string {
+  if (err instanceof PodStartupFailedError) {
+    if (err.reason === "Unschedulable") {
+      return "Not enough capacity to start the app right now. Please try again in a few minutes."
+    }
+    if (err.reason === "ImagePullBackOff") {
+      return "The app image couldn't be loaded. Please try again, or contact support if this keeps happening."
+    }
+    return "The app failed to start. Please try again, or contact support if this keeps happening."
+  }
+
+  const message = err instanceof Error ? err.message : String(err)
+  if (/not ready after \d+ms/i.test(message)) {
+    return "The app took too long to start. Please try again in a few minutes."
+  }
+  if (message.includes("did not become ready within the deploy window")) {
+    return "The app started but didn't come online in time. Please try again."
+  }
+  if (message.includes("No active LLM virtual keys")) {
+    return "This environment is missing its LLM credentials. Please reconfigure it and try again."
+  }
+
+  return PHASE_FAILURE_MESSAGE[phase] ?? "Publishing failed unexpectedly. Please try again, or contact support if it persists."
 }

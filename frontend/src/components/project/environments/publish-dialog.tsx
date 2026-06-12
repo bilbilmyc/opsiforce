@@ -92,8 +92,8 @@ export default function PublishDialog(props: PublishDialogProps) {
         </DialogTitle>
         <DialogDescription>
           {isFirstPublish()
-            ? `Build the Development app and run it in ${targetName()}.`
-            : `Build the Development app and update the one running in ${targetName()}.`}
+            ? `Publish your Development app and run it in ${targetName()}.`
+            : `Publish your latest Development changes to the app running in ${targetName()}.`}
         </DialogDescription>
 
         <div class="mt-4 space-y-4">
@@ -207,8 +207,8 @@ export default function PublishDialog(props: PublishDialogProps) {
         title={isFirstPublish() ? `Publish to ${targetName()}?` : `Publish update to ${targetName()}?`}
         description={
           isFirstPublish()
-            ? `This builds the Development app and starts it in ${targetName()}.`
-            : `${targetName()} is currently live. The update replaces the running app with a fresh build. The deploy happens in place and only swaps on success.`
+            ? `This publishes your Development app to ${targetName()} and starts it there.`
+            : `${targetName()} is currently live. Publishing replaces it with your latest version from Development. The app may be briefly unavailable while the new version starts, and only goes live once it's running.`
         }
         confirmLabel={submitLabel()}
         variant={isFirstPublish() ? "default" : "destructive"}

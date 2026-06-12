@@ -7,15 +7,11 @@ export interface PublishStep {
 }
 
 export const PUBLISH_STEPS: PublishStep[] = [
-  { key: "queued", label: "Queued", detail: "Waiting for a build slot" },
-  { key: "committing", label: "Committing", detail: "Snapshotting the Development files" },
-  { key: "swapping", label: "Swapping", detail: "Switching the environment to the new version" },
-  { key: "building", label: "Building", detail: "Restarting the app and installing dependencies" },
-  {
-    key: "migrating",
-    label: "Migrating",
-    detail: "Applying database migrations and waiting for the app to start",
-  },
+  { key: "queued", label: "Queued", detail: "Waiting to start" },
+  { key: "committing", label: "Saving changes", detail: "Capturing the latest version from Development" },
+  { key: "swapping", label: "Preparing release", detail: "Getting the new version ready to go live" },
+  { key: "building", label: "Starting the app", detail: "Launching your app and getting it ready" },
+  { key: "migrating", label: "Bringing it online", detail: "Waiting for your app to respond" },
 ]
 
 export const PUBLISH_STEP_ORDER: PublishJobStatus[] = [

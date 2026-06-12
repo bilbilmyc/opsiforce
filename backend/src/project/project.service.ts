@@ -226,6 +226,22 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   private async resumeStartingEnvironments(): Promise<void> {
+    const stranded = (await this.projectEnvironmentService.listByStatus(ProjectStatus.Publishing)).filter(
+      (env) => !env.disabled,
+    )
+    for (const env of stranded) {
+      await this.projectEnvironmentService
+        .patch(env.id, { status: ProjectStatus.Starting, podIp: null }, ProjectStatus.Publishing)
+        .catch((err) => {
+          this.logger.warn(`Failed to recover publishing environment ${env.id}: ${(err as Error).message}`)
+        })
+    }
+    if (stranded.length > 0) {
+      this.logger.warn(
+        `Recovered ${stranded.length} environment(s) stranded mid-publish after restart; their publish jobs were marked failed`,
+      )
+    }
+
     const rows = await this.projectEnvironmentService.listByStatus(ProjectStatus.Starting)
     const active = rows.filter((env) => !env.disabled)
 
@@ -1068,6 +1084,62 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.requestEnvironmentStartup(env, { deleteExistingPod: false })
   }
 
+  async beginPublishDeploy(envId: string): Promise<void> {
+    const updated = await this.projectEnvironmentService.patch(
+      envId,
+      { status: ProjectStatus.Publishing, podIp: null },
+      [
+        ProjectStatus.Active,
+        ProjectStatus.Starting,
+        ProjectStatus.Failed,
+        ProjectStatus.Suspended,
+        ProjectStatus.Publishing,
+      ],
+    )
+    if (updated) {
+      this.appService.invalidate(updated.projectId)
+      await this.projectEventsService.publish(updated.projectId).catch(() => undefined)
+    }
+  }
+
+  async recreatePodForDeploy(envId: string, timeoutMs: number): Promise<string> {
+    const env = await this.projectEnvironmentService.findById(envId)
+    const podName = this.podService.assignedPodName(envId)
+    await this.safeDeletePod(podName, `publish deploy for environment ${envId}`)
+    await this.spawnPodForEnvironment(env)
+    return this.podService.waitForReady(podName, timeoutMs)
+  }
+
+  async finishPublishDeploy(envId: string, podIp: string, deployedCommitSha: string): Promise<void> {
+    const updated = await this.projectEnvironmentService.patch(
+      envId,
+      { status: ProjectStatus.Active, podIp, deployedCommitSha, lastActiveAt: new Date() },
+      ProjectStatus.Publishing,
+    )
+    if (!updated) {
+      this.logger.warn(`finishPublishDeploy: environment ${envId} was not in 'publishing' state; leaving as-is`)
+      return
+    }
+    this.startupRetries.delete(envId)
+    this.appService.invalidate(updated.projectId)
+    await Promise.allSettled([
+      this.timeoutService.touch(envId).catch(() => undefined),
+      this.projectEventsService.publish(updated.projectId).catch(() => undefined),
+    ])
+  }
+
+  async failPublishDeploy(envId: string): Promise<void> {
+    const updated = await this.projectEnvironmentService.patch(
+      envId,
+      { status: ProjectStatus.Failed, podIp: null },
+      ProjectStatus.Publishing,
+    )
+    if (updated) {
+      this.appService.invalidate(updated.projectId)
+      await this.projectEventsService.publish(updated.projectId).catch(() => undefined)
+    }
+  }
+
   async touchActivity(projectId: string): Promise<void> {
     await this.touchEnvironmentActivity(projectId, "agent")
   }
@@ -1512,20 +1584,30 @@ export class ProjectService implements OnApplicationBootstrap {
       this.logger.warn(`runStartup invoked for pool environment ${envId}; skipping`)
       return
     }
+
+    try {
+      await this.spawnPodForEnvironment(current)
+      const podIp = await this.podService.waitForReady(podName)
+      await this.markEnvironmentActive(envId, podIp, podName)
+    } catch (err) {
+      await this.handleStartupFailure(envId, podName, err)
+    }
+  }
+
+  private async spawnPodForEnvironment(env: ProjectEnvironmentContext): Promise<void> {
+    if (!env.tenantId) {
+      throw new Error(`Cannot start pool environment ${env.id} without a tenant`)
+    }
+
     const [bifrostOptions, gatewayApiKey, agentName, podResources] = await Promise.all([
-      this.bifrostService.getEnvironmentPodOptions(envId),
-      this.gatewayKeyService.getEnvironmentToken(envId),
-      this.agentService.resolveName(current.agentId),
-      this.podResourcesForProject(current.projectId),
+      this.bifrostService.getEnvironmentPodOptions(env.id),
+      this.gatewayKeyService.getEnvironmentToken(env.id),
+      this.agentService.resolveName(env.agentId),
+      this.podResourcesForProject(env.projectId),
     ])
 
     if (this.bifrostService.isEnabled() && !bifrostOptions) {
-      await this.handleStartupFailure(
-        envId,
-        podName,
-        new Error(`No active LLM virtual keys for environment ${envId}; refusing to start pod without credentials`),
-      )
-      return
+      throw new Error(`No active LLM virtual keys for environment ${env.id}; refusing to start pod without credentials`)
     }
 
     const tenantOptions = {
@@ -1534,18 +1616,12 @@ export class ProjectService implements OnApplicationBootstrap {
       agentModel: this.agentModelByName.get(agentName),
       gatewayApiKey: gatewayApiKey ?? undefined,
       gatewayUrl: this.configService.get<string>("gatewayUrl", ""),
-      opsiforceEnv: current.isDefault ? undefined : "production",
+      opsiforceEnv: env.isDefault ? undefined : "production",
       resources: podResources,
       controlToken: crypto.randomBytes(32).toString("hex"),
     }
 
-    try {
-      await this.podService.createAssignedPod(envId, current.directory, current.projectId, tenantOptions)
-      const podIp = await this.podService.waitForReady(podName)
-      await this.markEnvironmentActive(envId, podIp, podName)
-    } catch (err) {
-      await this.handleStartupFailure(envId, podName, err)
-    }
+    await this.podService.createAssignedPod(env.id, env.directory, env.projectId, tenantOptions)
   }
 
   private async handleStartupFailure(envId: string, podName: string, err: unknown): Promise<void> {
