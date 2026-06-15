@@ -1,12 +1,12 @@
-import { Module } from "@nestjs/common"
-import { BullModule } from "@nestjs/bullmq"
-import { BullBoardModule } from "@bull-board/nestjs"
-import { BullMQAdapter } from "@bull-board/api/bullMQAdapter"
-import { AgentUpdateK8sService } from "./agent-update.k8s.service"
-import { AgentUpdateProcessor } from "./agent-update.processor"
-import { AgentUpdateService } from "./agent-update.service"
-import { AGENT_WORKSPACE_UPDATE_QUEUE } from "./agent-update.types"
-import { ProjectModule } from "../project/project.module"
+import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { AgentUpdateK8sService } from './agent-update.k8s.service';
+import { AgentUpdateProcessor } from './agent-update.processor';
+import { AgentUpdateService } from './agent-update.service';
+import { AGENT_WORKSPACE_UPDATE_QUEUE } from './agent-update.types';
+import { ProjectModule } from '../project/project.module';
 
 @Module({
   imports: [

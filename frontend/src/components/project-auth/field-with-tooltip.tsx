@@ -1,10 +1,6 @@
-import { JSX, Show } from "solid-js";
-import { Info } from "~/components/icons";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "~/components/ui/tooltip";
+import { JSX, Show } from 'solid-js';
+import { Info } from '~/components/icons';
+import { Tooltip, TooltipTrigger, TooltipContent } from '~/components/ui/tooltip';
 
 export interface FieldWithTooltipProps {
   label: string;
@@ -32,9 +28,7 @@ export function FieldWithTooltip(props: FieldWithTooltipProps) {
             >
               <Info class="w-3 h-3" />
             </TooltipTrigger>
-            <TooltipContent class="max-w-xs text-xs">
-              {props.tooltip}
-            </TooltipContent>
+            <TooltipContent class="max-w-xs text-xs">{props.tooltip}</TooltipContent>
           </Tooltip>
         </Show>
       </div>
@@ -47,14 +41,13 @@ export function TextInput(props: {
   value: string;
   onInput: (v: string) => void;
   placeholder?: string;
-  type?: "text" | "password" | "url";
+  type?: 'text' | 'password' | 'url';
   disabled?: boolean;
 }) {
-  const autoComplete = () =>
-    props.type === "password" ? "new-password" : "off";
+  const autoComplete = () => (props.type === 'password' ? 'new-password' : 'off');
   return (
     <input
-      type={props.type ?? "text"}
+      type={props.type ?? 'text'}
       value={props.value}
       onInput={(e) => props.onInput(e.currentTarget.value)}
       placeholder={props.placeholder}

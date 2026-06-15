@@ -1,14 +1,14 @@
-export const MAKARA_AUTH_SYNC_QUEUE = "makara-auth-sync"
+export const MAKARA_AUTH_SYNC_QUEUE = 'makara-auth-sync';
 
 export interface TenantSettingsResponse {
-  makaraTenantName: string | null
+  makaraTenantName: string | null;
 }
 
 export interface UpdateTenantSettingsDto {
-  makaraTenantName: string
+  makaraTenantName: string;
 }
 
 export interface MakaraAuthSyncJobData {
-  projectId: string
-  makaraTenantName: string
+  projectId: string;
+  makaraTenantName: string;
 }

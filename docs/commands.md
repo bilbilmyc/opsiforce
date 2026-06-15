@@ -45,6 +45,23 @@ yarn workspace @opsiforce/frontend run ts
 
 ---
 
+## Lint & Format
+
+Opsiforce TS/JS uses [oxlint](https://oxc.rs/docs/guide/usage/linter) (linter) and [oxfmt](https://oxc.rs/docs/guide/usage/formatter) (formatter) from the Rust-based OXC toolchain — not ESLint/Prettier. Config lives at `packages/opsiforce/.oxlintrc.json` (shared base, extended per package) and `packages/opsiforce/.oxfmtrc.json`.
+
+```bash
+# Per workspace (swap @opsiforce/backend for @opsiforce/frontend):
+yarn workspace @opsiforce/backend run lint          # apply safe autofixes, then report what remains (errors fail; warnings are advisory)
+yarn workspace @opsiforce/backend run format        # rewrite files with oxfmt (append --check for a CI-style dry run)
+yarn workspace @opsiforce/backend run check         # lint && ts — the pre-commit gate (fixes as it goes)
+```
+
+`lint` is a single pass per package, tuned to its stack: the backend (NestJS) runs type-aware rules via `oxlint-tsgolint` plus the `node`/`import`/`promise` plugins; the frontend (SolidJS) runs `jsx-a11y` plus Solid reactivity (`eslint-plugin-solid`) and solid-query (`@tanstack/eslint-plugin-query`) rules through oxlint `jsPlugins` (config auto-discovered from `frontend/oxlint.config.ts`).
+
+The vendored `frontend/opencode/` tree is **not** linted or formatted by these commands (it is upstream code with its own toolchain).
+
+---
+
 ## Database
 
 ```bash

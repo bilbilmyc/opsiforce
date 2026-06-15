@@ -1,24 +1,24 @@
-import { Show } from "solid-js"
-import { TIME_UNITS } from "~/lib/duration-units"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "~/components/ui/select"
+import { Show } from 'solid-js';
+import { TIME_UNITS } from '~/lib/duration-units';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '~/components/ui/select';
 import {
   NumberField,
   NumberFieldGroup,
   NumberFieldInput,
   NumberFieldIncrementTrigger,
   NumberFieldDecrementTrigger,
-} from "~/components/ui/number-field"
+} from '~/components/ui/number-field';
 
 export function TimeoutRow(props: {
-  label: string
-  description?: string
-  placeholder: string
-  value: string
-  unit: string
-  onValueChange: (value: string) => void
-  onUnitChange: (unit: string) => void
+  label: string;
+  description?: string;
+  placeholder: string;
+  value: string;
+  unit: string;
+  onValueChange: (value: string) => void;
+  onUnitChange: (unit: string) => void;
 }) {
-  const unitOption = () => TIME_UNITS.find((u) => u.value === props.unit) ?? null
+  const unitOption = () => TIME_UNITS.find((u) => u.value === props.unit) ?? null;
 
   return (
     <div class="rounded-lg border border-border p-3 space-y-2.5">
@@ -27,13 +27,7 @@ export function TimeoutRow(props: {
         <p class="text-xs text-muted-foreground/70">{props.description}</p>
       </Show>
       <div class="flex items-end gap-2">
-        <NumberField
-          class="flex-1"
-          minValue={1}
-          step={1}
-          value={props.value}
-          onChange={(v) => props.onValueChange(v)}
-        >
+        <NumberField class="flex-1" minValue={1} step={1} value={props.value} onChange={(v) => props.onValueChange(v)}>
           <NumberFieldGroup>
             <NumberFieldInput placeholder={props.placeholder} />
             <NumberFieldIncrementTrigger />
@@ -46,14 +40,16 @@ export function TimeoutRow(props: {
             optionValue="value"
             optionTextValue="label"
             value={unitOption()}
-            onChange={(opt) => { if (opt) props.onUnitChange(opt.value) }}
+            onChange={(opt) => {
+              if (opt) props.onUnitChange(opt.value);
+            }}
             itemComponent={(itemProps) => (
               <SelectItem item={itemProps.item}>{itemProps.item.rawValue.label}</SelectItem>
             )}
           >
             <SelectTrigger>
-              <SelectValue<typeof TIME_UNITS[0]>>
-                {(state) => <span>{state.selectedOption()?.label ?? "Minutes"}</span>}
+              <SelectValue<(typeof TIME_UNITS)[0]>>
+                {(state) => <span>{state.selectedOption()?.label ?? 'Minutes'}</span>}
               </SelectValue>
             </SelectTrigger>
             <SelectContent />
@@ -61,5 +57,5 @@ export function TimeoutRow(props: {
         </div>
       </div>
     </div>
-  )
+  );
 }

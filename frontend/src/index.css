@@ -1,5 +1,5 @@
-@import "tailwindcss";
-@import "tw-animate-css";
+@import 'tailwindcss';
+@import 'tw-animate-css';
 
 @theme {
   --animate-publish-arrive: publish-arrive 0.9s ease-out 2;
@@ -88,16 +88,9 @@ body {
   background: hsl(var(--background));
   color: hsl(var(--foreground));
   font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    "Segoe UI",
-    "Noto Sans",
-    Helvetica,
-    Arial,
-    sans-serif,
-    "Apple Color Emoji",
-    "Segoe UI Emoji";
-  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji';
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -139,10 +132,10 @@ body {
 .oc-chat-only .w-16.shrink-0,
 .oc-chat-only aside,
 .oc-chat-only nav,
-.oc-chat-only button[aria-label="More options"],
-.oc-chat-only [data-action="prompt-attach"],
+.oc-chat-only button[aria-label='More options'],
+.oc-chat-only [data-action='prompt-attach'],
 .oc-chat-only div[data-session-title] h1,
-.oc-chat-only .flex-col.md\:flex-row > .h-auto:has([role="tablist"]) {
+.oc-chat-only .flex-col.md\:flex-row > .h-auto:has([role='tablist']) {
   display: none !important;
 }
 
@@ -162,6 +155,6 @@ body {
   min-width: 0 !important;
 }
 
-.oc-chat-only [style*="--main-left"] {
+.oc-chat-only [style*='--main-left'] {
   --main-left: 0px !important;
 }

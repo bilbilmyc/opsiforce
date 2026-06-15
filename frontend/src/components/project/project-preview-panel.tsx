@@ -1,78 +1,73 @@
-import { Show, createEffect, createSignal, onMount } from "solid-js"
-import {
-  Check,
-  Copy,
-  LoaderCircle,
-  PanelRightClose,
-  PanelRightOpen,
-  Pencil,
-  RefreshCw,
-} from "~/components/icons"
-import { ToolbarButton } from "~/components/ui/toolbar-button"
-import { ResizeHandle } from "~/components/ui/resize-handle"
-import { createResizablePanel } from "~/lib/create-resizable-panel"
-import { appPublicUrl } from "~/lib/app-url"
-import { usePermissions } from "~/api/permissions"
-import { Permission } from "~/constants/permissions"
-import { useProjects } from "~/api/projects"
-import PinBadge from "./pin-badge"
-import EditAppDialog from "./edit-app-dialog"
+import { Show, createEffect, createSignal, on, onMount } from 'solid-js';
+import { Check, Copy, LoaderCircle, PanelRightClose, PanelRightOpen, Pencil, RefreshCw } from '~/components/icons';
+import { ToolbarButton } from '~/components/ui/toolbar-button';
+import { ResizeHandle } from '~/components/ui/resize-handle';
+import { createResizablePanel } from '~/lib/create-resizable-panel';
+import { appPublicUrl } from '~/lib/app-url';
+import { usePermissions } from '~/api/permissions';
+import { Permission } from '~/constants/permissions';
+import { useProjects } from '~/api/projects';
+import PinBadge from './pin-badge';
+import EditAppDialog from './edit-app-dialog';
 
 export interface ProjectPreviewPanelProps {
-  projectId: string
-  environmentId: string
-  environmentSlug: string | null
-  appName?: string
-  onReloadRef?: (reload: () => void) => void
+  projectId: string;
+  environmentId: string;
+  environmentSlug: string | null;
+  appName?: string;
+  onReloadRef?: (reload: () => void) => void;
 }
 
 export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
-  const [open, setOpen] = createSignal(true)
-  const [iframeLoading, setIframeLoading] = createSignal(true)
-  const [copied, setCopied] = createSignal(false)
-  const [editAppOpen, setEditAppOpen] = createSignal(false)
+  const [open, setOpen] = createSignal(true);
+  const [iframeLoading, setIframeLoading] = createSignal(true);
+  const [copied, setCopied] = createSignal(false);
+  const [editAppOpen, setEditAppOpen] = createSignal(false);
 
-  const { hasPermission } = usePermissions()
-  const canPinApps = () => hasPermission(Permission.pinApps)
-  const canEditAppDetails = () => hasPermission(Permission.editAppDetails)
-  const projectsEnabled = () => canPinApps() || canEditAppDetails()
-  const projects = useProjects({ enabled: projectsEnabled })
-  const project = () => projects.data?.find((p) => p.id === props.projectId)
-  const isPinnedHere = () => project()?.pinnedEnvironmentId === props.environmentId
-  const hasApp = () => project()?.hasApp === true
-  const showEditAction = () => canEditAppDetails() && hasApp()
+  const { hasPermission } = usePermissions();
+  const canPinApps = () => hasPermission(Permission.pinApps);
+  const canEditAppDetails = () => hasPermission(Permission.editAppDetails);
+  const projectsEnabled = () => canPinApps() || canEditAppDetails();
+  const projects = useProjects({ enabled: projectsEnabled });
+  const project = () => projects.data?.find((p) => p.id === props.projectId);
+  const isPinnedHere = () => project()?.pinnedEnvironmentId === props.environmentId;
+  const hasApp = () => project()?.hasApp === true;
+  const showEditAction = () => canEditAppDetails() && hasApp();
 
   const panel = createResizablePanel({
-    storageKey: "opsiforce:preview-width",
+    storageKey: 'opsiforce:preview-width',
     minWidth: 320,
     defaultWidth: () => Math.round(window.innerWidth * 0.4),
     maxWidth: () => window.innerWidth - 320,
-    direction: "left",
-  })
+    direction: 'left',
+  });
 
-  const previewDomain = import.meta.env.VITE_WEBAPP_PREVIEW_DOMAIN
-  const previewUrl = () => `https://${props.environmentId}.${previewDomain}/`
-  const publicUrl = () => appPublicUrl(props.environmentId, props.environmentSlug)
+  const previewDomain = import.meta.env.VITE_WEBAPP_PREVIEW_DOMAIN;
+  const previewUrl = () => `https://${props.environmentId}.${previewDomain}/`;
+  const publicUrl = () => appPublicUrl(props.environmentId, props.environmentSlug);
 
-  createEffect(() => {
-    props.environmentId
-    setIframeLoading(true)
-  })
+  createEffect(
+    on(
+      () => props.environmentId,
+      () => setIframeLoading(true)
+    )
+  );
 
   function reload() {
-    const iframe = document.getElementById("webapp-preview") as HTMLIFrameElement | null
-    if (!iframe) return
-    setIframeLoading(true)
-    iframe.src = iframe.src
+    const iframe = document.getElementById('webapp-preview') as HTMLIFrameElement | null;
+    if (!iframe) return;
+    setIframeLoading(true);
+    // oxlint-disable-next-line no-self-assign -- reassigning src forces the iframe to reload
+    iframe.src = iframe.src;
   }
 
   function copyUrl() {
-    navigator.clipboard.writeText(publicUrl())
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
+    navigator.clipboard.writeText(publicUrl());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   }
 
-  onMount(() => props.onReloadRef?.(reload))
+  onMount(() => props.onReloadRef?.(reload));
 
   return (
     <Show
@@ -91,19 +86,13 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
         class="shrink-0 border-l border-border flex flex-col bg-background relative"
         style={{ width: `${panel.width()}px` }}
       >
-        <ResizeHandle
-          onPointerDown={panel.startResize}
-          resizing={panel.resizing()}
-          position="left"
-        />
+        <ResizeHandle onPointerDown={panel.startResize} resizing={panel.resizing()} position="left" />
         <div class="h-8 flex items-center justify-between px-1.5 bg-sidebar border-b border-border shrink-0">
           <div class="flex items-center gap-1">
             <ToolbarButton onClick={() => setOpen(false)} tooltip="Close app">
               <PanelRightClose class="w-3.5 h-3.5" />
             </ToolbarButton>
-            <span class="text-xs font-medium text-muted-foreground truncate">
-              {props.appName || "App"}
-            </span>
+            <span class="text-xs font-medium text-muted-foreground truncate">{props.appName || 'App'}</span>
             <Show when={canPinApps()}>
               <PinBadge isPinned={isPinnedHere()} compact />
             </Show>
@@ -117,12 +106,8 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             </Show>
           </div>
           <div class="flex items-center">
-            <ToolbarButton onClick={copyUrl} tooltip={copied() ? "Copied!" : "Copy URL"}>
-              {copied() ? (
-                <Check class="w-3.5 h-3.5 text-green-500" />
-              ) : (
-                <Copy class="w-3.5 h-3.5" />
-              )}
+            <ToolbarButton onClick={copyUrl} tooltip={copied() ? 'Copied!' : 'Copy URL'}>
+              {copied() ? <Check class="w-3.5 h-3.5 text-green-500" /> : <Copy class="w-3.5 h-3.5" />}
             </ToolbarButton>
             <ToolbarButton onClick={reload} tooltip="Reload app">
               <RefreshCw class="w-3.5 h-3.5" />
@@ -148,5 +133,5 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
         />
       </div>
     </Show>
-  )
+  );
 }

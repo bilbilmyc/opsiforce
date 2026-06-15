@@ -1,4 +1,4 @@
-import { createSignal, onCleanup, type Accessor } from "solid-js"
+import { createSignal, onCleanup, type Accessor } from 'solid-js';
 
 /**
  * Centralized localStorage-backed signal.
@@ -26,93 +26,87 @@ import { createSignal, onCleanup, type Accessor } from "solid-js"
  */
 export interface PersistedSignalOptions<T> {
   /** Custom serializer. Defaults to `JSON.stringify`. */
-  serialize?: (value: T) => string
+  serialize?: (value: T) => string;
   /** Custom deserializer. Defaults to `JSON.parse`. Thrown errors fall back to `defaultValue`. */
-  deserialize?: (raw: string) => T
+  deserialize?: (raw: string) => T;
   /** Cross-tab sync via the `storage` event. Defaults to `true`. */
-  sync?: boolean
+  sync?: boolean;
 }
 
-export type PersistedSignal<T> = [Accessor<T>, (value: T | ((prev: T) => T)) => void]
+export type PersistedSignal<T> = [Accessor<T>, (value: T | ((prev: T) => T)) => void];
 
 export function createPersistedSignal<T>(
   key: string,
   defaultValue: T,
-  options: PersistedSignalOptions<T> = {},
+  options: PersistedSignalOptions<T> = {}
 ): PersistedSignal<T> {
-  const serialize = options.serialize ?? JSON.stringify
-  const deserialize = options.deserialize ?? (JSON.parse as (raw: string) => T)
-  const sync = options.sync ?? true
+  const serialize = options.serialize ?? JSON.stringify;
+  const deserialize = options.deserialize ?? (JSON.parse as (raw: string) => T);
+  const sync = options.sync ?? true;
 
   const read = (): T => {
-    if (typeof window === "undefined") return defaultValue
-    const raw = window.localStorage.getItem(key)
-    if (raw === null) return defaultValue
+    if (typeof window === 'undefined') return defaultValue;
+    const raw = window.localStorage.getItem(key);
+    if (raw === null) return defaultValue;
     try {
-      return deserialize(raw)
+      return deserialize(raw);
     } catch {
-      return defaultValue
+      return defaultValue;
     }
-  }
+  };
 
-  const [value, setValue] = createSignal<T>(read())
+  const [value, setValue] = createSignal<T>(read());
 
   const write = (next: T) => {
-    if (typeof window === "undefined") return
+    if (typeof window === 'undefined') return;
     try {
-      const serialized = serialize(next)
-      window.localStorage.setItem(key, serialized)
+      const serialized = serialize(next);
+      window.localStorage.setItem(key, serialized);
       if (sync) {
         // Dispatch a synthetic storage event so other hooks listening in this
         // same tab update too. StorageEvent in most browsers doesn't fire in
         // the origin tab, only in other tabs.
-        window.dispatchEvent(
-          new StorageEvent("storage", { key, newValue: serialized }),
-        )
+        window.dispatchEvent(new StorageEvent('storage', { key, newValue: serialized }));
       }
     } catch {
       // Ignore quota / serialization errors — persistence is best-effort.
     }
-  }
+  };
 
   const update = (next: T | ((prev: T) => T)) => {
-    const resolved = typeof next === "function" ? (next as (prev: T) => T)(value()) : next
-    setValue(() => resolved)
-    write(resolved)
-  }
+    const resolved = typeof next === 'function' ? (next as (prev: T) => T)(value()) : next;
+    setValue(() => resolved);
+    write(resolved);
+  };
 
-  if (sync && typeof window !== "undefined") {
+  if (sync && typeof window !== 'undefined') {
     const handler = (e: StorageEvent) => {
-      if (e.key !== key) return
+      if (e.key !== key) return;
       if (e.newValue === null) {
-        setValue(() => defaultValue)
-        return
+        setValue(() => defaultValue);
+        return;
       }
       try {
-        setValue(() => deserialize(e.newValue!))
+        setValue(() => deserialize(e.newValue!));
       } catch {
         // ignore — keep current value
       }
-    }
-    window.addEventListener("storage", handler)
-    onCleanup(() => window.removeEventListener("storage", handler))
+    };
+    window.addEventListener('storage', handler);
+    onCleanup(() => window.removeEventListener('storage', handler));
   }
 
-  return [value, update]
+  return [value, update];
 }
 
 /**
  * Raw string variant — skips JSON. Useful for existing unprefixed keys that
  * store plain strings (`sidebar:state` = `"true"`).
  */
-export function createPersistedStringSignal(
-  key: string,
-  defaultValue: string,
-  sync = true,
-): PersistedSignal<string> {
+export function createPersistedStringSignal(key: string, defaultValue: string, sync = true): PersistedSignal<string> {
   return createPersistedSignal<string>(key, defaultValue, {
     serialize: (v) => v,
     deserialize: (raw) => raw,
     sync,
-  })
+  });
 }

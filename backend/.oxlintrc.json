@@ -1,0 +1,24 @@
+{
+  "$schema": "https://raw.githubusercontent.com/oxc-project/oxc/main/npm/oxlint/configuration_schema.json",
+  "extends": ["../.oxlintrc.json"],
+  "plugins": ["typescript", "unicorn", "oxc", "import", "promise", "node"],
+  "env": {
+    "node": true,
+    "es2022": true
+  },
+  "rules": {
+    "typescript/no-extraneous-class": ["error", { "allowWithDecorator": true }],
+    "typescript/no-redundant-type-constituents": "off",
+    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/no-unnecessary-type-assertion": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/*.spec.ts", "**/*.e2e-spec.ts", "**/*.test.ts"],
+      "rules": {
+        "typescript/no-explicit-any": "off",
+        "no-console": "off"
+      }
+    }
+  ]
+}

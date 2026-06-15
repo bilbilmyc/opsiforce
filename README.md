@@ -135,6 +135,9 @@ Use this only when the shared infrastructure is already up and you do not need t
 ```bash
 yarn workspace @opsiforce/backend run ts
 yarn workspace @opsiforce/frontend run ts
+yarn workspace @opsiforce/backend run lint           # oxlint (type-aware on backend; Solid + solid-query rules on frontend)
+yarn workspace @opsiforce/backend run format         # oxfmt
+yarn workspace @opsiforce/backend run check          # lint + typecheck
 yarn workspace @opsiforce/backend run build
 yarn workspace @opsiforce/frontend run build
 yarn workspace @opsiforce/backend run db:migrate

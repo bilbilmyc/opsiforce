@@ -1,66 +1,66 @@
-import { Injectable, Logger } from "@nestjs/common"
-import { ConfigService } from "@nestjs/config"
-import * as k8s from "@kubernetes/client-node"
-import { loadKubeConfig } from "../common/k8s-client"
-import { resolvePreset, toK8sResources, type PodResources } from "../pod/pod-classes"
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as k8s from '@kubernetes/client-node';
+import { loadKubeConfig } from '../common/k8s-client';
+import { resolvePreset, toK8sResources, type PodResources } from '../pod/pod-classes';
 
-const JOB_COMPLETION_GRACE_MS = 60_000
+const JOB_COMPLETION_GRACE_MS = 60_000;
 
 export interface AgentUpdateJobOptions {
-  projectId: string
-  directory: string
-  agentName: string
-  targetVersion: string
-  agentModel?: string
+  projectId: string;
+  directory: string;
+  agentName: string;
+  targetVersion: string;
+  agentModel?: string;
 }
 
 export interface AgentUpdateRunResult {
-  logs: string
-  succeeded: boolean
+  logs: string;
+  succeeded: boolean;
 }
 
 @Injectable()
 export class AgentUpdateK8sService {
-  private readonly batchApi: k8s.BatchV1Api
-  private readonly coreApi: k8s.CoreV1Api
-  private readonly logger = new Logger(AgentUpdateK8sService.name)
-  private readonly namespace: string
-  private readonly jobTimeoutMs: number
+  private readonly batchApi: k8s.BatchV1Api;
+  private readonly coreApi: k8s.CoreV1Api;
+  private readonly logger = new Logger(AgentUpdateK8sService.name);
+  private readonly namespace: string;
+  private readonly jobTimeoutMs: number;
 
   constructor(private readonly configService: ConfigService) {
-    const kc = loadKubeConfig()
-    this.batchApi = kc.makeApiClient(k8s.BatchV1Api)
-    this.coreApi = kc.makeApiClient(k8s.CoreV1Api)
-    this.namespace = this.configService.getOrThrow<string>("k8sNamespace")
-    this.jobTimeoutMs = this.configService.get<number>("agentUpdateJobTimeoutMs", 30 * 60 * 1000)
+    const kc = loadKubeConfig();
+    this.batchApi = kc.makeApiClient(k8s.BatchV1Api);
+    this.coreApi = kc.makeApiClient(k8s.CoreV1Api);
+    this.namespace = this.configService.getOrThrow<string>('k8sNamespace');
+    this.jobTimeoutMs = this.configService.get<number>('agentUpdateJobTimeoutMs', 30 * 60 * 1000);
   }
 
   async run(options: AgentUpdateJobOptions): Promise<AgentUpdateRunResult> {
-    const jobName = this.jobName(options.projectId)
+    const jobName = this.jobName(options.projectId);
     await this.batchApi.createNamespacedJob({
       namespace: this.namespace,
       body: this.buildJob(jobName, options),
-    })
+    });
 
     try {
-      const succeeded = await this.waitForCompletion(jobName, this.jobTimeoutMs + JOB_COMPLETION_GRACE_MS)
-      const logs = await this.readLogs(jobName)
-      return { logs, succeeded }
+      const succeeded = await this.waitForCompletion(jobName, this.jobTimeoutMs + JOB_COMPLETION_GRACE_MS);
+      const logs = await this.readLogs(jobName);
+      return { logs, succeeded };
     } finally {
-      await this.deleteJob(jobName)
+      await this.deleteJob(jobName);
     }
   }
 
   private buildJob(jobName: string, options: AgentUpdateJobOptions): k8s.V1Job {
     return {
-      apiVersion: "batch/v1",
-      kind: "Job",
+      apiVersion: 'batch/v1',
+      kind: 'Job',
       metadata: {
         name: jobName,
         namespace: this.namespace,
         labels: {
-          app: "opsiforce-agent-update",
-          "opsiforce.io/project-id": options.projectId,
+          app: 'opsiforce-agent-update',
+          'opsiforce.io/project-id': options.projectId,
         },
       },
       spec: {
@@ -70,37 +70,37 @@ export class AgentUpdateK8sService {
         template: {
           metadata: {
             labels: {
-              app: "opsiforce-agent-update",
-              "opsiforce.io/project-id": options.projectId,
+              app: 'opsiforce-agent-update',
+              'opsiforce.io/project-id': options.projectId,
             },
           },
           spec: {
-            restartPolicy: "Never",
+            restartPolicy: 'Never',
             ...(this.imagePullSecrets().length > 0 ? { imagePullSecrets: this.imagePullSecrets() } : {}),
             ...(Object.keys(this.nodeSelector()).length > 0 ? { nodeSelector: this.nodeSelector() } : {}),
             ...(this.tolerations().length > 0 ? { tolerations: this.tolerations() } : {}),
             ...(Object.keys(this.affinity()).length > 0 ? { affinity: this.affinity() } : {}),
             containers: [
               {
-                name: "migrate",
-                image: this.configService.getOrThrow<string>("agentContainerImage"),
-                imagePullPolicy: this.configService.getOrThrow<string>("agentContainerImagePullPolicy"),
-                command: ["agent-workspace-migrate"],
+                name: 'migrate',
+                image: this.configService.getOrThrow<string>('agentContainerImage'),
+                imagePullPolicy: this.configService.getOrThrow<string>('agentContainerImagePullPolicy'),
+                command: ['agent-workspace-migrate'],
                 env: [
-                  { name: "AGENT_NAME", value: options.agentName },
-                  { name: "TARGET_VERSION", value: options.targetVersion },
-                  { name: "WORKSPACE", value: "/workspace" },
-                  ...(options.agentModel ? [{ name: "AGENT_MODEL", value: options.agentModel }] : []),
+                  { name: 'AGENT_NAME', value: options.agentName },
+                  { name: 'TARGET_VERSION', value: options.targetVersion },
+                  { name: 'WORKSPACE', value: '/workspace' },
+                  ...(options.agentModel ? [{ name: 'AGENT_MODEL', value: options.agentModel }] : []),
                 ],
                 volumeMounts: [
                   {
-                    name: "workspace",
-                    mountPath: "/workspace",
+                    name: 'workspace',
+                    mountPath: '/workspace',
                     subPath: options.directory,
                   },
                 ],
                 resources: toK8sResources(
-                  resolvePreset("small", this.configService.get<PodResources | null>("podClassSmall", null)),
+                  resolvePreset('small', this.configService.get<PodResources | null>('podClassSmall', null))
                 ),
               },
             ],
@@ -108,85 +108,87 @@ export class AgentUpdateK8sService {
           },
         },
       },
-    }
+    };
   }
 
   private workspaceVolume(): k8s.V1Volume {
-    const storageType = this.configService.getOrThrow<"cephfs" | "hostPath">("storageType")
-    if (storageType === "hostPath") {
+    const storageType = this.configService.getOrThrow<'cephfs' | 'hostPath'>('storageType');
+    if (storageType === 'hostPath') {
       return {
-        name: "workspace",
+        name: 'workspace',
         hostPath: {
-          path: this.configService.getOrThrow<string>("storageMountPath"),
-          type: "DirectoryOrCreate",
+          path: this.configService.getOrThrow<string>('storageMountPath'),
+          type: 'DirectoryOrCreate',
         },
-      }
+      };
     }
 
     return {
-      name: "workspace",
+      name: 'workspace',
       persistentVolumeClaim: {
-        claimName: this.configService.getOrThrow<string>("cephfsPvcName"),
+        claimName: this.configService.getOrThrow<string>('cephfsPvcName'),
       },
-    }
+    };
   }
 
   private async waitForCompletion(jobName: string, timeoutMs = 300_000): Promise<boolean> {
-    const start = Date.now()
+    const start = Date.now();
     while (Date.now() - start < timeoutMs) {
-      const job = await this.batchApi.readNamespacedJob({ name: jobName, namespace: this.namespace })
-      if ((job.status?.succeeded ?? 0) > 0) return true
+      const job = await this.batchApi.readNamespacedJob({ name: jobName, namespace: this.namespace });
+      if ((job.status?.succeeded ?? 0) > 0) return true;
       if ((job.status?.failed ?? 0) > 0) {
-        return false
+        return false;
       }
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
-    throw new Error(`Agent update job ${jobName} did not complete after ${timeoutMs}ms`)
+    throw new Error(`Agent update job ${jobName} did not complete after ${timeoutMs}ms`);
   }
 
   private async readLogs(jobName: string): Promise<string> {
     const pods = await this.coreApi.listNamespacedPod({
       namespace: this.namespace,
       labelSelector: `job-name=${jobName}`,
-    })
-    const podName = pods.items[0]?.metadata?.name
-    if (!podName) return ""
+    });
+    const podName = pods.items[0]?.metadata?.name;
+    if (!podName) return '';
     const logs = await this.coreApi.readNamespacedPodLog({
       name: podName,
       namespace: this.namespace,
-      container: "migrate",
-    })
-    return typeof logs === "string" ? logs : String(logs)
+      container: 'migrate',
+    });
+    return typeof logs === 'string' ? logs : String(logs);
   }
 
   private async deleteJob(jobName: string): Promise<void> {
-    await this.batchApi.deleteNamespacedJob({
-      name: jobName,
-      namespace: this.namespace,
-      propagationPolicy: "Background",
-    }).catch((err) => {
-      const message = err instanceof Error ? err.message : String(err)
-      if (!message.includes("NotFound")) this.logger.warn(`Failed to delete agent update job ${jobName}: ${message}`)
-    })
+    await this.batchApi
+      .deleteNamespacedJob({
+        name: jobName,
+        namespace: this.namespace,
+        propagationPolicy: 'Background',
+      })
+      .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!message.includes('NotFound')) this.logger.warn(`Failed to delete agent update job ${jobName}: ${message}`);
+      });
   }
 
   private jobName(projectId: string): string {
-    return `opsiforce-agent-update-${projectId.slice(0, 8)}-${Date.now().toString(36)}`
+    return `opsiforce-agent-update-${projectId.slice(0, 8)}-${Date.now().toString(36)}`;
   }
 
   private imagePullSecrets(): Array<{ name: string }> {
-    return this.configService.get<Array<{ name: string }>>("imagePullSecrets", [])
+    return this.configService.get<Array<{ name: string }>>('imagePullSecrets', []);
   }
 
   private nodeSelector(): Record<string, string> {
-    return this.configService.get<Record<string, string>>("agentNodeSelector", {})
+    return this.configService.get<Record<string, string>>('agentNodeSelector', {});
   }
 
   private tolerations(): k8s.V1Toleration[] {
-    return this.configService.get<k8s.V1Toleration[]>("agentTolerations", [])
+    return this.configService.get<k8s.V1Toleration[]>('agentTolerations', []);
   }
 
   private affinity(): k8s.V1Affinity {
-    return this.configService.get<k8s.V1Affinity>("agentAffinity", {})
+    return this.configService.get<k8s.V1Affinity>('agentAffinity', {});
   }
 }

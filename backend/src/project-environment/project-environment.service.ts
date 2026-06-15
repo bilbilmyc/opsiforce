@@ -1,20 +1,20 @@
-import { Injectable, NotFoundException } from "@nestjs/common"
-import { and, eq, inArray, type SQL } from "drizzle-orm"
-import { db } from "../../db"
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { and, eq, inArray, type SQL } from 'drizzle-orm';
+import { db } from '../../db';
 import {
   deletedProjectEnvironments,
   environments,
   projectEnvironments,
   projectSettings,
   projects,
-} from "../../db/schema"
-import type { ProjectStatus } from "../project/project.types"
+} from '../../db/schema';
+import type { ProjectStatus } from '../project/project.types';
 import {
   CreateProjectEnvironmentInput,
   ProjectEnvironmentContext,
   ProjectEnvironmentPatch,
   ProjectEnvironmentRow,
-} from "./project-environment.types"
+} from './project-environment.types';
 
 const contextFields = {
   id: projectEnvironments.id,
@@ -46,7 +46,7 @@ const contextFields = {
   environmentName: environments.name,
   environmentSlug: environments.slug,
   environmentIsDefault: environments.isDefault,
-}
+};
 
 @Injectable()
 export class ProjectEnvironmentService {
@@ -56,41 +56,41 @@ export class ProjectEnvironmentService {
       .from(projectEnvironments)
       .innerJoin(projects, eq(projects.id, projectEnvironments.projectId))
       .innerJoin(projectSettings, eq(projectSettings.projectId, projectEnvironments.projectId))
-      .leftJoin(environments, eq(environments.id, projectEnvironments.environmentId))
+      .leftJoin(environments, eq(environments.id, projectEnvironments.environmentId));
   }
 
   private select(where: SQL): Promise<ProjectEnvironmentContext[]> {
-    return this.baseQuery().where(where) as Promise<ProjectEnvironmentContext[]>
+    return this.baseQuery().where(where) as Promise<ProjectEnvironmentContext[]>;
   }
 
   async findByIdOrNull(envId: string): Promise<ProjectEnvironmentContext | null> {
-    const [row] = await this.select(eq(projectEnvironments.id, envId))
-    return row ?? null
+    const [row] = await this.select(eq(projectEnvironments.id, envId));
+    return row ?? null;
   }
 
   async findById(envId: string): Promise<ProjectEnvironmentContext> {
-    const row = await this.findByIdOrNull(envId)
-    if (!row) throw new NotFoundException(`Project environment ${envId} not found`)
-    return row
+    const row = await this.findByIdOrNull(envId);
+    if (!row) throw new NotFoundException(`Project environment ${envId} not found`);
+    return row;
   }
 
   defaultEnvironmentId(projectId: string): string {
-    return projectId
+    return projectId;
   }
 
   findDefaultByProjectId(projectId: string): Promise<ProjectEnvironmentContext> {
-    return this.findById(this.defaultEnvironmentId(projectId))
+    return this.findById(this.defaultEnvironmentId(projectId));
   }
 
   listByProjectId(projectId: string): Promise<ProjectEnvironmentContext[]> {
-    return this.select(eq(projectEnvironments.projectId, projectId))
+    return this.select(eq(projectEnvironments.projectId, projectId));
   }
 
   listByStatus(status: ProjectStatus | ProjectStatus[]): Promise<ProjectEnvironmentContext[]> {
     const where = Array.isArray(status)
       ? inArray(projectEnvironments.status, status)
-      : eq(projectEnvironments.status, status)
-    return this.select(where)
+      : eq(projectEnvironments.status, status);
+    return this.select(where);
   }
 
   async listAllDirectories(): Promise<{ id: string; projectId: string; directory: string }[]> {
@@ -100,7 +100,7 @@ export class ProjectEnvironmentService {
         projectId: projectEnvironments.projectId,
         directory: projectEnvironments.directory,
       })
-      .from(projectEnvironments)
+      .from(projectEnvironments);
   }
 
   async create(input: CreateProjectEnvironmentInput): Promise<void> {
@@ -111,56 +111,59 @@ export class ProjectEnvironmentService {
       isDefault: input.isDefault,
       directory: input.directory,
       platformVersion: input.platformVersion,
-      status: input.status ?? "starting",
-      authMode: input.authMode ?? "public",
+      status: input.status ?? 'starting',
+      authMode: input.authMode ?? 'public',
       deployedCommitSha: input.deployedCommitSha ?? null,
-    })
+    });
   }
 
   async patch(
     envId: string,
     patch: ProjectEnvironmentPatch,
-    expectStatus?: ProjectStatus | ProjectStatus[],
+    expectStatus?: ProjectStatus | ProjectStatus[]
   ): Promise<ProjectEnvironmentRow | undefined> {
     const where = expectStatus
       ? and(
           eq(projectEnvironments.id, envId),
           Array.isArray(expectStatus)
             ? inArray(projectEnvironments.status, expectStatus)
-            : eq(projectEnvironments.status, expectStatus),
+            : eq(projectEnvironments.status, expectStatus)
         )
-      : eq(projectEnvironments.id, envId)
+      : eq(projectEnvironments.id, envId);
 
     const [updated] = await db
       .update(projectEnvironments)
       .set({ ...patch, updatedAt: new Date() })
       .where(where)
-      .returning()
-    return updated
+      .returning();
+    return updated;
   }
 
   async touchActivity(envId: string): Promise<void> {
-    const now = new Date()
+    const now = new Date();
     await db
       .update(projectEnvironments)
       .set({ lastActiveAt: now, updatedAt: now })
-      .where(eq(projectEnvironments.id, envId))
+      .where(eq(projectEnvironments.id, envId));
   }
 
   async bindEnvironment(envId: string, environmentId: string): Promise<void> {
     await db
       .update(projectEnvironments)
       .set({ environmentId, updatedAt: new Date() })
-      .where(eq(projectEnvironments.id, envId))
+      .where(eq(projectEnvironments.id, envId));
   }
 
   async delete(env: { id: string; projectId: string; tenantId: string | null; directory: string }): Promise<void> {
-    await db.insert(deletedProjectEnvironments).values({
-      id: env.id,
-      projectId: env.projectId,
-      tenantId: env.tenantId,
-      directory: env.directory,
-    }).onConflictDoNothing()
-    await db.delete(projectEnvironments).where(eq(projectEnvironments.id, env.id))
+    await db
+      .insert(deletedProjectEnvironments)
+      .values({
+        id: env.id,
+        projectId: env.projectId,
+        tenantId: env.tenantId,
+        directory: env.directory,
+      })
+      .onConflictDoNothing();
+    await db.delete(projectEnvironments).where(eq(projectEnvironments.id, env.id));
   }
 }

@@ -1,21 +1,19 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
-import * as k8s from "@kubernetes/client-node";
-import { appCanonicalHost } from "../common/app-host";
-import { loadKubeConfig } from "../common/k8s-client";
-import { ProjectAuthOidcConfig } from "./project.types";
+import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as k8s from '@kubernetes/client-node';
+import { appCanonicalHost } from '../common/app-host';
+import { loadKubeConfig } from '../common/k8s-client';
+import { ProjectAuthOidcConfig } from './project.types';
 
-const TRAEFIK_GROUP = "traefik.io";
-const TRAEFIK_VERSION = "v1alpha1";
-const MIDDLEWARES_PLURAL = "middlewares";
-const INGRESSROUTES_PLURAL = "ingressroutes";
+const TRAEFIK_GROUP = 'traefik.io';
+const TRAEFIK_VERSION = 'v1alpha1';
+const MIDDLEWARES_PLURAL = 'middlewares';
+const INGRESSROUTES_PLURAL = 'ingressroutes';
 
-const middlewareName = (routingId: string) =>
-  `opsiforce-project-${routingId}-oidc`;
-const ingressRouteName = (routingId: string) =>
-  `opsiforce-project-${routingId}`;
+const middlewareName = (routingId: string) => `opsiforce-project-${routingId}-oidc`;
+const ingressRouteName = (routingId: string) => `opsiforce-project-${routingId}`;
 
-const OIDC_CALLBACK_PATH = "/oidc/callback";
+const OIDC_CALLBACK_PATH = '/oidc/callback';
 
 interface TraefikOidcAssertClaim {
   Name: string;
@@ -47,12 +45,12 @@ interface MiddlewareExtras {
   headers?: Array<{ Name: string; Value: string }>;
   assertClaims?: TraefikOidcAssertClaim[];
   bypassAuthPaths?: string[];
-  tokenValidation?: "IdToken" | "AccessToken" | "Introspection";
+  tokenValidation?: 'IdToken' | 'AccessToken' | 'Introspection';
 }
 
 const MANUAL_HEADERS: Array<{ Name: string; Value: string }> = [
-  { Name: "X-Oidc-Subject", Value: "{{ .claims.sub }}" },
-  { Name: "X-Oidc-Email", Value: "{{ .claims.email }}" },
+  { Name: 'X-Oidc-Subject', Value: '{{ .claims.sub }}' },
+  { Name: 'X-Oidc-Email', Value: '{{ .claims.email }}' },
 ];
 
 function bypassRuleFromPaths(paths: string[] | undefined): string | undefined {
@@ -60,18 +58,16 @@ function bypassRuleFromPaths(paths: string[] | undefined): string | undefined {
   const safe = paths
     .map((p) => p.trim())
     .filter((p) => p.length > 0)
-    .map((p) => p.replace(/'/g, ""));
+    .map((p) => p.replace(/'/g, ''));
   if (safe.length === 0) return undefined;
-  return safe.map((p) => `PathPrefix('${p}')`).join(" || ");
+  return safe.map((p) => `PathPrefix('${p}')`).join(' || ');
 }
 
 function pathsFromBypassRule(rule: string | undefined): string[] {
   if (!rule) return [];
   const matches = rule.match(/PathPrefix\('([^']*)'\)/g);
   if (!matches) return [];
-  return matches
-    .map((m) => m.slice("PathPrefix('".length, -2))
-    .filter((p) => p.length > 0);
+  return matches.map((m) => m.slice("PathPrefix('".length, -2)).filter((p) => p.length > 0);
 }
 
 type EnvironmentSlug = string | null;
@@ -92,21 +88,14 @@ export class ProjectAuthService {
   constructor(private readonly configService: ConfigService) {
     const kc = loadKubeConfig();
     this.customApi = kc.makeApiClient(k8s.CustomObjectsApi);
-    this.namespace = this.configService.getOrThrow<string>("k8sNamespace");
-    this.appsHostname = this.configService.getOrThrow<string>("appsHostname");
-    this.webappServiceName =
-      this.configService.getOrThrow<string>("webappServiceName");
-    this.webappServicePort =
-      this.configService.getOrThrow<number>("webappServicePort");
-    this.pluginSecret =
-      this.configService.getOrThrow<string>("oidcPluginSecret");
-    this.makaraClientId =
-      this.configService.getOrThrow<string>("makaraOidcClientId");
-    this.makaraClientSecret =
-      this.configService.get<string>("makaraOidcClientSecret") ?? "";
-    this.makaraIssuerUrl = this.configService.getOrThrow<string>(
-      "makaraOidcIssuerUrl",
-    );
+    this.namespace = this.configService.getOrThrow<string>('k8sNamespace');
+    this.appsHostname = this.configService.getOrThrow<string>('appsHostname');
+    this.webappServiceName = this.configService.getOrThrow<string>('webappServiceName');
+    this.webappServicePort = this.configService.getOrThrow<number>('webappServicePort');
+    this.pluginSecret = this.configService.getOrThrow<string>('oidcPluginSecret');
+    this.makaraClientId = this.configService.getOrThrow<string>('makaraOidcClientId');
+    this.makaraClientSecret = this.configService.get<string>('makaraOidcClientSecret') ?? '';
+    this.makaraIssuerUrl = this.configService.getOrThrow<string>('makaraOidcIssuerUrl');
   }
 
   private projectHost(routingId: string, slug: EnvironmentSlug): string {
@@ -120,46 +109,34 @@ export class ProjectAuthService {
   }
 
   callbackUrls(routingId: string, slug: EnvironmentSlug): string[] {
-    return this.projectHosts(routingId, slug).map(
-      (host) => `https://${host}${OIDC_CALLBACK_PATH}`,
-    );
+    return this.projectHosts(routingId, slug).map((host) => `https://${host}${OIDC_CALLBACK_PATH}`);
   }
 
-  private buildMiddleware(
-    routingId: string,
-    config: ProjectAuthOidcConfig,
-    extras: MiddlewareExtras = {},
-  ) {
+  private buildMiddleware(routingId: string, config: ProjectAuthOidcConfig, extras: MiddlewareExtras = {}) {
     if (!config.clientId || !config.clientSecret) {
-      throw new Error("clientId and clientSecret are required");
+      throw new Error('clientId and clientSecret are required');
     }
-    const providerUrl =
-      config.discoveryUrl?.replace(
-        /\/\.well-known\/openid-configuration\/?$/,
-        "",
-      ) ?? "";
+    const providerUrl = config.discoveryUrl?.replace(/\/\.well-known\/openid-configuration\/?$/, '') ?? '';
     if (!providerUrl) {
-      throw new Error("discoveryUrl is required");
+      throw new Error('discoveryUrl is required');
     }
 
-    const provider: TraefikOidcPluginSpec["Provider"] = {
+    const provider: TraefikOidcPluginSpec['Provider'] = {
       Url: providerUrl,
       ClientId: config.clientId,
       ClientSecret: config.clientSecret,
       UsePkce: true,
       ValidateAudience: true,
       ValidateIssuer: true,
-      TokenValidation: extras.tokenValidation ?? "IdToken",
+      TokenValidation: extras.tokenValidation ?? 'IdToken',
     };
 
     const plugin: TraefikOidcPluginSpec = {
-      LogLevel: "DEBUG",
+      LogLevel: 'DEBUG',
       Secret: this.pluginSecret,
       Provider: provider,
       CallbackUri: OIDC_CALLBACK_PATH,
-      Scopes: (config.scope ?? "openid profile email")
-        .split(/\s+/)
-        .filter(Boolean),
+      Scopes: (config.scope ?? 'openid profile email').split(/\s+/).filter(Boolean),
       SessionCookie: { Secure: true },
     };
 
@@ -178,33 +155,30 @@ export class ProjectAuthService {
 
     return {
       apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,
-      kind: "Middleware",
+      kind: 'Middleware',
       metadata: { name: middlewareName(routingId), namespace: this.namespace },
-      spec: { plugin: { "traefik-oidc-auth": plugin } },
+      spec: { plugin: { 'traefik-oidc-auth': plugin } },
     };
   }
 
-  private keycloakExtras(
-    tenantName: string,
-    clientId: string,
-  ): MiddlewareExtras {
+  private keycloakExtras(tenantName: string, clientId: string): MiddlewareExtras {
     return {
       headers: [
-        { Name: "X-Oidc-Username", Value: "{{ .claims.preferred_username }}" },
-        { Name: "X-Oidc-Subject", Value: "{{ .claims.sub }}" },
-        { Name: "X-Oidc-Email", Value: "{{ .claims.preferred_username }}" },
+        { Name: 'X-Oidc-Username', Value: '{{ .claims.preferred_username }}' },
+        { Name: 'X-Oidc-Subject', Value: '{{ .claims.sub }}' },
+        { Name: 'X-Oidc-Email', Value: '{{ .claims.preferred_username }}' },
         {
-          Name: "X-Oidc-Realm-Roles",
+          Name: 'X-Oidc-Realm-Roles',
           Value: '{{ index .claims "realm_access" "roles" | mapToJsonArray }}',
         },
         {
-          Name: "X-Oidc-Client-Roles",
+          Name: 'X-Oidc-Client-Roles',
           Value: `{{ index .claims "resource_access" "${clientId}" "roles" | mapToJsonArray }}`,
         },
       ],
       assertClaims: [
         {
-          Name: "realm_access.roles[*]",
+          Name: 'realm_access.roles[*]',
           AnyOf: [`makara_tenant_name_${tenantName}`],
         },
       ],
@@ -214,7 +188,7 @@ export class ProjectAuthService {
   private buildIngressRoute(
     routingId: string,
     slug: EnvironmentSlug,
-    middlewares: Array<{ name: string; namespace: string }>,
+    middlewares: Array<{ name: string; namespace: string }>
   ) {
     const serviceRef: {
       name: string;
@@ -228,20 +202,20 @@ export class ProjectAuthService {
 
     const match = this.projectHosts(routingId, slug)
       .map((host) => `Host(\`${host}\`)`)
-      .join(" || ");
+      .join(' || ');
 
     return {
       apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,
-      kind: "IngressRoute",
+      kind: 'IngressRoute',
       metadata: {
         name: ingressRouteName(routingId),
         namespace: this.namespace,
       },
       spec: {
-        entryPoints: ["websecure"],
+        entryPoints: ['websecure'],
         routes: [
           {
-            kind: "Rule",
+            kind: 'Rule',
             match,
             priority: 100,
             middlewares,
@@ -265,18 +239,14 @@ export class ProjectAuthService {
     return {
       config: {
         clientId: plugin.Provider.ClientId,
-        discoveryUrl: plugin.Provider.Url
-          ? `${plugin.Provider.Url}/.well-known/openid-configuration`
-          : undefined,
-        scope: plugin.Scopes?.join(" "),
+        discoveryUrl: plugin.Provider.Url ? `${plugin.Provider.Url}/.well-known/openid-configuration` : undefined,
+        scope: plugin.Scopes?.join(' '),
       },
       bypassAuthPaths: pathsFromBypassRule(plugin.BypassAuthenticationRule),
     };
   }
 
-  private async readPluginSpec(
-    routingId: string,
-  ): Promise<TraefikOidcPluginSpec | undefined> {
+  private async readPluginSpec(routingId: string): Promise<TraefikOidcPluginSpec | undefined> {
     try {
       const resp = await this.customApi.getNamespacedCustomObject({
         group: TRAEFIK_GROUP,
@@ -285,16 +255,13 @@ export class ProjectAuthService {
         plural: MIDDLEWARES_PLURAL,
         name: middlewareName(routingId),
       });
-      return (
-        resp as { spec?: { plugin?: Record<string, TraefikOidcPluginSpec> } }
-      )?.spec?.plugin?.["traefik-oidc-auth"];
+      return (resp as { spec?: { plugin?: Record<string, TraefikOidcPluginSpec> } })?.spec?.plugin?.[
+        'traefik-oidc-auth'
+      ];
     } catch (err) {
       const status = (err as { code?: number })?.code;
       if (status === 404) return undefined;
-      this.logger.error(
-        `Failed to read middleware for routing id ${routingId}`,
-        err,
-      );
+      this.logger.error(`Failed to read middleware for routing id ${routingId}`, err);
       throw err;
     }
   }
@@ -303,7 +270,7 @@ export class ProjectAuthService {
     routingId: string,
     slug: EnvironmentSlug,
     config: ProjectAuthOidcConfig,
-    bypassAuthPaths?: string[],
+    bypassAuthPaths?: string[]
   ): Promise<void> {
     const effectiveConfig = await this.preserveClientSecret(routingId, config);
     const extras: MiddlewareExtras = {
@@ -311,9 +278,7 @@ export class ProjectAuthService {
       bypassAuthPaths,
     };
     const mw = this.buildMiddleware(routingId, effectiveConfig, extras);
-    const ir = this.buildIngressRoute(routingId, slug, [
-      this.oidcMiddlewareRef(routingId),
-    ]);
+    const ir = this.buildIngressRoute(routingId, slug, [this.oidcMiddlewareRef(routingId)]);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
   }
@@ -322,12 +287,10 @@ export class ProjectAuthService {
     routingId: string,
     slug: EnvironmentSlug,
     tenantName: string,
-    bypassAuthPaths?: string[],
+    bypassAuthPaths?: string[]
   ): Promise<void> {
     if (!this.makaraClientSecret) {
-      throw new Error(
-        "MAKARA_OIDC_CLIENT_SECRET is not set — cannot enable Makara auth.",
-      );
+      throw new Error('MAKARA_OIDC_CLIENT_SECRET is not set — cannot enable Makara auth.');
     }
     const config: ProjectAuthOidcConfig = {
       clientId: this.makaraClientId,
@@ -336,7 +299,7 @@ export class ProjectAuthService {
     };
     const extras: MiddlewareExtras = {
       ...this.keycloakExtras(tenantName, this.makaraClientId),
-      tokenValidation: "AccessToken",
+      tokenValidation: 'AccessToken',
       bypassAuthPaths,
     };
     const mw = this.buildMiddleware(routingId, config, extras);
@@ -350,7 +313,7 @@ export class ProjectAuthService {
     fromRoutingId: string,
     toRoutingId: string,
     toSlug: EnvironmentSlug,
-    makaraFallbackTenantName?: string,
+    makaraFallbackTenantName?: string
   ): Promise<void> {
     const sourceSpec = await this.readPluginSpec(fromRoutingId);
     if (!sourceSpec) {
@@ -358,9 +321,7 @@ export class ProjectAuthService {
         await this.applyMakara(toRoutingId, toSlug, makaraFallbackTenantName);
         return;
       }
-      throw new Error(
-        `Cannot inherit app auth: source middleware ${middlewareName(fromRoutingId)} not found`,
-      );
+      throw new Error(`Cannot inherit app auth: source middleware ${middlewareName(fromRoutingId)} not found`);
     }
 
     await this.applyClonedSpec(toRoutingId, toSlug, sourceSpec);
@@ -369,7 +330,7 @@ export class ProjectAuthService {
   private async applyClonedSpec(
     routingId: string,
     slug: EnvironmentSlug,
-    sourceSpec: TraefikOidcPluginSpec,
+    sourceSpec: TraefikOidcPluginSpec
   ): Promise<void> {
     const clonedSpec: TraefikOidcPluginSpec = {
       ...sourceSpec,
@@ -377,21 +338,16 @@ export class ProjectAuthService {
     };
     const mw = {
       apiVersion: `${TRAEFIK_GROUP}/${TRAEFIK_VERSION}`,
-      kind: "Middleware",
+      kind: 'Middleware',
       metadata: { name: middlewareName(routingId), namespace: this.namespace },
-      spec: { plugin: { "traefik-oidc-auth": clonedSpec } },
+      spec: { plugin: { 'traefik-oidc-auth': clonedSpec } },
     };
-    const ir = this.buildIngressRoute(routingId, slug, [
-      this.oidcMiddlewareRef(routingId),
-    ]);
+    const ir = this.buildIngressRoute(routingId, slug, [this.oidcMiddlewareRef(routingId)]);
     await this.upsert(MIDDLEWARES_PLURAL, mw.metadata.name, mw);
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
   }
 
-  private async preserveClientSecret(
-    routingId: string,
-    config: ProjectAuthOidcConfig,
-  ): Promise<ProjectAuthOidcConfig> {
+  private async preserveClientSecret(routingId: string, config: ProjectAuthOidcConfig): Promise<ProjectAuthOidcConfig> {
     if (config.clientSecret?.trim()) return config;
     const existing = await this.readPluginSpec(routingId);
     const preserved = existing?.Provider?.ClientSecret;
@@ -400,18 +356,11 @@ export class ProjectAuthService {
   }
 
   async remove(routingId: string): Promise<void> {
-    await this.deleteIfExists(
-      INGRESSROUTES_PLURAL,
-      ingressRouteName(routingId),
-    );
+    await this.deleteIfExists(INGRESSROUTES_PLURAL, ingressRouteName(routingId));
     await this.deleteIfExists(MIDDLEWARES_PLURAL, middlewareName(routingId));
   }
 
-  private async upsert(
-    plural: string,
-    name: string,
-    body: object,
-  ): Promise<void> {
+  private async upsert(plural: string, name: string, body: object): Promise<void> {
     try {
       await this.customApi.createNamespacedCustomObject({
         group: TRAEFIK_GROUP,
@@ -435,8 +384,7 @@ export class ProjectAuthService {
     })) as { metadata?: { resourceVersion?: string } };
 
     const resourceVersion = existing.metadata?.resourceVersion;
-    const existingMeta =
-      (body as { metadata?: Record<string, unknown> }).metadata ?? {};
+    const existingMeta = (body as { metadata?: Record<string, unknown> }).metadata ?? {};
     const bodyWithVersion = {
       ...body,
       metadata: { ...existingMeta, resourceVersion },

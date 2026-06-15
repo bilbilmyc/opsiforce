@@ -1,79 +1,66 @@
-import { Index, Show, createEffect, createSignal } from "solid-js"
-import { toast } from "solid-sonner"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "~/components/ui/dialog"
-import { Button } from "~/components/ui/button"
-import Skeleton from "~/components/ui/skeleton"
-import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from "~/components/ui/switch"
-import { Plus, SlidersHorizontal, Trash2 } from "~/components/icons"
-import {
-  useEnvironmentVariables,
-  useUpdateEnvironmentVariables,
-} from "~/api/environment-variables"
-import type { ProjectEnvironment } from "~/api/environments"
+import { Index, Show, createEffect, createSignal } from 'solid-js';
+import { toast } from 'solid-sonner';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog';
+import { Button } from '~/components/ui/button';
+import Skeleton from '~/components/ui/skeleton';
+import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from '~/components/ui/switch';
+import { Plus, SlidersHorizontal, Trash2 } from '~/components/icons';
+import { useEnvironmentVariables, useUpdateEnvironmentVariables } from '~/api/environment-variables';
+import type { ProjectEnvironment } from '~/api/environments';
 
 interface VariableDraft {
-  key: string
-  value: string
+  key: string;
+  value: string;
 }
 
 export interface EnvironmentVariablesDialogProps {
-  projectId: string
-  environment: ProjectEnvironment | null
-  onOpenChange: (open: boolean) => void
+  projectId: string;
+  environment: ProjectEnvironment | null;
+  onOpenChange: (open: boolean) => void;
 }
 
 export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDialogProps) {
-  const open = () => props.environment !== null
-  const environmentId = () => props.environment?.id ?? ""
-  const environmentName = () => props.environment?.name ?? ""
-  const isDevelopment = () => props.environment?.isDefault === true
+  const open = () => props.environment !== null;
+  const environmentId = () => props.environment?.id ?? '';
+  const environmentName = () => props.environment?.name ?? '';
+  const isDevelopment = () => props.environment?.isDefault === true;
 
-  const [drafts, setDrafts] = createSignal<VariableDraft[]>([])
-  const [restartApp, setRestartApp] = createSignal(false)
-  const [loadedFor, setLoadedFor] = createSignal<string | null>(null)
+  const [drafts, setDrafts] = createSignal<VariableDraft[]>([]);
+  const [restartApp, setRestartApp] = createSignal(false);
+  const [loadedFor, setLoadedFor] = createSignal<string | null>(null);
 
-  const query = useEnvironmentVariables(
-    () => props.projectId,
-    environmentId,
-    { enabled: open },
-  )
-  const update = useUpdateEnvironmentVariables()
+  const query = useEnvironmentVariables(() => props.projectId, environmentId, { enabled: open });
+  const update = useUpdateEnvironmentVariables();
 
   createEffect(() => {
     if (!open()) {
-      setLoadedFor(null)
-      return
+      setLoadedFor(null);
+      return;
     }
-    if (loadedFor() === environmentId()) return
-    const data = query.data
-    if (!data) return
-    setDrafts(data.variables.map((v) => ({ key: v.key, value: v.value })))
-    setRestartApp(!isDevelopment())
-    setLoadedFor(environmentId())
-  })
+    if (loadedFor() === environmentId()) return;
+    const data = query.data;
+    if (!data) return;
+    setDrafts(data.variables.map((v) => ({ key: v.key, value: v.value })));
+    setRestartApp(!isDevelopment());
+    setLoadedFor(environmentId());
+  });
 
   const setDraft = (index: number, patch: Partial<VariableDraft>) => {
-    setDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)))
-  }
+    setDrafts((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+  };
 
-  const addDraft = () => setDrafts((prev) => [...prev, { key: "", value: "" }])
+  const addDraft = () => setDrafts((prev) => [...prev, { key: '', value: '' }]);
 
-  const removeDraft = (index: number) =>
-    setDrafts((prev) => prev.filter((_, i) => i !== index))
+  const removeDraft = (index: number) => setDrafts((prev) => prev.filter((_, i) => i !== index));
 
   const save = () => {
-    const environment = props.environment
-    if (!environment) return
+    const environment = props.environment;
+    if (!environment) return;
     const variables = Object.fromEntries(
       drafts()
         .map((d) => [d.key.trim(), d.value] as const)
-        .filter(([key]) => key.length > 0),
-    )
+        .filter(([key]) => key.length > 0)
+    );
     update.mutate(
       {
         projectId: props.projectId,
@@ -83,23 +70,22 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
       },
       {
         onSuccess: (result) => {
-          if (result.restart === "app") toast.success("Variables saved — restarting the app")
-          else if (result.restart === "pod")
-            toast.success("Variables saved — restarting the environment to apply them")
-          else toast.success("Variables saved")
-          props.onOpenChange(false)
+          if (result.restart === 'app') toast.success('Variables saved — restarting the app');
+          else if (result.restart === 'pod')
+            toast.success('Variables saved — restarting the environment to apply them');
+          else toast.success('Variables saved');
+          props.onOpenChange(false);
         },
-        onError: (err) =>
-          toast.error(err instanceof Error ? err.message : "Failed to save variables"),
-      },
-    )
-  }
+        onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to save variables'),
+      }
+    );
+  };
 
   return (
     <Dialog
       open={open()}
       onOpenChange={(value) => {
-        if (!value) props.onOpenChange(false)
+        if (!value) props.onOpenChange(false);
       }}
     >
       <DialogContent class="max-w-lg">
@@ -108,8 +94,7 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
           Environment variables — {environmentName()}
         </DialogTitle>
         <DialogDescription>
-          Configuration values the app reads when it starts. Changes take effect after the app
-          restarts.
+          Configuration values the app reads when it starts. Changes take effect after the app restarts.
         </DialogDescription>
 
         <div class="mt-4 space-y-4">
@@ -162,14 +147,12 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
                 <SwitchControl>
                   <SwitchThumb />
                 </SwitchControl>
-                <SwitchLabel class="text-xs text-foreground">
-                  Restart app to apply now
-                </SwitchLabel>
+                <SwitchLabel class="text-xs text-foreground">Restart app to apply now</SwitchLabel>
               </Switch>
               <p class="mt-1.5 text-xs text-muted-foreground">
                 {restartApp()
-                  ? "The app restarts right after saving and picks up the new values."
-                  : "Values are saved now and apply the next time the app restarts."}
+                  ? 'The app restarts right after saving and picks up the new values.'
+                  : 'Values are saved now and apply the next time the app restarts.'}
               </p>
             </div>
           </Show>
@@ -185,5 +168,5 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

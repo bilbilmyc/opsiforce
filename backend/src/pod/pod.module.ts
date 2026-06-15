@@ -1,6 +1,6 @@
-import { Module } from "@nestjs/common"
-import { PodService } from "./pod.service"
-import { PodCacheService } from "./pod.cache.service"
+import { Module } from '@nestjs/common';
+import { PodService } from './pod.service';
+import { PodCacheService } from './pod.cache.service';
 
 @Module({
   providers: [PodService, PodCacheService],

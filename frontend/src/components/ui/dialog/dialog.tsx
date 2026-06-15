@@ -1,8 +1,8 @@
-import { Dialog as Kobalte } from "@kobalte/core/dialog"
-import type { ComponentProps } from "solid-js"
+import { Dialog as Kobalte } from '@kobalte/core/dialog';
+import type { ComponentProps } from 'solid-js';
 
 export function Dialog(props: ComponentProps<typeof Kobalte>) {
-  return <Kobalte {...props} />
+  return <Kobalte {...props} />;
 }
 
-export { Kobalte as KobalteDialog }
+export { Kobalte as KobalteDialog };

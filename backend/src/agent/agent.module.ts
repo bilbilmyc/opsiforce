@@ -1,6 +1,6 @@
-import { Global, Module } from "@nestjs/common"
-import { AgentController } from "./agent.controller"
-import { AgentService } from "./agent.service"
+import { Global, Module } from '@nestjs/common';
+import { AgentController } from './agent.controller';
+import { AgentService } from './agent.service';
 
 @Global()
 @Module({

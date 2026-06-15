@@ -1,62 +1,57 @@
-import { Show, onCleanup, type Component } from "solid-js"
-import type { BaseRouterProps } from "@solidjs/router"
-import { AppBaseProviders, AppInterface } from "@opencode-ai/app/app"
-import { PlatformProvider } from "@opencode-ai/app/context/platform"
-import { ServerConnection } from "@opencode-ai/app/context/server"
-import { useGlobalSDK } from "@opencode-ai/app/context/global-sdk"
-import { useSyncProjectTitle } from "~/api/projects"
-import FileUpload from "~/components/file-upload"
-import OpencodeOverrides from "./opencode-overrides"
-import { platform } from "./platform"
+import { Show, onCleanup, type Component } from 'solid-js';
+import type { BaseRouterProps } from '@solidjs/router';
+import { AppBaseProviders, AppInterface } from '@opencode-ai/app/app';
+import { PlatformProvider } from '@opencode-ai/app/context/platform';
+import { ServerConnection } from '@opencode-ai/app/context/server';
+import { useGlobalSDK } from '@opencode-ai/app/context/global-sdk';
+import { useSyncProjectTitle } from '~/api/projects';
+import FileUpload from '~/components/file-upload';
+import OpencodeOverrides from './opencode-overrides';
+import { platform } from './platform';
 
 function OpenCodeEventBridge(props: { onReload: () => void; onTitle: (title: string) => void }) {
-  const globalSDK = useGlobalSDK()
-  let timer: ReturnType<typeof setTimeout> | undefined
+  const globalSDK = useGlobalSDK();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   const unsub = globalSDK.event.listen((e) => {
-    const event = e.details
-    if (event.type === "session.idle") {
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(() => props.onReload(), 1500)
-      return
+    const event = e.details;
+    if (event.type === 'session.idle') {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => props.onReload(), 1500);
+      return;
     }
-    if (event.type === "session.updated" && !event.properties.info.parentID) {
-      props.onTitle(event.properties.info.title)
+    if (event.type === 'session.updated' && !event.properties.info.parentID) {
+      props.onTitle(event.properties.info.title);
     }
-  })
+  });
   onCleanup(() => {
-    unsub()
-    if (timer) clearTimeout(timer)
-  })
-  return null
+    unsub();
+    if (timer) clearTimeout(timer);
+  });
+  return null;
 }
 
 export interface ProjectChatTabProps {
-  projectId: string
-  environmentId: string
-  router: Component<BaseRouterProps>
-  currentTitle: string | null
-  onPreviewReload: () => void
+  projectId: string;
+  environmentId: string;
+  router: Component<BaseRouterProps>;
+  currentTitle: string | null;
+  onPreviewReload: () => void;
 }
 
 export default function ProjectChatTab(props: ProjectChatTabProps) {
-  const syncTitle = useSyncProjectTitle()
-  const tunnelUrl = () => `${window.location.origin}/api/proxy/${props.environmentId}`
+  const syncTitle = useSyncProjectTitle();
+  const tunnelUrl = () => `${window.location.origin}/api/proxy/${props.environmentId}`;
 
   return (
     <>
       <Show when={tunnelUrl()} keyed>
         {(url) => {
-          const server: ServerConnection.Http = { type: "http", http: { url } }
-          const serverKey = ServerConnection.Key.make(url)
+          const server: ServerConnection.Http = { type: 'http', http: { url } };
+          const serverKey = ServerConnection.Key.make(url);
           return (
             <PlatformProvider value={platform}>
               <AppBaseProviders>
-                <AppInterface
-                  defaultServer={serverKey}
-                  servers={[server]}
-                  router={props.router}
-                  disableHealthCheck
-                >
+                <AppInterface defaultServer={serverKey} servers={[server]} router={props.router} disableHealthCheck>
                   <OpencodeOverrides />
                   <OpenCodeEventBridge
                     onReload={props.onPreviewReload}
@@ -65,10 +60,10 @@ export default function ProjectChatTab(props: ProjectChatTabProps) {
                 </AppInterface>
               </AppBaseProviders>
             </PlatformProvider>
-          )
+          );
         }}
       </Show>
       <FileUpload projectId={props.projectId} environmentId={props.environmentId} />
     </>
-  )
+  );
 }

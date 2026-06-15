@@ -1,16 +1,16 @@
-import { Module, forwardRef } from "@nestjs/common"
-import { BullModule } from "@nestjs/bullmq"
-import { BullBoardModule } from "@bull-board/nestjs"
-import { BullMQAdapter } from "@bull-board/api/bullMQAdapter"
-import { ScheduleService } from "./schedule.service"
-import { ScheduleWorker } from "./schedule.worker"
-import { ScheduleAgentController } from "./schedule.controller.agent"
-import { ScheduleAdminController } from "./schedule.controller.admin"
-import { GatewayModule } from "../gateway/gateway.module"
-import { PodModule } from "../pod/pod.module"
-import { ProjectModule } from "../project/project.module"
-import { ProxyService } from "../proxy/proxy.service"
-import { SCHEDULE_QUEUE_NAME } from "./schedule.types"
+import { Module, forwardRef } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { ScheduleService } from './schedule.service';
+import { ScheduleWorker } from './schedule.worker';
+import { ScheduleAgentController } from './schedule.controller.agent';
+import { ScheduleAdminController } from './schedule.controller.admin';
+import { GatewayModule } from '../gateway/gateway.module';
+import { PodModule } from '../pod/pod.module';
+import { ProjectModule } from '../project/project.module';
+import { ProxyService } from '../proxy/proxy.service';
+import { SCHEDULE_QUEUE_NAME } from './schedule.types';
 
 @Module({
   imports: [

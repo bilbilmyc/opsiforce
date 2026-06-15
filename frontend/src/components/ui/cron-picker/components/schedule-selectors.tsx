@@ -1,54 +1,54 @@
-import { createMemo, createSignal, For, Show } from "solid-js"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "~/components/ui/select"
-import MultiSelect from "./multi-select"
-import { getUnits } from "../lib/units"
-import { determineDefaultSelector, updateCronString } from "../lib/utils"
-import { type CronState, ScheduleSelector, type ScheduleSelectorObject, type ValuePayload } from "../lib/types"
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '~/components/ui/select';
+import MultiSelect from './multi-select';
+import { getUnits } from '../lib/units';
+import { determineDefaultSelector, updateCronString } from '../lib/utils';
+import { type CronState, ScheduleSelector, type ScheduleSelectorObject, type ValuePayload } from '../lib/types';
 
 interface Props {
-  constructCronState: (val: ValuePayload) => void
-  cronState: CronState
-  selectorText: string
-  activeScheduleSelectors: ScheduleSelector[]
-  updateCronState: (cron: string) => void
+  constructCronState: (val: ValuePayload) => void;
+  cronState: CronState;
+  selectorText: string;
+  activeScheduleSelectors: ScheduleSelector[];
+  updateCronState: (cron: string) => void;
 }
 
 const scheduleSelector: ScheduleSelectorObject[] = [
-  { name: ScheduleSelector.year, prefix: "on" },
-  { name: ScheduleSelector.weekday, prefix: "on" },
-  { name: ScheduleSelector.month, prefix: "on" },
-  { name: ScheduleSelector.day, prefix: "and" },
-  { name: ScheduleSelector.hour, prefix: "at" },
-  { name: ScheduleSelector.minute, prefix: ":" },
-]
+  { name: ScheduleSelector.year, prefix: 'on' },
+  { name: ScheduleSelector.weekday, prefix: 'on' },
+  { name: ScheduleSelector.month, prefix: 'on' },
+  { name: ScheduleSelector.day, prefix: 'and' },
+  { name: ScheduleSelector.hour, prefix: 'at' },
+  { name: ScheduleSelector.minute, prefix: ':' },
+];
 
-const units = getUnits()
+const units = getUnits();
 
 export default function ScheduleSelectors(props: Props) {
   const activeOptions = createMemo(() =>
-    scheduleSelector.filter((opt) => props.activeScheduleSelectors.includes(opt.name)),
-  )
+    scheduleSelector.filter((opt) => props.activeScheduleSelectors.includes(opt.name))
+  );
 
   const [selectedSchedule, setSelectedSchedule] = createSignal<ScheduleSelector>(
-    determineDefaultSelector(activeOptions(), props.cronState.expression),
-  )
+    determineDefaultSelector(activeOptions(), props.cronState.expression)
+  );
 
   const visibleSelectors = createMemo(() => {
-    const index = scheduleSelector.findIndex((s) => s.name === selectedSchedule())
+    const index = scheduleSelector.findIndex((s) => s.name === selectedSchedule());
     return scheduleSelector
       .slice(index + 1)
       .map((opt) => {
-        const unitIndex = units.findIndex((u) => u.name === opt.name)
-        return unitIndex === -1 ? null : { ...opt, unit: units[unitIndex], unitIndex }
+        const unitIndex = units.findIndex((u) => u.name === opt.name);
+        return unitIndex === -1 ? null : { ...opt, unit: units[unitIndex], unitIndex };
       })
-      .filter((x): x is NonNullable<typeof x> => !!x)
-  })
+      .filter((x): x is NonNullable<typeof x> => !!x);
+  });
 
   const handleChangeSelector = (option: ScheduleSelector | null) => {
-    if (!option) return
-    setSelectedSchedule(option)
-    props.updateCronState(updateCronString(props.cronState.expression, option, activeOptions()))
-  }
+    if (!option) return;
+    setSelectedSchedule(option);
+    props.updateCronState(updateCronString(props.cronState.expression, option, activeOptions()));
+  };
 
   return (
     <div class="flex flex-col gap-2">
@@ -84,5 +84,5 @@ export default function ScheduleSelectors(props: Props) {
         </div>
       </Show>
     </div>
-  )
+  );
 }

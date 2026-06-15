@@ -1,290 +1,290 @@
-const API_BASE = "/api"
+const API_BASE = '/api';
 
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
-    message: string,
+    message: string
   ) {
-    super(message)
+    super(message);
   }
 }
 
 async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
   try {
-    const text = await res.text()
-    if (!text) return fallback
-    const body: { message?: string | string[] } = JSON.parse(text)
-    if (Array.isArray(body.message)) return body.message.join(", ")
-    if (typeof body.message === "string" && body.message.length > 0) return body.message
-    return fallback
+    const text = await res.text();
+    if (!text) return fallback;
+    const body: { message?: string | string[] } = JSON.parse(text);
+    if (Array.isArray(body.message)) return body.message.join(', ');
+    if (typeof body.message === 'string' && body.message.length > 0) return body.message;
+    return fallback;
   } catch {
-    return fallback
+    return fallback;
   }
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     ...(options?.headers as Record<string, string>),
-  }
+  };
   if (options?.body) {
-    headers["Content-Type"] = "application/json"
+    headers['Content-Type'] = 'application/json';
   }
 
-  const tenant = localStorage.getItem("tenant")
+  const tenant = localStorage.getItem('tenant');
   if (tenant) {
-    headers["x-tenant-name"] = tenant
+    headers['x-tenant-name'] = tenant;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers })
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
     if (res.status === 401) {
-      window.location.reload()
-      throw new Error("Unauthorized")
+      window.location.reload();
+      throw new Error('Unauthorized');
     }
-    if (res.status === 403 && window.location.pathname !== "/permission-denied") {
-      localStorage.removeItem("tenant")
-      window.location.href = "/permission-denied"
-      throw new Error("Forbidden")
+    if (res.status === 403 && window.location.pathname !== '/permission-denied') {
+      localStorage.removeItem('tenant');
+      window.location.href = '/permission-denied';
+      throw new Error('Forbidden');
     }
-    const message = await extractErrorMessage(res, `Error: ${res.status}`)
-    throw new ApiError(res.status, message)
+    const message = await extractErrorMessage(res, `Error: ${res.status}`);
+    throw new ApiError(res.status, message);
   }
-  const text = await res.text()
-  return text ? JSON.parse(text) : (undefined as T)
+  const text = await res.text();
+  return text ? JSON.parse(text) : (undefined as T);
 }
 
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, {
-      method: "POST",
+      method: 'POST',
       body: body ? JSON.stringify(body) : undefined,
     }),
-  patch: <T>(path: string, body: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),
-  put: <T>(path: string, body: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
-  delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
-}
+  patch: <T>(path: string, body: unknown) => request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown) => request<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
+  delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+};
 
 export interface Tenant {
-  id: string
-  name: string
-  displayName: string
+  id: string;
+  name: string;
+  displayName: string;
 }
 
-export type ProjectStatus = "starting" | "active" | "suspended" | "disabled" | "failed"
+export type ProjectStatus = 'starting' | 'active' | 'suspended' | 'disabled' | 'failed';
 
-export type RequestLogMode = "off" | "metadata" | "full"
+export type RequestLogMode = 'off' | 'metadata' | 'full';
 
-export type PodClass = "small" | "medium" | "large" | "custom"
+export type PodClass = 'small' | 'medium' | 'large' | 'custom';
 
 export interface PodResources {
-  cpuMillicores: number
-  memoryRequestMib: number
-  memoryLimitMib: number
+  cpuMillicores: number;
+  memoryRequestMib: number;
+  memoryLimitMib: number;
 }
 
 export interface PodClassPreset {
-  podClass: "small" | "medium" | "large"
-  resources: PodResources
+  podClass: 'small' | 'medium' | 'large';
+  resources: PodResources;
 }
 
 export interface PodClassCatalog {
-  presets: PodClassPreset[]
-  customBounds: { min: PodResources; max: PodResources }
+  presets: PodClassPreset[];
+  customBounds: { min: PodResources; max: PodResources };
 }
 
 export interface UpdateProjectPodClassDto {
-  podClass: PodClass
-  cpuMillicores?: number
-  memoryRequestMib?: number
-  memoryLimitMib?: number
+  podClass: PodClass;
+  cpuMillicores?: number;
+  memoryRequestMib?: number;
+  memoryLimitMib?: number;
 }
 
 export interface Project {
-  id: string
-  tenantId: string
-  workspaceId: string | null
-  agentId: string
-  title: string | null
-  description: string | null
-  status: ProjectStatus
-  bifrostProjectId: string | null
-  timeoutIdle: number
-  appTimeoutIdle: number
-  timezone: string
-  requestLogMode: RequestLogMode
-  requestLogBodyLimit: number
-  podClass: PodClass
-  cpuMillicores: number
-  memoryRequestMib: number
-  memoryLimitMib: number
-  authMode: ProjectAuthMode
-  isPinned: boolean
-  pinnedAt: string | null
-  hasApp: boolean
-  appName: string | null
-  appDescription: string | null
-  lastActiveAt: string | null
-  createdAt: string
-  disabled: boolean
-  pinnedEnvironmentId: string | null
+  id: string;
+  tenantId: string;
+  workspaceId: string | null;
+  agentId: string;
+  title: string | null;
+  description: string | null;
+  status: ProjectStatus;
+  bifrostProjectId: string | null;
+  timeoutIdle: number;
+  appTimeoutIdle: number;
+  timezone: string;
+  requestLogMode: RequestLogMode;
+  requestLogBodyLimit: number;
+  podClass: PodClass;
+  cpuMillicores: number;
+  memoryRequestMib: number;
+  memoryLimitMib: number;
+  authMode: ProjectAuthMode;
+  isPinned: boolean;
+  pinnedAt: string | null;
+  hasApp: boolean;
+  appName: string | null;
+  appDescription: string | null;
+  lastActiveAt: string | null;
+  createdAt: string;
+  disabled: boolean;
+  pinnedEnvironmentId: string | null;
 }
 
 export const podClassApi = {
-  catalog: () => api.get<PodClassCatalog>("/pod-classes"),
+  catalog: () => api.get<PodClassCatalog>('/pod-classes'),
   update: (projectId: string, dto: UpdateProjectPodClassDto) =>
     api.put<Project>(`/projects/${projectId}/pod-class`, dto),
-}
+};
 
 export interface ProjectState {
-  id: string
-  status: ProjectStatus
-  workspaceId: string | null
-  title: string | null
-  operation: ProjectOperation | null
-  app: ProjectAppMeta | null
+  id: string;
+  status: ProjectStatus;
+  workspaceId: string | null;
+  title: string | null;
+  operation: ProjectOperation | null;
+  app: ProjectAppMeta | null;
 }
 
 export interface ProjectAppMeta {
-  exists: boolean
-  name: string | null
-  description: string | null
+  exists: boolean;
+  name: string | null;
+  description: string | null;
 }
 
-export type ProjectOperationStatus = "queued" | "copying" | "starting" | "failed"
+export type ProjectOperationStatus = 'queued' | 'copying' | 'starting' | 'failed';
 
 export interface ProjectOperation {
-  type: "duplicate"
-  status: ProjectOperationStatus
-  bytesTotal: number
-  bytesCopied: number
-  error: string | null
-  startedAt: string | null
-  completedAt: string | null
-  updatedAt: string
+  type: 'duplicate';
+  status: ProjectOperationStatus;
+  bytesTotal: number;
+  bytesCopied: number;
+  error: string | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  updatedAt: string;
 }
 
-export type ProjectAuthMode = "public" | "manual" | "makara"
+export type ProjectAuthMode = 'public' | 'manual' | 'makara';
 
 export interface ProjectAuthOidcConfig {
-  clientId?: string
-  clientSecret?: string
-  discoveryUrl?: string
-  scope?: string
+  clientId?: string;
+  clientSecret?: string;
+  discoveryUrl?: string;
+  scope?: string;
 }
 
 export interface ProjectAuthResponse {
-  mode: ProjectAuthMode
-  config?: ProjectAuthOidcConfig
-  bypassAuthPaths?: string[]
-  callbackUrls: string[]
+  mode: ProjectAuthMode;
+  config?: ProjectAuthOidcConfig;
+  bypassAuthPaths?: string[];
+  callbackUrls: string[];
 }
 
 export interface UpdateProjectAuthDto {
-  mode: ProjectAuthMode
-  config?: ProjectAuthOidcConfig
-  bypassAuthPaths?: string[]
+  mode: ProjectAuthMode;
+  config?: ProjectAuthOidcConfig;
+  bypassAuthPaths?: string[];
 }
 
-export type WorkspaceType = "private" | "shared"
+export type WorkspaceType = 'private' | 'shared';
 
 export interface Workspace {
-  id: string
-  tenantId: string
-  type: WorkspaceType
-  ownerId: string | null
-  name: string
-  description: string | null
-  createdAt: string
-  updatedAt: string
-  memberCount: number
-  projectCount: number
+  id: string;
+  tenantId: string;
+  type: WorkspaceType;
+  ownerId: string | null;
+  name: string;
+  description: string | null;
+  createdAt: string;
+  updatedAt: string;
+  memberCount: number;
+  projectCount: number;
 }
 
 export interface Agent {
-  id: string
-  name: string
-  displayName: string | null
-  description: string | null
+  id: string;
+  name: string;
+  displayName: string | null;
+  description: string | null;
 }
 
 export interface WorkspacePreferences {
-  workspaceOrder: string[]
-  updatedAt: string | null
+  workspaceOrder: string[];
+  updatedAt: string | null;
 }
 
 export interface OpenCodeSession {
-  id: string
-  parentID?: string
-  directory: string
-  title: string
-  time: { created: number; updated: number }
+  id: string;
+  parentID?: string;
+  directory: string;
+  title: string;
+  time: { created: number; updated: number };
 }
 
 export interface User {
-  id: string
-  keycloakId: string
-  email: string | null
-  displayName: string | null
-  createdAt: string
-  updatedAt: string
+  id: string;
+  keycloakId: string;
+  email: string | null;
+  displayName: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export const userApi = {
-  me: () => api.post<User>("/users/me"),
-}
+  me: () => api.post<User>('/users/me'),
+};
 
 export interface Schedule {
-  id: string
-  projectId: string
-  projectEnvironmentId: string
-  tenantId: string
-  name: string
-  cronPattern: string
-  timeZone: string
-  targetPath: string
-  method: string
-  body: unknown
-  headers: unknown
-  isActive: boolean
-  createdAt: string
-  updatedAt: string
-  projectTitle?: string | null
-  environmentName?: string | null
-  isDefault?: boolean
+  id: string;
+  projectId: string;
+  projectEnvironmentId: string;
+  tenantId: string;
+  name: string;
+  cronPattern: string;
+  timeZone: string;
+  targetPath: string;
+  method: string;
+  body: unknown;
+  headers: unknown;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  projectTitle?: string | null;
+  environmentName?: string | null;
+  isDefault?: boolean;
 }
 
 export interface ScheduleExecution {
-  id: string
-  scheduleId: string
-  trigger: string
-  firedAt: string
-  statusCode: number | null
-  latencyMs: number | null
-  error: string | null
+  id: string;
+  scheduleId: string;
+  trigger: string;
+  firedAt: string;
+  statusCode: number | null;
+  latencyMs: number | null;
+  error: string | null;
 }
 
 export interface UpdateScheduleDto {
-  cronPattern?: string
-  targetPath?: string
-  method?: string
-  body?: unknown
-  headers?: Record<string, string>
-  isActive?: boolean
+  cronPattern?: string;
+  targetPath?: string;
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string>;
+  isActive?: boolean;
 }
 
 export interface ScheduleListFilter {
-  environmentId?: string
-  projectEnvironmentId?: string
+  environmentId?: string;
+  projectEnvironmentId?: string;
 }
 
 export const scheduleApi = {
   list: (filter?: ScheduleListFilter) => {
-    const params = new URLSearchParams()
-    if (filter?.environmentId) params.set("environmentId", filter.environmentId)
-    if (filter?.projectEnvironmentId) params.set("projectEnvironmentId", filter.projectEnvironmentId)
-    const qs = params.toString()
-    return api.get<Schedule[]>(qs ? `/schedules?${qs}` : "/schedules")
+    const params = new URLSearchParams();
+    if (filter?.environmentId) params.set('environmentId', filter.environmentId);
+    if (filter?.projectEnvironmentId) params.set('projectEnvironmentId', filter.projectEnvironmentId);
+    const qs = params.toString();
+    return api.get<Schedule[]>(qs ? `/schedules?${qs}` : '/schedules');
   },
   update: (projectId: string, scheduleId: string, dto: UpdateScheduleDto) =>
     api.patch<Schedule>(`/projects/${projectId}/schedules/${scheduleId}`, dto),
@@ -293,20 +293,20 @@ export const scheduleApi = {
     api.post<{ success: boolean }>(`/projects/${projectId}/schedules/${scheduleId}/run`),
   getExecutions: (scheduleId: string, projectId: string, limit = 50) =>
     api.get<ScheduleExecution[]>(`/projects/${projectId}/schedules/${scheduleId}/executions?limit=${limit}`),
-}
+};
 
 export interface TimeoutDefaults {
-  defaultTimeoutIdle: number
-  defaultAppTimeoutIdle: number
+  defaultTimeoutIdle: number;
+  defaultAppTimeoutIdle: number;
 }
 
 export interface BudgetDefaults {
-  defaultTenantBudget: number
-  defaultTenantBudgetDuration: string
-  defaultProjectBudget: number
-  defaultProjectBudgetDuration: string
-  defaultChatBudget: number
-  defaultChatBudgetDuration: string
-  defaultBackendBudget: number
-  defaultBackendBudgetDuration: string
+  defaultTenantBudget: number;
+  defaultTenantBudgetDuration: string;
+  defaultProjectBudget: number;
+  defaultProjectBudgetDuration: string;
+  defaultChatBudget: number;
+  defaultChatBudgetDuration: string;
+  defaultBackendBudget: number;
+  defaultBackendBudgetDuration: string;
 }

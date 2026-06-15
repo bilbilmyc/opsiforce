@@ -1,49 +1,49 @@
-import { createSignal } from "solid-js"
-import { toast } from "solid-sonner"
-import { useCreateWorkspace } from "~/api/workspaces"
-import { Button } from "~/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "~/components/ui/dialog"
+import { createSignal } from 'solid-js';
+import { toast } from 'solid-sonner';
+import { useCreateWorkspace } from '~/api/workspaces';
+import { Button } from '~/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog';
 
 export default function CreateWorkspaceDialog(props: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onCreated?: (workspaceId: string) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated?: (workspaceId: string) => void;
 }) {
-  const createWorkspace = useCreateWorkspace()
-  const [name, setName] = createSignal("")
-  const [description, setDescription] = createSignal("")
+  const createWorkspace = useCreateWorkspace();
+  const [name, setName] = createSignal('');
+  const [description, setDescription] = createSignal('');
 
   const reset = () => {
-    setName("")
-    setDescription("")
-  }
+    setName('');
+    setDescription('');
+  };
 
   const close = () => {
-    reset()
-    props.onOpenChange(false)
-  }
+    reset();
+    props.onOpenChange(false);
+  };
 
   const handleCreate = async () => {
-    const trimmed = name().trim()
-    if (!trimmed) return
+    const trimmed = name().trim();
+    if (!trimmed) return;
     try {
       const ws = await createWorkspace.mutateAsync({
         name: trimmed,
         description: description().trim() || null,
-      })
-      toast.success("Workspace created")
-      close()
-      props.onCreated?.(ws.id)
+      });
+      toast.success('Workspace created');
+      close();
+      props.onCreated?.(ws.id);
     } catch {
-      toast.error("Failed to create workspace")
+      toast.error('Failed to create workspace');
     }
-  }
+  };
 
   return (
     <Dialog
       open={props.open}
       onOpenChange={(open) => {
-        if (!open) close()
+        if (!open) close();
       }}
     >
       <DialogContent>
@@ -60,7 +60,7 @@ export default function CreateWorkspaceDialog(props: {
               value={name()}
               onInput={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && name().trim()) handleCreate()
+                if (e.key === 'Enter' && name().trim()) handleCreate();
               }}
               class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               placeholder="e.g. Internal tools"
@@ -68,9 +68,7 @@ export default function CreateWorkspaceDialog(props: {
             />
           </div>
           <div>
-            <label class="text-xs text-muted-foreground mb-1 block">
-              Description (optional)
-            </label>
+            <label class="text-xs text-muted-foreground mb-1 block">Description (optional)</label>
             <textarea
               rows={2}
               value={description()}
@@ -84,15 +82,11 @@ export default function CreateWorkspaceDialog(props: {
           <Button size="sm" variant="outline" onClick={close}>
             Cancel
           </Button>
-          <Button
-            size="sm"
-            onClick={handleCreate}
-            disabled={!name().trim() || createWorkspace.isPending}
-          >
+          <Button size="sm" onClick={handleCreate} disabled={!name().trim() || createWorkspace.isPending}>
             Create
           </Button>
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

@@ -1,7 +1,7 @@
-import { forwardRef, Global, Module } from "@nestjs/common"
-import { UserController } from "./user.controller"
-import { UserService } from "./user.service"
-import { WorkspaceModule } from "../workspace/workspace.module"
+import { forwardRef, Global, Module } from '@nestjs/common';
+import { UserController } from './user.controller';
+import { UserService } from './user.service';
+import { WorkspaceModule } from '../workspace/workspace.module';
 
 @Global()
 @Module({

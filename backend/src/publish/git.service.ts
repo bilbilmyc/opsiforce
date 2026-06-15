@@ -1,59 +1,59 @@
-import { Injectable, Logger } from "@nestjs/common"
-import { execFile } from "node:child_process"
-import { promisify } from "node:util"
+import { Injectable, Logger } from '@nestjs/common';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
-const run = promisify(execFile)
+const run = promisify(execFile);
 
-const BASE_CONFIG = ["-c", "safe.directory=*", "-c", "core.hooksPath=/dev/null"]
-const COMMITTER = ["-c", "user.email=publish@opsiforce.local", "-c", "user.name=OpsiForce Publish"]
+const BASE_CONFIG = ['-c', 'safe.directory=*', '-c', 'core.hooksPath=/dev/null'];
+const COMMITTER = ['-c', 'user.email=publish@opsiforce.local', '-c', 'user.name=OpsiForce Publish'];
 
 @Injectable()
 export class GitService {
-  private readonly logger = new Logger(GitService.name)
+  private readonly logger = new Logger(GitService.name);
 
   private async git(cwd: string, args: string[]): Promise<string> {
-    const { stdout } = await run("git", [...BASE_CONFIG, ...args], { cwd, maxBuffer: 32 * 1024 * 1024 })
-    return stdout.trim()
+    const { stdout } = await run('git', [...BASE_CONFIG, ...args], { cwd, maxBuffer: 32 * 1024 * 1024 });
+    return stdout.trim();
   }
 
   async currentSha(dir: string): Promise<string> {
-    return this.git(dir, ["rev-parse", "HEAD"])
+    return this.git(dir, ['rev-parse', 'HEAD']);
   }
 
   async commitWorkingTree(dir: string, message: string): Promise<string> {
-    await this.git(dir, ["add", "-A"])
-    const staged = await this.git(dir, ["status", "--porcelain"])
+    await this.git(dir, ['add', '-A']);
+    const staged = await this.git(dir, ['status', '--porcelain']);
     if (staged.length > 0) {
-      await this.git(dir, [...COMMITTER, "commit", "--no-verify", "-m", message])
+      await this.git(dir, [...COMMITTER, 'commit', '--no-verify', '-m', message]);
     }
-    return this.currentSha(dir)
+    return this.currentSha(dir);
   }
 
   async cloneLocal(srcDir: string, destDir: string): Promise<void> {
-    await run("git", [...BASE_CONFIG, "clone", "--local", srcDir, destDir], { maxBuffer: 32 * 1024 * 1024 })
+    await run('git', [...BASE_CONFIG, 'clone', '--local', srcDir, destDir], { maxBuffer: 32 * 1024 * 1024 });
   }
 
   async cloneNoCheckout(srcDir: string, destDir: string): Promise<void> {
-    await run("git", [...BASE_CONFIG, "clone", "--local", "--no-checkout", srcDir, destDir], {
+    await run('git', [...BASE_CONFIG, 'clone', '--local', '--no-checkout', srcDir, destDir], {
       maxBuffer: 32 * 1024 * 1024,
-    })
+    });
   }
 
   async fetchOrigin(dir: string): Promise<void> {
-    await this.git(dir, ["fetch", "origin", "--prune"])
+    await this.git(dir, ['fetch', 'origin', '--prune']);
   }
 
   async resetHard(dir: string, sha: string): Promise<void> {
-    await this.git(dir, ["reset", "--hard", sha])
+    await this.git(dir, ['reset', '--hard', sha]);
   }
 
   async isRepo(dir: string): Promise<boolean> {
     try {
-      await this.git(dir, ["rev-parse", "--git-dir"])
-      return true
+      await this.git(dir, ['rev-parse', '--git-dir']);
+      return true;
     } catch (err) {
-      this.logger.debug(`Not a git repository at ${dir}: ${(err as Error).message}`)
-      return false
+      this.logger.debug(`Not a git repository at ${dir}: ${(err as Error).message}`);
+      return false;
     }
   }
 }

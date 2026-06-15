@@ -1,13 +1,10 @@
-import { Module, OnApplicationBootstrap } from "@nestjs/common"
-import { BullModule, InjectQueue } from "@nestjs/bullmq"
-import { BullBoardModule } from "@bull-board/nestjs"
-import { BullMQAdapter } from "@bull-board/api/bullMQAdapter"
-import { Queue } from "bullmq"
-import { WorkspaceCleanupProcessor, WORKSPACE_CLEANUP_QUEUE } from "./workspace-cleanup.processor"
-import {
-  RequestLogCleanupProcessor,
-  REQUEST_LOG_CLEANUP_QUEUE,
-} from "./request-log-cleanup.processor"
+import { Module, OnApplicationBootstrap } from '@nestjs/common';
+import { BullModule, InjectQueue } from '@nestjs/bullmq';
+import { BullBoardModule } from '@bull-board/nestjs';
+import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
+import { Queue } from 'bullmq';
+import { WorkspaceCleanupProcessor, WORKSPACE_CLEANUP_QUEUE } from './workspace-cleanup.processor';
+import { RequestLogCleanupProcessor, REQUEST_LOG_CLEANUP_QUEUE } from './request-log-cleanup.processor';
 
 @Module({
   imports: [
@@ -21,19 +18,19 @@ import {
 export class CleanupModule implements OnApplicationBootstrap {
   constructor(
     @InjectQueue(WORKSPACE_CLEANUP_QUEUE) private readonly workspaceCleanupQueue: Queue,
-    @InjectQueue(REQUEST_LOG_CLEANUP_QUEUE) private readonly requestLogCleanupQueue: Queue,
+    @InjectQueue(REQUEST_LOG_CLEANUP_QUEUE) private readonly requestLogCleanupQueue: Queue
   ) {}
 
   async onApplicationBootstrap() {
     await this.workspaceCleanupQueue.upsertJobScheduler(
-      "workspace-cleanup-daily",
-      { pattern: "0 3 * * *" },
-      { name: "cleanup" },
-    )
+      'workspace-cleanup-daily',
+      { pattern: '0 3 * * *' },
+      { name: 'cleanup' }
+    );
     await this.requestLogCleanupQueue.upsertJobScheduler(
-      "request-log-cleanup-3d",
-      { pattern: "0 4 */3 * *" },
-      { name: "cleanup" },
-    )
+      'request-log-cleanup-3d',
+      { pattern: '0 4 */3 * *' },
+      { name: 'cleanup' }
+    );
   }
 }

@@ -1,64 +1,60 @@
-import { Injectable, Logger } from "@nestjs/common"
-import { eq } from "drizzle-orm"
-import crypto from "crypto"
-import { db } from "../../db"
-import { tenantSettings, tenants } from "../../db/schema"
-import { BifrostService } from "../bifrost/bifrost.service"
-import { DefaultsService } from "../defaults/defaults.service"
-import { EnvironmentService } from "../environment/environment.service"
+import { Injectable, Logger } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
+import crypto from 'crypto';
+import { db } from '../../db';
+import { tenantSettings, tenants } from '../../db/schema';
+import { BifrostService } from '../bifrost/bifrost.service';
+import { DefaultsService } from '../defaults/defaults.service';
+import { EnvironmentService } from '../environment/environment.service';
 
-export const OPSIFORCE_TENANT_GROUP_PREFIX = "role:opsiforce_tenant_name_"
-export const MAKARA_TENANT_GROUP_PREFIX = "role:makara_tenant_name_"
+export const OPSIFORCE_TENANT_GROUP_PREFIX = 'role:opsiforce_tenant_name_';
+export const MAKARA_TENANT_GROUP_PREFIX = 'role:makara_tenant_name_';
 
 @Injectable()
 export class TenantService {
-  private readonly logger = new Logger(TenantService.name)
-  private readonly pendingTenants = new Map<string, Promise<typeof tenants.$inferSelect>>()
+  private readonly logger = new Logger(TenantService.name);
+  private readonly pendingTenants = new Map<string, Promise<typeof tenants.$inferSelect>>();
   constructor(
     private readonly bifrostService: BifrostService,
     private readonly defaultsService: DefaultsService,
-    private readonly environmentService: EnvironmentService,
+    private readonly environmentService: EnvironmentService
   ) {}
 
   parseGroupsByPrefix(groupsHeader: string, prefix: string): string[] {
     return groupsHeader
-      .split(",")
+      .split(',')
       .map((g) => g.trim())
       .filter((g) => g.startsWith(prefix))
-      .map((g) => g.slice(prefix.length))
+      .map((g) => g.slice(prefix.length));
   }
 
   private async ensureBifrostCustomer(tenant: typeof tenants.$inferSelect) {
-    if (!this.bifrostService.isEnabled()) return tenant
+    if (!this.bifrostService.isEnabled()) return tenant;
 
     try {
-      const customerId = await this.bifrostService.createTenantCustomer(tenant.id, tenant.name)
-      return { ...tenant, bifrostTenantId: customerId }
+      const customerId = await this.bifrostService.createTenantCustomer(tenant.id, tenant.name);
+      return { ...tenant, bifrostTenantId: customerId };
     } catch (err) {
-      this.logger.warn(`Failed to create Bifrost customer for tenant ${tenant.name}: ${(err as Error).message}`)
-      return tenant
+      this.logger.warn(`Failed to create Bifrost customer for tenant ${tenant.name}: ${(err as Error).message}`);
+      return tenant;
     }
   }
 
   async getOrCreateTenant(name: string) {
-    const pending = this.pendingTenants.get(name)
-    if (pending) return pending
+    const pending = this.pendingTenants.get(name);
+    if (pending) return pending;
 
-    const promise = this.doGetOrCreateTenant(name)
-      .finally(() => this.pendingTenants.delete(name))
-    this.pendingTenants.set(name, promise)
-    return promise
+    const promise = this.doGetOrCreateTenant(name).finally(() => this.pendingTenants.delete(name));
+    this.pendingTenants.set(name, promise);
+    return promise;
   }
 
   private async doGetOrCreateTenant(name: string) {
-    const [existing] = await db
-      .select()
-      .from(tenants)
-      .where(eq(tenants.name, name))
+    const [existing] = await db.select().from(tenants).where(eq(tenants.name, name));
 
     if (existing) {
-      if (existing.bifrostTenantId) return existing
-      return this.ensureBifrostCustomer(existing)
+      if (existing.bifrostTenantId) return existing;
+      return this.ensureBifrostCustomer(existing);
     }
 
     const created = await db.transaction(async (tx) => {
@@ -66,34 +62,31 @@ export class TenantService {
         .insert(tenants)
         .values({ id: crypto.randomUUID(), name, displayName: name })
         .onConflictDoNothing()
-        .returning()
-      if (!inserted) return undefined
-      await tx
-        .insert(tenantSettings)
-        .values({ tenantId: inserted.id, makaraTenantName: name })
-        .onConflictDoNothing()
-      return inserted
-    })
+        .returning();
+      if (!inserted) return undefined;
+      await tx.insert(tenantSettings).values({ tenantId: inserted.id, makaraTenantName: name }).onConflictDoNothing();
+      return inserted;
+    });
 
-    const tenant = created ?? (await db.select().from(tenants).where(eq(tenants.name, name)))[0]
+    const tenant = created ?? (await db.select().from(tenants).where(eq(tenants.name, name)))[0];
     if (created) {
       await this.defaultsService.seedTenantDefaults(tenant.id).catch((err) => {
-        this.logger.warn(`Failed to seed defaults for tenant ${tenant.name}: ${(err as Error).message}`)
-      })
+        this.logger.warn(`Failed to seed defaults for tenant ${tenant.name}: ${(err as Error).message}`);
+      });
       await this.environmentService.ensureDefaultForTenant(tenant.id).catch((err) => {
-        this.logger.warn(`Failed to seed environments for tenant ${tenant.name}: ${(err as Error).message}`)
-      })
+        this.logger.warn(`Failed to seed environments for tenant ${tenant.name}: ${(err as Error).message}`);
+      });
     }
-    return this.ensureBifrostCustomer(tenant)
+    return this.ensureBifrostCustomer(tenant);
   }
 
   async getOrCreateTenants(names: string[]) {
-    return Promise.all(names.map((name) => this.getOrCreateTenant(name)))
+    return Promise.all(names.map((name) => this.getOrCreateTenant(name)));
   }
 
   async getTenantById(id: string) {
-    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id))
-    return tenant ?? null
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id));
+    return tenant ?? null;
   }
 
   async getTenantByMakaraName(makaraTenantName: string) {
@@ -107,7 +100,7 @@ export class TenantService {
       })
       .from(tenantSettings)
       .innerJoin(tenants, eq(tenants.id, tenantSettings.tenantId))
-      .where(eq(tenantSettings.makaraTenantName, makaraTenantName))
-    return row ?? null
+      .where(eq(tenantSettings.makaraTenantName, makaraTenantName));
+    return row ?? null;
   }
 }
