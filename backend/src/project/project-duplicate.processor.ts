@@ -7,6 +7,7 @@ import path from 'path';
 import { eq } from 'drizzle-orm';
 import { db } from '../../db';
 import { projectDuplicateJobs } from '../../db/schema';
+import { GitService } from '../git/git.service';
 import { ProjectService } from './project.service';
 import { ProjectEventsService } from './project-events.service';
 import {
@@ -27,6 +28,14 @@ interface CopyProgress {
   bytesCopied: number;
 }
 
+function isEphemeralCache(relPath: string): boolean {
+  const segments = relPath.split('/');
+  if (segments.includes('.cache')) return true;
+  if (segments.includes('.bun')) return true;
+  if (relPath === '.xdg/cache' || relPath.startsWith('.xdg/cache/')) return true;
+  return false;
+}
+
 @Processor(PROJECT_DUPLICATE_QUEUE)
 export class ProjectDuplicateProcessor extends WorkerHost {
   private readonly logger = new Logger(ProjectDuplicateProcessor.name);
@@ -35,7 +44,8 @@ export class ProjectDuplicateProcessor extends WorkerHost {
   constructor(
     private readonly configService: ConfigService,
     private readonly projectService: ProjectService,
-    private readonly projectEventsService: ProjectEventsService
+    private readonly projectEventsService: ProjectEventsService,
+    private readonly gitService: GitService
   ) {
     super();
     this.storageMountPath = this.configService.getOrThrow<string>('storageMountPath');
@@ -53,17 +63,20 @@ export class ProjectDuplicateProcessor extends WorkerHost {
       const targetPath = path.join(this.storageMountPath, target.directory);
       tempPath = path.join(path.dirname(targetPath), `.${target.id}.copying`);
 
-      await this.markCopying(duplicateJobId, targetProjectId);
+      await this.markStatus(duplicateJobId, targetProjectId, ProjectDuplicateStatus.Committing, { start: true });
+      await this.gitService.commitWorkingTree(sourcePath, `Duplicate to ${targetProjectId}`);
+
+      await this.markStatus(duplicateJobId, targetProjectId, ProjectDuplicateStatus.Cloning);
       await rm(tempPath, { recursive: true, force: true });
       await mkdir(path.dirname(tempPath), { recursive: true });
+      await this.gitService.cloneLocal(sourcePath, tempPath);
+      await this.gitService.removeOrigin(tempPath);
 
-      const entries = await this.collectEntries(sourcePath, tempPath);
+      await this.markStatus(duplicateJobId, targetProjectId, ProjectDuplicateStatus.Copying);
+      const entries = await this.collectIgnoredEntries(sourcePath, tempPath);
       const bytesTotal = entries.reduce((total, entry) => total + entry.size, 0);
 
-      await this.updateProgress(duplicateJobId, targetProjectId, {
-        bytesTotal,
-        bytesCopied: 0,
-      });
+      await this.updateProgress(duplicateJobId, targetProjectId, { bytesTotal, bytesCopied: 0 });
 
       const progress = { bytesCopied: 0 };
       let lastPersistedAt = 0;
@@ -95,50 +108,38 @@ export class ProjectDuplicateProcessor extends WorkerHost {
     }
   }
 
-  private async collectEntries(sourceRoot: string, targetRoot: string): Promise<CopyEntry[]> {
+  private async collectIgnoredEntries(sourceRoot: string, targetRoot: string): Promise<CopyEntry[]> {
+    const ignored = await this.gitService.listIgnored(sourceRoot);
     const entries: CopyEntry[] = [];
-
-    const walk = async (sourcePath: string, targetPath: string) => {
-      const stats = await lstat(sourcePath);
-      if (stats.isDirectory()) {
-        entries.push({
-          source: sourcePath,
-          target: targetPath,
-          size: 0,
-          mode: stats.mode,
-          type: 'directory',
-        });
-        const children = await readdir(sourcePath);
-        for (const child of children) {
-          await walk(path.join(sourcePath, child), path.join(targetPath, child));
-        }
-        return;
-      }
-
-      if (stats.isSymbolicLink()) {
-        entries.push({
-          source: sourcePath,
-          target: targetPath,
-          size: 0,
-          mode: stats.mode,
-          type: 'symlink',
-        });
-        return;
-      }
-
-      if (stats.isFile()) {
-        entries.push({
-          source: sourcePath,
-          target: targetPath,
-          size: stats.size,
-          mode: stats.mode,
-          type: 'file',
-        });
-      }
-    };
-
-    await walk(sourceRoot, targetRoot);
+    for (const relPath of ignored) {
+      await this.walk(path.join(sourceRoot, relPath), path.join(targetRoot, relPath), relPath, entries);
+    }
     return entries;
+  }
+
+  private async walk(sourcePath: string, targetPath: string, relPath: string, entries: CopyEntry[]): Promise<void> {
+    if (isEphemeralCache(relPath)) return;
+
+    const stats = await lstat(sourcePath).catch(() => null);
+    if (!stats) return;
+
+    if (stats.isDirectory()) {
+      entries.push({ source: sourcePath, target: targetPath, size: 0, mode: stats.mode, type: 'directory' });
+      const children = await readdir(sourcePath);
+      for (const child of children) {
+        await this.walk(path.join(sourcePath, child), path.join(targetPath, child), `${relPath}/${child}`, entries);
+      }
+      return;
+    }
+
+    if (stats.isSymbolicLink()) {
+      entries.push({ source: sourcePath, target: targetPath, size: 0, mode: stats.mode, type: 'symlink' });
+      return;
+    }
+
+    if (stats.isFile()) {
+      entries.push({ source: sourcePath, target: targetPath, size: stats.size, mode: stats.mode, type: 'file' });
+    }
   }
 
   private async copyEntry(entry: CopyEntry, progress: CopyProgress): Promise<void> {
@@ -161,17 +162,20 @@ export class ProjectDuplicateProcessor extends WorkerHost {
     progress.bytesCopied += entry.size;
   }
 
-  private async markCopying(id: string, targetProjectId: string): Promise<void> {
+  private async markStatus(
+    id: string,
+    targetProjectId: string,
+    status: ProjectDuplicateStatus,
+    options: { start?: boolean } = {}
+  ): Promise<void> {
     await db
       .update(projectDuplicateJobs)
       .set({
-        status: ProjectDuplicateStatus.Copying,
-        bytesTotal: 0,
-        bytesCopied: 0,
-        error: null,
-        startedAt: new Date(),
-        completedAt: null,
+        status,
         updatedAt: new Date(),
+        ...(options.start
+          ? { startedAt: new Date(), completedAt: null, error: null, bytesTotal: 0, bytesCopied: 0 }
+          : {}),
       })
       .where(eq(projectDuplicateJobs.id, id));
     await this.projectEventsService.publish(targetProjectId);

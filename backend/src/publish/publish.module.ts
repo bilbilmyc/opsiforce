@@ -5,7 +5,7 @@ import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { PublishController } from './publish.controller';
 import { PublishService } from './publish.service';
 import { PublishProcessor } from './publish.processor';
-import { GitService } from './git.service';
+import { GitModule } from '../git/git.module';
 import { PROJECT_PUBLISH_QUEUE } from './publish.types';
 import { ProjectModule } from '../project/project.module';
 import { ProjectEventsModule } from '../project/project-events.module';
@@ -21,6 +21,7 @@ import { ScheduleModule } from '../schedule/schedule.module';
   imports: [
     BullModule.registerQueue({ name: PROJECT_PUBLISH_QUEUE }),
     BullBoardModule.forFeature({ name: PROJECT_PUBLISH_QUEUE, adapter: BullMQAdapter }),
+    GitModule,
     ProjectModule,
     ProjectEventsModule,
     ProjectEnvironmentModule,
@@ -32,7 +33,7 @@ import { ScheduleModule } from '../schedule/schedule.module';
     forwardRef(() => ScheduleModule),
   ],
   controllers: [PublishController],
-  providers: [PublishService, PublishProcessor, GitService],
+  providers: [PublishService, PublishProcessor],
   exports: [PublishService],
 })
 export class PublishModule {}

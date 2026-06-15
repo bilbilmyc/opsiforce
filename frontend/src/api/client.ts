@@ -151,7 +151,7 @@ export interface ProjectAppMeta {
   description: string | null;
 }
 
-export type ProjectOperationStatus = 'queued' | 'copying' | 'starting' | 'failed';
+export type ProjectOperationStatus = 'queued' | 'committing' | 'cloning' | 'copying' | 'starting' | 'failed';
 
 export interface ProjectOperation {
   type: 'duplicate';
