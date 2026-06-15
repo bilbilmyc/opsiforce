@@ -10,8 +10,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createReadStream } from 'fs';
-import { stat } from 'fs/promises';
+import { open } from 'fs/promises';
 import { basename } from 'path';
 import { DownloadService } from './download.service';
 import { ProjectService } from './project.service';
@@ -61,9 +60,13 @@ export class DownloadController {
     }
 
     const filePath = this.downloadService.resolveWorkspacePath(directory, requestedPath);
-    const info = await stat(filePath).catch(() => null);
-    if (!info || !info.isFile()) throw new NotFoundException('File not found');
-    if (!(await this.downloadService.isWithinWorkspace(directory, filePath))) {
+
+    const handle = await open(filePath, 'r').catch(() => null);
+    if (!handle) throw new NotFoundException('File not found');
+
+    const info = await handle.stat().catch(() => null);
+    if (!info || !info.isFile() || !(await this.downloadService.isOpenedFileWithinWorkspace(directory, handle.fd))) {
+      await handle.close().catch(() => {});
       throw new NotFoundException('File not found');
     }
 
@@ -80,7 +83,7 @@ export class DownloadController {
     reply.hijack();
     reply.raw.writeHead(200, headers);
 
-    const stream = createReadStream(filePath);
+    const stream = handle.createReadStream();
     const abort = () => stream.destroy();
     req.raw.on('close', abort);
     stream.on('error', (err: Error) => {
@@ -89,6 +92,9 @@ export class DownloadController {
       reply.raw.destroy();
     });
     stream.on('end', () => req.raw.off('close', abort));
+    stream.on('close', () => {
+      handle.close().catch(() => {});
+    });
     stream.pipe(reply.raw);
   }
 }

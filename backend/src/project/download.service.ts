@@ -44,10 +44,10 @@ export class DownloadService {
     return fullPath;
   }
 
-  async isWithinWorkspace(directory: string, fullPath: string): Promise<boolean> {
+  async isOpenedFileWithinWorkspace(directory: string, fd: number): Promise<boolean> {
     try {
       const root = await realpath(path.resolve(this.storageMountPath, directory));
-      const real = await realpath(fullPath);
+      const real = await realpath(`/proc/self/fd/${fd}`);
       return real === root || real.startsWith(root + path.sep);
     } catch {
       return false;
