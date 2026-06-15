@@ -4,8 +4,10 @@ import { BullBoardModule } from '@bull-board/nestjs';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ProjectController } from './project.controller';
 import { PodClassController } from './pod-class.controller';
+import { DownloadController } from './download.controller';
 import { ProjectService } from './project.service';
 import { ProjectAuthService } from './project-auth.service';
+import { DownloadService } from './download.service';
 import { ProjectDuplicateProcessor } from './project-duplicate.processor';
 import { ProjectEventsModule } from './project-events.module';
 import { AppService } from './app.service';
@@ -41,8 +43,8 @@ import { ProjectEnvironmentModule } from '../project-environment/project-environ
     ProjectEnvironmentModule,
     GitModule,
   ],
-  controllers: [ProjectController, PodClassController],
-  providers: [ProjectService, ProjectAuthService, ProjectDuplicateProcessor, ProxyService, AppService],
+  controllers: [ProjectController, PodClassController, DownloadController],
+  providers: [ProjectService, ProjectAuthService, DownloadService, ProjectDuplicateProcessor, ProxyService, AppService],
   exports: [ProjectService, ProjectAuthService],
 })
 export class ProjectModule {}

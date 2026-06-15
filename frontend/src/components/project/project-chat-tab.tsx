@@ -6,6 +6,7 @@ import { ServerConnection } from '@opencode-ai/app/context/server';
 import { useGlobalSDK } from '@opencode-ai/app/context/global-sdk';
 import { useSyncProjectTitle } from '~/api/projects';
 import FileUpload from '~/components/file-upload';
+import WorkspaceDownloadLinks from './workspace-download-links';
 import OpencodeOverrides from './opencode-overrides';
 import { platform } from './platform';
 
@@ -64,6 +65,7 @@ export default function ProjectChatTab(props: ProjectChatTabProps) {
         }}
       </Show>
       <FileUpload projectId={props.projectId} environmentId={props.environmentId} />
+      <WorkspaceDownloadLinks projectId={props.projectId} environmentId={props.environmentId} />
     </>
   );
 }
