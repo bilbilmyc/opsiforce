@@ -1562,11 +1562,19 @@ export class ProjectService implements OnApplicationBootstrap {
         .limit(1);
       if (!job) return;
 
-      await this.waitForAppReady(envId, podIp, DUPLICATE_APP_READY_TIMEOUT_MS);
+      const appReady = await this.waitForAppReady(envId, podIp, DUPLICATE_APP_READY_TIMEOUT_MS);
 
-      const completed = await db
+      const settled = await db
         .update(projectDuplicateJobs)
-        .set({ status: ProjectDuplicateStatus.Completed, updatedAt: new Date() })
+        .set(
+          appReady
+            ? { status: ProjectDuplicateStatus.Completed, updatedAt: new Date() }
+            : {
+                status: ProjectDuplicateStatus.Failed,
+                error: "The duplicated app didn't come online in time. Please try again.",
+                updatedAt: new Date(),
+              }
+        )
         .where(
           and(
             eq(projectDuplicateJobs.targetProjectId, projectId),
@@ -1575,7 +1583,7 @@ export class ProjectService implements OnApplicationBootstrap {
         )
         .returning({ id: projectDuplicateJobs.id });
 
-      if (completed.length > 0) {
+      if (settled.length > 0) {
         await this.projectEventsService.publish(projectId).catch(() => undefined);
       }
     })().catch((err) => {
