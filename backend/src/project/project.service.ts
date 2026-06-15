@@ -37,6 +37,7 @@ import { BifrostService } from '../bifrost/bifrost.service';
 import { assertPositiveMs } from '../common/validation';
 import { restoreEnvJsonBackup } from '../common/env-file';
 import { writeJsonAtomic } from '../common/fs';
+import { lockProjectGit, type DbExecutor } from '../common/locks';
 import { DefaultsService } from '../defaults/defaults.service';
 import { GatewayKeyService } from '../gateway/gateway-key.service';
 import { ScheduleService } from '../schedule/schedule.service';
@@ -427,6 +428,9 @@ export class ProjectService implements OnApplicationBootstrap {
       .where(eq(projectSchedules.projectEnvironmentId, source.id));
 
     await db.transaction(async (tx) => {
+      await lockProjectGit(tx, source.id);
+      await this.assertNoActiveGitOperation(source.id, tx);
+
       await tx.insert(projects).values({
         id,
         tenantId,
@@ -1521,8 +1525,8 @@ export class ProjectService implements OnApplicationBootstrap {
     return !!job;
   }
 
-  private async assertNoActiveGitOperation(projectId: string): Promise<void> {
-    const [publishing] = await db
+  private async assertNoActiveGitOperation(projectId: string, executor: DbExecutor = db): Promise<void> {
+    const [publishing] = await executor
       .select({ id: projectPublishJobs.id })
       .from(projectPublishJobs)
       .where(
@@ -1533,7 +1537,7 @@ export class ProjectService implements OnApplicationBootstrap {
       throw new ConflictException('Cannot duplicate while a publish is in progress for this project');
     }
 
-    const [duplicating] = await db
+    const [duplicating] = await executor
       .select({ id: projectDuplicateJobs.id })
       .from(projectDuplicateJobs)
       .where(

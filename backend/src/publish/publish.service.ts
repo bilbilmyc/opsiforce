@@ -14,6 +14,7 @@ import crypto from 'crypto';
 import { db } from '../../db';
 import { projectDuplicateJobs, projectEnvironments, projectPublishJobs, projectSchedules } from '../../db/schema';
 import { readEnvJson } from '../common/env-file';
+import { lockProjectGit, type DbExecutor } from '../common/locks';
 import { EnvironmentService } from '../environment/environment.service';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
 import { ProjectStatus } from '../project/project.types';
@@ -187,13 +188,19 @@ export class PublishService implements OnApplicationBootstrap {
 
     const publishJobId = crypto.randomUUID();
     try {
-      await db.insert(projectPublishJobs).values({
-        id: publishJobId,
-        projectId,
-        projectEnvironmentId,
-        environmentId: dto.environmentId,
-        tenantId,
-        status: PublishStatus.Queued,
+      await db.transaction(async (tx) => {
+        await lockProjectGit(tx, projectId);
+        if (await this.hasActiveDuplicate(projectId, tx)) {
+          throw new ConflictException('Cannot publish while a duplicate is in progress for this project');
+        }
+        await tx.insert(projectPublishJobs).values({
+          id: publishJobId,
+          projectId,
+          projectEnvironmentId,
+          environmentId: dto.environmentId,
+          tenantId,
+          status: PublishStatus.Queued,
+        });
       });
     } catch (err) {
       if (isActivePublishConflict(err)) {
@@ -260,8 +267,8 @@ export class PublishService implements OnApplicationBootstrap {
     return !!row;
   }
 
-  private async hasActiveDuplicate(projectId: string): Promise<boolean> {
-    const [row] = await db
+  private async hasActiveDuplicate(projectId: string, executor: DbExecutor = db): Promise<boolean> {
+    const [row] = await executor
       .select({ id: projectDuplicateJobs.id })
       .from(projectDuplicateJobs)
       .where(
