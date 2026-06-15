@@ -1,8 +1,8 @@
-import { Global, Module } from "@nestjs/common"
-import { TenantService } from "./tenant.service"
-import { TenantController } from "./tenant.controller"
-import { BifrostModule } from "../bifrost/bifrost.module"
-import { EnvironmentModule } from "../environment/environment.module"
+import { Global, Module } from '@nestjs/common';
+import { TenantService } from './tenant.service';
+import { TenantController } from './tenant.controller';
+import { BifrostModule } from '../bifrost/bifrost.module';
+import { EnvironmentModule } from '../environment/environment.module';
 
 @Global()
 @Module({

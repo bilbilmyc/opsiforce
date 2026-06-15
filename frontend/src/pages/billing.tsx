@@ -1,92 +1,84 @@
-import { Show, For, createSignal, createEffect } from "solid-js"
-import { useQueryClient } from "@tanstack/solid-query"
-import { createAppQuery } from "~/lib/create-app-query"
-import { api, type Project } from "~/api/client"
-import { usePermissions } from "~/api/permissions"
-import { Permission } from "~/constants/permissions"
-import { CircleDollarSign, Settings } from "~/components/icons"
-import { Button } from "~/components/ui/button"
-import ProjectSettings from "~/components/project-settings"
-import { DURATION_OPTIONS, durationLabel, type BudgetConfig } from "~/constants/budget"
+import { Show, For, createSignal, createEffect } from 'solid-js';
+import { useQueryClient } from '@tanstack/solid-query';
+import { createAppQuery } from '~/lib/create-app-query';
+import { api, type Project } from '~/api/client';
+import { usePermissions } from '~/api/permissions';
+import { Permission } from '~/constants/permissions';
+import { CircleDollarSign, Settings } from '~/components/icons';
+import { Button } from '~/components/ui/button';
+import ProjectSettings from '~/components/project-settings';
+import { DURATION_OPTIONS, durationLabel, type BudgetConfig } from '~/constants/budget';
 import {
   NumberField,
   NumberFieldGroup,
   NumberFieldInput,
   NumberFieldIncrementTrigger,
   NumberFieldDecrementTrigger,
-} from "~/components/ui/number-field"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "~/components/ui/select"
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "~/components/ui/table"
-import { toast } from "solid-sonner"
+} from '~/components/ui/number-field';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '~/components/ui/select';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '~/components/ui/table';
+import { toast } from 'solid-sonner';
 
 interface TenantBudget {
-  tenantBudget: number | null
-  budgetDuration: string | null
-  currentUsage: number
+  tenantBudget: number | null;
+  budgetDuration: string | null;
+  currentUsage: number;
 }
 
 export default function BillingPage() {
-  const qc = useQueryClient()
-  const { hasPermission } = usePermissions()
-  const canManage = () => hasPermission(Permission.manageTenantBudget)
+  const qc = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canManage = () => hasPermission(Permission.manageTenantBudget);
   const canSeeSettings = () =>
-    hasPermission(Permission.manageProjectBudgetSettings) ||
-    hasPermission(Permission.manageProjectTimeoutSettings)
+    hasPermission(Permission.manageProjectBudgetSettings) || hasPermission(Permission.manageProjectTimeoutSettings);
 
-  const [editing, setEditing] = createSignal(false)
-  const [draftBudget, setDraftBudget] = createSignal("")
-  const [draftDuration, setDraftDuration] = createSignal("1M")
-  const [saving, setSaving] = createSignal(false)
-  const [settingsProjectId, setSettingsProjectId] = createSignal<string | null>(null)
+  const [editing, setEditing] = createSignal(false);
+  const [draftBudget, setDraftBudget] = createSignal('');
+  const [draftDuration, setDraftDuration] = createSignal('1M');
+  const [saving, setSaving] = createSignal(false);
+  const [settingsProjectId, setSettingsProjectId] = createSignal<string | null>(null);
 
   const tenantBudget = createAppQuery(() => ({
-    queryKey: ["tenant", "budget"],
-    queryFn: () => api.get<TenantBudget>("/usage/tenant/budget"),
-  }))
+    queryKey: ['tenant', 'budget'],
+    queryFn: () => api.get<TenantBudget>('/usage/tenant/budget'),
+  }));
 
   const projectList = createAppQuery(() => ({
-    queryKey: ["projects"],
-    queryFn: () => api.get<Project[]>("/projects"),
-  }))
+    queryKey: ['projects'],
+    queryFn: () => api.get<Project[]>('/projects'),
+  }));
 
   createEffect(() => {
     if (tenantBudget.data) {
-      setDraftBudget(tenantBudget.data.tenantBudget != null ? String(tenantBudget.data.tenantBudget) : "")
-      setDraftDuration(tenantBudget.data.budgetDuration ?? "1M")
+      setDraftBudget(tenantBudget.data.tenantBudget != null ? String(tenantBudget.data.tenantBudget) : '');
+      setDraftDuration(tenantBudget.data.budgetDuration ?? '1M');
     }
-  })
+  });
 
-  const spend = () => tenantBudget.data?.currentUsage ?? 0
-  const limit = () => tenantBudget.data?.tenantBudget ?? null
+  const spend = () => tenantBudget.data?.currentUsage ?? 0;
+  const limit = () => tenantBudget.data?.tenantBudget ?? null;
   const hasBudget = () => {
-    const b = limit()
-    return b != null && b > 0
-  }
+    const b = limit();
+    return b != null && b > 0;
+  };
   const pct = () => {
-    const b = limit()
-    return b && b > 0 ? Math.min((spend() / b) * 100, 100) : 0
-  }
+    const b = limit();
+    return b && b > 0 ? Math.min((spend() / b) * 100, 100) : 0;
+  };
 
   async function handleSave() {
-    setSaving(true)
+    setSaving(true);
     try {
-      await api.put("/usage/tenant/budget", {
+      await api.put('/usage/tenant/budget', {
         tenantBudget: parseFloat(draftBudget()) || 0,
         budgetDuration: draftDuration(),
-      })
-      await qc.invalidateQueries({ queryKey: ["tenant", "budget"] })
-      setEditing(false)
+      });
+      await qc.invalidateQueries({ queryKey: ['tenant', 'budget'] });
+      setEditing(false);
     } catch {
-      toast.error("Failed to save budget")
+      toast.error('Failed to save budget');
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
@@ -111,16 +103,18 @@ export default function BillingPage() {
           <Show when={hasBudget()}>
             <div class="space-y-1.5">
               <div class="flex items-center justify-between text-xs text-muted-foreground">
-                <span class="tabular-nums">${spend().toFixed(2)} / ${limit()}</span>
+                <span class="tabular-nums">
+                  ${spend().toFixed(2)} / ${limit()}
+                </span>
                 <span>{durationLabel(tenantBudget.data?.budgetDuration ?? null)}</span>
               </div>
               <div class="h-2 w-full rounded-full bg-muted overflow-hidden">
                 <div
                   class="h-full rounded-full transition-all"
                   classList={{
-                    "bg-primary": pct() < 80,
-                    "bg-yellow-500": pct() >= 80 && pct() < 100,
-                    "bg-destructive": pct() >= 100,
+                    'bg-primary': pct() < 80,
+                    'bg-yellow-500': pct() >= 80 && pct() < 100,
+                    'bg-destructive': pct() >= 100,
                   }}
                   style={{ width: `${pct()}%` }}
                 />
@@ -155,14 +149,16 @@ export default function BillingPage() {
                   optionValue="value"
                   optionTextValue="label"
                   value={DURATION_OPTIONS.find((d) => d.value === draftDuration()) ?? null}
-                  onChange={(opt) => { if (opt) setDraftDuration(opt.value) }}
+                  onChange={(opt) => {
+                    if (opt) setDraftDuration(opt.value);
+                  }}
                   itemComponent={(itemProps) => (
                     <SelectItem item={itemProps.item}>{itemProps.item.rawValue.label}</SelectItem>
                   )}
                 >
                   <SelectTrigger>
-                    <SelectValue<typeof DURATION_OPTIONS[0]>>
-                      {(state) => <span>{state.selectedOption()?.label ?? "Select"}</span>}
+                    <SelectValue<(typeof DURATION_OPTIONS)[0]>>
+                      {(state) => <span>{state.selectedOption()?.label ?? 'Select'}</span>}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent />
@@ -170,9 +166,11 @@ export default function BillingPage() {
               </div>
             </div>
             <div class="flex justify-end gap-2 pt-1">
-              <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+              <Button size="sm" variant="outline" onClick={() => setEditing(false)}>
+                Cancel
+              </Button>
               <Button size="sm" disabled={saving()} onClick={handleSave}>
-                {saving() ? "Saving..." : "Save"}
+                {saving() ? 'Saving...' : 'Save'}
               </Button>
             </div>
           </Show>
@@ -219,31 +217,29 @@ export default function BillingPage() {
           <ProjectSettings
             projectId={id()}
             open={true}
-            onOpenChange={(open) => { if (!open) setSettingsProjectId(null) }}
+            onOpenChange={(open) => {
+              if (!open) setSettingsProjectId(null);
+            }}
           />
         )}
       </Show>
     </div>
-  )
+  );
 }
 
-function ProjectRow(props: {
-  project: Project
-  canSeeSettings: boolean
-  onSettings: () => void
-}) {
+function ProjectRow(props: { project: Project; canSeeSettings: boolean; onSettings: () => void }) {
   const budget = createAppQuery(() => ({
-    queryKey: ["projects", props.project.id, "budget"],
+    queryKey: ['projects', props.project.id, 'budget'],
     queryFn: () => api.get<BudgetConfig & { currentUsage: number }>(`/usage/projects/${props.project.id}/budget`),
-  }))
+  }));
 
-  const name = () => props.project.title ?? `Project ${props.project.id.slice(0, 8)}`
-  const maxBudget = () => budget.data?.maxBudget ?? null
-  const currentUsage = () => budget.data?.currentUsage ?? 0
+  const name = () => props.project.title ?? `Project ${props.project.id.slice(0, 8)}`;
+  const maxBudget = () => budget.data?.maxBudget ?? null;
+  const currentUsage = () => budget.data?.currentUsage ?? 0;
   const hasBudget = () => {
-    const b = maxBudget()
-    return b != null && b > 0
-  }
+    const b = maxBudget();
+    return b != null && b > 0;
+  };
 
   return (
     <TableRow>
@@ -251,7 +247,8 @@ function ProjectRow(props: {
       <TableCell class="text-right text-xs tabular-nums text-muted-foreground">
         ${currentUsage().toFixed(2)}
         <Show when={hasBudget()}>
-          {" / $"}{maxBudget()}
+          {' / $'}
+          {maxBudget()}
         </Show>
       </TableCell>
       <TableCell class="text-right pr-2">
@@ -268,5 +265,5 @@ function ProjectRow(props: {
         </Show>
       </TableCell>
     </TableRow>
-  )
+  );
 }

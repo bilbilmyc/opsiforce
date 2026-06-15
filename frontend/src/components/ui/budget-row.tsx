@@ -1,32 +1,32 @@
-import { Show } from "solid-js"
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "~/components/ui/select"
+import { Show } from 'solid-js';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '~/components/ui/select';
 import {
   NumberField,
   NumberFieldGroup,
   NumberFieldInput,
   NumberFieldIncrementTrigger,
   NumberFieldDecrementTrigger,
-} from "~/components/ui/number-field"
-import { DURATION_OPTIONS } from "~/constants/budget"
+} from '~/components/ui/number-field';
+import { DURATION_OPTIONS } from '~/constants/budget';
 
 export interface BudgetRowProps {
-  label: string
-  draftBudget: string
-  draftDuration: string
-  onBudgetChange: (value: string) => void
-  onDurationChange: (value: string) => void
-  currentBudget?: number | null
-  currentSpend?: number
+  label: string;
+  draftBudget: string;
+  draftDuration: string;
+  onBudgetChange: (value: string) => void;
+  onDurationChange: (value: string) => void;
+  currentBudget?: number | null;
+  currentSpend?: number;
 }
 
 export function BudgetRow(props: BudgetRowProps) {
-  const durationOption = () => DURATION_OPTIONS.find((d) => d.value === props.draftDuration) ?? null
-  const hasBudget = () => props.currentBudget != null && props.currentBudget > 0
+  const durationOption = () => DURATION_OPTIONS.find((d) => d.value === props.draftDuration) ?? null;
+  const hasBudget = () => props.currentBudget != null && props.currentBudget > 0;
   const pct = () => {
-    const max = props.currentBudget
-    if (max == null || max <= 0) return 0
-    return Math.min(((props.currentSpend ?? 0) / max) * 100, 100)
-  }
+    const max = props.currentBudget;
+    if (max == null || max <= 0) return 0;
+    return Math.min(((props.currentSpend ?? 0) / max) * 100, 100);
+  };
 
   return (
     <div class="rounded-lg border border-border p-3 space-y-2.5">
@@ -41,10 +41,7 @@ export function BudgetRow(props: BudgetRowProps) {
 
       <Show when={hasBudget()}>
         <div class="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-          <div
-            class="h-full rounded-full bg-primary transition-all"
-            style={{ width: `${pct()}%` }}
-          />
+          <div class="h-full rounded-full bg-primary transition-all" style={{ width: `${pct()}%` }} />
         </div>
       </Show>
 
@@ -70,14 +67,16 @@ export function BudgetRow(props: BudgetRowProps) {
             optionValue="value"
             optionTextValue="label"
             value={durationOption()}
-            onChange={(opt) => { if (opt) props.onDurationChange(opt.value) }}
+            onChange={(opt) => {
+              if (opt) props.onDurationChange(opt.value);
+            }}
             itemComponent={(itemProps) => (
               <SelectItem item={itemProps.item}>{itemProps.item.rawValue.label}</SelectItem>
             )}
           >
             <SelectTrigger>
-              <SelectValue<typeof DURATION_OPTIONS[0]>>
-                {(state) => <span>{state.selectedOption()?.label ?? "Select"}</span>}
+              <SelectValue<(typeof DURATION_OPTIONS)[0]>>
+                {(state) => <span>{state.selectedOption()?.label ?? 'Select'}</span>}
               </SelectValue>
             </SelectTrigger>
             <SelectContent />
@@ -85,5 +84,5 @@ export function BudgetRow(props: BudgetRowProps) {
         </div>
       </div>
     </div>
-  )
+  );
 }

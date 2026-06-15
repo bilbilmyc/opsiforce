@@ -42,6 +42,10 @@ _Avoid_: App metadata (vague); Project title (the Project shell's label — a di
 The act of materializing or updating a non-Development ProjectEnvironment from the Development one's files, so the App runs in a chosen Environment. Publishing over an already-running environment is a **Publish update**.
 _Avoid_: Deploy, Release, Promote, Redeploy
 
+**Duplicate**:
+Creating a new Project in the same tenant and workspace from an existing one, preserving its working state in full — App source and history, the agent conversation, the App's databases, Environment Variables, settings, Resources, and App Details. The duplicate is independent: it gets its own keys, never inherits the source's Pin, and its Schedules arrive **paused** so no automation fires twice. Only the Development ProjectEnvironment is duplicated — published environments are re-created by publishing from the duplicate.
+_Avoid_: Copy, Clone, Fork (non-canonical); conflating with Publish (which transports App source only, never working state)
+
 **Active environment**:
 The one ProjectEnvironment the project workspace is currently showing — chat, code, DB, and the app pane all follow it. Chosen by clicking an environment in the Environments panel, or via **View environment** after a Publish completes; defaults to Development. Viewing changes nothing about the environment itself — it only re-points the workspace.
 _Avoid_: Current env, Selected env (spell out "environment"); conflating with Development (the default, not a synonym)

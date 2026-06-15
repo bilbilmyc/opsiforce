@@ -1,16 +1,16 @@
-import { Show } from "solid-js"
-import { Clock, AlertTriangle } from "~/components/icons"
-import type { CronState } from "../lib/types"
+import { Show } from 'solid-js';
+import { Clock, AlertTriangle } from '~/components/icons';
+import type { CronState } from '../lib/types';
 
 interface Props {
-  state: CronState
-  disableExplainerText?: boolean
+  state: CronState;
+  disableExplainerText?: boolean;
 }
 
 export default function ScheduleExplainer(props: Props) {
   return (
     <Show
-      when={props.state.error === ""}
+      when={props.state.error === ''}
       fallback={
         <div class="flex items-center gap-2 rounded-md border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
           <AlertTriangle class="w-3.5 h-3.5 shrink-0" />
@@ -25,5 +25,5 @@ export default function ScheduleExplainer(props: Props) {
         </div>
       </Show>
     </Show>
-  )
+  );
 }

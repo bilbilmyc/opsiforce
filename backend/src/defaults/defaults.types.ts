@@ -1,18 +1,18 @@
 export interface TimeoutDefaults {
-  defaultTimeoutIdle: number
-  defaultAppTimeoutIdle: number
+  defaultTimeoutIdle: number;
+  defaultAppTimeoutIdle: number;
 }
 
 export interface BudgetDefaults {
-  defaultTenantBudget: number
-  defaultTenantBudgetDuration: string
-  defaultProjectBudget: number
-  defaultProjectBudgetDuration: string
-  defaultChatBudget: number
-  defaultChatBudgetDuration: string
-  defaultBackendBudget: number
-  defaultBackendBudgetDuration: string
+  defaultTenantBudget: number;
+  defaultTenantBudgetDuration: string;
+  defaultProjectBudget: number;
+  defaultProjectBudgetDuration: string;
+  defaultChatBudget: number;
+  defaultChatBudgetDuration: string;
+  defaultBackendBudget: number;
+  defaultBackendBudgetDuration: string;
 }
 
-export type UpdateTimeoutDefaultsDto = Partial<TimeoutDefaults>
-export type UpdateBudgetDefaultsDto = Partial<BudgetDefaults>
+export type UpdateTimeoutDefaultsDto = Partial<TimeoutDefaults>;
+export type UpdateBudgetDefaultsDto = Partial<BudgetDefaults>;

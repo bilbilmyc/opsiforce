@@ -1,30 +1,28 @@
-import { For, Show, createMemo, createSignal } from "solid-js"
-import { type Project } from "~/api/client"
-import { useProjects } from "~/api/projects"
-import { PUBLIC_LABEL, useMoveProject } from "~/api/workspaces"
-import { projectDisplayTitle } from "~/lib/project-display"
-import { Button } from "~/components/ui/button"
+import { For, Show, createMemo, createSignal } from 'solid-js';
+import { type Project } from '~/api/client';
+import { useProjects } from '~/api/projects';
+import { PUBLIC_LABEL, useMoveProject } from '~/api/workspaces';
+import { projectDisplayTitle } from '~/lib/project-display';
+import { Button } from '~/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
-import Spinner from "~/components/ui/spinner"
-import { ChevronDown, Plus, AppWindow, Trash2 } from "~/components/icons"
+} from '~/components/ui/dropdown-menu';
+import Spinner from '~/components/ui/spinner';
+import { ChevronDown, Plus, AppWindow, Trash2 } from '~/components/icons';
 
 export default function WorkspaceProjectsTab(props: {
-  workspaceId: string
-  workspaceName: string
-  projects: Project[]
+  workspaceId: string;
+  workspaceName: string;
+  projects: Project[];
 }) {
-  const [pickerOpen, setPickerOpen] = createSignal(false)
-  const allProjects = useProjects({ enabled: () => pickerOpen() })
-  const move = useMoveProject()
+  const [pickerOpen, setPickerOpen] = createSignal(false);
+  const allProjects = useProjects({ enabled: () => pickerOpen() });
+  const move = useMoveProject();
 
-  const assignable = createMemo(() =>
-    (allProjects.data ?? []).filter((p) => p.workspaceId === null),
-  )
+  const assignable = createMemo(() => (allProjects.data ?? []).filter((p) => p.workspaceId === null));
 
   const assign = (projectId: string) => {
     move.mutate(
@@ -35,9 +33,9 @@ export default function WorkspaceProjectsTab(props: {
         fromName: PUBLIC_LABEL,
         toName: props.workspaceName,
       },
-      { onSuccess: () => setPickerOpen(false) },
-    )
-  }
+      { onSuccess: () => setPickerOpen(false) }
+    );
+  };
 
   const unassign = (projectId: string) => {
     move.mutate({
@@ -46,18 +44,14 @@ export default function WorkspaceProjectsTab(props: {
       toWorkspaceId: null,
       fromName: props.workspaceName,
       toName: PUBLIC_LABEL,
-    })
-  }
+    });
+  };
 
   return (
     <div class="space-y-3">
       <Show
         when={props.projects.length > 0}
-        fallback={
-          <p class="text-xs text-muted-foreground text-center py-6">
-            No projects in this workspace yet.
-          </p>
-        }
+        fallback={<p class="text-xs text-muted-foreground text-center py-6">No projects in this workspace yet.</p>}
       >
         <div class="flex flex-col gap-1">
           <For each={props.projects}>
@@ -98,9 +92,7 @@ export default function WorkspaceProjectsTab(props: {
               <Show
                 when={allProjects.isLoading}
                 fallback={
-                  <div class="px-2 py-6 text-xs text-center text-muted-foreground">
-                    No public projects available.
-                  </div>
+                  <div class="px-2 py-6 text-xs text-center text-muted-foreground">No public projects available.</div>
                 }
               >
                 <div class="px-2 py-3">
@@ -120,5 +112,5 @@ export default function WorkspaceProjectsTab(props: {
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-  )
+  );
 }

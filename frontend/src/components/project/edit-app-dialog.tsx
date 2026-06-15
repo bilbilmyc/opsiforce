@@ -1,8 +1,8 @@
-import { Show, createEffect, createMemo, createSignal } from "solid-js";
-import { toast } from "solid-sonner";
-import { useUpdateApp } from "~/api/projects";
-import { Button } from "~/components/ui/button";
-import { Dialog, DialogContent, DialogTitle } from "~/components/ui/dialog";
+import { Show, createEffect, createMemo, createSignal } from 'solid-js';
+import { toast } from 'solid-sonner';
+import { useUpdateApp } from '~/api/projects';
+import { Button } from '~/components/ui/button';
+import { Dialog, DialogContent, DialogTitle } from '~/components/ui/dialog';
 
 // TODO: replace these hand-rolled validators with zod schemas once zod is introduced.
 const APP_NAME_MIN_LENGTH = 1;
@@ -11,7 +11,7 @@ const APP_DESCRIPTION_MAX_LENGTH = 500;
 
 function validateAppName(value: string): string | null {
   const trimmed = value.trim();
-  if (trimmed.length < APP_NAME_MIN_LENGTH) return "Name is required";
+  if (trimmed.length < APP_NAME_MIN_LENGTH) return 'Name is required';
   if (trimmed.length > APP_NAME_MAX_LENGTH) {
     return `Name must be at most ${APP_NAME_MAX_LENGTH} characters`;
   }
@@ -36,31 +36,26 @@ export interface EditAppDialogProps {
 
 export default function EditAppDialog(props: EditAppDialogProps) {
   const updateApp = useUpdateApp();
-  const [name, setName] = createSignal("");
-  const [description, setDescription] = createSignal("");
+  const [name, setName] = createSignal('');
+  const [description, setDescription] = createSignal('');
 
   createEffect(() => {
     if (props.open) {
-      setName(props.initialName ?? "");
-      setDescription(props.initialDescription ?? "");
+      setName(props.initialName ?? '');
+      setDescription(props.initialDescription ?? '');
     }
   });
 
   const nameError = createMemo(() => validateAppName(name()));
-  const descriptionError = createMemo(() =>
-    validateAppDescription(description()),
-  );
+  const descriptionError = createMemo(() => validateAppDescription(description()));
 
   const isDirty = createMemo(() => {
-    const initialName = (props.initialName ?? "").trim();
-    const initialDesc = (props.initialDescription ?? "").trim();
-    return (
-      name().trim() !== initialName || description().trim() !== initialDesc
-    );
+    const initialName = (props.initialName ?? '').trim();
+    const initialDesc = (props.initialDescription ?? '').trim();
+    return name().trim() !== initialName || description().trim() !== initialDesc;
   });
 
-  const canSave = () =>
-    !nameError() && !descriptionError() && isDirty() && !updateApp.isPending;
+  const canSave = () => !nameError() && !descriptionError() && isDirty() && !updateApp.isPending;
 
   const close = () => props.onOpenChange(false);
 
@@ -68,24 +63,21 @@ export default function EditAppDialog(props: EditAppDialogProps) {
     if (!canSave()) return;
     const trimmedName = name().trim();
     const trimmedDescription = description().trim();
-    const initialName = (props.initialName ?? "").trim();
-    const initialDesc = (props.initialDescription ?? "").trim();
+    const initialName = (props.initialName ?? '').trim();
+    const initialDesc = (props.initialDescription ?? '').trim();
 
     const payload: { name?: string; description?: string | null } = {};
     if (trimmedName !== initialName) payload.name = trimmedName;
     if (trimmedDescription !== initialDesc) {
-      payload.description =
-        trimmedDescription.length === 0 ? null : trimmedDescription;
+      payload.description = trimmedDescription.length === 0 ? null : trimmedDescription;
     }
 
     try {
       await updateApp.mutateAsync({ projectId: props.projectId, payload });
-      toast.success("App details updated");
+      toast.success('App details updated');
       close();
     } catch (err) {
-      toast.error(
-        err instanceof Error ? err.message : "Failed to update app details",
-      );
+      toast.error(err instanceof Error ? err.message : 'Failed to update app details');
     }
   };
 
@@ -106,7 +98,7 @@ export default function EditAppDialog(props: EditAppDialogProps) {
               value={name()}
               onInput={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && canSave()) handleSave();
+                if (e.key === 'Enter' && canSave()) handleSave();
               }}
               class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               placeholder="My App"
@@ -118,9 +110,7 @@ export default function EditAppDialog(props: EditAppDialogProps) {
             </Show>
           </div>
           <div>
-            <label class="text-xs text-muted-foreground mb-1 block">
-              Description (optional)
-            </label>
+            <label class="text-xs text-muted-foreground mb-1 block">Description (optional)</label>
             <textarea
               rows={3}
               value={description()}

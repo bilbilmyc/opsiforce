@@ -1,166 +1,142 @@
-import { Show, For, createSignal, createMemo, createEffect } from "solid-js"
-import { createMutation, useQueryClient } from "@tanstack/solid-query"
-import { createAppQuery } from "~/lib/create-app-query"
-import { Link, useNavigate, useSearch } from "@tanstack/solid-router"
-import { scheduleApi, type Schedule, type ScheduleExecution, type UpdateScheduleDto } from "~/api/client"
-import { useEnvironments, useProjectEnvironments } from "~/api/environments"
-import { useProjects } from "~/api/projects"
-import {
-  Calendar,
-  Trash2,
-  Pencil,
-  Play,
-  Clock,
-  EllipsisVertical,
-  ChevronLeft,
-} from "~/components/icons"
-import { Button } from "~/components/ui/button"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs"
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "~/components/ui/dialog"
-import ConfirmDialog from "~/components/ui/confirm-dialog"
-import { Badge } from "~/components/ui/badge"
-import Skeleton from "~/components/ui/skeleton"
-import { CronPicker } from "~/components/ui/cron-picker"
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "~/components/ui/table"
-import { Switch, SwitchControl, SwitchThumb } from "~/components/ui/switch"
+import { Show, For, createSignal, createMemo, createEffect } from 'solid-js';
+import { createMutation, useQueryClient } from '@tanstack/solid-query';
+import { createAppQuery } from '~/lib/create-app-query';
+import { Link, useNavigate, useSearch } from '@tanstack/solid-router';
+import { scheduleApi, type Schedule, type ScheduleExecution, type UpdateScheduleDto } from '~/api/client';
+import { useEnvironments, useProjectEnvironments } from '~/api/environments';
+import { useProjects } from '~/api/projects';
+import { Calendar, Trash2, Pencil, Play, Clock, EllipsisVertical, ChevronLeft } from '~/components/icons';
+import { Button } from '~/components/ui/button';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from '~/components/ui/dialog';
+import ConfirmDialog from '~/components/ui/confirm-dialog';
+import { Badge } from '~/components/ui/badge';
+import Skeleton from '~/components/ui/skeleton';
+import { CronPicker } from '~/components/ui/cron-picker';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '~/components/ui/table';
+import { Switch, SwitchControl, SwitchThumb } from '~/components/ui/switch';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from "~/components/ui/dropdown-menu"
+} from '~/components/ui/dropdown-menu';
 
 function cronToHuman(expr: string): string {
-  const parts = expr.trim().split(/\s+/)
-  if (parts.length < 5) return expr
-  const [min, hour, , , dow] = parts
-  if (min === "*" && hour === "*") return "Every minute"
-  if (min.startsWith("*/")) return `Every ${min.slice(2)} min`
-  if (hour === "*") return `Hourly at :${min.padStart(2, "0")}`
-  const h = parseInt(hour)
-  const ampm = h >= 12 ? "PM" : "AM"
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
-  const time = `${h12}:${min.padStart(2, "0")} ${ampm}`
-  if (dow === "1-5") return `Weekdays ${time}`
-  if (dow !== "*") return `${dow} ${time}`
-  return `Daily ${time}`
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length < 5) return expr;
+  const [min, hour, , , dow] = parts;
+  if (min === '*' && hour === '*') return 'Every minute';
+  if (min.startsWith('*/')) return `Every ${min.slice(2)} min`;
+  if (hour === '*') return `Hourly at :${min.padStart(2, '0')}`;
+  const h = parseInt(hour);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  const time = `${h12}:${min.padStart(2, '0')} ${ampm}`;
+  if (dow === '1-5') return `Weekdays ${time}`;
+  if (dow !== '*') return `${dow} ${time}`;
+  return `Daily ${time}`;
 }
 
 export default function SchedulesPage() {
-  const qc = useQueryClient()
-  const search = useSearch({ from: "/schedules" })
-  const navigate = useNavigate()
+  const qc = useQueryClient();
+  const search = useSearch({ from: '/schedules' });
+  const navigate = useNavigate();
 
-  const scopedProjectEnvId = createMemo(() => search().projectEnvironmentId)
-  const scopedProjectId = createMemo(() => search().projectId)
-  const isScoped = createMemo(() => !!scopedProjectEnvId())
+  const scopedProjectEnvId = createMemo(() => search().projectEnvironmentId);
+  const scopedProjectId = createMemo(() => search().projectId);
+  const isScoped = createMemo(() => !!scopedProjectEnvId());
 
-  const environments = useEnvironments({ enabled: () => !isScoped() })
+  const environments = useEnvironments({ enabled: () => !isScoped() });
   const sortedEnvs = createMemo(() =>
     [...(environments.data ?? [])].toSorted((a, b) => {
-      if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1
-      return a.name.localeCompare(b.name)
-    }),
-  )
-  const [selectedEnvId, setSelectedEnvId] = createSignal("")
+      if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    })
+  );
+  const [selectedEnvId, setSelectedEnvId] = createSignal('');
   createEffect(() => {
-    const envs = sortedEnvs()
-    if (envs.length === 0) return
-    const fromSearch = search().environmentId
-    setSelectedEnvId(fromSearch && envs.some((e) => e.id === fromSearch) ? fromSearch : envs[0].id)
-  })
-  const activeEnvId = selectedEnvId
+    const envs = sortedEnvs();
+    if (envs.length === 0) return;
+    const fromSearch = search().environmentId;
+    setSelectedEnvId(fromSearch && envs.some((e) => e.id === fromSearch) ? fromSearch : envs[0].id);
+  });
+  const activeEnvId = selectedEnvId;
   const selectEnv = (id: string) => {
-    setSelectedEnvId(id)
-    navigate({ to: "/schedules", search: { environmentId: id }, replace: true })
-  }
+    setSelectedEnvId(id);
+    navigate({ to: '/schedules', search: { environmentId: id }, replace: true });
+  };
 
-  const [editSchedule, setEditSchedule] = createSignal<Schedule | null>(null)
-  const [deleteTarget, setDeleteTarget] = createSignal<Schedule | null>(null)
-  const [runTarget, setRunTarget] = createSignal<Schedule | null>(null)
-  const [execSchedule, setExecSchedule] = createSignal<Schedule | null>(null)
-  const [triggeredId, setTriggeredId] = createSignal<string | null>(null)
+  const [editSchedule, setEditSchedule] = createSignal<Schedule | null>(null);
+  const [deleteTarget, setDeleteTarget] = createSignal<Schedule | null>(null);
+  const [runTarget, setRunTarget] = createSignal<Schedule | null>(null);
+  const [execSchedule, setExecSchedule] = createSignal<Schedule | null>(null);
+  const [triggeredId, setTriggeredId] = createSignal<string | null>(null);
 
   const schedules = createAppQuery(() => ({
     queryKey: isScoped()
-      ? ["schedules", "project-environment", scopedProjectEnvId()]
-      : ["schedules", "environment", activeEnvId()],
+      ? ['schedules', 'project-environment', scopedProjectEnvId()]
+      : ['schedules', 'environment', activeEnvId()],
     queryFn: () =>
       isScoped()
         ? scheduleApi.list({ projectEnvironmentId: scopedProjectEnvId() })
         : scheduleApi.list({ environmentId: activeEnvId() }),
     enabled: isScoped() ? !!scopedProjectEnvId() : !!activeEnvId(),
-  }))
+  }));
 
-  const projects = useProjects({ enabled: () => isScoped() })
-  const projectEnvironments = useProjectEnvironments(() => scopedProjectId() ?? "", {
+  const projects = useProjects({ enabled: () => isScoped() });
+  const projectEnvironments = useProjectEnvironments(() => scopedProjectId() ?? '', {
     enabled: () => isScoped() && !!scopedProjectId(),
-  })
+  });
   const scopedEnvName = createMemo(
     () =>
       projectEnvironments.data?.find((e) => e.id === scopedProjectEnvId())?.name ??
       schedules.data?.[0]?.environmentName ??
-      null,
-  )
+      null
+  );
   const scopedProjectTitle = createMemo(
-    () =>
-      projects.data?.find((p) => p.id === scopedProjectId())?.title ??
-      schedules.data?.[0]?.projectTitle ??
-      null,
-  )
+    () => projects.data?.find((p) => p.id === scopedProjectId())?.title ?? schedules.data?.[0]?.projectTitle ?? null
+  );
 
   const executions = createAppQuery(() => ({
-    queryKey: ["executions", execSchedule()?.id],
+    queryKey: ['executions', execSchedule()?.id],
     queryFn: () => {
-      const s = execSchedule()
-      return s ? scheduleApi.getExecutions(s.id, s.projectId) : Promise.resolve([])
+      const s = execSchedule();
+      return s ? scheduleApi.getExecutions(s.id, s.projectId) : Promise.resolve([]);
     },
     enabled: !!execSchedule(),
-  }))
+  }));
 
   const removeMutation = createMutation(() => ({
     mutationFn: (s: Schedule) => scheduleApi.remove(s.projectId, s.id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["schedules"] })
-      setDeleteTarget(null)
+      qc.invalidateQueries({ queryKey: ['schedules'] });
+      setDeleteTarget(null);
     },
-  }))
+  }));
 
   const updateMutation = createMutation(() => ({
     mutationFn: (args: { s: Schedule; dto: UpdateScheduleDto }) =>
       scheduleApi.update(args.s.projectId, args.s.id, args.dto),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["schedules"] })
-      setEditSchedule(null)
+      qc.invalidateQueries({ queryKey: ['schedules'] });
+      setEditSchedule(null);
     },
-  }))
+  }));
 
   const runNow = async (s: Schedule) => {
-    setTriggeredId(s.id)
-    await scheduleApi.triggerRun(s.projectId, s.id)
-    setTimeout(() => setTriggeredId(null), 2000)
-    qc.invalidateQueries({ queryKey: ["executions", s.id] })
-  }
+    setTriggeredId(s.id);
+    await scheduleApi.triggerRun(s.projectId, s.id);
+    setTimeout(() => setTriggeredId(null), 2000);
+    qc.invalidateQueries({ queryKey: ['executions', s.id] });
+  };
 
   const toggleActive = (s: Schedule) => {
-    updateMutation.mutate({ s, dto: { isActive: !s.isActive } })
-  }
+    updateMutation.mutate({ s, dto: { isActive: !s.isActive } });
+  };
 
-  const count = () => schedules.data?.length ?? 0
+  const count = () => schedules.data?.length ?? 0;
 
   return (
     <div class="w-full px-4 py-6">
@@ -197,10 +173,10 @@ export default function SchedulesPage() {
           <Show when={scopedProjectTitle()} fallback="Automated tasks for this environment.">
             {(title) => (
               <>
-                Automated tasks for{" "}
+                Automated tasks for{' '}
                 <Link
                   to="/projects/$projectId"
-                  params={{ projectId: scopedProjectId() ?? "" }}
+                  params={{ projectId: scopedProjectId() ?? '' }}
                   search={{ prompt: undefined }}
                   class="text-primary hover:underline underline-offset-2"
                 >
@@ -262,38 +238,42 @@ export default function SchedulesPage() {
         schedule={editSchedule()}
         onClose={() => setEditSchedule(null)}
         onSave={(dto) => {
-          const s = editSchedule()
-          if (s) updateMutation.mutate({ s, dto })
+          const s = editSchedule();
+          if (s) updateMutation.mutate({ s, dto });
         }}
       />
 
       <ConfirmDialog
         open={!!deleteTarget()}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
         title={`Delete schedule "${deleteTarget()?.name}"`}
         description="This will permanently remove the schedule and all its execution history."
         confirmLabel="Delete"
         variant="destructive"
         onConfirm={() => {
-          const t = deleteTarget()
-          if (t) removeMutation.mutate(t)
+          const t = deleteTarget();
+          if (t) removeMutation.mutate(t);
         }}
       />
 
       <ConfirmDialog
         open={!!runTarget()}
-        onOpenChange={(open) => { if (!open) setRunTarget(null) }}
+        onOpenChange={(open) => {
+          if (!open) setRunTarget(null);
+        }}
         title={`Run "${runTarget()?.name}" now?`}
         description={
           `This triggers the schedule immediately, outside its normal cron window. ` +
-          `It will fire ${runTarget()?.targetPath ?? "the configured target"} once and record the run in execution history.`
+          `It will fire ${runTarget()?.targetPath ?? 'the configured target'} once and record the run in execution history.`
         }
         confirmLabel="Run now"
         onConfirm={() => {
-          const t = runTarget()
+          const t = runTarget();
           if (t) {
-            runNow(t)
-            setRunTarget(null)
+            runNow(t);
+            setRunTarget(null);
           }
         }}
       />
@@ -305,22 +285,22 @@ export default function SchedulesPage() {
         onClose={() => setExecSchedule(null)}
       />
     </div>
-  )
+  );
 }
 
 function ScheduleTableSection(props: {
-  pending: boolean
-  schedules: Schedule[] | undefined
-  showProject: boolean
-  updating: boolean
-  triggeredId: string | null
-  onToggle: (s: Schedule) => void
-  onRun: (s: Schedule) => void
-  onViewExecutions: (s: Schedule) => void
-  onEdit: (s: Schedule) => void
-  onDelete: (s: Schedule) => void
+  pending: boolean;
+  schedules: Schedule[] | undefined;
+  showProject: boolean;
+  updating: boolean;
+  triggeredId: string | null;
+  onToggle: (s: Schedule) => void;
+  onRun: (s: Schedule) => void;
+  onViewExecutions: (s: Schedule) => void;
+  onEdit: (s: Schedule) => void;
+  onDelete: (s: Schedule) => void;
 }) {
-  const count = () => props.schedules?.length ?? 0
+  const count = () => props.schedules?.length ?? 0;
   return (
     <>
       <Show when={props.pending}>
@@ -384,11 +364,7 @@ function ScheduleTableSection(props: {
                     </TableCell>
                     <TableCell class="text-xs text-muted-foreground">{s.timeZone}</TableCell>
                     <TableCell>
-                      <Switch
-                        checked={s.isActive}
-                        onChange={() => props.onToggle(s)}
-                        disabled={props.updating}
-                      >
+                      <Switch checked={s.isActive} onChange={() => props.onToggle(s)} disabled={props.updating}>
                         <SwitchControl>
                           <SwitchThumb />
                         </SwitchControl>
@@ -411,15 +387,15 @@ function ScheduleTableSection(props: {
         </div>
       </Show>
     </>
-  )
+  );
 }
 
 function RowActions(props: {
-  disabled?: boolean
-  onRun: () => void
-  onViewExecutions: () => void
-  onEdit: () => void
-  onDelete: () => void
+  disabled?: boolean;
+  onRun: () => void;
+  onViewExecutions: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
 }) {
   return (
     <DropdownMenu>
@@ -453,25 +429,30 @@ function RowActions(props: {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 function EditScheduleDialog(props: {
-  schedule: Schedule | null
-  onClose: () => void
-  onSave: (dto: UpdateScheduleDto) => void
+  schedule: Schedule | null;
+  onClose: () => void;
+  onSave: (dto: UpdateScheduleDto) => void;
 }) {
-  const [cron, setCron] = createSignal("")
+  const [cron, setCron] = createSignal('');
 
-  const open = createMemo(() => !!props.schedule)
+  const open = createMemo(() => !!props.schedule);
 
   createEffect(() => {
-    const s = props.schedule
-    if (s) setCron(s.cronPattern)
-  })
+    const s = props.schedule;
+    if (s) setCron(s.cronPattern);
+  });
 
   return (
-    <Dialog open={open()} onOpenChange={(o) => { if (!o) props.onClose() }} >
+    <Dialog
+      open={open()}
+      onOpenChange={(o) => {
+        if (!o) props.onClose();
+      }}
+    >
       <DialogContent class="max-w-lg">
         <DialogTitle>Edit Schedule: {props.schedule?.name}</DialogTitle>
         <DialogDescription>Change when this schedule runs</DialogDescription>
@@ -482,28 +463,30 @@ function EditScheduleDialog(props: {
           <Button variant="outline" size="sm" onClick={props.onClose}>
             Cancel
           </Button>
-          <Button
-            size="sm"
-            onClick={() => props.onSave({ cronPattern: cron() })}
-          >
+          <Button size="sm" onClick={() => props.onSave({ cronPattern: cron() })}>
             Save
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
 
 function ExecutionsDialog(props: {
-  schedule: Schedule | null
-  executions: ScheduleExecution[]
-  loading: boolean
-  onClose: () => void
+  schedule: Schedule | null;
+  executions: ScheduleExecution[];
+  loading: boolean;
+  onClose: () => void;
 }) {
-  const open = createMemo(() => !!props.schedule)
+  const open = createMemo(() => !!props.schedule);
 
   return (
-    <Dialog open={open()} onOpenChange={(o) => { if (!o) props.onClose() }}>
+    <Dialog
+      open={open()}
+      onOpenChange={(o) => {
+        if (!o) props.onClose();
+      }}
+    >
       <DialogContent class="max-w-lg max-h-[80vh] overflow-y-auto">
         <DialogTitle>Executions: {props.schedule?.name}</DialogTitle>
         <DialogDescription>Recent execution history</DialogDescription>
@@ -526,20 +509,18 @@ function ExecutionsDialog(props: {
               {(exec) => (
                 <div class="flex items-center gap-3 text-xs border rounded px-3 py-2">
                   <Badge
-                    variant={exec.statusCode && exec.statusCode < 400 ? "success" : "destructive"}
+                    variant={exec.statusCode && exec.statusCode < 400 ? 'success' : 'destructive'}
                     class="text-[10px] px-1.5"
                   >
-                    {exec.statusCode ?? "ERR"}
+                    {exec.statusCode ?? 'ERR'}
                   </Badge>
                   <span class="text-muted-foreground">{exec.trigger}</span>
-                  <span class="flex-1 text-muted-foreground">
-                    {new Date(exec.firedAt).toLocaleString()}
-                  </span>
+                  <span class="flex-1 text-muted-foreground">{new Date(exec.firedAt).toLocaleString()}</span>
                   <Show when={exec.latencyMs != null}>
                     <span class="text-muted-foreground">{exec.latencyMs}ms</span>
                   </Show>
                   <Show when={exec.error}>
-                    <span class="text-destructive truncate max-w-48" title={exec.error ?? ""}>
+                    <span class="text-destructive truncate max-w-48" title={exec.error ?? ''}>
                       {exec.error}
                     </span>
                   </Show>
@@ -550,5 +531,5 @@ function ExecutionsDialog(props: {
         </Show>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

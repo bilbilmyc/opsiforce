@@ -1,12 +1,12 @@
-import { For, Show, createMemo, createSignal, type JSX } from "solid-js";
-import { toast } from "solid-sonner";
-import { useNavigate } from "@tanstack/solid-router";
-import { type Agent, type Project } from "~/api/client";
-import { useAgents } from "~/api/agents";
-import { usePermissions } from "~/api/permissions";
-import { useCurrentUser, useUserInfo } from "~/api/user";
-import { useCreateProjectInWorkspace, useWorkspaces } from "~/api/workspaces";
-import { Permission } from "~/constants/permissions";
+import { For, Show, createMemo, createSignal, type JSX } from 'solid-js';
+import { toast } from 'solid-sonner';
+import { useNavigate } from '@tanstack/solid-router';
+import { type Agent, type Project } from '~/api/client';
+import { useAgents } from '~/api/agents';
+import { usePermissions } from '~/api/permissions';
+import { useCurrentUser, useUserInfo } from '~/api/user';
+import { useCreateProjectInWorkspace, useWorkspaces } from '~/api/workspaces';
+import { Permission } from '~/constants/permissions';
 import {
   Sidebar,
   SidebarHeader,
@@ -18,20 +18,20 @@ import {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
-} from "~/components/ui/sidebar";
+} from '~/components/ui/sidebar';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from "~/components/ui/dropdown-menu";
-import { Button } from "~/components/ui/button";
-import { cn } from "~/lib/cn";
-import TenantSelector from "~/components/tenant-selector";
-import ProjectSidebar from "~/components/project-sidebar";
-import CreateWorkspaceDialog from "~/components/create-workspace-dialog";
-import TenantSettings from "~/components/tenant-settings";
+} from '~/components/ui/dropdown-menu';
+import { Button } from '~/components/ui/button';
+import { cn } from '~/lib/cn';
+import TenantSelector from '~/components/tenant-selector';
+import ProjectSidebar from '~/components/project-sidebar';
+import CreateWorkspaceDialog from '~/components/create-workspace-dialog';
+import TenantSettings from '~/components/tenant-settings';
 import {
   Bot,
   Calendar,
@@ -47,7 +47,7 @@ import {
   Users,
   Wallet,
   X,
-} from "~/components/icons";
+} from '~/components/icons';
 
 export default function AppSidebar() {
   const navigate = useNavigate();
@@ -59,7 +59,7 @@ export default function AppSidebar() {
   const agents = useAgents();
   const createInWorkspace = useCreateProjectInWorkspace();
 
-  const [search, setSearch] = createSignal("");
+  const [search, setSearch] = createSignal('');
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = createSignal(false);
   const [tenantSettingsOpen, setTenantSettingsOpen] = createSignal(false);
   let searchRef: HTMLInputElement | undefined;
@@ -67,13 +67,10 @@ export default function AppSidebar() {
   const privateWorkspace = createMemo(() => {
     const uid = currentUser.data?.id;
     if (!uid) return undefined;
-    return (workspaces.data ?? []).find(
-      (w) => w.type === "private" && w.ownerId === uid,
-    );
+    return (workspaces.data ?? []).find((w) => w.type === 'private' && w.ownerId === uid);
   });
 
-  const plusDisabled = () =>
-    createInWorkspace.isPending || !privateWorkspace();
+  const plusDisabled = () => createInWorkspace.isPending || !privateWorkspace();
 
   const handleCreateProject = (agentId: string) => {
     const ws = privateWorkspace();
@@ -85,22 +82,22 @@ export default function AppSidebar() {
       { workspaceId: ws.id, dto: { agentId } },
       {
         onSuccess: (project: Project) => {
-          toast.success("Project created");
+          toast.success('Project created');
           navigate({
-            to: "/projects/$projectId",
+            to: '/projects/$projectId',
             params: { projectId: project.id },
             search: { prompt: undefined },
           });
         },
-        onError: () => toast.error("Failed to create project"),
-      },
+        onError: () => toast.error('Failed to create project'),
+      }
     );
   };
 
-  const userName = () => userInfo.data?.preferredUsername ?? "";
+  const userName = () => userInfo.data?.preferredUsername ?? '';
   const userInitial = () => {
     const name = userName();
-    return name ? name.charAt(0).toUpperCase() : "U";
+    return name ? name.charAt(0).toUpperCase() : 'U';
   };
 
   return (
@@ -109,14 +106,10 @@ export default function AppSidebar() {
         <div class="flex items-center gap-2 px-1 py-0.5 group-data-[collapsible=icon]/sidebar:justify-center group-data-[collapsible=icon]/sidebar:px-0">
           <div
             class="w-7 h-7 shrink-0 rounded-lg bg-foreground/5 border border-foreground/10 flex items-center justify-center cursor-pointer hover:bg-foreground/10 transition-colors"
-            onClick={() => navigate({ to: "/" })}
+            onClick={() => navigate({ to: '/' })}
             title="Home"
           >
-            <img
-              alt="Opsiforce"
-              src="/assets/icons/brands/opsima.svg"
-              class="w-4 h-4"
-            />
+            <img alt="Opsiforce" src="/assets/icons/brands/opsima.svg" class="w-4 h-4" />
           </div>
           <span class="font-semibold text-sm text-sidebar-foreground truncate group-data-[collapsible=icon]/sidebar:hidden">
             Opsiforce
@@ -152,9 +145,9 @@ export default function AppSidebar() {
               <button
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => {
-                  setSearch("");
+                  setSearch('');
                   if (searchRef) {
-                    searchRef.value = "";
+                    searchRef.value = '';
                     searchRef.focus();
                   }
                 }}
@@ -240,9 +233,7 @@ export default function AppSidebar() {
                       <span class="text-xs font-semibold">{userInitial()}</span>
                     </div>
                     <div class="flex-1 min-w-0 text-left group-data-[collapsible=icon]/sidebar:hidden">
-                      <span class="block text-sm font-medium truncate text-sidebar-foreground">
-                        {userName()}
-                      </span>
+                      <span class="block text-sm font-medium truncate text-sidebar-foreground">{userName()}</span>
                     </div>
                     <ChevronsUpDown class="w-4 h-4 shrink-0 text-sidebar-muted-foreground group-data-[collapsible=icon]/sidebar:hidden" />
                   </button>
@@ -253,45 +244,34 @@ export default function AppSidebar() {
                   <p class="text-sm font-medium truncate">{userName()}</p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onSelect={() => navigate({ to: "/schedules" })}
-                >
+                <DropdownMenuItem onSelect={() => navigate({ to: '/schedules' })}>
                   <Calendar class="w-4 h-4 text-muted-foreground" />
                   Schedules
                 </DropdownMenuItem>
                 <Show when={hasPermission(Permission.manageWorkspaces)}>
-                  <DropdownMenuItem
-                    onSelect={() => navigate({ to: "/settings/workspaces" })}
-                  >
+                  <DropdownMenuItem onSelect={() => navigate({ to: '/settings/workspaces' })}>
                     <Settings class="w-4 h-4 text-muted-foreground" />
                     Workspaces
                   </DropdownMenuItem>
                 </Show>
                 <Show when={hasPermission(Permission.manageUsers)}>
-                  <DropdownMenuItem
-                    onSelect={() => navigate({ to: "/settings/users" })}
-                  >
+                  <DropdownMenuItem onSelect={() => navigate({ to: '/settings/users' })}>
                     <Users class="w-4 h-4 text-muted-foreground" />
                     Users
                   </DropdownMenuItem>
                 </Show>
                 <Show when={hasPermission(Permission.manageTenantBudget)}>
-                  <DropdownMenuItem
-                    onSelect={() => navigate({ to: "/billing" })}
-                  >
+                  <DropdownMenuItem onSelect={() => navigate({ to: '/billing' })}>
                     <Wallet class="w-4 h-4 text-muted-foreground" />
                     Billing
                   </DropdownMenuItem>
                 </Show>
                 <Show
                   when={
-                    hasPermission(Permission.managePlatformDefaults) ||
-                    hasPermission(Permission.manageTenantDefaults)
+                    hasPermission(Permission.managePlatformDefaults) || hasPermission(Permission.manageTenantDefaults)
                   }
                 >
-                  <DropdownMenuItem
-                    onSelect={() => navigate({ to: "/defaults" })}
-                  >
+                  <DropdownMenuItem onSelect={() => navigate({ to: '/defaults' })}>
                     <SlidersHorizontal class="w-4 h-4 text-muted-foreground" />
                     Defaults
                   </DropdownMenuItem>
@@ -304,7 +284,7 @@ export default function AppSidebar() {
                 </Show>
                 <DropdownMenuItem
                   onSelect={() => {
-                    window.location.href = "/oauth2/sign_out";
+                    window.location.href = '/oauth2/sign_out';
                   }}
                 >
                   <LogOut class="w-4 h-4 text-muted-foreground" />
@@ -316,14 +296,8 @@ export default function AppSidebar() {
         </SidebarMenu>
       </SidebarFooter>
 
-      <CreateWorkspaceDialog
-        open={createWorkspaceOpen()}
-        onOpenChange={setCreateWorkspaceOpen}
-      />
-      <TenantSettings
-        open={tenantSettingsOpen()}
-        onOpenChange={setTenantSettingsOpen}
-      />
+      <CreateWorkspaceDialog open={createWorkspaceOpen()} onOpenChange={setCreateWorkspaceOpen} />
+      <TenantSettings open={tenantSettingsOpen()} onOpenChange={setTenantSettingsOpen} />
     </Sidebar>
   );
 }
@@ -340,25 +314,17 @@ function TopPlusMenu(props: {
     <DropdownMenu>
       <DropdownMenuTrigger as={props.trigger} />
       <DropdownMenuContent class="w-72">
-        <MenuDividerLabel class="mb-1 mt-1">
-          Select an agent to build a project
-        </MenuDividerLabel>
+        <MenuDividerLabel class="mb-1 mt-1">Select an agent to build a project</MenuDividerLabel>
         <Show
           when={(props.agents ?? []).length > 0}
-          fallback={
-            <div class="px-2 py-1.5 text-xs italic text-muted-foreground">
-              No agents available
-            </div>
-          }
+          fallback={<div class="px-2 py-1.5 text-xs italic text-muted-foreground">No agents available</div>}
         >
           <For each={props.agents}>
             {(agent) => (
               <RichMenuItem
                 icon={<Bot class="w-4 h-4" />}
                 title={agent.displayName ?? agent.name}
-                description={
-                  agent.description ?? "Start a new project with this agent."
-                }
+                description={agent.description ?? 'Start a new project with this agent.'}
                 disabled={props.disabled}
                 onSelect={() => props.onCreateProject(agent.id)}
               />
@@ -382,12 +348,7 @@ function TopPlusMenu(props: {
 
 function MenuDividerLabel(props: { children: JSX.Element; class?: string }) {
   return (
-    <div
-      class={cn(
-        "-mx-1 my-1.5 flex items-center gap-2 text-xs font-medium text-muted-foreground",
-        props.class,
-      )}
-    >
+    <div class={cn('-mx-1 my-1.5 flex items-center gap-2 text-xs font-medium text-muted-foreground', props.class)}>
       <span class="h-px flex-1 bg-border" />
       <span class="shrink-0">{props.children}</span>
       <span class="h-px flex-1 bg-border" />
@@ -405,23 +366,16 @@ function RichMenuItem(props: {
 }) {
   return (
     <DropdownMenuItem
-      class={cn("items-start gap-2.5", props.compact ? "py-1.5" : "py-2")}
+      class={cn('items-start gap-2.5', props.compact ? 'py-1.5' : 'py-2')}
       disabled={props.disabled}
       onSelect={props.onSelect}
     >
       <span class="mt-0.5 shrink-0 text-muted-foreground">{props.icon}</span>
       <span class="flex min-w-0 flex-col gap-0.5">
-        <span
-          class={cn(
-            "font-medium leading-none text-foreground",
-            props.compact ? "text-xs" : "text-sm",
-          )}
-        >
+        <span class={cn('font-medium leading-none text-foreground', props.compact ? 'text-xs' : 'text-sm')}>
           {props.title}
         </span>
-        <span class="text-xs leading-snug text-muted-foreground">
-          {props.description}
-        </span>
+        <span class="text-xs leading-snug text-muted-foreground">{props.description}</span>
       </span>
     </DropdownMenuItem>
   );

@@ -1,45 +1,45 @@
-import { Show, For } from "solid-js"
-import { useNavigate } from "@tanstack/solid-router"
-import { api, type Tenant } from "~/api/client"
-import { createTenantState } from "~/lib/tenant-state"
+import { Show, For } from 'solid-js';
+import { useNavigate } from '@tanstack/solid-router';
+import { api, type Tenant } from '~/api/client';
+import { createTenantState } from '~/lib/tenant-state';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
-} from "~/components/ui/dropdown-menu"
-import { SidebarMenu, SidebarMenuItem } from "~/components/ui/sidebar"
-import { Building2, ChevronsUpDown } from "~/components/icons"
-import { createAppQuery } from "~/lib/create-app-query"
+} from '~/components/ui/dropdown-menu';
+import { SidebarMenu, SidebarMenuItem } from '~/components/ui/sidebar';
+import { Building2, ChevronsUpDown } from '~/components/icons';
+import { createAppQuery } from '~/lib/create-app-query';
 
 export default function TenantSelector() {
-  const [currentTenant, setTenant] = createTenantState()
-  const navigate = useNavigate()
+  const [currentTenant, setTenant] = createTenantState();
+  const navigate = useNavigate();
 
   const tenantsQuery = createAppQuery(() => ({
-    queryKey: ["tenants"],
-    queryFn: () => api.get<Tenant[]>("/tenants"),
-  }))
+    queryKey: ['tenants'],
+    queryFn: () => api.get<Tenant[]>('/tenants'),
+  }));
 
   const currentDisplayName = () => {
-    const tenants = tenantsQuery.data
-    if (!tenants) return ""
-    const match = tenants.find((t) => t.name === currentTenant())
-    return match?.displayName ?? currentTenant()
-  }
+    const tenants = tenantsQuery.data;
+    if (!tenants) return '';
+    const match = tenants.find((t) => t.name === currentTenant());
+    return match?.displayName ?? currentTenant();
+  };
 
   const initTenant = () => {
-    const tenants = tenantsQuery.data
-    if (!tenants || tenants.length === 0) return
+    const tenants = tenantsQuery.data;
+    if (!tenants || tenants.length === 0) return;
     if (!currentTenant() || !tenants.some((t) => t.name === currentTenant())) {
-      setTenant(tenants[0].name)
+      setTenant(tenants[0].name);
     }
-  }
+  };
 
   return (
     <Show when={tenantsQuery.data} fallback={null}>
       {(tenants) => {
-        initTenant()
+        initTenant();
         return (
           <Show when={tenants().length >= 2}>
             <SidebarMenu>
@@ -65,11 +65,11 @@ export default function TenantSelector() {
                     <For each={tenants()}>
                       {(tenant) => (
                         <DropdownMenuItem
-                          class={tenant.name === currentTenant() ? "bg-accent" : ""}
+                          class={tenant.name === currentTenant() ? 'bg-accent' : ''}
                           onSelect={() => {
-                          setTenant(tenant.name)
-                          navigate({ to: "/" })
-                        }}
+                            setTenant(tenant.name);
+                            navigate({ to: '/' });
+                          }}
                         >
                           {tenant.displayName}
                         </DropdownMenuItem>
@@ -80,8 +80,8 @@ export default function TenantSelector() {
               </SidebarMenuItem>
             </SidebarMenu>
           </Show>
-        )
+        );
       }}
     </Show>
-  )
+  );
 }

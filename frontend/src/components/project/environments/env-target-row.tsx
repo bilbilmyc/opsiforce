@@ -1,14 +1,14 @@
-import { Show } from "solid-js"
-import { Check, Rocket } from "~/components/icons"
-import { Button } from "~/components/ui/button"
-import EnvAppLinkButtons from "./env-app-link-buttons"
-import type { PublishTarget } from "~/api/publish"
+import { Show } from 'solid-js';
+import { Check, Rocket } from '~/components/icons';
+import { Button } from '~/components/ui/button';
+import EnvAppLinkButtons from './env-app-link-buttons';
+import type { PublishTarget } from '~/api/publish';
 
 export interface EnvTargetRowProps {
-  target: PublishTarget
-  hasApp: boolean
-  canPublish: boolean
-  onPublish: () => void
+  target: PublishTarget;
+  hasApp: boolean;
+  canPublish: boolean;
+  onPublish: () => void;
 }
 
 export default function EnvTargetRow(props: EnvTargetRowProps) {
@@ -20,11 +20,7 @@ export default function EnvTargetRow(props: EnvTargetRowProps) {
           {props.target.name}
         </span>
       </span>
-      <EnvAppLinkButtons
-        appUrl=""
-        enabled={false}
-        disabledReason="Publish first — no app is running here yet"
-      />
+      <EnvAppLinkButtons appUrl="" enabled={false} disabledReason="Publish first — no app is running here yet" />
       <span class="truncate text-xs text-muted-foreground">Not published yet</span>
       <Show when={props.canPublish && props.hasApp}>
         <Button
@@ -38,5 +34,5 @@ export default function EnvTargetRow(props: EnvTargetRowProps) {
         </Button>
       </Show>
     </div>
-  )
+  );
 }

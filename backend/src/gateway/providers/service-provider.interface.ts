@@ -1,17 +1,17 @@
 export interface ServiceProviderContext {
-  projectId: string
-  tenantId: string
+  projectId: string;
+  tenantId: string;
 }
 
 export interface ServiceProviderResult {
-  success: boolean
-  data?: unknown
-  error?: string
+  success: boolean;
+  data?: unknown;
+  error?: string;
 }
 
 export interface ServiceProvider {
-  readonly serviceName: string
-  execute(payload: unknown, context: ServiceProviderContext): Promise<ServiceProviderResult>
+  readonly serviceName: string;
+  execute(payload: unknown, context: ServiceProviderContext): Promise<ServiceProviderResult>;
 }
 
-export const SERVICE_PROVIDERS = Symbol("SERVICE_PROVIDERS")
+export const SERVICE_PROVIDERS = Symbol('SERVICE_PROVIDERS');

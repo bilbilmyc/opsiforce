@@ -1,16 +1,16 @@
-import { createFileRoute, useNavigate } from "@tanstack/solid-router"
-import { createMemo, createSignal, For } from "solid-js"
-import { toast } from "solid-sonner"
-import { type Project } from "~/api/client"
-import { useCurrentUser } from "~/api/user"
-import { useCreateProjectInWorkspace, useWorkspaces } from "~/api/workspaces"
-import { EXAMPLES, type Example } from "~/data/examples"
-import { ArrowUp, LoaderCircle } from "~/components/icons"
-import { cn } from "~/lib/cn"
+import { createFileRoute, useNavigate } from '@tanstack/solid-router';
+import { createMemo, createSignal, For } from 'solid-js';
+import { toast } from 'solid-sonner';
+import { type Project } from '~/api/client';
+import { useCurrentUser } from '~/api/user';
+import { useCreateProjectInWorkspace, useWorkspaces } from '~/api/workspaces';
+import { EXAMPLES, type Example } from '~/data/examples';
+import { ArrowUp, LoaderCircle } from '~/components/icons';
+import { cn } from '~/lib/cn';
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute('/')({
   component: HomePage,
-})
+});
 
 function ExampleCard(props: { example: Example; onClick: () => void }) {
   return (
@@ -20,97 +20,86 @@ function ExampleCard(props: { example: Example; onClick: () => void }) {
     >
       <div
         class={cn(
-          "w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-base leading-none bg-gradient-to-br",
-          props.example.gradient,
+          'w-8 h-8 shrink-0 rounded-lg flex items-center justify-center text-base leading-none bg-gradient-to-br',
+          props.example.gradient
         )}
       >
         {props.example.icon}
       </div>
       <div class="flex flex-col gap-0.5 min-w-0 pt-px">
-        <span class="text-xs font-semibold text-foreground leading-tight truncate">
-          {props.example.title}
-        </span>
-        <span class="text-xs text-muted-foreground leading-snug line-clamp-2">
-          {props.example.description}
-        </span>
+        <span class="text-xs font-semibold text-foreground leading-tight truncate">{props.example.title}</span>
+        <span class="text-xs text-muted-foreground leading-snug line-clamp-2">{props.example.description}</span>
       </div>
     </button>
-  )
+  );
 }
 
 function HomePage() {
-  const navigate = useNavigate()
-  const currentUser = useCurrentUser()
-  const workspaces = useWorkspaces()
-  const createInWorkspace = useCreateProjectInWorkspace()
-  const [prompt, setPrompt] = createSignal("")
-  const [focused, setFocused] = createSignal(false)
+  const navigate = useNavigate();
+  const currentUser = useCurrentUser();
+  const workspaces = useWorkspaces();
+  const createInWorkspace = useCreateProjectInWorkspace();
+  const [prompt, setPrompt] = createSignal('');
+  const [focused, setFocused] = createSignal(false);
 
   const privateWorkspace = createMemo(() => {
-    const uid = currentUser.data?.id
-    if (!uid) return undefined
-    return (workspaces.data ?? []).find(
-      (w) => w.type === "private" && w.ownerId === uid,
-    )
-  })
+    const uid = currentUser.data?.id;
+    if (!uid) return undefined;
+    return (workspaces.data ?? []).find((w) => w.type === 'private' && w.ownerId === uid);
+  });
 
   const goToProject = (project: Project) => {
-    const text = prompt().trim()
+    const text = prompt().trim();
     navigate({
-      to: "/projects/$projectId",
+      to: '/projects/$projectId',
       params: { projectId: project.id },
       search: { prompt: text || undefined },
-    })
-  }
+    });
+  };
 
-  const isSubmitting = () => createInWorkspace.isPending
+  const isSubmitting = () => createInWorkspace.isPending;
 
   const handleSubmit = () => {
-    if (isSubmitting()) return
-    const ws = privateWorkspace()
+    if (isSubmitting()) return;
+    const ws = privateWorkspace();
     if (!ws) {
-      toast.error("Your private workspace isn't ready yet")
-      return
+      toast.error("Your private workspace isn't ready yet");
+      return;
     }
     createInWorkspace.mutate(
       { workspaceId: ws.id },
       {
         onSuccess: (project) => {
-          toast.success("Project created")
-          goToProject(project)
+          toast.success('Project created');
+          goToProject(project);
         },
-        onError: () => toast.error("Failed to create project"),
-      },
-    )
-  }
+        onError: () => toast.error('Failed to create project'),
+      }
+    );
+  };
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSubmit()
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
     }
-  }
+  };
 
   return (
     <div class="h-full overflow-y-auto">
       <div
         class="flex flex-col items-center px-6 pb-16 min-h-full"
         style={{
-          background: "radial-gradient(ellipse 80% 40% at 50% 0%, hsl(var(--primary)/0.035) 0%, transparent 100%)",
-          "padding-top": "clamp(2.5rem, 8vh, 5rem)",
+          background: 'radial-gradient(ellipse 80% 40% at 50% 0%, hsl(var(--primary)/0.035) 0%, transparent 100%)',
+          'padding-top': 'clamp(2.5rem, 8vh, 5rem)',
         }}
       >
         <div class="w-full max-w-2xl flex flex-col gap-10">
-
           {/* ── Header ── */}
           <div class="flex flex-col items-center gap-5 text-center">
             <div class="relative">
               <div class="w-11 h-11 rounded-2xl bg-foreground/5 border border-foreground/10 flex items-center justify-center shadow-sm">
-                <img
-                  alt="Opsiforce"
-                  src="/assets/icons/brands/opsima.svg"
-                  class="w-6 h-6"
-                />
+                <img alt="Opsiforce" src="/assets/icons/brands/opsima.svg" class="w-6 h-6" />
               </div>
             </div>
             <div class="flex flex-col gap-2">
@@ -125,10 +114,8 @@ function HomePage() {
 
           <div
             class={cn(
-              "rounded-2xl border bg-card overflow-hidden transition-all duration-150",
-              focused()
-                ? "border-foreground/20 ring ring-foreground/10 shadow-sm"
-                : "border-border shadow-sm",
+              'rounded-2xl border bg-card overflow-hidden transition-all duration-150',
+              focused() ? 'border-foreground/20 ring ring-foreground/10 shadow-sm' : 'border-border shadow-sm'
             )}
           >
             <textarea
@@ -149,10 +136,10 @@ function HomePage() {
                 onClick={handleSubmit}
                 disabled={isSubmitting() || !privateWorkspace()}
                 class={cn(
-                  "flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium",
-                  "bg-foreground text-background",
-                  "transition-all duration-150 hover:bg-foreground/80 active:scale-95",
-                  "disabled:opacity-35 disabled:cursor-not-allowed disabled:active:scale-100",
+                  'flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium',
+                  'bg-foreground text-background',
+                  'transition-all duration-150 hover:bg-foreground/80 active:scale-95',
+                  'disabled:opacity-35 disabled:cursor-not-allowed disabled:active:scale-100'
                 )}
               >
                 {isSubmitting() ? (
@@ -169,7 +156,7 @@ function HomePage() {
               </button>
             </div>
           </div>
-          
+
           <div>
             <div class="flex items-center gap-3 mb-4">
               <span class="text-xs font-semibold text-muted-foreground/50 uppercase tracking-widest">
@@ -183,17 +170,16 @@ function HomePage() {
                   <ExampleCard
                     example={ex}
                     onClick={() => {
-                      setPrompt(ex.prompt)
-                      handleSubmit()
+                      setPrompt(ex.prompt);
+                      handleSubmit();
                     }}
                   />
                 )}
               </For>
             </div>
           </div>
-
         </div>
       </div>
     </div>
-  )
+  );
 }

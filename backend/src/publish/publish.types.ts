@@ -1,72 +1,72 @@
-import type { ProjectStatus } from "../project/project.types"
+import type { ProjectStatus } from '../project/project.types';
 
-export const PROJECT_PUBLISH_QUEUE = "project-publish"
+export const PROJECT_PUBLISH_QUEUE = 'project-publish';
 
 export const PublishStatus = {
-  Queued: "queued",
-  Committing: "committing",
-  Building: "building",
-  Migrating: "migrating",
-  Swapping: "swapping",
-  Done: "done",
-  Failed: "failed",
-} as const
+  Queued: 'queued',
+  Committing: 'committing',
+  Building: 'building',
+  Migrating: 'migrating',
+  Swapping: 'swapping',
+  Done: 'done',
+  Failed: 'failed',
+} as const;
 
-export type PublishStatus = (typeof PublishStatus)[keyof typeof PublishStatus]
+export type PublishStatus = (typeof PublishStatus)[keyof typeof PublishStatus];
 
 export interface PublishJobData {
-  publishJobId: string
-  projectId: string
-  projectEnvironmentId: string
-  environmentId: string
-  tenantId: string
-  isFirstPublish: boolean
-  variables: Record<string, string>
-  scheduleIds: string[]
+  publishJobId: string;
+  projectId: string;
+  projectEnvironmentId: string;
+  environmentId: string;
+  tenantId: string;
+  isFirstPublish: boolean;
+  variables: Record<string, string>;
+  scheduleIds: string[];
 }
 
 export interface PublishDto {
-  environmentId: string
-  variables?: Record<string, string>
-  scheduleIds?: string[]
+  environmentId: string;
+  variables?: Record<string, string>;
+  scheduleIds?: string[];
 }
 
 export interface PublishTarget {
-  environmentId: string
-  name: string
-  slug: string
-  description: string | null
-  projectEnvironmentId: string | null
-  status: ProjectStatus | null
-  deployedCommitSha: string | null
+  environmentId: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  projectEnvironmentId: string | null;
+  status: ProjectStatus | null;
+  deployedCommitSha: string | null;
 }
 
 export interface PublishFormVariable {
-  key: string
-  value: string
+  key: string;
+  value: string;
 }
 
 export interface PublishFormScheduleOption {
-  id: string
-  name: string
-  selected: boolean
+  id: string;
+  name: string;
+  selected: boolean;
 }
 
 export interface PublishFormResponse {
-  environmentId: string
-  environmentName: string
-  isFirstPublish: boolean
-  variables: PublishFormVariable[]
-  schedules: PublishFormScheduleOption[]
+  environmentId: string;
+  environmentName: string;
+  isFirstPublish: boolean;
+  variables: PublishFormVariable[];
+  schedules: PublishFormScheduleOption[];
 }
 
 export interface PublishJobResponse {
-  id: string
-  projectEnvironmentId: string
-  environmentId: string
-  status: PublishStatus
-  commitSha: string | null
-  error: string | null
-  createdAt: Date
-  updatedAt: Date
+  id: string;
+  projectEnvironmentId: string;
+  environmentId: string;
+  status: PublishStatus;
+  commitSha: string | null;
+  error: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }

@@ -1,41 +1,36 @@
-import { Show } from "solid-js"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "~/components/ui/dialog"
-import { Button } from "~/components/ui/button"
-import Skeleton from "~/components/ui/skeleton"
-import { ExternalLink, Layers, Rocket } from "~/components/icons"
-import { appPublicUrl } from "~/lib/app-url"
-import PublishProgress from "./publish-progress"
-import type { TrackedPublish } from "./publish-jobs-context"
+import { Show } from 'solid-js';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog';
+import { Button } from '~/components/ui/button';
+import Skeleton from '~/components/ui/skeleton';
+import { ExternalLink, Layers, Rocket } from '~/components/icons';
+import { appPublicUrl } from '~/lib/app-url';
+import PublishProgress from './publish-progress';
+import type { TrackedPublish } from './publish-jobs-context';
 
 export interface PublishProgressDialogProps {
-  entry: TrackedPublish
-  onMinimize: () => void
-  onDismiss: () => void
-  onViewEnvironment: () => void
+  entry: TrackedPublish;
+  onMinimize: () => void;
+  onDismiss: () => void;
+  onViewEnvironment: () => void;
 }
 
 export default function PublishProgressDialog(props: PublishProgressDialogProps) {
-  const job = () => props.entry.job
+  const job = () => props.entry.job;
   const isTerminal = () => {
-    const status = job()?.status
-    return status === "done" || status === "failed"
-  }
+    const status = job()?.status;
+    return status === 'done' || status === 'failed';
+  };
   const appUrl = () => {
-    const current = job()
-    if (!current || current.status !== "done") return null
-    return appPublicUrl(current.projectEnvironmentId, props.entry.environmentSlug)
-  }
+    const current = job();
+    if (!current || current.status !== 'done') return null;
+    return appPublicUrl(current.projectEnvironmentId, props.entry.environmentSlug);
+  };
 
   return (
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open) props.onMinimize()
+        if (!open) props.onMinimize();
       }}
     >
       <DialogContent class="max-w-lg">
@@ -55,11 +50,7 @@ export default function PublishProgressDialog(props: PublishProgressDialogProps)
           <Show when={appUrl()}>
             {(url) => (
               <>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => window.open(url(), "_blank", "noopener,noreferrer")}
-                >
+                <Button size="sm" variant="outline" onClick={() => window.open(url(), '_blank', 'noopener,noreferrer')}>
                   <ExternalLink class="h-3.5 w-3.5" />
                   Open app
                 </Button>
@@ -85,5 +76,5 @@ export default function PublishProgressDialog(props: PublishProgressDialogProps)
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

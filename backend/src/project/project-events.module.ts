@@ -1,5 +1,5 @@
-import { Module } from "@nestjs/common"
-import { ProjectEventsService } from "./project-events.service"
+import { Module } from '@nestjs/common';
+import { ProjectEventsService } from './project-events.service';
 
 @Module({
   providers: [ProjectEventsService],

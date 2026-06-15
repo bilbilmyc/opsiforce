@@ -1,49 +1,49 @@
-import { Injectable, Logger } from "@nestjs/common"
-import crypto from "crypto"
-import { db } from "../../db"
-import { gatewayAuditLogs } from "../../db/schema"
-import { ServiceProviderRegistry } from "./providers/provider-registry"
-import type { ServiceProviderContext, ServiceProviderResult } from "./providers/service-provider.interface"
+import { Injectable, Logger } from '@nestjs/common';
+import crypto from 'crypto';
+import { db } from '../../db';
+import { gatewayAuditLogs } from '../../db/schema';
+import { ServiceProviderRegistry } from './providers/provider-registry';
+import type { ServiceProviderContext, ServiceProviderResult } from './providers/service-provider.interface';
 
 @Injectable()
 export class GatewayService {
-  private readonly logger = new Logger(GatewayService.name)
+  private readonly logger = new Logger(GatewayService.name);
 
   constructor(private readonly providerRegistry: ServiceProviderRegistry) {}
 
   async dispatch(
     serviceName: string,
     payload: unknown,
-    context: ServiceProviderContext,
+    context: ServiceProviderContext
   ): Promise<ServiceProviderResult> {
-    const provider = this.providerRegistry.get(serviceName)
+    const provider = this.providerRegistry.get(serviceName);
     if (!provider) {
       return {
         success: false,
-        error: `Unknown service: ${serviceName}. Available: ${this.providerRegistry.listServices().join(", ")}`,
-      }
+        error: `Unknown service: ${serviceName}. Available: ${this.providerRegistry.listServices().join(', ')}`,
+      };
     }
 
-    const start = Date.now()
-    let result: ServiceProviderResult
+    const start = Date.now();
+    let result: ServiceProviderResult;
 
     try {
-      result = await provider.execute(payload, context)
+      result = await provider.execute(payload, context);
     } catch (err) {
-      result = { success: false, error: (err as Error).message }
+      result = { success: false, error: (err as Error).message };
     }
 
-    const durationMs = Date.now() - start
-    this.writeAuditLog(context, serviceName, result, durationMs)
+    const durationMs = Date.now() - start;
+    this.writeAuditLog(context, serviceName, result, durationMs);
 
-    return result
+    return result;
   }
 
   private writeAuditLog(
     context: ServiceProviderContext,
     service: string,
     result: ServiceProviderResult,
-    durationMs: number,
+    durationMs: number
   ): void {
     db.insert(gatewayAuditLogs)
       .values({
@@ -51,12 +51,12 @@ export class GatewayService {
         projectId: context.projectId,
         tenantId: context.tenantId,
         service,
-        status: result.success ? "success" : "error",
+        status: result.success ? 'success' : 'error',
         durationMs,
         errorMessage: result.error ?? null,
       })
       .catch((err) => {
-        this.logger.warn(`Failed to write audit log: ${(err as Error).message}`)
-      })
+        this.logger.warn(`Failed to write audit log: ${(err as Error).message}`);
+      });
   }
 }

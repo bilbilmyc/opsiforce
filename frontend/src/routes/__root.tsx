@@ -1,21 +1,16 @@
-import { Show } from "solid-js";
-import { QueryClient, QueryClientProvider } from "@tanstack/solid-query";
-import {
-  Outlet,
-  createRootRoute,
-  useRouter,
-  useLocation,
-} from "@tanstack/solid-router";
-import { TanStackDevtools } from "@tanstack/solid-devtools";
-import { SolidQueryDevtoolsPanel } from "@tanstack/solid-query-devtools";
-import { TanStackRouterDevtoolsPanel } from "@tanstack/solid-router-devtools";
-import { ApiError } from "~/api/client";
-import AppSidebar from "~/components/app-sidebar";
-import { useSidebar } from "~/components/ui/sidebar";
-import { Button } from "~/components/ui/button";
-import { Menu } from "~/components/icons";
-import { HotjarScript } from "~/scripts/hotjar";
-import { Toaster } from "solid-sonner";
+import { Show } from 'solid-js';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import { Outlet, createRootRoute, useRouter, useLocation } from '@tanstack/solid-router';
+import { TanStackDevtools } from '@tanstack/solid-devtools';
+import { SolidQueryDevtoolsPanel } from '@tanstack/solid-query-devtools';
+import { TanStackRouterDevtoolsPanel } from '@tanstack/solid-router-devtools';
+import { ApiError } from '~/api/client';
+import AppSidebar from '~/components/app-sidebar';
+import { useSidebar } from '~/components/ui/sidebar';
+import { Button } from '~/components/ui/button';
+import { Menu } from '~/components/icons';
+import { HotjarScript } from '~/scripts/hotjar';
+import { Toaster } from 'solid-sonner';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,12 +31,7 @@ function MobileHeader() {
   return (
     <Show when={isMobile()}>
       <header class="flex items-center h-10 px-3 shrink-0 bg-background border-b border-border">
-        <Button
-          variant="ghost"
-          size="icon"
-          class="h-8 w-8"
-          onClick={toggleSidebar}
-        >
+        <Button variant="ghost" size="icon" class="h-8 w-8" onClick={toggleSidebar}>
           <Menu class="h-5 w-5" />
         </Button>
       </header>
@@ -56,8 +46,8 @@ function SidebarLayout() {
     <div
       class="group/sidebar-wrapper flex h-full w-full"
       style={{
-        "--sidebar-width": `${sidebarResize.width()}px`,
-        "--sidebar-width-icon": "3rem",
+        '--sidebar-width': `${sidebarResize.width()}px`,
+        '--sidebar-width-icon': '3rem',
       }}
     >
       <AppSidebar />
@@ -86,7 +76,7 @@ function RootLayout() {
 function AppContent() {
   const router = useRouter();
   const location = useLocation();
-  const isPermissionDenied = () => location().pathname === "/permission-denied";
+  const isPermissionDenied = () => location().pathname === '/permission-denied';
 
   return (
     <>
@@ -99,11 +89,11 @@ function AppContent() {
         <TanStackDevtools
           plugins={[
             {
-              name: "TanStack Query",
+              name: 'TanStack Query',
               render: () => <SolidQueryDevtoolsPanel client={queryClient} />,
             },
             {
-              name: "TanStack Router",
+              name: 'TanStack Router',
               render: () => <TanStackRouterDevtoolsPanel router={router} />,
             },
           ]}

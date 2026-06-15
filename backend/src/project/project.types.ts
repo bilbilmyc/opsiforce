@@ -1,63 +1,63 @@
-import type { PodClass } from "../pod/pod-classes"
+import type { PodClass } from '../pod/pod-classes';
 
 export const ProjectStatus = {
-  Starting: "starting",
-  Active: "active",
-  Suspended: "suspended",
-  Disabled: "disabled",
-  Failed: "failed",
-  Pending: "pending",
-  Claiming: "claiming",
-  Publishing: "publishing",
-} as const
+  Starting: 'starting',
+  Active: 'active',
+  Suspended: 'suspended',
+  Disabled: 'disabled',
+  Failed: 'failed',
+  Pending: 'pending',
+  Claiming: 'claiming',
+  Publishing: 'publishing',
+} as const;
 
-export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus]
+export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
 
 export const RequestLogMode = {
-  Off: "off",
-  Metadata: "metadata",
-  Full: "full",
-} as const
+  Off: 'off',
+  Metadata: 'metadata',
+  Full: 'full',
+} as const;
 
-export type RequestLogMode = (typeof RequestLogMode)[keyof typeof RequestLogMode]
+export type RequestLogMode = (typeof RequestLogMode)[keyof typeof RequestLogMode];
 
-export const REQUEST_LOG_BODY_LIMIT_DEFAULT = 10240
-export const REQUEST_LOG_BODY_LIMIT_MAX = 256 * 1024
+export const REQUEST_LOG_BODY_LIMIT_DEFAULT = 10240;
+export const REQUEST_LOG_BODY_LIMIT_MAX = 256 * 1024;
 
 export interface CreateProjectDto {
-  title?: string
-  description?: string
-  timezone?: string
-  agentId?: string
+  title?: string;
+  description?: string;
+  timezone?: string;
+  agentId?: string;
 }
 
 export interface UpdateProjectDto {
-  title?: string
-  description?: string
-  timeoutIdle?: number
-  appTimeoutIdle?: number
-  timezone?: string
+  title?: string;
+  description?: string;
+  timeoutIdle?: number;
+  appTimeoutIdle?: number;
+  timezone?: string;
 }
 
 export interface DuplicateProjectDto {
-  title?: string
+  title?: string;
 }
 
 export interface UpdateProjectLoggingDto {
-  mode: RequestLogMode
-  bodyLimit?: number
+  mode: RequestLogMode;
+  bodyLimit?: number;
 }
 
 export interface ProjectLoggingResponse {
-  mode: RequestLogMode
-  bodyLimit: number
+  mode: RequestLogMode;
+  bodyLimit: number;
 }
 
 export interface UpdateProjectPodClassDto {
-  podClass: PodClass
-  cpuMillicores?: number
-  memoryRequestMib?: number
-  memoryLimitMib?: number
+  podClass: PodClass;
+  cpuMillicores?: number;
+  memoryRequestMib?: number;
+  memoryLimitMib?: number;
 }
 
 /**
@@ -67,113 +67,113 @@ export interface UpdateProjectPodClassDto {
  * and policy come from the project shell.
  */
 export interface ProjectResponse {
-  id: string
-  tenantId: string | null
-  workspaceId: string | null
-  agentId: string
-  title: string | null
-  description: string | null
-  disabled: boolean
-  bifrostProjectId: string | null
-  directory: string
-  status: ProjectStatus
-  podIp: string | null
-  sessionId: string | null
-  platformVersion: string
-  authMode: ProjectAuthMode
-  lastActiveAt: Date | null
-  timeoutIdle: number
-  appTimeoutIdle: number
-  timezone: string
-  requestLogMode: RequestLogMode
-  requestLogBodyLimit: number
-  podClass: PodClass
-  cpuMillicores: number
-  memoryRequestMib: number
-  memoryLimitMib: number
-  isPinned: boolean
-  pinnedAt: Date | null
-  pinnedEnvironmentId: string | null
-  hasApp: boolean
-  appName: string | null
-  appDescription: string | null
-  createdAt: Date
-  updatedAt: Date
+  id: string;
+  tenantId: string | null;
+  workspaceId: string | null;
+  agentId: string;
+  title: string | null;
+  description: string | null;
+  disabled: boolean;
+  bifrostProjectId: string | null;
+  directory: string;
+  status: ProjectStatus;
+  podIp: string | null;
+  sessionId: string | null;
+  platformVersion: string;
+  authMode: ProjectAuthMode;
+  lastActiveAt: Date | null;
+  timeoutIdle: number;
+  appTimeoutIdle: number;
+  timezone: string;
+  requestLogMode: RequestLogMode;
+  requestLogBodyLimit: number;
+  podClass: PodClass;
+  cpuMillicores: number;
+  memoryRequestMib: number;
+  memoryLimitMib: number;
+  isPinned: boolean;
+  pinnedAt: Date | null;
+  pinnedEnvironmentId: string | null;
+  hasApp: boolean;
+  appName: string | null;
+  appDescription: string | null;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface ProjectState {
-  id: string
-  status: ProjectStatus
-  workspaceId: string | null
-  title: string | null
-  operation: ProjectDuplicateOperation | null
-  app: ProjectAppMeta | null
+  id: string;
+  status: ProjectStatus;
+  workspaceId: string | null;
+  title: string | null;
+  operation: ProjectDuplicateOperation | null;
+  app: ProjectAppMeta | null;
 }
 
 export interface ProjectEnvironmentSummary {
-  id: string
-  projectId: string
-  environmentId: string | null
-  name: string
-  slug: string | null
-  isDefault: boolean
-  status: ProjectStatus
-  authMode: ProjectAuthMode
-  deployedCommitSha: string | null
-  lastActiveAt: Date | null
-  isPinned: boolean
-  sessionId: string | null
+  id: string;
+  projectId: string;
+  environmentId: string | null;
+  name: string;
+  slug: string | null;
+  isDefault: boolean;
+  status: ProjectStatus;
+  authMode: ProjectAuthMode;
+  deployedCommitSha: string | null;
+  lastActiveAt: Date | null;
+  isPinned: boolean;
+  sessionId: string | null;
 }
 
 export interface ProjectDuplicateOperation {
-  type: "duplicate"
-  status: "queued" | "copying" | "starting" | "failed"
-  bytesTotal: number
-  bytesCopied: number
-  error: string | null
-  startedAt: Date | null
-  completedAt: Date | null
-  updatedAt: Date
+  type: 'duplicate';
+  status: 'queued' | 'copying' | 'starting' | 'failed';
+  bytesTotal: number;
+  bytesCopied: number;
+  error: string | null;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  updatedAt: Date;
 }
 
 export interface ProjectAppMeta {
-  exists: boolean
-  name: string | null
-  description: string | null
+  exists: boolean;
+  name: string | null;
+  description: string | null;
 }
 
 export interface ProjectAuthOidcConfig {
-  clientId?: string
-  clientSecret?: string
-  discoveryUrl?: string
-  scope?: string
+  clientId?: string;
+  clientSecret?: string;
+  discoveryUrl?: string;
+  scope?: string;
 }
 
-export type ProjectAuthMode = "public" | "manual" | "makara"
+export type ProjectAuthMode = 'public' | 'manual' | 'makara';
 
 export interface ProjectAuthResponse {
-  mode: ProjectAuthMode
-  config?: ProjectAuthOidcConfig
-  bypassAuthPaths?: string[]
-  callbackUrls: string[]
+  mode: ProjectAuthMode;
+  config?: ProjectAuthOidcConfig;
+  bypassAuthPaths?: string[];
+  callbackUrls: string[];
 }
 
 export interface UpdateProjectAuthDto {
-  mode: ProjectAuthMode
-  config?: ProjectAuthOidcConfig
-  bypassAuthPaths?: string[]
+  mode: ProjectAuthMode;
+  config?: ProjectAuthOidcConfig;
+  bypassAuthPaths?: string[];
 }
 
 export interface SetAppPinDto {
-  isPinned: boolean
-  environmentId?: string
+  isPinned: boolean;
+  environmentId?: string;
 }
 
 export interface SetEnvironmentSessionDto {
-  sessionId: string | null
+  sessionId: string | null;
 }
 
 export interface UpdateAppDto {
-  name?: string
-  description?: string | null
+  name?: string;
+  description?: string | null;
 }

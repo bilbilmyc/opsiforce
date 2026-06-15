@@ -1,13 +1,13 @@
-import { Show, createSignal } from "solid-js"
-import { AlertTriangle, X } from "~/components/icons"
+import { Show, createSignal } from 'solid-js';
+import { AlertTriangle, X } from '~/components/icons';
 
 export interface EnvProdBannerProps {
-  environmentName: string
-  onSwitchToDevelopment: () => void
+  environmentName: string;
+  onSwitchToDevelopment: () => void;
 }
 
 export default function EnvProdBanner(props: EnvProdBannerProps) {
-  const [dismissed, setDismissed] = createSignal(false)
+  const [dismissed, setDismissed] = createSignal(false);
 
   return (
     <Show when={!dismissed()}>
@@ -15,17 +15,16 @@ export default function EnvProdBanner(props: EnvProdBannerProps) {
         <div class="flex items-start gap-2.5">
           <AlertTriangle class="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600" />
           <div class="min-w-0 flex-1 text-xs leading-relaxed text-amber-900">
-            You are viewing the published{" "}
-            <span class="font-semibold">{props.environmentName}</span> app. Edits made here in chat
-            or code are <span class="font-semibold">not saved</span> and will be overwritten on the
-            next publish.{" "}
+            You are viewing the published <span class="font-semibold">{props.environmentName}</span> app. Edits made
+            here in chat or code are <span class="font-semibold">not saved</span> and will be overwritten on the next
+            publish.{' '}
             <button
               type="button"
               onClick={props.onSwitchToDevelopment}
               class="font-semibold underline underline-offset-2 hover:text-amber-950"
             >
               Switch to Development
-            </button>{" "}
+            </button>{' '}
             to make changes.
           </div>
           <button
@@ -39,5 +38,5 @@ export default function EnvProdBanner(props: EnvProdBannerProps) {
         </div>
       </div>
     </Show>
-  )
+  );
 }

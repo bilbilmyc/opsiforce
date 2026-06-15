@@ -1,34 +1,26 @@
-import { For, Show, createMemo, createSignal } from "solid-js"
-import { toast } from "solid-sonner"
-import { type User } from "~/api/client"
-import { useUsers } from "~/api/users"
-import {
-  useAddWorkspaceMember,
-  useRemoveWorkspaceMember,
-} from "~/api/workspaces"
-import { Button } from "~/components/ui/button"
+import { For, Show, createMemo, createSignal } from 'solid-js';
+import { toast } from 'solid-sonner';
+import { type User } from '~/api/client';
+import { useUsers } from '~/api/users';
+import { useAddWorkspaceMember, useRemoveWorkspaceMember } from '~/api/workspaces';
+import { Button } from '~/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
-import Spinner from "~/components/ui/spinner"
-import { ChevronDown, Plus, Trash2 } from "~/components/icons"
+} from '~/components/ui/dropdown-menu';
+import Spinner from '~/components/ui/spinner';
+import { ChevronDown, Plus, Trash2 } from '~/components/icons';
 
-export default function WorkspaceMembersTab(props: {
-  workspaceId: string
-  members: User[]
-}) {
-  const [pickerOpen, setPickerOpen] = createSignal(false)
-  const users = useUsers(() => pickerOpen())
-  const addMember = useAddWorkspaceMember()
-  const removeMember = useRemoveWorkspaceMember()
+export default function WorkspaceMembersTab(props: { workspaceId: string; members: User[] }) {
+  const [pickerOpen, setPickerOpen] = createSignal(false);
+  const users = useUsers(() => pickerOpen());
+  const addMember = useAddWorkspaceMember();
+  const removeMember = useRemoveWorkspaceMember();
 
-  const memberIds = createMemo(() => new Set(props.members.map((m) => m.id)))
-  const addable = createMemo(() =>
-    (users.data ?? []).filter((u) => !memberIds().has(u.id)),
-  )
+  const memberIds = createMemo(() => new Set(props.members.map((m) => m.id)));
+  const addable = createMemo(() => (users.data ?? []).filter((u) => !memberIds().has(u.id)));
 
   return (
     <div class="space-y-3">
@@ -45,12 +37,10 @@ export default function WorkspaceMembersTab(props: {
             {(m) => (
               <div class="flex items-center gap-2 p-2 rounded-md border border-border">
                 <div class="w-7 h-7 rounded-full bg-sidebar-accent flex items-center justify-center text-xs font-semibold text-sidebar-foreground">
-                  {((m.displayName ?? m.email ?? "?").charAt(0)).toUpperCase()}
+                  {(m.displayName ?? m.email ?? '?').charAt(0).toUpperCase()}
                 </div>
                 <div class="flex-1 min-w-0">
-                  <div class="text-sm font-medium truncate">
-                    {m.displayName ?? m.email ?? m.id}
-                  </div>
+                  <div class="text-sm font-medium truncate">{m.displayName ?? m.email ?? m.id}</div>
                 </div>
                 <button
                   class="text-muted-foreground hover:text-destructive p-1.5 rounded-md hover:bg-accent"
@@ -58,9 +48,9 @@ export default function WorkspaceMembersTab(props: {
                     removeMember.mutate(
                       { workspaceId: props.workspaceId, userId: m.id },
                       {
-                        onSuccess: () => toast.success("Member removed"),
-                        onError: () => toast.error("Failed to remove member"),
-                      },
+                        onSuccess: () => toast.success('Member removed'),
+                        onError: () => toast.error('Failed to remove member'),
+                      }
                     )
                   }
                   title="Remove"
@@ -89,11 +79,7 @@ export default function WorkspaceMembersTab(props: {
             fallback={
               <Show
                 when={users.isLoading}
-                fallback={
-                  <div class="px-2 py-6 text-xs text-center text-muted-foreground">
-                    No users available.
-                  </div>
-                }
+                fallback={<div class="px-2 py-6 text-xs text-center text-muted-foreground">No users available.</div>}
               >
                 <div class="px-2 py-3">
                   <Spinner size="sm" />
@@ -108,11 +94,11 @@ export default function WorkspaceMembersTab(props: {
                     addMember.mutate(
                       { workspaceId: props.workspaceId, userId: u.id },
                       {
-                        onSuccess: () => toast.success("Member added"),
-                        onError: () => toast.error("Failed to add member"),
-                      },
-                    )
-                    setPickerOpen(false)
+                        onSuccess: () => toast.success('Member added'),
+                        onError: () => toast.error('Failed to add member'),
+                      }
+                    );
+                    setPickerOpen(false);
                   }}
                 >
                   <span class="text-sm truncate">{u.displayName ?? u.email ?? u.id}</span>
@@ -123,5 +109,5 @@ export default function WorkspaceMembersTab(props: {
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-  )
+  );
 }

@@ -1,42 +1,42 @@
-import { Show, createSignal } from "solid-js"
-import { toast } from "solid-sonner"
-import { Lock, Pencil, Trash2, X } from "~/components/icons"
-import { Button } from "~/components/ui/button"
-import { useUpdateEnvironment, type Environment } from "~/api/environments"
+import { Show, createSignal } from 'solid-js';
+import { toast } from 'solid-sonner';
+import { Lock, Pencil, Trash2, X } from '~/components/icons';
+import { Button } from '~/components/ui/button';
+import { useUpdateEnvironment, type Environment } from '~/api/environments';
 
 export interface EnvironmentRowProps {
-  environment: Environment
-  onRequestDelete: (environment: Environment) => void
+  environment: Environment;
+  onRequestDelete: (environment: Environment) => void;
 }
 
 export default function EnvironmentRow(props: EnvironmentRowProps) {
-  const update = useUpdateEnvironment()
-  const [editing, setEditing] = createSignal(false)
-  const [name, setName] = createSignal("")
-  const [description, setDescription] = createSignal("")
+  const update = useUpdateEnvironment();
+  const [editing, setEditing] = createSignal(false);
+  const [name, setName] = createSignal('');
+  const [description, setDescription] = createSignal('');
 
-  const isLocked = () => props.environment.isProtected
+  const isLocked = () => props.environment.isProtected;
 
   const startEdit = () => {
-    setName(props.environment.name)
-    setDescription(props.environment.description ?? "")
-    setEditing(true)
-  }
+    setName(props.environment.name);
+    setDescription(props.environment.description ?? '');
+    setEditing(true);
+  };
 
   const save = async () => {
-    const trimmed = name().trim()
-    if (!trimmed) return
+    const trimmed = name().trim();
+    if (!trimmed) return;
     try {
       await update.mutateAsync({
         id: props.environment.id,
         dto: { name: trimmed, description: description().trim() },
-      })
-      toast.success("Environment updated")
-      setEditing(false)
+      });
+      toast.success('Environment updated');
+      setEditing(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to update environment")
+      toast.error(err instanceof Error ? err.message : 'Failed to update environment');
     }
-  }
+  };
 
   return (
     <div class="rounded-md border border-border bg-background p-2.5">
@@ -61,9 +61,7 @@ export default function EnvironmentRow(props: EnvironmentRowProps) {
                 </Show>
               </div>
               <Show when={props.environment.description}>
-                {(description) => (
-                  <p class="mt-0.5 truncate text-xs text-muted-foreground">{description()}</p>
-                )}
+                {(description) => <p class="mt-0.5 truncate text-xs text-muted-foreground">{description()}</p>}
               </Show>
             </div>
             <Show when={!isLocked()}>
@@ -108,7 +106,7 @@ export default function EnvironmentRow(props: EnvironmentRowProps) {
             value={name()}
             onInput={(e) => setName(e.currentTarget.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && name().trim()) save()
+              if (e.key === 'Enter' && name().trim()) save();
             }}
             class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             placeholder="Name"
@@ -125,17 +123,12 @@ export default function EnvironmentRow(props: EnvironmentRowProps) {
             <Button size="sm" variant="outline" onClick={() => setEditing(false)}>
               Cancel
             </Button>
-            <Button
-              size="sm"
-              onClick={save}
-              loading={update.isPending}
-              disabled={!name().trim()}
-            >
+            <Button size="sm" onClick={save} loading={update.isPending} disabled={!name().trim()}>
               Save
             </Button>
           </div>
         </div>
       </Show>
     </div>
-  )
+  );
 }

@@ -1,11 +1,11 @@
-import { For, Show, createMemo, createSignal } from "solid-js"
-import { createMutation, useQueryClient } from "@tanstack/solid-query"
-import { toast } from "solid-sonner"
-import { usePermissions } from "~/api/permissions"
-import { Permission } from "~/constants/permissions"
-import { api, type Project } from "~/api/client"
-import { useRestartProjectEnvironment } from "~/api/environments"
-import { PUBLIC_LABEL, useMoveProject, useWorkspaces } from "~/api/workspaces"
+import { For, Show, createMemo, createSignal } from 'solid-js';
+import { createMutation, useQueryClient } from '@tanstack/solid-query';
+import { toast } from 'solid-sonner';
+import { usePermissions } from '~/api/permissions';
+import { Permission } from '~/constants/permissions';
+import { api, type Project } from '~/api/client';
+import { useRestartProjectEnvironment } from '~/api/environments';
+import { PUBLIC_LABEL, useMoveProject, useWorkspaces } from '~/api/workspaces';
 import {
   ArrowRightLeft,
   Ban,
@@ -19,7 +19,7 @@ import {
   RotateCcw,
   Settings,
   Trash2,
-} from "~/components/icons"
+} from '~/components/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,126 +29,122 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu"
-import ProjectSettings from "./project-settings"
-import ConfirmDialog from "./ui/confirm-dialog"
+} from '~/components/ui/dropdown-menu';
+import ProjectSettings from './project-settings';
+import ConfirmDialog from './ui/confirm-dialog';
 
 interface PendingMove {
-  toWorkspaceId: string | null
-  toName: string
+  toWorkspaceId: string | null;
+  toName: string;
 }
 
 export default function ProjectActionsMenu(props: {
-  projectId: string
-  status: Project["status"]
-  workspaceId: string | null
-  project?: Project
-  activeEnvironmentId?: string
-  showRename?: boolean
-  onRename?: () => void
-  onSettings?: () => void
-  onDeleted?: () => void
-  onDuplicated?: (project: Project) => void
-  triggerClass?: string
-  onTriggerClick?: (e: MouseEvent) => void
+  projectId: string;
+  status: Project['status'];
+  workspaceId: string | null;
+  project?: Project;
+  activeEnvironmentId?: string;
+  showRename?: boolean;
+  onRename?: () => void;
+  onSettings?: () => void;
+  onDeleted?: () => void;
+  onDuplicated?: (project: Project) => void;
+  triggerClass?: string;
+  onTriggerClick?: (e: MouseEvent) => void;
 }) {
-  const qc = useQueryClient()
-  const { hasPermission } = usePermissions()
+  const qc = useQueryClient();
+  const { hasPermission } = usePermissions();
 
   const canSeeSettings = () =>
     hasPermission(Permission.manageProjectBudgetSettings) ||
     hasPermission(Permission.manageProjectTimeoutSettings) ||
     hasPermission(Permission.manageProjectLoggingSettings) ||
-    hasPermission(Permission.manageProjectPodSettings)
-  const canDisable = () => hasPermission(Permission.disableProject)
-  const canRestart = () => hasPermission(Permission.restartProject)
-  const canDuplicate = () => hasPermission(Permission.duplicateProject)
-  const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces)
-  const isDisabled = () => props.status === "disabled"
+    hasPermission(Permission.manageProjectPodSettings);
+  const canDisable = () => hasPermission(Permission.disableProject);
+  const canRestart = () => hasPermission(Permission.restartProject);
+  const canDuplicate = () => hasPermission(Permission.duplicateProject);
+  const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces);
+  const isDisabled = () => props.status === 'disabled';
 
-  const [settingsOpen, setSettingsOpen] = createSignal(false)
-  const [confirmAction, setConfirmAction] = createSignal<
-    "delete" | "duplicate" | "disable" | "restart" | null
-  >(null)
-  const [pendingMove, setPendingMove] = createSignal<PendingMove | null>(null)
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const [confirmAction, setConfirmAction] = createSignal<'delete' | 'duplicate' | 'disable' | 'restart' | null>(null);
+  const [pendingMove, setPendingMove] = createSignal<PendingMove | null>(null);
 
-  const workspaces = useWorkspaces()
-  const move = useMoveProject()
+  const workspaces = useWorkspaces();
+  const move = useMoveProject();
 
-  const moveTargets = createMemo(() => (workspaces.data ?? []).filter((w) => w.id !== props.workspaceId))
+  const moveTargets = createMemo(() => (workspaces.data ?? []).filter((w) => w.id !== props.workspaceId));
 
   const currentWorkspaceName = createMemo(() => {
-    if (props.workspaceId === null) return PUBLIC_LABEL
-    return (workspaces.data ?? []).find((w) => w.id === props.workspaceId)?.name ?? "workspace"
-  })
+    if (props.workspaceId === null) return PUBLIC_LABEL;
+    return (workspaces.data ?? []).find((w) => w.id === props.workspaceId)?.name ?? 'workspace';
+  });
 
-  const showMove = () =>
-    moveTargets().length > 0 || (canManageWorkspaces() && props.workspaceId !== null)
+  const showMove = () => moveTargets().length > 0 || (canManageWorkspaces() && props.workspaceId !== null);
 
-  const projectTitle = () => props.project?.title?.trim() || "Untitled project"
+  const projectTitle = () => props.project?.title?.trim() || 'Untitled project';
 
   const confirmMove = () => {
-    const target = pendingMove()
-    if (!target) return
+    const target = pendingMove();
+    if (!target) return;
     move.mutate({
       projectId: props.projectId,
       fromWorkspaceId: props.workspaceId,
       toWorkspaceId: target.toWorkspaceId,
       fromName: currentWorkspaceName(),
       toName: target.toName,
-    })
-  }
+    });
+  };
 
   const deleteProject = createMutation(() => ({
     mutationFn: () => api.delete<void>(`/projects/${props.projectId}`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] })
-      props.onDeleted?.()
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      props.onDeleted?.();
     },
-  }))
+  }));
 
   const duplicateProject = createMutation(() => ({
     mutationFn: () => api.post<Project>(`/projects/${props.projectId}/duplicate`),
     onSuccess: (p: Project) => {
-      qc.invalidateQueries({ queryKey: ["projects"] })
-      toast.success("Duplicate started")
-      props.onDuplicated?.(p)
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      toast.success('Duplicate started');
+      props.onDuplicated?.(p);
     },
-    onError: () => toast.error("Failed to duplicate project"),
-  }))
+    onError: () => toast.error('Failed to duplicate project'),
+  }));
 
   const disableProject = createMutation(() => ({
     mutationFn: () => api.post<Project>(`/projects/${props.projectId}/disable`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
-  }))
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  }));
 
   const enableProject = createMutation(() => ({
     mutationFn: () => api.post<Project>(`/projects/${props.projectId}/enable`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["projects"] }),
-  }))
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] }),
+  }));
 
   const restartProject = createMutation(() => ({
     mutationFn: () => api.post<Project>(`/projects/${props.projectId}/restart`),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] })
-      qc.refetchQueries({ queryKey: ["projects", props.projectId] })
+      qc.invalidateQueries({ queryKey: ['projects'] });
+      qc.refetchQueries({ queryKey: ['projects', props.projectId] });
     },
-  }))
+  }));
 
-  const restartEnvironment = useRestartProjectEnvironment()
+  const restartEnvironment = useRestartProjectEnvironment();
 
-  const isDevelopmentActive = () =>
-    !props.activeEnvironmentId || props.activeEnvironmentId === props.projectId
+  const isDevelopmentActive = () => !props.activeEnvironmentId || props.activeEnvironmentId === props.projectId;
 
   const handleRestart = () => {
     if (isDevelopmentActive()) {
-      restartProject.mutate(undefined as never)
-      return
+      restartProject.mutate(undefined as never);
+      return;
     }
-    const environmentId = props.activeEnvironmentId
-    if (!environmentId) return
-    restartEnvironment.mutate({ projectId: props.projectId, environmentId })
-  }
+    const environmentId = props.activeEnvironmentId;
+    if (!environmentId) return;
+    restartEnvironment.mutate({ projectId: props.projectId, environmentId });
+  };
 
   return (
     <>
@@ -156,7 +152,7 @@ export default function ProjectActionsMenu(props: {
         <DropdownMenuTrigger
           class={
             props.triggerClass ??
-            "inline-flex items-center justify-center rounded-md w-7 h-7 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            'inline-flex items-center justify-center rounded-md w-7 h-7 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors'
           }
           onClick={(e: MouseEvent) => props.onTriggerClick?.(e)}
           aria-label="Project actions"
@@ -171,13 +167,13 @@ export default function ProjectActionsMenu(props: {
             </DropdownMenuItem>
           </Show>
           <Show when={canDuplicate()}>
-            <DropdownMenuItem onSelect={() => setConfirmAction("duplicate")}>
+            <DropdownMenuItem onSelect={() => setConfirmAction('duplicate')}>
               <Copy class="w-3.5 h-3.5 text-muted-foreground" />
               Duplicate
             </DropdownMenuItem>
           </Show>
           <Show when={canRestart() && !isDisabled()}>
-            <DropdownMenuItem onSelect={() => setConfirmAction("restart")}>
+            <DropdownMenuItem onSelect={() => setConfirmAction('restart')}>
               <RotateCcw class="w-3.5 h-3.5 text-muted-foreground" />
               Restart
             </DropdownMenuItem>
@@ -186,7 +182,7 @@ export default function ProjectActionsMenu(props: {
             <Show
               when={isDisabled()}
               fallback={
-                <DropdownMenuItem onSelect={() => setConfirmAction("disable")}>
+                <DropdownMenuItem onSelect={() => setConfirmAction('disable')}>
                   <Ban class="w-3.5 h-3.5 text-muted-foreground" />
                   Disable
                 </DropdownMenuItem>
@@ -201,8 +197,8 @@ export default function ProjectActionsMenu(props: {
           <Show when={canSeeSettings()}>
             <DropdownMenuItem
               onSelect={() => {
-                if (props.onSettings) props.onSettings()
-                else setSettingsOpen(true)
+                if (props.onSettings) props.onSettings();
+                else setSettingsOpen(true);
               }}
             >
               <Settings class="w-3.5 h-3.5 text-muted-foreground" />
@@ -220,9 +216,7 @@ export default function ProjectActionsMenu(props: {
               <DropdownMenuSubContent>
                 <For each={moveTargets()}>
                   {(ws) => (
-                    <DropdownMenuItem
-                      onSelect={() => setPendingMove({ toWorkspaceId: ws.id, toName: ws.name })}
-                    >
+                    <DropdownMenuItem onSelect={() => setPendingMove({ toWorkspaceId: ws.id, toName: ws.name })}>
                       <FolderKanban class="w-3.5 h-3.5 text-muted-foreground" />
                       {ws.name}
                     </DropdownMenuItem>
@@ -232,9 +226,7 @@ export default function ProjectActionsMenu(props: {
                   <Show when={moveTargets().length > 0}>
                     <DropdownMenuSeparator />
                   </Show>
-                  <DropdownMenuItem
-                    onSelect={() => setPendingMove({ toWorkspaceId: null, toName: PUBLIC_LABEL })}
-                  >
+                  <DropdownMenuItem onSelect={() => setPendingMove({ toWorkspaceId: null, toName: PUBLIC_LABEL })}>
                     <Globe class="w-3.5 h-3.5 text-muted-foreground" />
                     {PUBLIC_LABEL}
                   </DropdownMenuItem>
@@ -245,7 +237,7 @@ export default function ProjectActionsMenu(props: {
           <DropdownMenuSeparator />
           <DropdownMenuItem
             class="text-destructive data-[highlighted]:text-destructive"
-            onSelect={() => setConfirmAction("delete")}
+            onSelect={() => setConfirmAction('delete')}
           >
             <Trash2 class="w-3.5 h-3.5" />
             Delete
@@ -265,22 +257,20 @@ export default function ProjectActionsMenu(props: {
       <ConfirmDialog
         open={pendingMove() !== null}
         onOpenChange={(open) => {
-          if (!open) setPendingMove(null)
+          if (!open) setPendingMove(null);
         }}
         title="Move project"
         description={
-          pendingMove()
-            ? `Move "${projectTitle()}" from ${currentWorkspaceName()} to ${pendingMove()?.toName}?`
-            : ""
+          pendingMove() ? `Move "${projectTitle()}" from ${currentWorkspaceName()} to ${pendingMove()?.toName}?` : ''
         }
         confirmLabel="Move"
         onConfirm={confirmMove}
       />
 
       <ConfirmDialog
-        open={confirmAction() === "delete"}
+        open={confirmAction() === 'delete'}
         onOpenChange={(open) => {
-          if (!open) setConfirmAction(null)
+          if (!open) setConfirmAction(null);
         }}
         title="Delete project"
         description="This will permanently delete the project and all its data. This action cannot be undone."
@@ -290,9 +280,9 @@ export default function ProjectActionsMenu(props: {
       />
 
       <ConfirmDialog
-        open={confirmAction() === "disable"}
+        open={confirmAction() === 'disable'}
         onOpenChange={(open) => {
-          if (!open) setConfirmAction(null)
+          if (!open) setConfirmAction(null);
         }}
         title="Disable project"
         description="This will shut down the project. The project data will be preserved and the project can be re-enabled later."
@@ -302,9 +292,9 @@ export default function ProjectActionsMenu(props: {
       />
 
       <ConfirmDialog
-        open={confirmAction() === "duplicate"}
+        open={confirmAction() === 'duplicate'}
         onOpenChange={(open) => {
-          if (!open) setConfirmAction(null)
+          if (!open) setConfirmAction(null);
         }}
         title="Duplicate project"
         description="This will create a copy of the project with the same workspace files."
@@ -313,9 +303,9 @@ export default function ProjectActionsMenu(props: {
       />
 
       <ConfirmDialog
-        open={confirmAction() === "restart"}
+        open={confirmAction() === 'restart'}
         onOpenChange={(open) => {
-          if (!open) setConfirmAction(null)
+          if (!open) setConfirmAction(null);
         }}
         title="Restart project"
         description="Are you sure you want to restart this project? Project data will be preserved."
@@ -324,5 +314,5 @@ export default function ProjectActionsMenu(props: {
         onConfirm={handleRestart}
       />
     </>
-  )
+  );
 }

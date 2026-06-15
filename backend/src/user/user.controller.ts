@@ -1,81 +1,75 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UnauthorizedException } from "@nestjs/common"
-import { FastifyRequest } from "fastify"
-import { RequirePermission } from "../permission/permission.guard"
-import { Perms } from "../permission/permission.constants"
-import { CurrentTenant, Public, type TenantContext } from "../tenant/tenant.decorator"
-import { CurrentUser, type UserContext } from "./user.decorator"
+import { Body, Controller, Get, Param, Patch, Post, Req, UnauthorizedException } from '@nestjs/common';
+import { FastifyRequest } from 'fastify';
+import { RequirePermission } from '../permission/permission.guard';
+import { Perms } from '../permission/permission.constants';
+import { CurrentTenant, Public, type TenantContext } from '../tenant/tenant.decorator';
+import { CurrentUser, type UserContext } from './user.decorator';
 import {
   UserService,
   type UpdateWorkspacePreferencesDto,
   type UserRecord,
   type WorkspacePreferencesResponse,
-} from "./user.service"
+} from './user.service';
 
-@Controller("users")
+@Controller('users')
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get()
   @RequirePermission(Perms.manageWorkspaces)
   listUsers(@CurrentTenant() tenant: TenantContext): Promise<UserRecord[]> {
-    return this.userService.listByTenant(tenant.tenantId)
+    return this.userService.listByTenant(tenant.tenantId);
   }
 
   @Public()
-  @Post("last-access-times")
+  @Post('last-access-times')
   async getLastAccessTimes(
-    @Body() body: { keycloakUserIds?: string[] },
+    @Body() body: { keycloakUserIds?: string[] }
   ): Promise<{ lastAccessTimes: Record<string, string | null> }> {
-    const keycloakUserIds = Array.isArray(body?.keycloakUserIds) ? body.keycloakUserIds : []
-    const lastAccessTimes = await this.userService.getLastAccessTimes(keycloakUserIds)
-    return { lastAccessTimes }
+    const keycloakUserIds = Array.isArray(body?.keycloakUserIds) ? body.keycloakUserIds : [];
+    const lastAccessTimes = await this.userService.getLastAccessTimes(keycloakUserIds);
+    return { lastAccessTimes };
   }
 
-  @Post("me")
-  async getOrCreateMe(
-    @Req() req: FastifyRequest,
-    @CurrentTenant() tenant: TenantContext,
-  ): Promise<UserRecord> {
-    const keycloakId = req.headers["x-forwarded-user"] as string | undefined
+  @Post('me')
+  async getOrCreateMe(@Req() req: FastifyRequest, @CurrentTenant() tenant: TenantContext): Promise<UserRecord> {
+    const keycloakId = req.headers['x-forwarded-user'] as string | undefined;
     if (!keycloakId) {
-      throw new UnauthorizedException("Missing x-forwarded-user header")
+      throw new UnauthorizedException('Missing x-forwarded-user header');
     }
-    const email = req.headers["x-forwarded-email"] as string | undefined
-    const displayName = req.headers["x-forwarded-preferred-username"] as string | undefined
-    return this.userService.getOrCreateUser({ keycloakId, email, displayName }, tenant.tenantId)
+    const email = req.headers['x-forwarded-email'] as string | undefined;
+    const displayName = req.headers['x-forwarded-preferred-username'] as string | undefined;
+    return this.userService.getOrCreateUser({ keycloakId, email, displayName }, tenant.tenantId);
   }
 
-  @Get("me")
-  async getMe(
-    @CurrentUser() user: UserContext,
-    @CurrentTenant() tenant: TenantContext,
-  ): Promise<UserRecord> {
-    return this.ensureDbUser(user, tenant.tenantId)
+  @Get('me')
+  async getMe(@CurrentUser() user: UserContext, @CurrentTenant() tenant: TenantContext): Promise<UserRecord> {
+    return this.ensureDbUser(user, tenant.tenantId);
   }
 
-  @Get("me/workspace-preferences")
+  @Get('me/workspace-preferences')
   async getWorkspacePreferences(
     @CurrentUser() user: UserContext,
-    @CurrentTenant() tenant: TenantContext,
+    @CurrentTenant() tenant: TenantContext
   ): Promise<WorkspacePreferencesResponse> {
-    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
-    return this.userService.getWorkspacePreferences(dbUser.id)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId);
+    return this.userService.getWorkspacePreferences(dbUser.id);
   }
 
-  @Patch("me/workspace-preferences")
+  @Patch('me/workspace-preferences')
   async updateWorkspacePreferences(
     @CurrentUser() user: UserContext,
     @CurrentTenant() tenant: TenantContext,
-    @Body() dto: UpdateWorkspacePreferencesDto,
+    @Body() dto: UpdateWorkspacePreferencesDto
   ): Promise<WorkspacePreferencesResponse> {
-    const dbUser = await this.ensureDbUser(user, tenant.tenantId)
-    return this.userService.updateWorkspacePreferences(dbUser.id, dto)
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId);
+    return this.userService.updateWorkspacePreferences(dbUser.id, dto);
   }
 
-  @Get(":id")
+  @Get(':id')
   @RequirePermission(Perms.manageWorkspaces)
-  findOne(@Param("id") id: string): Promise<UserRecord> {
-    return this.userService.findById(id)
+  findOne(@Param('id') id: string): Promise<UserRecord> {
+    return this.userService.findById(id);
   }
 
   private ensureDbUser(user: UserContext, tenantId: string): Promise<UserRecord> {
@@ -85,7 +79,7 @@ export class UserController {
         email: user.email ?? undefined,
         displayName: user.displayName ?? undefined,
       },
-      tenantId,
-    )
+      tenantId
+    );
   }
 }
