@@ -127,7 +127,7 @@ export interface ProjectEnvironmentSummary {
 
 export interface ProjectDuplicateOperation {
   type: 'duplicate';
-  status: 'queued' | 'copying' | 'starting' | 'failed';
+  status: 'queued' | 'committing' | 'cloning' | 'copying' | 'starting' | 'failed';
   bytesTotal: number;
   bytesCopied: number;
   error: string | null;

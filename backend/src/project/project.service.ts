@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   Logger,
   Inject,
   forwardRef,
@@ -20,6 +21,8 @@ import {
   projects,
   projectApps,
   projectEnvironments,
+  projectPublishJobs,
+  projectSchedules,
   workspaceMembers,
   workspaces,
   tenants,
@@ -27,6 +30,7 @@ import {
   projectDuplicateJobs,
 } from '../../db/schema';
 import { PodService, PodStartupFailedError } from '../pod/pod.service';
+import { ProxyService } from '../proxy/proxy.service';
 import { ProjectPoolService } from '../pool/project-pool.service';
 import { TimeoutService } from '../timeout/timeout.service';
 import { BifrostService } from '../bifrost/bifrost.service';
@@ -39,7 +43,7 @@ import { ScheduleService } from '../schedule/schedule.service';
 import { AgentService } from '../agent/agent.service';
 import { readAgentConfig } from '../agent/agent-config';
 import { EnvironmentService } from '../environment/environment.service';
-import { GitService } from '../publish/git.service';
+import { GitService } from '../git/git.service';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
 import type { ProjectEnvironmentContext } from '../project-environment/project-environment.types';
 import {
@@ -78,6 +82,9 @@ const CRASH_LOOP_RECREATE_AGE_MS = 60 * 1000;
 const UNSCHEDULABLE_STARTUP_GRACE_MS = 180 * 1000;
 const STARTUP_RETRY_BASE_MS = 5 * 1000;
 const STARTUP_RETRY_MAX_MS = 5 * 60 * 1000;
+const DUPLICATE_APP_READY_TIMEOUT_MS = 5 * 60 * 1000;
+const DUPLICATE_APP_POLL_INTERVAL_MS = 3000;
+const DUPLICATE_APP_FETCH_TIMEOUT_MS = 4000;
 
 interface AppMetaPatch {
   name?: string;
@@ -127,10 +134,12 @@ import { ProjectAuthService } from './project-auth.service';
 import { ProjectEventsService } from './project-events.service';
 import { AppService } from './app.service';
 import {
+  ACTIVE_DUPLICATE_STATUSES,
   PROJECT_DUPLICATE_QUEUE,
   ProjectDuplicateStatus,
   type ProjectDuplicateJobData,
 } from './project-duplicate.types';
+import { ACTIVE_PUBLISH_STATUSES } from '../publish/publish.types';
 
 type ProjectActivityKind = 'agent' | 'app';
 
@@ -210,6 +219,7 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly environmentService: EnvironmentService,
     private readonly gitService: GitService,
     private readonly projectEnvironmentService: ProjectEnvironmentService,
+    private readonly proxyService: ProxyService,
     @InjectQueue(PROJECT_DUPLICATE_QUEUE)
     private readonly duplicateQueue: Queue<ProjectDuplicateJobData>
   ) {
@@ -402,6 +412,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
   async duplicate(sourceId: string, tenantId: string, dto?: DuplicateProjectDto): Promise<ProjectResponse> {
     const source = await this.findOne(sourceId, tenantId);
+    await this.assertNoActiveGitOperation(source.id);
 
     const id = crypto.randomUUID();
     const duplicateJobId = crypto.randomUUID();
@@ -409,6 +420,11 @@ export class ProjectService implements OnApplicationBootstrap {
     const platformVersion = this.configService.get<string>('platformVersion', '0.1.0');
     const title = dto?.title ?? (source.title ? `${source.title} (copy)` : null);
     const defaultEnvironment = await this.environmentService.ensureDefaultForTenant(tenantId);
+    const [sourceApp] = await db.select().from(projectApps).where(eq(projectApps.projectId, source.id));
+    const sourceSchedules = await db
+      .select()
+      .from(projectSchedules)
+      .where(eq(projectSchedules.projectEnvironmentId, source.id));
 
     await db.transaction(async (tx) => {
       await tx.insert(projects).values({
@@ -445,7 +461,36 @@ export class ProjectService implements OnApplicationBootstrap {
         directory,
         platformVersion,
         status: ProjectStatus.Starting,
+        authMode: source.authMode,
       });
+
+      if (sourceApp) {
+        await tx.insert(projectApps).values({
+          projectId: id,
+          name: sourceApp.name,
+          description: sourceApp.description,
+          iconUrl: sourceApp.iconUrl,
+        });
+      }
+
+      if (sourceSchedules.length > 0) {
+        await tx.insert(projectSchedules).values(
+          sourceSchedules.map((schedule) => ({
+            id: crypto.randomUUID(),
+            projectId: id,
+            projectEnvironmentId: id,
+            tenantId,
+            name: schedule.name,
+            cronPattern: schedule.cronPattern,
+            timeZone: schedule.timeZone,
+            targetPath: schedule.targetPath,
+            method: schedule.method,
+            body: schedule.body,
+            headers: schedule.headers,
+            isActive: false,
+          }))
+        );
+      }
 
       await tx.insert(projectDuplicateJobs).values({
         id: duplicateJobId,
@@ -1342,21 +1387,14 @@ export class ProjectService implements OnApplicationBootstrap {
 
     this.startupRetries.delete(envId);
 
+    if (updated.isDefault) {
+      this.completeDuplicateWhenAppReady(updated.projectId, envId, podIp);
+    }
+
     await Promise.allSettled([
       this.timeoutService.touch(envId).catch((err) => {
         this.logger.warn(`Failed to touch timeout for environment ${envId}: ${(err as Error).message}`);
       }),
-      updated.isDefault
-        ? db
-            .update(projectDuplicateJobs)
-            .set({ status: ProjectDuplicateStatus.Completed, updatedAt: new Date() })
-            .where(
-              and(
-                eq(projectDuplicateJobs.targetProjectId, updated.projectId),
-                eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting)
-              )
-            )
-        : Promise.resolve(),
       this.projectEventsService.publish(updated.projectId).catch((err) => {
         this.logger.warn(`Failed to publish active event for environment ${envId}: ${(err as Error).message}`);
       }),
@@ -1397,6 +1435,8 @@ export class ProjectService implements OnApplicationBootstrap {
       .where(
         inArray(projectDuplicateJobs.status, [
           ProjectDuplicateStatus.Queued,
+          ProjectDuplicateStatus.Committing,
+          ProjectDuplicateStatus.Cloning,
           ProjectDuplicateStatus.Copying,
           ProjectDuplicateStatus.Starting,
         ])
@@ -1404,7 +1444,12 @@ export class ProjectService implements OnApplicationBootstrap {
 
     for (const job of activeJobs) {
       if (job.status === ProjectDuplicateStatus.Starting) {
-        this.spawnStartupWorker(job.targetProjectId);
+        const env = await this.projectEnvironmentService.findByIdOrNull(job.targetProjectId);
+        if (env && env.status === ProjectStatus.Active && env.podIp) {
+          this.completeDuplicateWhenAppReady(job.targetProjectId, env.id, env.podIp);
+        } else {
+          this.spawnStartupWorker(job.targetProjectId);
+        }
         continue;
       }
 
@@ -1433,6 +1478,8 @@ export class ProjectService implements OnApplicationBootstrap {
           eq(projectDuplicateJobs.targetProjectId, projectId),
           inArray(projectDuplicateJobs.status, [
             ProjectDuplicateStatus.Queued,
+            ProjectDuplicateStatus.Committing,
+            ProjectDuplicateStatus.Cloning,
             ProjectDuplicateStatus.Copying,
             ProjectDuplicateStatus.Starting,
             ProjectDuplicateStatus.Failed,
@@ -1464,12 +1511,91 @@ export class ProjectService implements OnApplicationBootstrap {
           eq(projectDuplicateJobs.targetProjectId, projectId),
           inArray(projectDuplicateJobs.status, [
             ProjectDuplicateStatus.Queued,
+            ProjectDuplicateStatus.Committing,
+            ProjectDuplicateStatus.Cloning,
             ProjectDuplicateStatus.Copying,
             ProjectDuplicateStatus.Failed,
           ])
         )
       );
     return !!job;
+  }
+
+  private async assertNoActiveGitOperation(projectId: string): Promise<void> {
+    const [publishing] = await db
+      .select({ id: projectPublishJobs.id })
+      .from(projectPublishJobs)
+      .where(
+        and(eq(projectPublishJobs.projectId, projectId), inArray(projectPublishJobs.status, ACTIVE_PUBLISH_STATUSES))
+      )
+      .limit(1);
+    if (publishing) {
+      throw new ConflictException('Cannot duplicate while a publish is in progress for this project');
+    }
+
+    const [duplicating] = await db
+      .select({ id: projectDuplicateJobs.id })
+      .from(projectDuplicateJobs)
+      .where(
+        and(
+          or(eq(projectDuplicateJobs.sourceProjectId, projectId), eq(projectDuplicateJobs.targetProjectId, projectId)),
+          inArray(projectDuplicateJobs.status, ACTIVE_DUPLICATE_STATUSES)
+        )
+      )
+      .limit(1);
+    if (duplicating) {
+      throw new ConflictException('A duplicate is already in progress for this project');
+    }
+  }
+
+  private completeDuplicateWhenAppReady(projectId: string, envId: string, podIp: string): void {
+    void (async () => {
+      const [job] = await db
+        .select({ id: projectDuplicateJobs.id })
+        .from(projectDuplicateJobs)
+        .where(
+          and(
+            eq(projectDuplicateJobs.targetProjectId, projectId),
+            eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting)
+          )
+        )
+        .limit(1);
+      if (!job) return;
+
+      await this.waitForAppReady(envId, podIp, DUPLICATE_APP_READY_TIMEOUT_MS);
+
+      const completed = await db
+        .update(projectDuplicateJobs)
+        .set({ status: ProjectDuplicateStatus.Completed, updatedAt: new Date() })
+        .where(
+          and(
+            eq(projectDuplicateJobs.targetProjectId, projectId),
+            eq(projectDuplicateJobs.status, ProjectDuplicateStatus.Starting)
+          )
+        )
+        .returning({ id: projectDuplicateJobs.id });
+
+      if (completed.length > 0) {
+        await this.projectEventsService.publish(projectId).catch(() => undefined);
+      }
+    })().catch((err) => {
+      this.logger.warn(`Failed to finish duplicate for project ${projectId}: ${(err as Error).message}`);
+    });
+  }
+
+  private async waitForAppReady(envId: string, podIp: string, timeoutMs: number): Promise<boolean> {
+    const upstream = this.proxyService.resolveAppUpstreamForProject({ id: envId, podIp });
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const response = await fetch(`${upstream}/`, { signal: AbortSignal.timeout(DUPLICATE_APP_FETCH_TIMEOUT_MS) });
+        if (response.status >= 200 && response.status < 400) return true;
+      } catch (err) {
+        this.logger.debug(`Duplicate app not ready for ${envId}: ${(err as Error).message}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, DUPLICATE_APP_POLL_INTERVAL_MS));
+    }
+    return false;
   }
 
   private async requestEnvironmentStartup(

@@ -33,6 +33,8 @@ export const requestLogModeEnum = pgEnum("request_log_mode", ["off", "metadata",
 
 export const projectDuplicateStatusEnum = pgEnum("project_duplicate_status", [
   "queued",
+  "committing",
+  "cloning",
   "copying",
   "starting",
   "completed",

@@ -47,6 +47,29 @@ export class GitService {
     await this.git(dir, ['reset', '--hard', sha]);
   }
 
+  async removeOrigin(dir: string): Promise<void> {
+    await this.git(dir, ['remote', 'remove', 'origin']).catch((err) => {
+      this.logger.debug(`No origin remote to remove at ${dir}: ${(err as Error).message}`);
+    });
+  }
+
+  async listIgnored(dir: string): Promise<string[]> {
+    const stdout = await this.git(dir, [
+      '-c',
+      'core.quotePath=false',
+      'ls-files',
+      '--others',
+      '--ignored',
+      '--exclude-standard',
+      '--directory',
+    ]);
+    return stdout
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line) => (line.endsWith('/') ? line.slice(0, -1) : line));
+  }
+
   async isRepo(dir: string): Promise<boolean> {
     try {
       await this.git(dir, ['rev-parse', '--git-dir']);

@@ -14,6 +14,14 @@ export const PublishStatus = {
 
 export type PublishStatus = (typeof PublishStatus)[keyof typeof PublishStatus];
 
+export const ACTIVE_PUBLISH_STATUSES: PublishStatus[] = [
+  PublishStatus.Queued,
+  PublishStatus.Committing,
+  PublishStatus.Swapping,
+  PublishStatus.Building,
+  PublishStatus.Migrating,
+];
+
 export interface PublishJobData {
   publishJobId: string;
   projectId: string;

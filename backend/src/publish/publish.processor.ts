@@ -7,7 +7,7 @@ import { mkdir, rename, rm } from 'node:fs/promises';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../../db';
 import { projectPublishJobs, projectSchedules } from '../../db/schema';
-import { GitService } from './git.service';
+import { GitService } from '../git/git.service';
 import { PublishService } from './publish.service';
 import { ProjectEventsService } from '../project/project-events.service';
 import { PROJECT_PUBLISH_QUEUE, PublishJobData, PublishStatus } from './publish.types';

@@ -9,15 +9,17 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import crypto from 'crypto';
 import { db } from '../../db';
-import { projectEnvironments, projectPublishJobs, projectSchedules } from '../../db/schema';
+import { projectDuplicateJobs, projectEnvironments, projectPublishJobs, projectSchedules } from '../../db/schema';
 import { readEnvJson } from '../common/env-file';
 import { EnvironmentService } from '../environment/environment.service';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
 import { ProjectStatus } from '../project/project.types';
+import { ACTIVE_DUPLICATE_STATUSES } from '../project/project-duplicate.types';
 import {
+  ACTIVE_PUBLISH_STATUSES,
   PROJECT_PUBLISH_QUEUE,
   PublishDto,
   PublishFormResponse,
@@ -26,14 +28,6 @@ import {
   PublishStatus,
   PublishTarget,
 } from './publish.types';
-
-const ACTIVE_PUBLISH_STATUSES = [
-  PublishStatus.Queued,
-  PublishStatus.Committing,
-  PublishStatus.Swapping,
-  PublishStatus.Building,
-  PublishStatus.Migrating,
-];
 
 @Injectable()
 export class PublishService implements OnApplicationBootstrap {
@@ -161,6 +155,10 @@ export class PublishService implements OnApplicationBootstrap {
       throw new ConflictException('A publish is already in progress for this environment');
     }
 
+    if (await this.hasActiveDuplicate(projectId)) {
+      throw new ConflictException('Cannot publish while a duplicate is in progress for this project');
+    }
+
     const instances = await this.projectEnvironmentService.listByProjectId(projectId);
     const existing = instances.find((i) => i.environmentId === dto.environmentId);
     const isFirstPublish = !existing || existing.deployedCommitSha === null;
@@ -256,6 +254,20 @@ export class PublishService implements OnApplicationBootstrap {
           eq(projectPublishJobs.projectId, projectId),
           eq(projectPublishJobs.environmentId, environmentId),
           inArray(projectPublishJobs.status, ACTIVE_PUBLISH_STATUSES)
+        )
+      )
+      .limit(1);
+    return !!row;
+  }
+
+  private async hasActiveDuplicate(projectId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ id: projectDuplicateJobs.id })
+      .from(projectDuplicateJobs)
+      .where(
+        and(
+          or(eq(projectDuplicateJobs.sourceProjectId, projectId), eq(projectDuplicateJobs.targetProjectId, projectId)),
+          inArray(projectDuplicateJobs.status, ACTIVE_DUPLICATE_STATUSES)
         )
       )
       .limit(1);

@@ -16,7 +16,7 @@ import { BifrostModule } from '../bifrost/bifrost.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 import { ProxyService } from '../proxy/proxy.service';
-import { GitService } from '../publish/git.service';
+import { GitModule } from '../git/git.module';
 import { ProjectPoolModule } from '../pool/project-pool.module';
 import { EnvironmentModule } from '../environment/environment.module';
 import { EnvironmentVariablesModule } from '../environment-variables/environment-variables.module';
@@ -39,9 +39,10 @@ import { ProjectEnvironmentModule } from '../project-environment/project-environ
     EnvironmentModule,
     EnvironmentVariablesModule,
     ProjectEnvironmentModule,
+    GitModule,
   ],
   controllers: [ProjectController, PodClassController],
-  providers: [ProjectService, ProjectAuthService, ProjectDuplicateProcessor, ProxyService, AppService, GitService],
+  providers: [ProjectService, ProjectAuthService, ProjectDuplicateProcessor, ProxyService, AppService],
   exports: [ProjectService, ProjectAuthService],
 })
 export class ProjectModule {}
