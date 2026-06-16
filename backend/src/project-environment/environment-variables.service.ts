@@ -2,8 +2,8 @@ import { BadRequestException, Injectable, Logger, NotFoundException } from '@nes
 import { ConfigService } from '@nestjs/config';
 import { readEnvJson, writeEnvJson } from '../common/env-file';
 import { PodService } from '../pod/pod.service';
-import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
-import type { ProjectEnvironmentContext } from '../project-environment/project-environment.types';
+import { ProjectEnvironmentService } from './project-environment.service';
+import type { ProjectEnvironmentContext } from './project-environment.types';
 import {
   EnvironmentVariablesResponse,
   UpdateEnvironmentVariablesDto,

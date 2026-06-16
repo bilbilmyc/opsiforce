@@ -21,7 +21,6 @@ import { ProxyService } from '../proxy/proxy.service';
 import { GitModule } from '../git/git.module';
 import { ProjectPoolModule } from '../pool/project-pool.module';
 import { EnvironmentModule } from '../environment/environment.module';
-import { EnvironmentVariablesModule } from '../environment-variables/environment-variables.module';
 import { ProjectEnvironmentModule } from '../project-environment/project-environment.module';
 
 @Module({
@@ -39,7 +38,6 @@ import { ProjectEnvironmentModule } from '../project-environment/project-environ
     forwardRef(() => ScheduleModule),
     ProjectPoolModule,
     EnvironmentModule,
-    EnvironmentVariablesModule,
     ProjectEnvironmentModule,
     GitModule,
   ],

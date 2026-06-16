@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SchedulesRouteImport } from './routes/schedules'
 import { Route as PermissionDeniedRouteImport } from './routes/permission-denied'
 import { Route as SettingsRouteRouteImport } from './routes/settings/route'
+import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsWorkspacesRouteImport } from './routes/settings/workspaces'
@@ -21,6 +22,7 @@ import { Route as SettingsEnvironmentsRouteImport } from './routes/settings/envi
 import { Route as SettingsDefaultsRouteImport } from './routes/settings/defaults'
 import { Route as SettingsBillingRouteImport } from './routes/settings/billing'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
+import { Route as AdminPodsRouteImport } from './routes/admin/pods'
 
 const SchedulesRoute = SchedulesRouteImport.update({
   id: '/schedules',
@@ -35,6 +37,11 @@ const PermissionDeniedRoute = PermissionDeniedRouteImport.update({
 const SettingsRouteRoute = SettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRouteRoute = AdminRouteRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -82,12 +89,19 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/projects/$projectId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminPodsRoute = AdminPodsRouteImport.update({
+  id: '/pods',
+  path: '/pods',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
   '/permission-denied': typeof PermissionDeniedRoute
   '/schedules': typeof SchedulesRoute
+  '/admin/pods': typeof AdminPodsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/settings/billing': typeof SettingsBillingRoute
   '/settings/defaults': typeof SettingsDefaultsRoute
@@ -99,8 +113,10 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
   '/permission-denied': typeof PermissionDeniedRoute
   '/schedules': typeof SchedulesRoute
+  '/admin/pods': typeof AdminPodsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/settings/billing': typeof SettingsBillingRoute
   '/settings/defaults': typeof SettingsDefaultsRoute
@@ -113,9 +129,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
   '/settings': typeof SettingsRouteRouteWithChildren
   '/permission-denied': typeof PermissionDeniedRoute
   '/schedules': typeof SchedulesRoute
+  '/admin/pods': typeof AdminPodsRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/settings/billing': typeof SettingsBillingRoute
   '/settings/defaults': typeof SettingsDefaultsRoute
@@ -129,9 +147,11 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/admin'
     | '/settings'
     | '/permission-denied'
     | '/schedules'
+    | '/admin/pods'
     | '/projects/$projectId'
     | '/settings/billing'
     | '/settings/defaults'
@@ -143,8 +163,10 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/admin'
     | '/permission-denied'
     | '/schedules'
+    | '/admin/pods'
     | '/projects/$projectId'
     | '/settings/billing'
     | '/settings/defaults'
@@ -156,9 +178,11 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/admin'
     | '/settings'
     | '/permission-denied'
     | '/schedules'
+    | '/admin/pods'
     | '/projects/$projectId'
     | '/settings/billing'
     | '/settings/defaults'
@@ -171,6 +195,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRouteRoute: typeof AdminRouteRouteWithChildren
   SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
   PermissionDeniedRoute: typeof PermissionDeniedRoute
   SchedulesRoute: typeof SchedulesRoute
@@ -198,6 +223,13 @@ declare module '@tanstack/solid-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -263,8 +295,27 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/pods': {
+      id: '/admin/pods'
+      path: '/pods'
+      fullPath: '/admin/pods'
+      preLoaderRoute: typeof AdminPodsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
   }
 }
+
+interface AdminRouteRouteChildren {
+  AdminPodsRoute: typeof AdminPodsRoute
+}
+
+const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminPodsRoute: AdminPodsRoute,
+}
+
+const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
+  AdminRouteRouteChildren,
+)
 
 interface SettingsRouteRouteChildren {
   SettingsBillingRoute: typeof SettingsBillingRoute
@@ -292,6 +343,7 @@ const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRouteRoute: AdminRouteRouteWithChildren,
   SettingsRouteRoute: SettingsRouteRouteWithChildren,
   PermissionDeniedRoute: PermissionDeniedRoute,
   SchedulesRoute: SchedulesRoute,

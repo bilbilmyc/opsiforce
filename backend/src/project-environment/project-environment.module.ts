@@ -1,8 +1,11 @@
 import { Module } from '@nestjs/common';
+import { PodModule } from '../pod/pod.module';
 import { ProjectEnvironmentService } from './project-environment.service';
+import { EnvironmentVariablesService } from './environment-variables.service';
 
 @Module({
-  providers: [ProjectEnvironmentService],
-  exports: [ProjectEnvironmentService],
+  imports: [PodModule],
+  providers: [ProjectEnvironmentService, EnvironmentVariablesService],
+  exports: [ProjectEnvironmentService, EnvironmentVariablesService],
 })
 export class ProjectEnvironmentModule {}

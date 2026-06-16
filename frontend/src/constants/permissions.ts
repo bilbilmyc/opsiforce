@@ -23,4 +23,5 @@ export const Permission = {
   deleteEnvironment: 'can_delete_environment',
   manageUsers: 'can_manage_users',
   manageSchedules: 'can_manage_schedules',
+  viewPods: 'can_view_pods',
 } as const;
