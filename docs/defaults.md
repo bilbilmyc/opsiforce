@@ -27,7 +27,7 @@ Two permissions, both wired through Keycloak:
 - `can_manage_platform_defaults` — edits the global baseline. Admin-only.
 - `can_manage_tenant_defaults` — edits the current tenant's overrides.
 
-The settings page at `/defaults` shows the tabs the user has permission for.
+Defaults live in **Settings → Defaults** (`/settings/defaults`), with a **New organizations** tab (the platform baseline, admin-only) and a **New projects** tab (this organization), each shown by permission. The tabs are named for what they seed; the internal scope identifiers stay `global`/`tenant`.
 
 ## Changing the platform baseline
 

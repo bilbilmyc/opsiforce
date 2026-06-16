@@ -14,7 +14,9 @@ Firing happens internally, never through the public ingress. When a job fires th
 
 ## Security
 
-Schedules ride the same per-project **service-gateway token** the agent already uses for outbound calls: the token authenticates the caller and resolves its project and environment, so there are no new credentials. The schedule endpoints sit under the cluster-internal gateway prefix that the external proxy blocks, so they are unreachable from the internet, and firing calls the pod directly inside the cluster — never through the public ingress or the auth proxy. Managing schedules from the UI is tenant-scoped like the rest of the admin surface.
+Schedules ride the same per-project **service-gateway token** the agent already uses for outbound calls: the token authenticates the caller and resolves its project and environment, so there are no new credentials. The schedule endpoints sit under the cluster-internal gateway prefix that the external proxy blocks, so they are unreachable from the internet, and firing calls the pod directly inside the cluster — never through the public ingress or the auth proxy.
+
+Managing schedules **from the UI** requires `can_manage_schedules`: the admin controller is gated class-level with `@RequirePermission`, covering the list, the scoped view, and every edit/run/delete. This closed a real gap — the controller previously had no guard, so any authenticated member could manage every project's schedules. Agent-facing endpoints are unaffected (they authenticate with the service-gateway token, not a human role).
 
 ## Viewing and managing
 
@@ -22,6 +24,8 @@ Two views, both built around the per-environment model:
 
 - The tenant-wide **Schedules** page (top navigation) presents **one tab per registry environment** — Development, Production, and so on — and loads that environment's schedules **on demand** when you open its tab, with each row labelled by its project. Because environment names come from the tenant's shared registry, an environment tab reads coherently even across projects, listing *every* project's schedules for that environment. From here you can edit the cron expression, toggle a schedule on or off, trigger a run immediately, view execution history, and delete.
 - Opening **Schedules** from an environment's row in the project's **Environments** dialog drops into a **single project-environment view**: only that one app's schedules for that one environment, filtered by its `projectEnvironmentId` rather than by the shared registry environment — so *this* app's Development, not every project's Development. A breadcrumb names the project and environment, and an **All schedules** link returns to the tenant-wide tabbed view. This is the only per-environment launcher; the project menu no longer carries a Schedules entry. Both views are the same page (`frontend/src/pages/schedules.tsx`); the presence of a `projectEnvironmentId` in the URL selects the scoped view.
+
+Both views require `can_manage_schedules`; without it the dropdown entry, the per-environment launcher, and the page itself all disappear (the page redirects home), matching the server.
 
 ```
 Agent in a pod

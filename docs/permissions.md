@@ -44,6 +44,7 @@ Frontend (usePermissions hook)
 | `opsiforce_can_manage_environment_variables` | `Permission.manageEnvironmentVariables` | The per-environment Environment variables editor (view/edit `opsiforce.env.json`, optional app restart to apply) |
 | `opsiforce_can_publish_project` | `Permission.publishProject` | The per-row Publish buttons and publish endpoints |
 | `opsiforce_can_delete_environment` | `Permission.deleteEnvironment` | Delete a published project environment from the Environments dialog |
+| `opsiforce_can_manage_schedules` | `Permission.manageSchedules` | Managing schedules org-wide — the top-level Schedules page, the per-environment Schedules launcher in the Environments dialog, and every schedule edit/run/delete endpoint. **Enforced server-side** (see Backend). |
 | `opsiforce_can_list_pinned_apps_internal` | — (service-account only) | **Never assign to humans.** Granted in Pulumi to the `keycloak-ms-admin` service account so Makara backend can list pinned apps via `GET /api/internal/apps/pinned`. |
 
 ---
@@ -70,6 +71,7 @@ Groups bundle permissions for easy user assignment. Managed via Pulumi in `packa
 | `opsiforce_manage_environment_variables` | `can_manage_environment_variables` | Per-environment variables editor |
 | `opsiforce_publish_project` | `can_publish_project` | Publish a project to an environment |
 | `opsiforce_delete_environment` | `can_delete_environment` | Delete a published project environment |
+| `opsiforce_manage_schedules` | `can_manage_schedules` | Manage every project's schedules in the organization |
 
 ---
 
@@ -100,7 +102,9 @@ const { hasPermission } = usePermissions()
 
 `GET /api/permissions` — returns the current user's permission strings.
 
-Parses the `x-forwarded-groups` header, filters for `role:opsiforce_` prefixed entries (excluding `role:opsiforce_tenant_name_` tenant roles), and strips the prefix.
+Parses the `x-forwarded-groups` header, filters for `role:opsiforce_` prefixed entries (excluding `role:opsiforce_tenant_name_` tenant roles), and strips the prefix. This read endpoint powers **frontend gating only**.
+
+**Enforcement is separate.** Protect a route with `@RequirePermission(Perms.x)` (class- or method-level); the global `PermissionGuard` checks `x-forwarded-groups` and returns `403` if the role is absent. **A route without the decorator is open to any authenticated member** — the guard allows when it finds no metadata, so frontend-only gating hides UI but leaves the endpoint reachable. That's how the Schedules admin endpoints were callable by everyone until `can_manage_schedules` + a class-level guard were added.
 
 ---
 
@@ -108,7 +112,7 @@ Parses the `x-forwarded-groups` header, filters for `role:opsiforce_` prefixed e
 
 1. **Pulumi** — add the role string to `OPSIFORCE_ALL_PERMISSIONS` in `opsiforce/permissions.ts`, add it to `OPSIFORCE_ADMIN_GROUP_PERMISSIONS` if admins should have it, and create a group in `opsiforce.ts` via `createGroupWithRoles()`
 2. **Frontend** — add the constant to `constants/permissions.ts`, use `hasPermission()` to gate UI
-3. **No backend changes needed** — the `/permissions` endpoint dynamically returns all `opsiforce_` roles from the header
+3. **Backend** — `GET /permissions` returns the new role automatically, so no change is needed for *frontend* gating. But to **enforce** it server-side, add the string to `Perms` in `backend/src/permission/permission.constants.ts` and guard the route(s) with `@RequirePermission(Perms.x)`. Skipping this leaves the endpoint open regardless of what the UI shows — see Backend above.
 
 ---
 

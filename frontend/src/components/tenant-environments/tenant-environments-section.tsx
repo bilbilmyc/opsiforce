@@ -1,7 +1,5 @@
 import { For, Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
-import { usePermissions } from '~/api/permissions';
-import { Permission } from '~/constants/permissions';
 import { ENVIRONMENT_SLUG_MAX_LENGTH, ENVIRONMENT_SLUG_PATTERN, slugifyEnvironmentName } from '~/lib/app-url';
 import { useCreateEnvironment, useDeleteEnvironment, useEnvironments, type Environment } from '~/api/environments';
 import { Button } from '~/components/ui/button';
@@ -10,11 +8,8 @@ import Skeleton from '~/components/ui/skeleton';
 import { Plus } from '~/components/icons';
 import EnvironmentRow from './environment-row';
 
-export default function TenantEnvironmentsSection(props: { active: boolean }) {
-  const { hasPermission } = usePermissions();
-  const canManage = () => hasPermission(Permission.manageEnvironments);
-
-  const environments = useEnvironments({ enabled: () => props.active && canManage() });
+export function TenantEnvironmentsSection(props: { active: boolean }) {
+  const environments = useEnvironments({ enabled: () => props.active });
   const create = useCreateEnvironment();
   const remove = useDeleteEnvironment();
 
@@ -73,35 +68,21 @@ export default function TenantEnvironmentsSection(props: { active: boolean }) {
   };
 
   return (
-    <Show
-      when={canManage()}
-      fallback={
-        <div class="mt-4 rounded-lg border border-border bg-muted/30 p-4 text-center">
-          <p class="text-sm text-muted-foreground">You do not have permission to manage environments.</p>
-        </div>
-      }
-    >
-      <div class="mt-4 space-y-3">
-        <p class="text-xs text-muted-foreground">
-          Environments are the publish targets offered to every project in this tenant. Development and Production are
-          always available and cannot be renamed or deleted.
-        </p>
-
-        <div class="space-y-2">
-          <Show
-            when={!environments.isPending}
-            fallback={
-              <div class="space-y-2">
-                <Skeleton class="h-12 w-full" />
-                <Skeleton class="h-12 w-full" />
-              </div>
-            }
-          >
-            <For each={environments.data}>
-              {(env) => <EnvironmentRow environment={env} onRequestDelete={setPendingDelete} />}
-            </For>
-          </Show>
-        </div>
+    <>
+      <div class="space-y-2">
+        <Show
+          when={!environments.isPending}
+          fallback={
+            <div class="space-y-2">
+              <Skeleton class="h-12 w-full" />
+              <Skeleton class="h-12 w-full" />
+            </div>
+          }
+        >
+          <For each={environments.data}>
+            {(env) => <EnvironmentRow environment={env} onRequestDelete={setPendingDelete} />}
+          </For>
+        </Show>
 
         <Show
           when={creating()}
@@ -183,11 +164,11 @@ export default function TenantEnvironmentsSection(props: { active: boolean }) {
           if (!open) setPendingDelete(null);
         }}
         title="Delete environment"
-        description={`This deletes the ${pendingDelete()?.name ?? ''} environment from the tenant. Projects can no longer publish to it. This action cannot be undone.`}
+        description={`This deletes the ${pendingDelete()?.name ?? ''} environment from the organization. Projects can no longer publish to it. This action cannot be undone.`}
         confirmLabel="Delete"
         variant="destructive"
         onConfirm={confirmDelete}
       />
-    </Show>
+    </>
   );
 }

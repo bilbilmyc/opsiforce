@@ -40,6 +40,7 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
   const canDelete = () => hasPermission(Permission.deleteEnvironment);
   const canPublish = () => hasPermission(Permission.publishProject);
   const canManageVariables = () => hasPermission(Permission.manageEnvironmentVariables);
+  const canSchedules = () => hasPermission(Permission.manageSchedules);
 
   const navigate = useNavigate();
   const [open, setOpen] = createSignal(false);
@@ -92,10 +93,12 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   const activeEnvironment = createMemo(() => props.environments.find((e) => e.id === props.activeEnvironmentId));
 
-  const description = () =>
-    canPin()
-      ? 'Click an environment to view it. Publish the app, manage auth and variables, pin to the Makara catalog, or open schedules.'
-      : 'Click an environment to view it. Publish the app, manage auth and variables, or open schedules.';
+  const description = () => {
+    const tail = canSchedules() ? ', or open schedules' : '';
+    return canPin()
+      ? `Click an environment to view it. Publish the app, manage auth and variables, pin to the Makara catalog${tail}.`
+      : `Click an environment to view it. Publish the app, manage auth and variables${tail}.`;
+  };
 
   const openSchedules = (env: ProjectEnvironment) => {
     setOpen(false);
@@ -148,6 +151,7 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
     canDelete: canDelete(),
     canPublish: canPublish() && target !== null,
     canManageVariables: canManageVariables(),
+    canSchedules: canSchedules(),
     restarting: restartingId() === env.id,
     onAuth: () => setAuthEnv(env),
     onVariables: () => setVariablesEnv(env),

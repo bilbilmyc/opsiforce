@@ -1,9 +1,12 @@
 import { Controller, Get, Patch, Post, Delete, Param, Query, Body } from '@nestjs/common';
 import { CurrentTenant, type TenantContext } from '../tenant/tenant.decorator';
+import { Perms } from '../permission/permission.constants';
+import { RequirePermission } from '../permission/permission.guard';
 import { ScheduleService } from './schedule.service';
 import type { UpdateScheduleDto } from './schedule.types';
 
 @Controller()
+@RequirePermission(Perms.manageSchedules)
 export class ScheduleAdminController {
   constructor(private readonly scheduleService: ScheduleService) {}
 

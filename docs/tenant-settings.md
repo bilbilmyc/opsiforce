@@ -2,7 +2,9 @@
 
 Per-tenant configuration for Opsiforce. Today it holds a single value — the
 **Makara tenant name** this Opsiforce tenant maps to — but the table is
-designed to accumulate more cross-tenant configuration over time.
+designed to accumulate more cross-tenant configuration over time. In the UI it
+is surfaced as the **Integrations** section of [Settings](settings.md); the
+internal table and APIs keep the `tenant_settings` name.
 
 ## Why this exists
 
@@ -29,8 +31,8 @@ without guessing.
        Makara tenant ────┘
 ```
 
-A tenant admin opens **Tenant Settings** from the bottom-left sidebar menu and
-picks the corresponding Makara tenant from a dropdown. The dropdown options
+A tenant admin opens **Settings → Integrations** and picks the corresponding
+Makara organization from a dropdown. The dropdown options
 come from the user's own Makara group memberships (parsed from
 `/oauth2/userinfo`'s `groups` claim, filtered by the Makara role prefix), so
 admins can only pick a Makara tenant they actually belong to. The backend
@@ -75,8 +77,8 @@ correctly — they just can't change the mapping.
   Opsiforce reverse lookup) and `backend/src/project/project.service.ts`
   (Opsiforce → Makara: resolves the mapped name before
   `applyMakara`).
-- Frontend dialog: `frontend/src/components/tenant-settings.tsx`, opened from
-  the SidebarFooter dropdown in `app-sidebar.tsx`.
+- Frontend page: `frontend/src/pages/integrations.tsx` — the **Integrations**
+  section of Settings, wired at `frontend/src/routes/settings/integrations.tsx`.
 - Frontend hooks: `frontend/src/api/tenant-settings.ts` and the
   `parseMakaraTenants` helper in `frontend/src/api/user.ts`.
 

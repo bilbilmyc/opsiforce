@@ -7,6 +7,7 @@ import { usePermissions } from '~/api/permissions';
 import { useCurrentUser, useUserInfo } from '~/api/user';
 import { useCreateProjectInWorkspace, useWorkspaces } from '~/api/workspaces';
 import { Permission } from '~/constants/permissions';
+import { firstPermittedSettingsTab } from '~/constants/settings-tabs';
 import {
   Sidebar,
   SidebarHeader,
@@ -31,7 +32,6 @@ import { cn } from '~/lib/cn';
 import TenantSelector from '~/components/tenant-selector';
 import ProjectSidebar from '~/components/project-sidebar';
 import CreateWorkspaceDialog from '~/components/create-workspace-dialog';
-import TenantSettings from '~/components/tenant-settings';
 import {
   Bot,
   Calendar,
@@ -39,13 +39,9 @@ import {
   FolderKanban,
   FolderPlus,
   LogOut,
-  Plug,
   Plus,
   Search,
   Settings,
-  SlidersHorizontal,
-  Users,
-  Wallet,
   X,
 } from '~/components/icons';
 
@@ -61,8 +57,9 @@ export default function AppSidebar() {
 
   const [search, setSearch] = createSignal('');
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = createSignal(false);
-  const [tenantSettingsOpen, setTenantSettingsOpen] = createSignal(false);
   let searchRef: HTMLInputElement | undefined;
+
+  const canOpenSettings = () => !!firstPermittedSettingsTab(hasPermission);
 
   const privateWorkspace = createMemo(() => {
     const uid = currentUser.data?.id;
@@ -244,42 +241,16 @@ export default function AppSidebar() {
                   <p class="text-sm font-medium truncate">{userName()}</p>
                 </div>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onSelect={() => navigate({ to: '/schedules' })}>
-                  <Calendar class="w-4 h-4 text-muted-foreground" />
-                  Schedules
-                </DropdownMenuItem>
-                <Show when={hasPermission(Permission.manageWorkspaces)}>
-                  <DropdownMenuItem onSelect={() => navigate({ to: '/settings/workspaces' })}>
+                <Show when={canOpenSettings()}>
+                  <DropdownMenuItem onSelect={() => navigate({ to: '/settings' })}>
                     <Settings class="w-4 h-4 text-muted-foreground" />
-                    Workspaces
+                    Settings
                   </DropdownMenuItem>
                 </Show>
-                <Show when={hasPermission(Permission.manageUsers)}>
-                  <DropdownMenuItem onSelect={() => navigate({ to: '/settings/users' })}>
-                    <Users class="w-4 h-4 text-muted-foreground" />
-                    Users
-                  </DropdownMenuItem>
-                </Show>
-                <Show when={hasPermission(Permission.manageTenantBudget)}>
-                  <DropdownMenuItem onSelect={() => navigate({ to: '/billing' })}>
-                    <Wallet class="w-4 h-4 text-muted-foreground" />
-                    Billing
-                  </DropdownMenuItem>
-                </Show>
-                <Show
-                  when={
-                    hasPermission(Permission.managePlatformDefaults) || hasPermission(Permission.manageTenantDefaults)
-                  }
-                >
-                  <DropdownMenuItem onSelect={() => navigate({ to: '/defaults' })}>
-                    <SlidersHorizontal class="w-4 h-4 text-muted-foreground" />
-                    Defaults
-                  </DropdownMenuItem>
-                </Show>
-                <Show when={hasPermission(Permission.manageMakaraIntegration)}>
-                  <DropdownMenuItem onSelect={() => setTenantSettingsOpen(true)}>
-                    <Plug class="w-4 h-4 text-muted-foreground" />
-                    Tenant Settings
+                <Show when={hasPermission(Permission.manageSchedules)}>
+                  <DropdownMenuItem onSelect={() => navigate({ to: '/schedules' })}>
+                    <Calendar class="w-4 h-4 text-muted-foreground" />
+                    Schedules
                   </DropdownMenuItem>
                 </Show>
                 <DropdownMenuItem
@@ -297,7 +268,6 @@ export default function AppSidebar() {
       </SidebarFooter>
 
       <CreateWorkspaceDialog open={createWorkspaceOpen()} onOpenChange={setCreateWorkspaceOpen} />
-      <TenantSettings open={tenantSettingsOpen()} onOpenChange={setTenantSettingsOpen} />
     </Sidebar>
   );
 }

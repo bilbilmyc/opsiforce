@@ -25,4 +25,5 @@ export const Perms = {
   publishProject: 'can_publish_project',
   deleteEnvironment: 'can_delete_environment',
   manageUsers: 'can_manage_users',
+  manageSchedules: 'can_manage_schedules',
 } as const;

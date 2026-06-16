@@ -11,11 +11,15 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SchedulesRouteImport } from './routes/schedules'
 import { Route as PermissionDeniedRouteImport } from './routes/permission-denied'
-import { Route as DefaultsRouteImport } from './routes/defaults'
-import { Route as BillingRouteImport } from './routes/billing'
+import { Route as SettingsRouteRouteImport } from './routes/settings/route'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
 import { Route as SettingsWorkspacesRouteImport } from './routes/settings/workspaces'
 import { Route as SettingsUsersRouteImport } from './routes/settings/users'
+import { Route as SettingsIntegrationsRouteImport } from './routes/settings/integrations'
+import { Route as SettingsEnvironmentsRouteImport } from './routes/settings/environments'
+import { Route as SettingsDefaultsRouteImport } from './routes/settings/defaults'
+import { Route as SettingsBillingRouteImport } from './routes/settings/billing'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
 
 const SchedulesRoute = SchedulesRouteImport.update({
@@ -28,14 +32,9 @@ const PermissionDeniedRoute = PermissionDeniedRouteImport.update({
   path: '/permission-denied',
   getParentRoute: () => rootRouteImport,
 } as any)
-const DefaultsRoute = DefaultsRouteImport.update({
-  id: '/defaults',
-  path: '/defaults',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BillingRoute = BillingRouteImport.update({
-  id: '/billing',
-  path: '/billing',
+const SettingsRouteRoute = SettingsRouteRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -43,15 +42,40 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsIndexRoute = SettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
 const SettingsWorkspacesRoute = SettingsWorkspacesRouteImport.update({
-  id: '/settings/workspaces',
-  path: '/settings/workspaces',
-  getParentRoute: () => rootRouteImport,
+  id: '/workspaces',
+  path: '/workspaces',
+  getParentRoute: () => SettingsRouteRoute,
 } as any)
 const SettingsUsersRoute = SettingsUsersRouteImport.update({
-  id: '/settings/users',
-  path: '/settings/users',
-  getParentRoute: () => rootRouteImport,
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsIntegrationsRoute = SettingsIntegrationsRouteImport.update({
+  id: '/integrations',
+  path: '/integrations',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsEnvironmentsRoute = SettingsEnvironmentsRouteImport.update({
+  id: '/environments',
+  path: '/environments',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsDefaultsRoute = SettingsDefaultsRouteImport.update({
+  id: '/defaults',
+  path: '/defaults',
+  getParentRoute: () => SettingsRouteRoute,
+} as any)
+const SettingsBillingRoute = SettingsBillingRouteImport.update({
+  id: '/billing',
+  path: '/billing',
+  getParentRoute: () => SettingsRouteRoute,
 } as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
@@ -61,77 +85,96 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/billing': typeof BillingRoute
-  '/defaults': typeof DefaultsRoute
+  '/settings': typeof SettingsRouteRouteWithChildren
   '/permission-denied': typeof PermissionDeniedRoute
   '/schedules': typeof SchedulesRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/settings/billing': typeof SettingsBillingRoute
+  '/settings/defaults': typeof SettingsDefaultsRoute
+  '/settings/environments': typeof SettingsEnvironmentsRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/users': typeof SettingsUsersRoute
   '/settings/workspaces': typeof SettingsWorkspacesRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/billing': typeof BillingRoute
-  '/defaults': typeof DefaultsRoute
   '/permission-denied': typeof PermissionDeniedRoute
   '/schedules': typeof SchedulesRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/settings/billing': typeof SettingsBillingRoute
+  '/settings/defaults': typeof SettingsDefaultsRoute
+  '/settings/environments': typeof SettingsEnvironmentsRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/users': typeof SettingsUsersRoute
   '/settings/workspaces': typeof SettingsWorkspacesRoute
+  '/settings': typeof SettingsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/billing': typeof BillingRoute
-  '/defaults': typeof DefaultsRoute
+  '/settings': typeof SettingsRouteRouteWithChildren
   '/permission-denied': typeof PermissionDeniedRoute
   '/schedules': typeof SchedulesRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/settings/billing': typeof SettingsBillingRoute
+  '/settings/defaults': typeof SettingsDefaultsRoute
+  '/settings/environments': typeof SettingsEnvironmentsRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
   '/settings/users': typeof SettingsUsersRoute
   '/settings/workspaces': typeof SettingsWorkspacesRoute
+  '/settings/': typeof SettingsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/billing'
-    | '/defaults'
+    | '/settings'
     | '/permission-denied'
     | '/schedules'
     | '/projects/$projectId'
+    | '/settings/billing'
+    | '/settings/defaults'
+    | '/settings/environments'
+    | '/settings/integrations'
     | '/settings/users'
     | '/settings/workspaces'
+    | '/settings/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/billing'
-    | '/defaults'
     | '/permission-denied'
     | '/schedules'
     | '/projects/$projectId'
+    | '/settings/billing'
+    | '/settings/defaults'
+    | '/settings/environments'
+    | '/settings/integrations'
     | '/settings/users'
     | '/settings/workspaces'
+    | '/settings'
   id:
     | '__root__'
     | '/'
-    | '/billing'
-    | '/defaults'
+    | '/settings'
     | '/permission-denied'
     | '/schedules'
     | '/projects/$projectId'
+    | '/settings/billing'
+    | '/settings/defaults'
+    | '/settings/environments'
+    | '/settings/integrations'
     | '/settings/users'
     | '/settings/workspaces'
+    | '/settings/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  BillingRoute: typeof BillingRoute
-  DefaultsRoute: typeof DefaultsRoute
+  SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
   PermissionDeniedRoute: typeof PermissionDeniedRoute
   SchedulesRoute: typeof SchedulesRoute
   ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
-  SettingsUsersRoute: typeof SettingsUsersRoute
-  SettingsWorkspacesRoute: typeof SettingsWorkspacesRoute
 }
 
 declare module '@tanstack/solid-router' {
@@ -150,18 +193,11 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof PermissionDeniedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/defaults': {
-      id: '/defaults'
-      path: '/defaults'
-      fullPath: '/defaults'
-      preLoaderRoute: typeof DefaultsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/billing': {
-      id: '/billing'
-      path: '/billing'
-      fullPath: '/billing'
-      preLoaderRoute: typeof BillingRouteImport
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -171,19 +207,54 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings/': {
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/settings/workspaces': {
       id: '/settings/workspaces'
-      path: '/settings/workspaces'
+      path: '/workspaces'
       fullPath: '/settings/workspaces'
       preLoaderRoute: typeof SettingsWorkspacesRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof SettingsRouteRoute
     }
     '/settings/users': {
       id: '/settings/users'
-      path: '/settings/users'
+      path: '/users'
       fullPath: '/settings/users'
       preLoaderRoute: typeof SettingsUsersRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/integrations': {
+      id: '/settings/integrations'
+      path: '/integrations'
+      fullPath: '/settings/integrations'
+      preLoaderRoute: typeof SettingsIntegrationsRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/environments': {
+      id: '/settings/environments'
+      path: '/environments'
+      fullPath: '/settings/environments'
+      preLoaderRoute: typeof SettingsEnvironmentsRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/defaults': {
+      id: '/settings/defaults'
+      path: '/defaults'
+      fullPath: '/settings/defaults'
+      preLoaderRoute: typeof SettingsDefaultsRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
+    '/settings/billing': {
+      id: '/settings/billing'
+      path: '/billing'
+      fullPath: '/settings/billing'
+      preLoaderRoute: typeof SettingsBillingRouteImport
+      parentRoute: typeof SettingsRouteRoute
     }
     '/projects/$projectId': {
       id: '/projects/$projectId'
@@ -195,15 +266,36 @@ declare module '@tanstack/solid-router' {
   }
 }
 
+interface SettingsRouteRouteChildren {
+  SettingsBillingRoute: typeof SettingsBillingRoute
+  SettingsDefaultsRoute: typeof SettingsDefaultsRoute
+  SettingsEnvironmentsRoute: typeof SettingsEnvironmentsRoute
+  SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
+  SettingsUsersRoute: typeof SettingsUsersRoute
+  SettingsWorkspacesRoute: typeof SettingsWorkspacesRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
+}
+
+const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
+  SettingsBillingRoute: SettingsBillingRoute,
+  SettingsDefaultsRoute: SettingsDefaultsRoute,
+  SettingsEnvironmentsRoute: SettingsEnvironmentsRoute,
+  SettingsIntegrationsRoute: SettingsIntegrationsRoute,
+  SettingsUsersRoute: SettingsUsersRoute,
+  SettingsWorkspacesRoute: SettingsWorkspacesRoute,
+  SettingsIndexRoute: SettingsIndexRoute,
+}
+
+const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(
+  SettingsRouteRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  BillingRoute: BillingRoute,
-  DefaultsRoute: DefaultsRoute,
+  SettingsRouteRoute: SettingsRouteRouteWithChildren,
   PermissionDeniedRoute: PermissionDeniedRoute,
   SchedulesRoute: SchedulesRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
-  SettingsUsersRoute: SettingsUsersRoute,
-  SettingsWorkspacesRoute: SettingsWorkspacesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
