@@ -37,6 +37,7 @@ export interface EnvManageRowProps {
   canDelete: boolean;
   canPublish: boolean;
   canManageVariables: boolean;
+  canSchedules: boolean;
   restarting: boolean;
   onAuth: () => void;
   onPin: () => void;
@@ -132,10 +133,12 @@ export default function EnvManageRow(props: EnvManageRowProps) {
                 {isPublic() ? 'Pin to Makara' : 'Pin to Makara (set auth public first)'}
               </DropdownMenuItem>
             </Show>
-            <DropdownMenuItem onSelect={() => props.onSchedules()}>
-              <Calendar class="h-3.5 w-3.5 text-muted-foreground" />
-              Schedules
-            </DropdownMenuItem>
+            <Show when={props.canSchedules}>
+              <DropdownMenuItem onSelect={() => props.onSchedules()}>
+                <Calendar class="h-3.5 w-3.5 text-muted-foreground" />
+                Schedules
+              </DropdownMenuItem>
+            </Show>
             <Show when={canRestartEnv()}>
               <DropdownMenuItem onSelect={() => props.onRestart()}>
                 <RotateCcw class="h-3.5 w-3.5 text-muted-foreground" />

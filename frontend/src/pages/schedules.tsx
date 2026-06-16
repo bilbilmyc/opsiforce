@@ -5,6 +5,8 @@ import { Link, useNavigate, useSearch } from '@tanstack/solid-router';
 import { scheduleApi, type Schedule, type ScheduleExecution, type UpdateScheduleDto } from '~/api/client';
 import { useEnvironments, useProjectEnvironments } from '~/api/environments';
 import { useProjects } from '~/api/projects';
+import { usePermissions } from '~/api/permissions';
+import { Permission } from '~/constants/permissions';
 import { Calendar, Trash2, Pencil, Play, Clock, EllipsisVertical, ChevronLeft } from '~/components/icons';
 import { Button } from '~/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
@@ -43,6 +45,14 @@ export default function SchedulesPage() {
   const qc = useQueryClient();
   const search = useSearch({ from: '/schedules' });
   const navigate = useNavigate();
+  const { permissions, hasPermission } = usePermissions();
+
+  createEffect(() => {
+    if (permissions.isPending) return;
+    if (!hasPermission(Permission.manageSchedules)) {
+      navigate({ to: '/' });
+    }
+  });
 
   const scopedProjectEnvId = createMemo(() => search().projectEnvironmentId);
   const scopedProjectId = createMemo(() => search().projectId);

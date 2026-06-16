@@ -4,6 +4,12 @@ AI coding-assistant platform: users converse with an agent inside a Kubernetes p
 
 ## Language
 
+### Organization
+
+**Organization**:
+The top-level customer account a user works inside — owner of its Workspaces, Users, Billing, Defaults, Integrations, and Environment registry. A user may belong to several and switches between them in the selector (shown by display name and a building mark). Its technical name is **tenant** — the `tenants` table, the `*_tenant_*` permissions, the API — which must never surface in user-facing copy. Prefer omitting the noun entirely where context already makes the scope obvious.
+_Avoid_: Tenant (internal name only — never user-facing); Account (collides with the user's login); Workspace (a grouping *within* an Organization, not the Organization itself)
+
 ### Projects & Environments
 
 **Project**:
@@ -103,3 +109,19 @@ _Avoid_: Mode (the stored identifier `request_log_mode`); log level (in the DEBU
 **Body limit**:
 The byte cap on how much of each request/response body the Full level captures before truncating. The log holds a prefix, never the whole body.
 _Avoid_: Buffer size, max body size (collides with upload limits)
+
+### Runtime
+
+**Keep-alive activity**:
+The traffic that keeps a ProjectEnvironment's pod running, of two kinds: **agent activity** — the user working through the agent (chat, the code editor, the database viewer, file uploads) — and **app activity** — the running App's own traffic (its public and preview URLs, and scheduled runs). Each kind has its own idle timeout; the pod is suspended only once both kinds have been idle past their timeouts. "Why a pod is still alive" is always one of these two, never a finer reason.
+_Avoid_: Chat (one input to agent activity, not a category of its own); Heartbeat, Ping (non-canonical)
+
+### Administration
+
+**Settings**:
+The permission-gated surface where a member configures the Organization currently chosen in the selector — its Workspaces, Users, Billing, Defaults, Integrations, and Environment registry. One destination with one section per area; each section is independently gated, so a member sees only the areas they may manage. Operational, project-scoped views (e.g. Schedules) are deliberately not part of it.
+_Avoid_: Tenant Settings (retired user-facing label — the old modal that held only Integrations + Environments); Admin panel, Config (non-canonical); conflating with Defaults (one section within Settings, not the whole)
+
+**Pods**:
+The operational view of an Organization's running environment pods — one row per running ProjectEnvironment, grouped by Project — showing each pod's status, age, Resources, configured timeouts, and live Keep-alive activity (when it was last kept alive and by which kind). Read-only and operational: like Schedules it is reached from the avatar dropdown, not part of Settings.
+_Avoid_: Pod class (the Resources identifier — a different thing); Resources (the size policy, not the running instances); Instances (non-canonical)

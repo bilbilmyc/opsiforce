@@ -1,18 +1,14 @@
-import { For, Show, createEffect, createSignal } from 'solid-js';
+import { For, Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
-import { useNavigate } from '@tanstack/solid-router';
-import { usePermissions } from '~/api/permissions';
 import { useCreateWorkspace, useWorkspaces } from '~/api/workspaces';
-import { Permission } from '~/constants/permissions';
 import { Button } from '~/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog';
 import Spinner from '~/components/ui/spinner';
+import { SettingsSection } from '~/components/settings/settings-section';
 import WorkspaceSettings from '~/components/workspace-settings';
 import { FolderKanban, Plus, Settings, AppWindow, Users } from '~/components/icons';
 
-export default function WorkspacesPage() {
-  const navigate = useNavigate();
-  const { hasPermission } = usePermissions();
+export function WorkspacesPage() {
   const workspaces = useWorkspaces('all');
   const createWorkspace = useCreateWorkspace();
 
@@ -20,12 +16,6 @@ export default function WorkspacesPage() {
   const [createDialogOpen, setCreateDialogOpen] = createSignal(false);
   const [newName, setNewName] = createSignal('');
   const [newDescription, setNewDescription] = createSignal('');
-
-  createEffect(() => {
-    if (!hasPermission(Permission.manageWorkspaces)) {
-      navigate({ to: '/' });
-    }
-  });
 
   const closeCreateDialog = () => {
     setCreateDialogOpen(false);
@@ -50,19 +40,18 @@ export default function WorkspacesPage() {
   };
 
   return (
-    <div class="h-full overflow-y-auto">
-      <div class="max-w-3xl mx-auto px-6 py-10 flex flex-col gap-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-2xl font-semibold tracking-tight">Workspaces</h1>
-            <p class="text-sm text-muted-foreground mt-1">Group projects, and control which users can see them.</p>
-          </div>
+    <>
+      <SettingsSection
+        icon={FolderKanban}
+        title="Workspaces"
+        description="Group and share projects."
+        action={
           <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
             <Plus class="w-4 h-4 mr-1.5" />
             New workspace
           </Button>
-        </div>
-
+        }
+      >
         <Show
           when={workspaces.data}
           fallback={
@@ -114,7 +103,7 @@ export default function WorkspacesPage() {
             </Show>
           )}
         </Show>
-      </div>
+      </SettingsSection>
 
       <Dialog
         open={createDialogOpen()}
@@ -176,6 +165,6 @@ export default function WorkspacesPage() {
           />
         )}
       </Show>
-    </div>
+    </>
   );
 }

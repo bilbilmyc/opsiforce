@@ -189,7 +189,7 @@ export default function WorkspaceSettings(props: {
         open={confirmDeleteOpen()}
         onOpenChange={setConfirmDeleteOpen}
         title={`Delete "${workspace.data?.name ?? 'workspace'}"?`}
-        description="Projects move to the Public bucket — visible to everyone in the tenant."
+        description="Projects move to the Public bucket — visible to everyone in the organization."
         confirmLabel="Delete"
         variant="destructive"
         onConfirm={handleDelete}

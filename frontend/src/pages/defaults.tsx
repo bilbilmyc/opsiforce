@@ -8,53 +8,53 @@ import { Permission } from '~/constants/permissions';
 import { Clock, CircleDollarSign, SlidersHorizontal } from '~/components/icons';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { Button } from '~/components/ui/button';
+import { SettingsSection } from '~/components/settings/settings-section';
 import { TimeoutRow } from '~/components/ui/timeout-row';
 import { BudgetRow } from '~/components/ui/budget-row';
 import { msToUnit, unitToMs } from '~/lib/duration-units';
 
 type Scope = 'global' | 'tenant';
 
-export default function DefaultsPage() {
+export function DefaultsPage() {
   const { hasPermission } = usePermissions();
   const canPlatform = () => hasPermission(Permission.managePlatformDefaults);
   const canTenant = () => hasPermission(Permission.manageTenantDefaults);
   const defaultScope = createMemo<Scope>(() => (canPlatform() ? 'global' : 'tenant'));
   const [scope, setScope] = createSignal<Scope>(defaultScope());
 
-  return (
-    <div class="h-full overflow-y-auto">
-      <div class="max-w-2xl mx-auto p-6 space-y-6">
-        <div class="flex items-center gap-2">
-          <SlidersHorizontal class="w-5 h-5 text-muted-foreground" />
-          <h1 class="text-lg font-semibold">Defaults</h1>
-        </div>
-        <p class="text-xs text-muted-foreground">
-          Defaults seed new tenants (platform scope) and new projects/keys (tenant scope). Changing these does not
-          affect existing entities.
-        </p>
+  const scopeDescription = () =>
+    scope() === 'global'
+      ? 'These seed every new organization created on the platform. Existing organizations keep their own values.'
+      : 'These seed every new project (and its LLM keys) in this organization. Existing projects keep their own values.';
 
-        <Tabs value={scope()} onChange={(v) => setScope(v as Scope)}>
-          <TabsList>
-            <Show when={canPlatform()}>
-              <TabsTrigger value="global">Global</TabsTrigger>
-            </Show>
-            <Show when={canTenant()}>
-              <TabsTrigger value="tenant">Tenant</TabsTrigger>
-            </Show>
-          </TabsList>
+  return (
+    <SettingsSection
+      icon={SlidersHorizontal}
+      title="Defaults"
+      description="The starting timeouts and budgets new organizations and projects are created with."
+    >
+      <Tabs value={scope()} onChange={(v) => setScope(v as Scope)}>
+        <TabsList>
           <Show when={canPlatform()}>
-            <TabsContent value="global">
-              <DefaultsForm scope="global" />
-            </TabsContent>
+            <TabsTrigger value="global">New organizations</TabsTrigger>
           </Show>
           <Show when={canTenant()}>
-            <TabsContent value="tenant">
-              <DefaultsForm scope="tenant" />
-            </TabsContent>
+            <TabsTrigger value="tenant">New projects</TabsTrigger>
           </Show>
-        </Tabs>
-      </div>
-    </div>
+        </TabsList>
+        <p class="mt-3 text-xs text-muted-foreground">{scopeDescription()}</p>
+        <Show when={canPlatform()}>
+          <TabsContent value="global">
+            <DefaultsForm scope="global" />
+          </TabsContent>
+        </Show>
+        <Show when={canTenant()}>
+          <TabsContent value="tenant">
+            <DefaultsForm scope="tenant" />
+          </TabsContent>
+        </Show>
+      </Tabs>
+    </SettingsSection>
   );
 }
 
@@ -198,7 +198,7 @@ function BudgetsSection(props: { base: string; data: BudgetDefaults; onSaved: ()
       onSave={save}
     >
       <BudgetRow
-        label="Tenant"
+        label="Organization"
         draftBudget={tenantBudget()}
         draftDuration={tenantDuration()}
         onBudgetChange={(v) => {

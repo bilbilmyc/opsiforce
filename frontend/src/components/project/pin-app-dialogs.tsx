@@ -20,7 +20,7 @@ export default function PinAppDialogs(props: PinAppDialogsProps) {
 
   const makaraTenantLabel = () => {
     const name = tenantSettings.data?.makaraTenantName;
-    return name ? `Makara tenant ${name}` : 'your mapped Makara tenant';
+    return name ? `the ${name} organization` : 'your mapped organization';
   };
 
   return (
