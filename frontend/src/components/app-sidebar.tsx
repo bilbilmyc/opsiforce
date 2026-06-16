@@ -8,6 +8,7 @@ import { useCurrentUser, useUserInfo } from '~/api/user';
 import { useCreateProjectInWorkspace, useWorkspaces } from '~/api/workspaces';
 import { Permission } from '~/constants/permissions';
 import { firstPermittedSettingsTab } from '~/constants/settings-tabs';
+import { firstPermittedAdminTab } from '~/constants/admin-tabs';
 import {
   Sidebar,
   SidebarHeader,
@@ -41,11 +42,12 @@ import {
   LogOut,
   Plus,
   Search,
+  Server,
   Settings,
   X,
 } from '~/components/icons';
 
-export default function AppSidebar() {
+export function AppSidebar() {
   const navigate = useNavigate();
   const { toggleSidebar } = useSidebar();
   const { hasPermission } = usePermissions();
@@ -60,6 +62,7 @@ export default function AppSidebar() {
   let searchRef: HTMLInputElement | undefined;
 
   const canOpenSettings = () => !!firstPermittedSettingsTab(hasPermission);
+  const canOpenAdmin = () => !!firstPermittedAdminTab(hasPermission);
 
   const privateWorkspace = createMemo(() => {
     const uid = currentUser.data?.id;
@@ -245,6 +248,12 @@ export default function AppSidebar() {
                   <DropdownMenuItem onSelect={() => navigate({ to: '/settings' })}>
                     <Settings class="w-4 h-4 text-muted-foreground" />
                     Settings
+                  </DropdownMenuItem>
+                </Show>
+                <Show when={canOpenAdmin()}>
+                  <DropdownMenuItem onSelect={() => navigate({ to: '/admin' })}>
+                    <Server class="w-4 h-4 text-muted-foreground" />
+                    Admin
                   </DropdownMenuItem>
                 </Show>
                 <Show when={hasPermission(Permission.manageSchedules)}>

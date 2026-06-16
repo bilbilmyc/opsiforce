@@ -59,3 +59,5 @@ export { default as Rocket } from 'lucide-solid/icons/rocket';
 export { default as GitBranch } from 'lucide-solid/icons/git-branch';
 export { default as ExternalLink } from 'lucide-solid/icons/external-link';
 export { default as Layers } from 'lucide-solid/icons/layers';
+export { default as Boxes } from 'lucide-solid/icons/boxes';
+export { default as Server } from 'lucide-solid/icons/server';

@@ -8,6 +8,16 @@ import { projectEnvironments, projectSettings } from '../../db/schema';
 const AGENT_KEY_PREFIX = 'opsiforce:timeout:';
 const APP_KEY_PREFIX = 'opsiforce:app-timeout:';
 
+export interface KeepAliveActivity {
+  lastTouchMs: number | null;
+  remainingMs: number | null;
+}
+
+export interface EnvironmentKeepAlive {
+  agent: KeepAliveActivity;
+  app: KeepAliveActivity;
+}
+
 @Injectable()
 export class TimeoutService implements OnModuleDestroy {
   private readonly redis: Redis;
@@ -60,6 +70,34 @@ export class TimeoutService implements OnModuleDestroy {
     return agentTtl <= 0 && appTtl <= 0;
   }
 
+  async getKeepAlive(envId: string): Promise<EnvironmentKeepAlive> {
+    const batch = await this.getKeepAliveBatch([envId]);
+    return batch.get(envId) ?? emptyKeepAlive();
+  }
+
+  async getKeepAliveBatch(envIds: string[]): Promise<Map<string, EnvironmentKeepAlive>> {
+    const result = new Map<string, EnvironmentKeepAlive>();
+    if (envIds.length === 0) return result;
+
+    const pipeline = this.redis.pipeline();
+    envIds.forEach((envId) => {
+      pipeline.get(`${AGENT_KEY_PREFIX}${envId}`);
+      pipeline.pttl(`${AGENT_KEY_PREFIX}${envId}`);
+      pipeline.get(`${APP_KEY_PREFIX}${envId}`);
+      pipeline.pttl(`${APP_KEY_PREFIX}${envId}`);
+    });
+    const responses = await pipeline.exec();
+
+    envIds.forEach((envId, index) => {
+      const base = index * 4;
+      result.set(envId, {
+        agent: readActivityFromPipeline(responses, base),
+        app: readActivityFromPipeline(responses, base + 2),
+      });
+    });
+    return result;
+  }
+
   async clear(envId: string): Promise<void> {
     await this.redis.del(`${AGENT_KEY_PREFIX}${envId}`, `${APP_KEY_PREFIX}${envId}`);
   }
@@ -76,4 +114,21 @@ export class TimeoutService implements OnModuleDestroy {
     const match = url.match(/\/(\d+)$/);
     return match ? parseInt(match[1]) : 0;
   }
+}
+
+function emptyKeepAlive(): EnvironmentKeepAlive {
+  return { agent: { lastTouchMs: null, remainingMs: null }, app: { lastTouchMs: null, remainingMs: null } };
+}
+
+function readActivityFromPipeline(responses: [Error | null, unknown][] | null, valueIndex: number): KeepAliveActivity {
+  if (!responses) return { lastTouchMs: null, remainingMs: null };
+  const valueResult = responses[valueIndex];
+  const ttlResult = responses[valueIndex + 1];
+  const rawPttl = ttlResult && ttlResult[0] === null ? ttlResult[1] : null;
+  const pttl = typeof rawPttl === 'number' ? rawPttl : -2;
+  const remainingMs = pttl >= 0 ? pttl : null;
+  const rawValue = valueResult && valueResult[0] === null ? valueResult[1] : null;
+  if (typeof rawValue !== 'string') return { lastTouchMs: null, remainingMs };
+  const parsed = Number(rawValue);
+  return { lastTouchMs: Number.isFinite(parsed) ? parsed : null, remainingMs };
 }

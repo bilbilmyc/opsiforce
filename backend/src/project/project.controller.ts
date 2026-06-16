@@ -34,8 +34,8 @@ import { RequirePermission } from '../permission/permission.guard';
 import { Perms } from '../permission/permission.constants';
 import { ProjectEventsService } from './project-events.service';
 import { AppService } from './app.service';
-import { EnvironmentVariablesService } from '../environment-variables/environment-variables.service';
-import type { UpdateEnvironmentVariablesDto } from '../environment-variables/environment-variables.types';
+import { EnvironmentVariablesService } from '../project-environment/environment-variables.service';
+import type { UpdateEnvironmentVariablesDto } from '../project-environment/environment-variables.types';
 
 @Controller('projects')
 export class ProjectController {

@@ -119,9 +119,13 @@ _Avoid_: Chat (one input to agent activity, not a category of its own); Heartbea
 ### Administration
 
 **Settings**:
-The permission-gated surface where a member configures the Organization currently chosen in the selector — its Workspaces, Users, Billing, Defaults, Integrations, and Environment registry. One destination with one section per area; each section is independently gated, so a member sees only the areas they may manage. Operational, project-scoped views (e.g. Schedules) are deliberately not part of it.
-_Avoid_: Tenant Settings (retired user-facing label — the old modal that held only Integrations + Environments); Admin panel, Config (non-canonical); conflating with Defaults (one section within Settings, not the whole)
+The permission-gated surface where a member **configures** the Organization currently chosen in the selector — its Workspaces, Users, Billing, Defaults, Integrations, and Environment registry. One destination with one section per area; each section is independently gated, so a member sees only the areas they may manage. It changes stored configuration; the running-state counterpart is Admin.
+_Avoid_: Tenant Settings (retired user-facing label — the old modal that held only Integrations + Environments); Config (non-canonical); Admin (the operational sibling — a separate destination, not a synonym for Settings); conflating with Defaults (one section within Settings, not the whole)
+
+**Admin**:
+The permission-gated surface where a member **observes and operates** the running state of the Organization currently chosen in the selector — the counterpart to Settings, which configures it. A sibling destination reached from the avatar dropdown, built on the same left-rail layout (one page per area, each independently gated). Its first page is Pods. The test for where a view belongs: if it shows or acts on what is running now, it is Admin; if it changes stored configuration, it is Settings.
+_Avoid_: Settings (the configuration sibling — a different destination); Admin panel, Console, Operations, Monitoring (non-canonical — say Admin); conflating with Pods (the first page within Admin, not the whole)
 
 **Pods**:
-The operational view of an Organization's running environment pods — one row per running ProjectEnvironment, grouped by Project — showing each pod's status, age, Resources, configured timeouts, and live Keep-alive activity (when it was last kept alive and by which kind). Read-only and operational: like Schedules it is reached from the avatar dropdown, not part of Settings.
+The view of an Organization's running environment pods — one row per running ProjectEnvironment, grouped by Project — showing each pod's status, age, Resources, configured timeouts, and live Keep-alive activity (when it was last kept alive and by which kind). Read-only; the first page within Admin.
 _Avoid_: Pod class (the Resources identifier — a different thing); Resources (the size policy, not the running instances); Instances (non-canonical)
