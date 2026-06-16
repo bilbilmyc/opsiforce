@@ -1,0 +1,5 @@
+{
+  "id": "20260616_app_readiness_push",
+  "requiresPodRecreate": true,
+  "operations": []
+}

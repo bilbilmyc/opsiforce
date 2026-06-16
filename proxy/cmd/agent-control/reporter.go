@@ -1,0 +1,232 @@
+package main
+
+import (
+	"bytes"
+	"encoding/json"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/fsnotify/fsnotify"
+)
+
+const (
+	watchDir            = "/workspace/app"
+	metaFileName        = "app.meta.json"
+	appMetaRoute        = "/api/app-meta"
+	defaultAppPort      = "3000"
+	probeTimeout        = 3 * time.Second
+	pushTimeout         = 5 * time.Second
+	fastProbeInterval   = 2 * time.Second
+	steadyProbeInterval = 15 * time.Second
+	heartbeatInterval   = 30 * time.Second
+	pushAttempts        = 4
+	pushBackoff         = 1500 * time.Millisecond
+	downStrikeThreshold = 2
+)
+
+type appState struct {
+	Serving     bool    `json:"serving"`
+	Live        bool    `json:"live"`
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+func (s appState) positive() bool {
+	return s.Serving || s.Live
+}
+
+func (s appState) equal(other appState) bool {
+	return s.Serving == other.Serving &&
+		s.Live == other.Live &&
+		ptrEqual(s.Name, other.Name) &&
+		ptrEqual(s.Description, other.Description)
+}
+
+func ptrEqual(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func runReporter() {
+	key := os.Getenv("SERVICE_GATEWAY_API_KEY")
+	base := os.Getenv("SERVICE_GATEWAY_URL")
+	if key == "" || base == "" {
+		log.Println("app-reporter: SERVICE_GATEWAY_API_KEY/URL not set; app readiness reporting disabled")
+		return
+	}
+
+	appPort := os.Getenv("APP_PORT")
+	if appPort == "" {
+		appPort = defaultAppPort
+	}
+
+	probeURL := "http://127.0.0.1:" + appPort + appMetaRoute
+	pushURL := strings.TrimRight(base, "/") + "/app/state"
+
+	probeClient := &http.Client{Timeout: probeTimeout}
+	pushClient := &http.Client{Timeout: pushTimeout}
+
+	nudge := make(chan struct{}, 1)
+	go watchMeta(nudge)
+
+	var (
+		last        appState
+		lastPushAt  time.Time
+		serving     bool
+		downStrikes int
+	)
+
+	ticker := time.NewTicker(fastProbeInterval)
+	defer ticker.Stop()
+
+	evaluate := func() {
+		current := probeApp(probeClient, probeURL)
+
+		if !current.Serving && last.positive() {
+			downStrikes++
+			if downStrikes < downStrikeThreshold {
+				return
+			}
+		} else {
+			downStrikes = 0
+		}
+
+		if current.Serving != serving {
+			serving = current.Serving
+			if serving {
+				ticker.Reset(steadyProbeInterval)
+			} else {
+				ticker.Reset(fastProbeInterval)
+			}
+		}
+
+		changed := !current.equal(last)
+		heartbeatDue := current.positive() && time.Since(lastPushAt) >= heartbeatInterval
+		if !changed && !heartbeatDue {
+			return
+		}
+
+		if !pushState(pushClient, pushURL, key, current) {
+			return
+		}
+
+		last = current
+		lastPushAt = time.Now()
+	}
+
+	evaluate()
+
+	for {
+		select {
+		case <-ticker.C:
+			evaluate()
+		case <-nudge:
+			evaluate()
+		}
+	}
+}
+
+func probeApp(client *http.Client, url string) appState {
+	resp, err := client.Get(url)
+	if err != nil {
+		return appState{}
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return appState{}
+	}
+
+	state := appState{Serving: true}
+
+	var body struct {
+		Exists      bool    `json:"exists"`
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err == nil && body.Exists {
+		state.Live = true
+		state.Name = body.Name
+		state.Description = body.Description
+	}
+	return state
+}
+
+func pushState(client *http.Client, url, key string, state appState) bool {
+	payload, err := json.Marshal(state)
+	if err != nil {
+		log.Printf("app-reporter: marshal state failed: %v", err)
+		return false
+	}
+
+	for attempt := 1; attempt <= pushAttempts; attempt++ {
+		if attempt > 1 {
+			time.Sleep(pushBackoff * time.Duration(attempt-1))
+		}
+
+		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
+		if err != nil {
+			log.Printf("app-reporter: build request failed: %v", err)
+			return false
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+key)
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("app-reporter: push attempt %d failed: %v", attempt, err)
+			continue
+		}
+		ok := resp.StatusCode >= 200 && resp.StatusCode < 300
+		resp.Body.Close()
+		if ok {
+			return true
+		}
+		log.Printf("app-reporter: push attempt %d returned status %d", attempt, resp.StatusCode)
+	}
+	return false
+}
+
+func watchMeta(nudge chan<- struct{}) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Printf("app-reporter: watcher init failed: %v", err)
+		return
+	}
+	defer watcher.Close()
+
+	if err := watcher.Add(watchDir); err != nil {
+		log.Printf("app-reporter: watching %s failed: %v", watchDir, err)
+		return
+	}
+
+	const relevant = fsnotify.Create | fsnotify.Write | fsnotify.Rename
+	for {
+		select {
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			if filepath.Base(event.Name) != metaFileName {
+				continue
+			}
+			if event.Op&relevant != 0 {
+				select {
+				case nudge <- struct{}{}:
+				default:
+				}
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Printf("app-reporter: watch error: %v", err)
+		}
+	}
+}

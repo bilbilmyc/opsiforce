@@ -6,6 +6,7 @@ import { db } from '../../db';
 import { projects } from '../../db/schema';
 import { ScheduleService } from './schedule.service';
 import { ProjectService } from '../project/project.service';
+import { AppReadinessService } from '../project/app-readiness.service';
 import { ProxyService } from '../proxy/proxy.service';
 import { SCHEDULE_QUEUE_NAME, type ScheduleJobData, type ScheduleTrigger } from './schedule.types';
 
@@ -16,6 +17,7 @@ export class ScheduleWorker extends WorkerHost {
   constructor(
     private readonly scheduleService: ScheduleService,
     private readonly projectService: ProjectService,
+    private readonly appReadiness: AppReadinessService,
     private readonly proxyService: ProxyService
   ) {
     super();
@@ -60,7 +62,7 @@ export class ScheduleWorker extends WorkerHost {
     }
 
     if (ensured.state === 'starting') {
-      const ready = await this.waitForEnvironmentReady(routingId, 120_000);
+      const ready = await this.appReadiness.awaitReady(routingId, 120_000);
       if (!ready) {
         await this.scheduleService.recordExecution(scheduleId, trigger, null, null, 'pod startup timeout');
         return;
@@ -97,24 +99,5 @@ export class ScheduleWorker extends WorkerHost {
       await this.scheduleService.recordExecution(scheduleId, trigger, null, latencyMs, errorMessage);
       this.logger.error(`Schedule "${schedule.name}" failed: ${errorMessage}`);
     }
-  }
-
-  private async waitForEnvironmentReady(environmentId: string, timeoutMs: number): Promise<boolean> {
-    const interval = 3000;
-    const maxAttempts = Math.ceil(timeoutMs / interval);
-
-    for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((resolve) => setTimeout(resolve, interval));
-
-      try {
-        const ensured = await this.projectService.ensureEnvironmentById(environmentId, 'app');
-        if (ensured.state === 'ready') return true;
-        if (ensured.state === 'disabled' || ensured.state === 'failed') return false;
-      } catch {
-        continue;
-      }
-    }
-
-    return false;
   }
 }

@@ -22,10 +22,12 @@ const (
 var appGuardNames = []string{"app-backend", "app-frontend"}
 
 func main() {
+	go runReporter()
+
 	token := os.Getenv("OPSIFORCE_CONTROL_TOKEN")
 	if token == "" {
 		log.Println("OPSIFORCE_CONTROL_TOKEN not set; control server disabled")
-		return
+		select {}
 	}
 
 	port := os.Getenv("CONTROL_PORT")

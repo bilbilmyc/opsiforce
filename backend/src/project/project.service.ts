@@ -84,8 +84,6 @@ const UNSCHEDULABLE_STARTUP_GRACE_MS = 180 * 1000;
 const STARTUP_RETRY_BASE_MS = 5 * 1000;
 const STARTUP_RETRY_MAX_MS = 5 * 60 * 1000;
 const DUPLICATE_APP_READY_TIMEOUT_MS = 5 * 60 * 1000;
-const DUPLICATE_APP_POLL_INTERVAL_MS = 3000;
-const DUPLICATE_APP_FETCH_TIMEOUT_MS = 4000;
 
 interface AppMetaPatch {
   name?: string;
@@ -134,6 +132,7 @@ function validateAppDescription(value: unknown): string | null {
 import { ProjectAuthService } from './project-auth.service';
 import { ProjectEventsService } from './project-events.service';
 import { AppService } from './app.service';
+import { AppReadinessService } from './app-readiness.service';
 import {
   ACTIVE_DUPLICATE_STATUSES,
   PROJECT_DUPLICATE_QUEUE,
@@ -214,8 +213,8 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly scheduleService: ScheduleService,
     private readonly projectAuthService: ProjectAuthService,
     private readonly projectEventsService: ProjectEventsService,
-    @Inject(forwardRef(() => AppService))
     private readonly appService: AppService,
+    private readonly appReadiness: AppReadinessService,
     private readonly agentService: AgentService,
     private readonly environmentService: EnvironmentService,
     private readonly gitService: GitService,
@@ -881,9 +880,6 @@ export class ProjectService implements OnApplicationBootstrap {
     const project = await this.findOne(id, tenantId);
     const envs = await this.projectEnvironmentService.listByProjectId(id);
 
-    this.appService.stopPolling(id);
-    this.appService.invalidate(id);
-
     await Promise.allSettled([
       ...envs.map((env) => this.safeDeletePod(this.podService.assignedPodName(env.id), `removing project ${id}`)),
       this.bifrostService.isEnabled()
@@ -937,7 +933,6 @@ export class ProjectService implements OnApplicationBootstrap {
         .where(eq(projectEnvironments.projectId, id));
     });
 
-    this.appService.invalidate(id);
     await this.projectEventsService.publish(id);
 
     return this.findOne(id, tenantId);
@@ -1040,7 +1035,6 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.writeAppMetaFile(project.directory, { name, description });
     await db.update(projectApps).set({ name, description, updatedAt: new Date() }).where(eq(projectApps.projectId, id));
 
-    this.appService.invalidate(id);
     await this.projectEventsService.publish(id);
 
     return this.findOne(id, tenantId);
@@ -1143,7 +1137,6 @@ export class ProjectService implements OnApplicationBootstrap {
       ]
     );
     if (updated) {
-      this.appService.invalidate(updated.projectId);
       await this.projectEventsService.publish(updated.projectId).catch(() => undefined);
     }
   }
@@ -1167,7 +1160,6 @@ export class ProjectService implements OnApplicationBootstrap {
       return;
     }
     this.startupRetries.delete(envId);
-    this.appService.invalidate(updated.projectId);
     await Promise.allSettled([
       this.timeoutService.touch(envId).catch(() => undefined),
       this.projectEventsService.publish(updated.projectId).catch(() => undefined),
@@ -1181,7 +1173,6 @@ export class ProjectService implements OnApplicationBootstrap {
       ProjectStatus.Publishing
     );
     if (updated) {
-      this.appService.invalidate(updated.projectId);
       await this.projectEventsService.publish(updated.projectId).catch(() => undefined);
     }
   }
@@ -1392,7 +1383,7 @@ export class ProjectService implements OnApplicationBootstrap {
     this.startupRetries.delete(envId);
 
     if (updated.isDefault) {
-      this.completeDuplicateWhenAppReady(updated.projectId, envId, podIp);
+      this.completeDuplicateWhenAppReady(updated.projectId, envId);
     }
 
     await Promise.allSettled([
@@ -1450,7 +1441,7 @@ export class ProjectService implements OnApplicationBootstrap {
       if (job.status === ProjectDuplicateStatus.Starting) {
         const env = await this.projectEnvironmentService.findByIdOrNull(job.targetProjectId);
         if (env && env.status === ProjectStatus.Active && env.podIp) {
-          this.completeDuplicateWhenAppReady(job.targetProjectId, env.id, env.podIp);
+          this.completeDuplicateWhenAppReady(job.targetProjectId, env.id);
         } else {
           this.spawnStartupWorker(job.targetProjectId);
         }
@@ -1552,7 +1543,7 @@ export class ProjectService implements OnApplicationBootstrap {
     }
   }
 
-  private completeDuplicateWhenAppReady(projectId: string, envId: string, podIp: string): void {
+  private completeDuplicateWhenAppReady(projectId: string, envId: string): void {
     void (async () => {
       const [job] = await db
         .select({ id: projectDuplicateJobs.id })
@@ -1566,7 +1557,7 @@ export class ProjectService implements OnApplicationBootstrap {
         .limit(1);
       if (!job) return;
 
-      const appReady = await this.waitForAppReady(envId, podIp, DUPLICATE_APP_READY_TIMEOUT_MS);
+      const appReady = await this.appReadiness.awaitReady(envId, DUPLICATE_APP_READY_TIMEOUT_MS);
 
       const settled = await db
         .update(projectDuplicateJobs)
@@ -1593,21 +1584,6 @@ export class ProjectService implements OnApplicationBootstrap {
     })().catch((err) => {
       this.logger.warn(`Failed to finish duplicate for project ${projectId}: ${(err as Error).message}`);
     });
-  }
-
-  private async waitForAppReady(envId: string, podIp: string, timeoutMs: number): Promise<boolean> {
-    const upstream = this.proxyService.resolveAppUpstreamForProject({ id: envId, podIp });
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      try {
-        const response = await fetch(`${upstream}/`, { signal: AbortSignal.timeout(DUPLICATE_APP_FETCH_TIMEOUT_MS) });
-        if (response.status >= 200 && response.status < 400) return true;
-      } catch (err) {
-        this.logger.debug(`Duplicate app not ready for ${envId}: ${(err as Error).message}`);
-      }
-      await new Promise((resolve) => setTimeout(resolve, DUPLICATE_APP_POLL_INTERVAL_MS));
-    }
-    return false;
   }
 
   private async requestEnvironmentStartup(
@@ -1645,7 +1621,6 @@ export class ProjectService implements OnApplicationBootstrap {
     }
 
     this.spawnStartupWorker(env.id);
-    this.appService.invalidate(env.projectId);
     await this.projectEventsService.publish(env.projectId);
 
     return this.projectEnvironmentService.findById(env.id);
@@ -1737,6 +1712,8 @@ export class ProjectService implements OnApplicationBootstrap {
       throw new Error(`Cannot start pool environment ${env.id} without a tenant`);
     }
 
+    this.appReadiness.markDown(env.id);
+
     const [bifrostOptions, gatewayApiKey, agentName, podResources] = await Promise.all([
       this.bifrostService.getEnvironmentPodOptions(env.id),
       this.gatewayKeyService.getEnvironmentToken(env.id),
@@ -1773,8 +1750,6 @@ export class ProjectService implements OnApplicationBootstrap {
     this.logger.warn(`Startup failed for environment ${envId}: ${message}`);
 
     const env = await this.projectEnvironmentService.findByIdOrNull(envId).catch(() => null);
-    this.appService.invalidate(envId);
-    if (env) this.appService.invalidate(env.projectId);
 
     const projectId = env?.projectId ?? envId;
 

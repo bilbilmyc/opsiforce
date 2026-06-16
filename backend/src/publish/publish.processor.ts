@@ -16,15 +16,13 @@ import { ProjectAuthService } from '../project/project-auth.service';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
 import { GatewayKeyService } from '../gateway/gateway-key.service';
 import { ScheduleService } from '../schedule/schedule.service';
-import { ProxyService } from '../proxy/proxy.service';
+import { AppReadinessService } from '../project/app-readiness.service';
 import { PodStartupFailedError } from '../pod/pod.service';
 import { writeJsonAtomic } from '../common/fs';
 import { clearEnvJsonBackup, writeEnvJsonBackup } from '../common/env-file';
 
 const POD_READY_TIMEOUT_MS = 180 * 1000;
 const APP_READY_TIMEOUT_MS = 10 * 60 * 1000;
-const APP_POLL_INTERVAL_MS = 4000;
-const APP_FETCH_TIMEOUT_MS = 4000;
 
 @Processor(PROJECT_PUBLISH_QUEUE)
 export class PublishProcessor extends WorkerHost {
@@ -40,7 +38,7 @@ export class PublishProcessor extends WorkerHost {
     private readonly projectEnvironmentService: ProjectEnvironmentService,
     private readonly gatewayKeyService: GatewayKeyService,
     private readonly scheduleService: ScheduleService,
-    private readonly proxyService: ProxyService,
+    private readonly appReadiness: AppReadinessService,
     private readonly projectEvents: ProjectEventsService
   ) {
     super();
@@ -112,7 +110,7 @@ export class PublishProcessor extends WorkerHost {
 
       phase = PublishStatus.Migrating;
       await this.setStatus(data.publishJobId, PublishStatus.Migrating);
-      const appReady = await this.waitForAppReady(data.projectEnvironmentId, podIp, APP_READY_TIMEOUT_MS);
+      const appReady = await this.appReadiness.awaitReady(data.projectEnvironmentId, APP_READY_TIMEOUT_MS);
       if (!appReady) {
         throw new Error('Production app did not become ready within the deploy window');
       }
@@ -244,21 +242,6 @@ export class PublishProcessor extends WorkerHost {
     }
   }
 
-  private async waitForAppReady(environmentId: string, podIp: string, timeoutMs: number): Promise<boolean> {
-    const upstream = this.proxyService.resolveAppUpstreamForProject({ id: environmentId, podIp });
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      try {
-        const response = await fetch(`${upstream}/`, { signal: AbortSignal.timeout(APP_FETCH_TIMEOUT_MS) });
-        if (response.status >= 200 && response.status < 400) return true;
-      } catch (err) {
-        this.logger.debug(`App not ready for ${environmentId}: ${(err as Error).message}`);
-      }
-      await sleep(APP_POLL_INTERVAL_MS);
-    }
-    return false;
-  }
-
   private async writeEnvFile(
     directory: string,
     variables: Record<string, string>,
@@ -292,10 +275,6 @@ export class PublishProcessor extends WorkerHost {
 function isStringRecord(value: unknown): value is Record<string, string> {
   if (!value || typeof value !== 'object') return false;
   return Object.values(value).every((entry) => typeof entry === 'string');
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 const PHASE_FAILURE_MESSAGE: Partial<Record<PublishStatus, string>> = {

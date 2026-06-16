@@ -21,7 +21,6 @@ import {
   DuplicateProjectDto,
   UpdateProjectAuthDto,
   UpdateProjectLoggingDto,
-  ProjectStatus,
   SetAppPinDto,
   SetEnvironmentSessionDto,
   UpdateAppDto,
@@ -33,7 +32,6 @@ import { UserService } from '../user/user.service';
 import { RequirePermission } from '../permission/permission.guard';
 import { Perms } from '../permission/permission.constants';
 import { ProjectEventsService } from './project-events.service';
-import { AppService } from './app.service';
 import { EnvironmentVariablesService } from '../project-environment/environment-variables.service';
 import type { UpdateEnvironmentVariablesDto } from '../project-environment/environment-variables.types';
 
@@ -43,7 +41,6 @@ export class ProjectController {
     private readonly projectService: ProjectService,
     private readonly userService: UserService,
     private readonly projectEventsService: ProjectEventsService,
-    private readonly appService: AppService,
     private readonly environmentVariablesService: EnvironmentVariablesService
   ) {}
 
@@ -93,7 +90,6 @@ export class ProjectController {
 
     let closed = false;
     let unsubscribe = () => {};
-    let polling = false;
     const heartbeat = setInterval(() => {
       if (!closed) reply.raw.write(': ping\n\n');
     }, 25000);
@@ -101,10 +97,6 @@ export class ProjectController {
       closed = true;
       clearInterval(heartbeat);
       unsubscribe();
-      if (polling) {
-        this.appService.stopPolling(id);
-        polling = false;
-      }
     };
 
     const sendError = (code: 'not_found' | 'forbidden' | 'internal', message: string) => {
@@ -120,15 +112,6 @@ export class ProjectController {
         const status = await loadStatus();
         if (closed) return;
         reply.raw.write(`data: ${JSON.stringify(status)}\n\n`);
-
-        const shouldPoll = status.status === ProjectStatus.Active && (status.app === null || !status.app.exists);
-        if (shouldPoll && !polling) {
-          this.appService.startPolling(id);
-          polling = true;
-        } else if (!shouldPoll && polling) {
-          this.appService.stopPolling(id);
-          polling = false;
-        }
       } catch (err) {
         if (err instanceof NotFoundException) sendError('not_found', err.message);
         else if (err instanceof ForbiddenException) sendError('forbidden', err.message);

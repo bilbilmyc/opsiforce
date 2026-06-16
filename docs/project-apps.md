@@ -4,7 +4,7 @@ Every Opsiforce project can publish a small bundle of "app details" — a name, 
 
 ## Detection
 
-Each project's agent template ships with a small backend route at `/api/app-meta`. While the project is Active and a client is listening on the SSE status stream, Opsiforce polls that route every few seconds. As soon as the agent answers with `{ exists: true, name?, description? }` — sourced from an `app.meta.json` at the project root — Opsiforce creates a `projectApps` row, caches the metadata, and stops the poller. From then on, the DB row is the canonical thing other parts of the platform read. The agent owns its own file; Opsiforce mirrors what the agent publishes.
+Each project's agent template ships with a small backend route at `/api/app-meta`, sourced from an `app.meta.json` at the project root. The pod itself watches for that file and probes the app locally, and **pushes** go-live to the backend the moment it happens — the backend never polls. On that push Opsiforce creates a `projectApps` row and notifies the open workspace over SSE, so the app pane appears. From then on the DB row is the canonical thing other parts of the platform read. The agent owns its own file; Opsiforce mirrors what the agent publishes. The mechanics of the push — and the single service that also feeds publish, duplicate, and schedule — live in [App Readiness](app-readiness.md) ([ADR-0015](adr/0015-app-liveness-pushed-not-polled.md)).
 
 The agent's instructions make going live the deliberate last step of the first build: `app.meta.json` is written only after the first feature exists and the agent's type and boot checks pass, so a detected app is never an empty shell or a broken boot.
 

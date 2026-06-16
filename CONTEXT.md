@@ -44,6 +44,10 @@ _Avoid_: Project (when you mean the built application)
 The App's human-facing identity — its name and description. First published by the agent when the App goes live, mirrored by the platform, and re-curated by humans afterwards; the running App reads its own name from it at runtime, and Makara's catalog shows the mirrored copy.
 _Avoid_: App metadata (vague); Project title (the Project shell's label — a different thing)
 
+**Go-live**:
+The moment a Project's App first exists and is running — the agent finishes the first feature, its checks pass, and it publishes App Details. Before go-live a Project has a pod and a chat but no App; the in-workspace app pane and the Makara catalog appear only once it happens.
+_Avoid_: Detection (the platform's inward-facing name for noticing the same moment); App ready, Launch; Deploy/Publish (which moves an already-live App between Environments)
+
 **Publish**:
 The act of materializing or updating a non-Development ProjectEnvironment from the Development one's files, so the App runs in a chosen Environment. Publishing over an already-running environment is a **Publish update**.
 _Avoid_: Deploy, Release, Promote, Redeploy
