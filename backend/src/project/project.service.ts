@@ -1712,8 +1712,6 @@ export class ProjectService implements OnApplicationBootstrap {
       throw new Error(`Cannot start pool environment ${env.id} without a tenant`);
     }
 
-    this.appReadiness.markDown(env.id);
-
     const [bifrostOptions, gatewayApiKey, agentName, podResources] = await Promise.all([
       this.bifrostService.getEnvironmentPodOptions(env.id),
       this.gatewayKeyService.getEnvironmentToken(env.id),
@@ -1739,7 +1737,13 @@ export class ProjectService implements OnApplicationBootstrap {
       controlToken: crypto.randomBytes(32).toString('hex'),
     };
 
-    await this.podService.createAssignedPod(env.id, env.directory, env.projectId, tenantOptions);
+    const { created } = await this.podService.createAssignedPod(
+      env.id,
+      env.directory,
+      env.projectId,
+      tenantOptions
+    );
+    if (created) this.appReadiness.markDown(env.id);
   }
 
   private async handleStartupFailure(envId: string, podName: string, err: unknown): Promise<void> {
