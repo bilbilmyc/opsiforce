@@ -14,7 +14,6 @@ import { EnvironmentModule } from '../environment/environment.module';
 import { BifrostModule } from '../bifrost/bifrost.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { PodModule } from '../pod/pod.module';
-import { ProxyModule } from '../proxy/proxy.module';
 import { ScheduleModule } from '../schedule/schedule.module';
 
 @Module({
@@ -29,7 +28,6 @@ import { ScheduleModule } from '../schedule/schedule.module';
     forwardRef(() => BifrostModule),
     GatewayModule,
     PodModule,
-    ProxyModule,
     forwardRef(() => ScheduleModule),
   ],
   controllers: [PublishController],

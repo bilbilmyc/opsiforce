@@ -7,6 +7,7 @@ import { ProjectStatus } from '../project/project.types';
 import { TimeoutService } from './timeout.service';
 import { PodService } from '../pod/pod.service';
 import { ProjectEventsService } from '../project/project-events.service';
+import { AppReadinessService } from '../project/app-readiness.service';
 
 @Injectable()
 export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
@@ -17,7 +18,8 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly timeoutService: TimeoutService,
     private readonly podService: PodService,
-    private readonly projectEventsService: ProjectEventsService
+    private readonly projectEventsService: ProjectEventsService,
+    private readonly appReadiness: AppReadinessService
   ) {}
 
   async onModuleInit() {
@@ -82,6 +84,8 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
     await this.podService.deletePod(podName).catch((err) => {
       this.logger.warn(`Failed to delete pod ${podName}: ${err.message}`);
     });
+
+    this.appReadiness.markDown(envId);
 
     this.logger.log(`Environment ${envId} suspended due to idle timeout`);
     await this.projectEventsService.publish(updated.projectId);

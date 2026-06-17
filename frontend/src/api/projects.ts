@@ -170,8 +170,14 @@ export interface UpdateAppPayload {
 export function useUpdateApp() {
   const qc = useQueryClient();
   return createMutation(() => ({
-    mutationFn: (params: { projectId: string; payload: UpdateAppPayload }) =>
-      api.patch<Project>(`/projects/${params.projectId}/app`, params.payload),
-    onSuccess: () => qc.invalidateQueries({ queryKey: projectKeys.all }),
+    mutationFn: (params: { projectId: string; environmentId: string; payload: UpdateAppPayload }) =>
+      api.patch<Project>(`/projects/${params.projectId}/app`, {
+        ...params.payload,
+        environmentId: params.environmentId,
+      }),
+    onSuccess: (_data, params) => {
+      qc.invalidateQueries({ queryKey: projectKeys.all });
+      qc.invalidateQueries({ queryKey: environmentKeys.forProject(params.projectId) });
+    },
   }));
 }

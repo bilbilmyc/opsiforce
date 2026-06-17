@@ -121,13 +121,13 @@ export default function EnvManageRow(props: EnvManageRowProps) {
                 Environment variables
               </DropdownMenuItem>
             </Show>
-            <Show when={props.canPin && props.hasApp && env().isPinned}>
+            <Show when={props.canPin && env().hasApp && env().isPinned}>
               <DropdownMenuItem onSelect={() => props.onUnpin()}>
                 <PinOff class="h-3.5 w-3.5 text-muted-foreground" />
                 Unpin from Makara
               </DropdownMenuItem>
             </Show>
-            <Show when={props.canPin && props.hasApp && !env().isPinned}>
+            <Show when={props.canPin && env().hasApp && !env().isPinned}>
               <DropdownMenuItem disabled={!isPublic()} onSelect={() => props.onPin()}>
                 <Pin class="h-3.5 w-3.5 text-muted-foreground" />
                 {isPublic() ? 'Pin to Makara' : 'Pin to Makara (set auth public first)'}

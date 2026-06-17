@@ -11,6 +11,7 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import { eq, and, desc, asc, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { Queue } from 'bullmq';
 import crypto from 'crypto';
 import path from 'path';
@@ -84,8 +85,7 @@ const UNSCHEDULABLE_STARTUP_GRACE_MS = 180 * 1000;
 const STARTUP_RETRY_BASE_MS = 5 * 1000;
 const STARTUP_RETRY_MAX_MS = 5 * 60 * 1000;
 const DUPLICATE_APP_READY_TIMEOUT_MS = 5 * 60 * 1000;
-const DUPLICATE_APP_POLL_INTERVAL_MS = 3000;
-const DUPLICATE_APP_FETCH_TIMEOUT_MS = 4000;
+const APP_SERVING_PROBE_TIMEOUT_MS = 3 * 1000;
 
 interface AppMetaPatch {
   name?: string;
@@ -134,6 +134,7 @@ function validateAppDescription(value: unknown): string | null {
 import { ProjectAuthService } from './project-auth.service';
 import { ProjectEventsService } from './project-events.service';
 import { AppService } from './app.service';
+import { AppReadinessService } from './app-readiness.service';
 import {
   ACTIVE_DUPLICATE_STATUSES,
   PROJECT_DUPLICATE_QUEUE,
@@ -157,6 +158,8 @@ const projectOrderBy = () =>
   ] as const;
 
 const effectiveStatus = sql<ProjectStatus>`CASE WHEN ${projects.disabled} THEN 'disabled' ELSE ${projectEnvironments.status} END`;
+
+const pinnedApp = alias(projectApps, 'pinned_app');
 
 const projectSelectFields = {
   id: projects.id,
@@ -182,10 +185,10 @@ const projectSelectFields = {
   cpuMillicores: projectPodSettings.cpuMillicores,
   memoryRequestMib: projectPodSettings.memoryRequestMib,
   memoryLimitMib: projectPodSettings.memoryLimitMib,
-  isPinned: sql<boolean>`coalesce(${projectApps.isPinned}, false)`.as('is_pinned'),
-  pinnedAt: projectApps.pinnedAt,
-  pinnedEnvironmentId: projectApps.pinnedEnvironmentId,
-  hasApp: sql<boolean>`${projectApps.projectId} is not null`.as('has_app'),
+  isPinned: sql<boolean>`${pinnedApp.projectEnvironmentId} is not null`.as('is_pinned'),
+  pinnedAt: pinnedApp.pinnedAt,
+  pinnedEnvironmentId: pinnedApp.projectEnvironmentId,
+  hasApp: sql<boolean>`${projectApps.projectEnvironmentId} is not null`.as('has_app'),
   appName: projectApps.name,
   appDescription: projectApps.description,
   lastActiveAt: projectEnvironments.lastActiveAt,
@@ -214,8 +217,8 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly scheduleService: ScheduleService,
     private readonly projectAuthService: ProjectAuthService,
     private readonly projectEventsService: ProjectEventsService,
-    @Inject(forwardRef(() => AppService))
     private readonly appService: AppService,
+    private readonly appReadiness: AppReadinessService,
     private readonly agentService: AgentService,
     private readonly environmentService: EnvironmentService,
     private readonly gitService: GitService,
@@ -421,7 +424,7 @@ export class ProjectService implements OnApplicationBootstrap {
     const platformVersion = this.configService.get<string>('platformVersion', '0.1.0');
     const title = dto?.title ?? (source.title ? `${source.title} (copy)` : null);
     const defaultEnvironment = await this.environmentService.ensureDefaultForTenant(tenantId);
-    const [sourceApp] = await db.select().from(projectApps).where(eq(projectApps.projectId, source.id));
+    const [sourceApp] = await db.select().from(projectApps).where(eq(projectApps.projectEnvironmentId, source.id));
     const sourceSchedules = await db
       .select()
       .from(projectSchedules)
@@ -470,10 +473,10 @@ export class ProjectService implements OnApplicationBootstrap {
 
       if (sourceApp) {
         await tx.insert(projectApps).values({
+          projectEnvironmentId: id,
           projectId: id,
           name: sourceApp.name,
           description: sourceApp.description,
-          iconUrl: sourceApp.iconUrl,
         });
       }
 
@@ -536,7 +539,8 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
-      .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
+      .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
+      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .leftJoin(
         workspaceMembers,
         and(eq(workspaceMembers.workspaceId, projects.workspaceId), eq(workspaceMembers.userId, userId))
@@ -561,7 +565,8 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
-      .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
+      .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
+      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .where(where)
       .orderBy(...projectOrderBy()) as Promise<ProjectResponse[]>;
   }
@@ -573,7 +578,8 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
-      .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
+      .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
+      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .where(and(eq(projects.id, id), eq(projects.tenantId, tenantId)))) as ProjectResponse[];
     if (!project) throw new NotFoundException(`Project ${id} not found`);
     return project;
@@ -655,7 +661,8 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
-      .leftJoin(projectApps, eq(projectApps.projectId, projects.id))
+      .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
+      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .where(eq(projects.id, id))) as ProjectResponse[];
 
     if (!project) throw new NotFoundException(`Project ${id} not found`);
@@ -665,29 +672,39 @@ export class ProjectService implements OnApplicationBootstrap {
   async listEnvironments(projectId: string, tenantId: string): Promise<ProjectEnvironmentSummary[]> {
     await this.findOne(projectId, tenantId);
     const envs = await this.projectEnvironmentService.listByProjectId(projectId);
-    const pinned = await db
-      .select({ isPinned: projectApps.isPinned, pinnedEnvironmentId: projectApps.pinnedEnvironmentId })
+    const appRows = await db
+      .select({
+        projectEnvironmentId: projectApps.projectEnvironmentId,
+        name: projectApps.name,
+        description: projectApps.description,
+        isPinned: projectApps.isPinned,
+      })
       .from(projectApps)
       .where(eq(projectApps.projectId, projectId));
-    const pinnedRow = pinned[0];
-    const pinnedEnvironmentId = pinnedRow?.isPinned ? (pinnedRow.pinnedEnvironmentId ?? projectId) : null;
+    const appByEnv = new Map(appRows.map((row) => [row.projectEnvironmentId, row]));
 
     return envs
       .toSorted((a, b) => Number(b.isDefault) - Number(a.isDefault) || a.createdAt.getTime() - b.createdAt.getTime())
-      .map((env) => ({
-        id: env.id,
-        projectId: env.projectId,
-        environmentId: env.environmentId,
-        name: env.isDefault ? 'Development' : (env.environmentName ?? 'Environment'),
-        slug: env.environmentSlug,
-        isDefault: env.isDefault,
-        status: env.disabled ? ProjectStatus.Disabled : env.status,
-        authMode: env.authMode,
-        deployedCommitSha: env.deployedCommitSha,
-        lastActiveAt: env.lastActiveAt,
-        isPinned: pinnedEnvironmentId === env.id,
-        sessionId: env.sessionId,
-      }));
+      .map((env) => {
+        const app = appByEnv.get(env.id);
+        return {
+          id: env.id,
+          projectId: env.projectId,
+          environmentId: env.environmentId,
+          name: env.isDefault ? 'Development' : (env.environmentName ?? 'Environment'),
+          slug: env.environmentSlug,
+          isDefault: env.isDefault,
+          status: env.disabled ? ProjectStatus.Disabled : env.status,
+          authMode: env.authMode,
+          deployedCommitSha: env.deployedCommitSha,
+          lastActiveAt: env.lastActiveAt,
+          isPinned: app?.isPinned ?? false,
+          hasApp: !!app,
+          appName: app?.name ?? null,
+          appDescription: app?.description ?? null,
+          sessionId: env.sessionId,
+        };
+      });
   }
 
   async setEnvironmentSession(
@@ -881,9 +898,6 @@ export class ProjectService implements OnApplicationBootstrap {
     const project = await this.findOne(id, tenantId);
     const envs = await this.projectEnvironmentService.listByProjectId(id);
 
-    this.appService.stopPolling(id);
-    this.appService.invalidate(id);
-
     await Promise.allSettled([
       ...envs.map((env) => this.safeDeletePod(this.podService.assignedPodName(env.id), `removing project ${id}`)),
       this.bifrostService.isEnabled()
@@ -899,6 +913,8 @@ export class ProjectService implements OnApplicationBootstrap {
       }),
       ...envs.map((env) => this.timeoutService.clear(env.id)),
     ]);
+
+    envs.forEach((env) => this.appReadiness.clear(env.id));
 
     await db.delete(projects).where(eq(projects.id, id));
 
@@ -937,7 +953,8 @@ export class ProjectService implements OnApplicationBootstrap {
         .where(eq(projectEnvironments.projectId, id));
     });
 
-    this.appService.invalidate(id);
+    envs.forEach((env) => this.appReadiness.markDown(env.id));
+
     await this.projectEventsService.publish(id);
 
     return this.findOne(id, tenantId);
@@ -986,11 +1003,6 @@ export class ProjectService implements OnApplicationBootstrap {
       throw new BadRequestException('The Development environment cannot be deleted');
     }
 
-    await db
-      .update(projectApps)
-      .set({ isPinned: false, pinnedEnvironmentId: null, pinnedById: null, pinnedAt: null, updatedAt: new Date() })
-      .where(and(eq(projectApps.projectId, projectId), eq(projectApps.pinnedEnvironmentId, env.id)));
-
     await Promise.allSettled([
       this.safeDeletePod(this.podService.assignedPodName(env.id), `deleting environment ${env.id}`),
       this.projectAuthService.remove(env.id).catch((err) => {
@@ -1010,6 +1022,8 @@ export class ProjectService implements OnApplicationBootstrap {
       this.timeoutService.clear(env.id),
     ]);
 
+    this.appReadiness.clear(env.id);
+
     await this.projectEnvironmentService.delete({
       id: env.id,
       projectId: env.projectId,
@@ -1020,27 +1034,42 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.projectEventsService.publish(projectId);
   }
 
-  async updateApp(id: string, tenantId: string, body: UpdateAppDto): Promise<ProjectResponse> {
-    const project = await this.findOne(id, tenantId);
-    if (!project.hasApp) {
+  async updateApp(
+    id: string,
+    tenantId: string,
+    environmentId: string | undefined,
+    body: UpdateAppDto
+  ): Promise<ProjectResponse> {
+    await this.findOne(id, tenantId);
+    const targetEnv = await this.projectEnvironmentService.findById(environmentId ?? id);
+    if (targetEnv.projectId !== id) {
+      throw new NotFoundException(`Environment ${environmentId ?? id} not found`);
+    }
+
+    const [appRow] = await db
+      .select({ name: projectApps.name, description: projectApps.description })
+      .from(projectApps)
+      .where(eq(projectApps.projectEnvironmentId, targetEnv.id));
+    if (!appRow) {
       throw new BadRequestException(
-        "APP_NOT_DETECTED: this project has no detectable app yet. Make sure the project's web server is running and serves /api/app-meta before editing app details."
+        'APP_NOT_DETECTED: this environment has no detectable app yet. Make sure its web server is running and serves /api/app-meta before editing app details.'
       );
     }
 
     const patch = validateUpdateAppDto(body);
-    const current = (await this.appService.get(id)) ?? { name: null, description: null };
-    const name = patch.name ?? current.name;
-    const description = 'description' in patch ? (patch.description ?? null) : current.description;
+    const name = patch.name ?? appRow.name;
+    const description = 'description' in patch ? (patch.description ?? null) : appRow.description;
 
     if (!name) {
       throw new BadRequestException("'name' is required and cannot be empty");
     }
 
-    await this.writeAppMetaFile(project.directory, { name, description });
-    await db.update(projectApps).set({ name, description, updatedAt: new Date() }).where(eq(projectApps.projectId, id));
+    await this.writeAppMetaFile(targetEnv.directory, { name, description });
+    await db
+      .update(projectApps)
+      .set({ name, description, updatedAt: new Date() })
+      .where(eq(projectApps.projectEnvironmentId, targetEnv.id));
 
-    this.appService.invalidate(id);
     await this.projectEventsService.publish(id);
 
     return this.findOne(id, tenantId);
@@ -1067,8 +1096,8 @@ export class ProjectService implements OnApplicationBootstrap {
     const project = await this.findOne(id, tenantId);
 
     if (isPinned) {
-      const pinnedEnvironmentId = environmentId ?? project.pinnedEnvironmentId ?? id;
-      const targetEnv = await this.projectEnvironmentService.findById(pinnedEnvironmentId);
+      const targetEnvId = environmentId ?? project.pinnedEnvironmentId ?? id;
+      const targetEnv = await this.projectEnvironmentService.findById(targetEnvId);
       if (targetEnv.projectId !== id) {
         throw new BadRequestException('Pinned environment does not belong to this project');
       }
@@ -1077,31 +1106,30 @@ export class ProjectService implements OnApplicationBootstrap {
           "Only apps with public auth can be pinned to Makara. Change the environment's auth mode to public before pinning."
         );
       }
-      if (!project.hasApp) {
+      const [targetApp] = await db
+        .select({ projectEnvironmentId: projectApps.projectEnvironmentId })
+        .from(projectApps)
+        .where(eq(projectApps.projectEnvironmentId, targetEnv.id));
+      if (!targetApp) {
         throw new BadRequestException(
-          "This project has no detectable app yet. Make sure the project's web server is running before pinning."
+          'This environment has no detectable app yet. Make sure its web server is running before pinning.'
         );
       }
+      await db.transaction(async (tx) => {
+        await tx
+          .update(projectApps)
+          .set({ isPinned: false, pinnedById: null, pinnedAt: null, updatedAt: new Date() })
+          .where(and(eq(projectApps.projectId, id), eq(projectApps.isPinned, true)));
+        await tx
+          .update(projectApps)
+          .set({ isPinned: true, pinnedById: userId, pinnedAt: new Date(), updatedAt: new Date() })
+          .where(eq(projectApps.projectEnvironmentId, targetEnv.id));
+      });
+    } else {
       await db
         .update(projectApps)
-        .set({
-          isPinned: true,
-          pinnedEnvironmentId,
-          pinnedById: userId,
-          pinnedAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .where(eq(projectApps.projectId, id));
-    } else if (project.hasApp) {
-      await db
-        .update(projectApps)
-        .set({
-          isPinned: false,
-          pinnedById: null,
-          pinnedAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(projectApps.projectId, id));
+        .set({ isPinned: false, pinnedById: null, pinnedAt: null, updatedAt: new Date() })
+        .where(and(eq(projectApps.projectId, id), eq(projectApps.isPinned, true)));
     }
 
     return this.findOne(id, tenantId);
@@ -1143,7 +1171,6 @@ export class ProjectService implements OnApplicationBootstrap {
       ]
     );
     if (updated) {
-      this.appService.invalidate(updated.projectId);
       await this.projectEventsService.publish(updated.projectId).catch(() => undefined);
     }
   }
@@ -1167,7 +1194,6 @@ export class ProjectService implements OnApplicationBootstrap {
       return;
     }
     this.startupRetries.delete(envId);
-    this.appService.invalidate(updated.projectId);
     await Promise.allSettled([
       this.timeoutService.touch(envId).catch(() => undefined),
       this.projectEventsService.publish(updated.projectId).catch(() => undefined),
@@ -1181,7 +1207,6 @@ export class ProjectService implements OnApplicationBootstrap {
       ProjectStatus.Publishing
     );
     if (updated) {
-      this.appService.invalidate(updated.projectId);
       await this.projectEventsService.publish(updated.projectId).catch(() => undefined);
     }
   }
@@ -1392,7 +1417,7 @@ export class ProjectService implements OnApplicationBootstrap {
     this.startupRetries.delete(envId);
 
     if (updated.isDefault) {
-      this.completeDuplicateWhenAppReady(updated.projectId, envId, podIp);
+      this.completeDuplicateWhenAppReady(updated.projectId, envId);
     }
 
     await Promise.allSettled([
@@ -1450,7 +1475,7 @@ export class ProjectService implements OnApplicationBootstrap {
       if (job.status === ProjectDuplicateStatus.Starting) {
         const env = await this.projectEnvironmentService.findByIdOrNull(job.targetProjectId);
         if (env && env.status === ProjectStatus.Active && env.podIp) {
-          this.completeDuplicateWhenAppReady(job.targetProjectId, env.id, env.podIp);
+          this.completeDuplicateWhenAppReady(job.targetProjectId, env.id, true);
         } else {
           this.spawnStartupWorker(job.targetProjectId);
         }
@@ -1552,7 +1577,7 @@ export class ProjectService implements OnApplicationBootstrap {
     }
   }
 
-  private completeDuplicateWhenAppReady(projectId: string, envId: string, podIp: string): void {
+  private completeDuplicateWhenAppReady(projectId: string, envId: string, probeFirst = false): void {
     void (async () => {
       const [job] = await db
         .select({ id: projectDuplicateJobs.id })
@@ -1566,7 +1591,11 @@ export class ProjectService implements OnApplicationBootstrap {
         .limit(1);
       if (!job) return;
 
-      const appReady = await this.waitForAppReady(envId, podIp, DUPLICATE_APP_READY_TIMEOUT_MS);
+      if (probeFirst && (await this.probeAppServing(envId))) {
+        this.appReadiness.markServing(envId);
+      }
+
+      const appReady = await this.appReadiness.awaitReady(envId, DUPLICATE_APP_READY_TIMEOUT_MS);
 
       const settled = await db
         .update(projectDuplicateJobs)
@@ -1595,19 +1624,14 @@ export class ProjectService implements OnApplicationBootstrap {
     });
   }
 
-  private async waitForAppReady(envId: string, podIp: string, timeoutMs: number): Promise<boolean> {
-    const upstream = this.proxyService.resolveAppUpstreamForProject({ id: envId, podIp });
-    const deadline = Date.now() + timeoutMs;
-    while (Date.now() < deadline) {
-      try {
-        const response = await fetch(`${upstream}/`, { signal: AbortSignal.timeout(DUPLICATE_APP_FETCH_TIMEOUT_MS) });
-        if (response.status >= 200 && response.status < 400) return true;
-      } catch (err) {
-        this.logger.debug(`Duplicate app not ready for ${envId}: ${(err as Error).message}`);
-      }
-      await new Promise((resolve) => setTimeout(resolve, DUPLICATE_APP_POLL_INTERVAL_MS));
+  private async probeAppServing(envId: string): Promise<boolean> {
+    try {
+      const upstream = await this.proxyService.resolveAppUpstreamByEnvironmentId(envId);
+      const res = await fetch(`${upstream}/api/app-meta`, { signal: AbortSignal.timeout(APP_SERVING_PROBE_TIMEOUT_MS) });
+      return res.ok;
+    } catch {
+      return false;
     }
-    return false;
   }
 
   private async requestEnvironmentStartup(
@@ -1645,7 +1669,6 @@ export class ProjectService implements OnApplicationBootstrap {
     }
 
     this.spawnStartupWorker(env.id);
-    this.appService.invalidate(env.projectId);
     await this.projectEventsService.publish(env.projectId);
 
     return this.projectEnvironmentService.findById(env.id);
@@ -1762,7 +1785,13 @@ export class ProjectService implements OnApplicationBootstrap {
       controlToken: crypto.randomBytes(32).toString('hex'),
     };
 
-    await this.podService.createAssignedPod(env.id, env.directory, env.projectId, tenantOptions);
+    const { created } = await this.podService.createAssignedPod(
+      env.id,
+      env.directory,
+      env.projectId,
+      tenantOptions
+    );
+    if (created) this.appReadiness.markDown(env.id);
   }
 
   private async handleStartupFailure(envId: string, podName: string, err: unknown): Promise<void> {
@@ -1773,8 +1802,6 @@ export class ProjectService implements OnApplicationBootstrap {
     this.logger.warn(`Startup failed for environment ${envId}: ${message}`);
 
     const env = await this.projectEnvironmentService.findByIdOrNull(envId).catch(() => null);
-    this.appService.invalidate(envId);
-    if (env) this.appService.invalidate(env.projectId);
 
     const projectId = env?.projectId ?? envId;
 
