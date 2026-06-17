@@ -37,7 +37,7 @@ export class AppAgentController {
       const name = typeof dto.name === 'string' ? dto.name : null;
       const description = typeof dto.description === 'string' ? dto.description : null;
       const changed = await this.appService.upsertProjectApp(key, projectId, { name, description });
-      this.appReadiness.markLive(key);
+      this.appReadiness.markServing(key);
       if (changed) {
         await this.projectEventsService.publish(projectId);
       }

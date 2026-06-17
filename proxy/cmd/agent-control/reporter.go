@@ -22,7 +22,6 @@ const (
 	pushTimeout         = 5 * time.Second
 	fastProbeInterval   = 2 * time.Second
 	steadyProbeInterval = 15 * time.Second
-	heartbeatInterval   = 30 * time.Second
 	pushAttempts        = 4
 	pushBackoff         = 1500 * time.Millisecond
 	downStrikeThreshold = 2
@@ -77,7 +76,6 @@ func runReporter() {
 
 	var (
 		last        appState
-		lastPushAt  time.Time
 		serving     bool
 		downStrikes int
 		hasPushed   bool
@@ -108,8 +106,7 @@ func runReporter() {
 		}
 
 		changed := !current.equal(last)
-		heartbeatDue := current.positive() && time.Since(lastPushAt) >= heartbeatInterval
-		if hasPushed && !changed && !heartbeatDue {
+		if hasPushed && !changed {
 			return
 		}
 
@@ -119,7 +116,6 @@ func runReporter() {
 
 		hasPushed = true
 		last = current
-		lastPushAt = time.Now()
 	}
 
 	evaluate()

@@ -24,14 +24,14 @@ AGENT POD (opencode container)              BACKEND
 │  reuses SERVICE_GATEWAY_*   │  gateway/ │  • awaitReady(env)         │
 │  (already in its env)       │  app/state│  → projectApps (identity)  │
 └────────────────────────────┘ at-least  │  → SSE to the workspace    │
-        ▲ same channel agents   once      │ proxy /failure ───────────►│ (app down)
+        ▲ same channel agents   once      │ proxy /failure ───────────►│ (pod recovery)
         └ already use for schedules        └───────────────────────────┘
 
-consumers of AppReadinessService.awaitReady():
-  preview gate (SSE) · publish · duplicate · schedule
+consumers of AppReadinessService.awaitReady(): publish · duplicate · schedule
+the app pane reads identity (projectApps) over SSE — not awaitReady
 ```
 
-`agent-control` pushes one idempotent `{serving, live, name, description}` event whenever that state changes (and re-asserts it on a periodic keep-alive, described below) — `live` meaning `app.meta.json` is present *and* the app answers locally. The backend's `AppReadinessService` is the single owner of per-environment app state: it records identity into `projectApps`, notifies the open workspace over SSE so the app pane appears, and resolves `awaitReady` for whatever publish/duplicate/schedule flow is waiting. The runtime proxy keeps reporting the **down** direction from the real request path, as it already does.
+`agent-control` pushes one idempotent `{serving, live, name, description}` event **only when that state changes** (no periodic re-assert — see [§ Why there is no heartbeat](#why-there-is-no-heartbeat)) — `live` meaning `app.meta.json` is present *and* the app answers locally. The backend's `AppReadinessService` is the single owner of per-environment app state: it records identity into `projectApps`, notifies the open workspace over SSE so the app pane appears, and resolves `awaitReady` for whatever publish/duplicate/schedule flow is waiting. The runtime proxy's real-path `/failure` report is a separate concern — pod **recovery**, not readiness: it inspects k8s pod state and restarts or wakes the pod from real traffic, and never writes `serving`.
 
 ### Why the inotify watch is safe here (cf. ADR-0009)
 
@@ -41,11 +41,13 @@ ADR-0009 rejected an in-pod inotify watch for the *Environment Variables* file b
 
 Reliability rests on the push, not a backstop probe: at-least-once delivery (agent-control retries until acked), identity persisted in `projectApps` so a backend restart never loses detection, and a startup resync in agent-control. There is one deliberately-accepted gap — a pod its kubelet can reach but the cluster cannot. The properties, and why that gap is acceptable, are in [ADR-0015 § Consequences](adr/0015-app-liveness-pushed-not-polled.md#consequences).
 
-## The 30s keep-alive
+## Why there is no heartbeat
 
-`agent-control` re-sends its positive state every 30s, not only on change. This isn't polling and doesn't re-curate App Details — its sole job is to re-assert liveness in the in-memory (ephemeral, per ADR-0015) `AppReadinessService`, so a backend restart — which wipes the map — recovers within one interval. Without it, a stable app emits no push and `awaitReady` would stall after every redeploy.
+The reporter pushes **only on edges** — go-live, serving↑, serving↓ — never on a timer, because **nothing reads `serving` as a standing value.** Its only consumer is `awaitReady` (publish, duplicate, schedule), and each recreates or wakes the pod — calling `markDown` — *before* it waits, so it always wants the next *edge* on a fresh pod, never a remembered level. A `serving` left stale by an ungraceful pod death is therefore never consulted.
 
-The cost is linear and trivial at hundreds of apps; the real limit is **multiple backend replicas** (the map isn't shared), not app count. When that comes, move readiness to Redis with a TTL (already used here) — the keep-alive becomes the TTL refresh and silent pod deaths self-expire. Not a Postgres column: a no-TTL boolean would report a long-dead pod as serving.
+This splits the two facts by where they live: **identity** stays durable in `projectApps`, while **serving** is a thin in-memory edge owned by `AppReadinessService`, fed only by pushes. `markDown` keeps `serving` honest at every pod-lifecycle boundary the backend controls — pod (re)create (`spawnPodForEnvironment`), idle-suspend (`timeout.listener`), and project disable (`disable`); deleting a project or environment evicts the key (`clear`) so the map can't grow without bound.
+
+The trade behind dropping the re-push — why `serving` is never a Postgres column, and the multi-replica path (Redis with a TTL) when one backend replica is no longer enough — is in [ADR-0015 § Amendment](adr/0015-app-liveness-pushed-not-polled.md#amendment-2026-06-17-edges-not-a-heartbeat).
 
 ## Rollout
 
@@ -57,4 +59,4 @@ The cost is linear and trivial at hundreds of apps; the real limit is **multiple
 - Backend owner: `packages/opsiforce/backend/src/project/app-readiness.service.ts` — the ephemeral per-environment state and `awaitReady`
 - Push endpoint: `backend/src/project/app.controller.agent.ts` (`POST gateway/app/state`, `GatewayAuthGuard`)
 - Identity row: `projectApps`, written by `AppService.upsertProjectApp` (`backend/src/project/app.service.ts`)
-- Down signal: `opsiforce-proxy` failure report (`proxy/internal/server/server.go` → `backend/src/internal`)
+- Pod recovery (real-path, not readiness): `opsiforce-proxy` failure report (`proxy/internal/server/server.go` → `backend/src/internal`)

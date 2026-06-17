@@ -913,6 +913,8 @@ export class ProjectService implements OnApplicationBootstrap {
       ...envs.map((env) => this.timeoutService.clear(env.id)),
     ]);
 
+    envs.forEach((env) => this.appReadiness.clear(env.id));
+
     await db.delete(projects).where(eq(projects.id, id));
 
     if (project.tenantId) {
@@ -949,6 +951,8 @@ export class ProjectService implements OnApplicationBootstrap {
         .set({ podIp: null, updatedAt: new Date() })
         .where(eq(projectEnvironments.projectId, id));
     });
+
+    envs.forEach((env) => this.appReadiness.markDown(env.id));
 
     await this.projectEventsService.publish(id);
 
@@ -1016,6 +1020,8 @@ export class ProjectService implements OnApplicationBootstrap {
       }),
       this.timeoutService.clear(env.id),
     ]);
+
+    this.appReadiness.clear(env.id);
 
     await this.projectEnvironmentService.delete({
       id: env.id,
