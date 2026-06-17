@@ -62,7 +62,9 @@ export function PodStatusCell(props: PodStatusCellProps) {
             <AlertTriangle class="size-3" />
             Drift
           </TooltipTrigger>
-          <TooltipContent>Pod is running, but its environment is marked {props.dbStatus} in the database.</TooltipContent>
+          <TooltipContent>
+            Pod is running, but its environment is marked {props.dbStatus} in the database.
+          </TooltipContent>
         </Tooltip>
       </Show>
     </div>

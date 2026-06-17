@@ -56,7 +56,12 @@ export function PodsPage() {
           </Badge>
         </Show>
         <div class="ml-auto">
-          <LiveIndicator now={now} updatedAt={dataUpdatedAt} fetching={pods.isFetching} onRefresh={() => pods.refetch()} />
+          <LiveIndicator
+            now={now}
+            updatedAt={dataUpdatedAt}
+            fetching={pods.isFetching}
+            onRefresh={() => pods.refetch()}
+          />
         </div>
       </div>
 

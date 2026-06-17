@@ -3,10 +3,12 @@ import { splitProps, Show, type ComponentProps, type ParentProps } from 'solid-j
 import { X } from '~/components/icons';
 import { cn } from '~/lib/cn';
 
-type DialogContentProps = ParentProps<ComponentProps<typeof Kobalte.Content> & { hideClose?: boolean }>;
+type DialogContentProps = ParentProps<
+  ComponentProps<typeof Kobalte.Content> & { hideClose?: boolean; align?: 'center' | 'top' }
+>;
 
 export function DialogContent(props: DialogContentProps) {
-  const [local, rest] = splitProps(props, ['class', 'children', 'hideClose']);
+  const [local, rest] = splitProps(props, ['class', 'children', 'hideClose', 'align']);
   return (
     <Kobalte.Portal>
       <Kobalte.Overlay
@@ -15,7 +17,12 @@ export function DialogContent(props: DialogContentProps) {
           'data-[expanded]:animate-in data-[closed]:animate-out data-[closed]:fade-out-0 data-[expanded]:fade-in-0'
         )}
       />
-      <div class="fixed inset-0 z-50 flex items-center justify-center">
+      <div
+        class={cn(
+          'fixed inset-0 z-50 flex justify-center',
+          local.align === 'top' ? 'items-start pt-[8vh]' : 'items-center'
+        )}
+      >
         <Kobalte.Content
           class={cn(
             'relative z-50 w-full max-w-md rounded-lg border border-border bg-popover p-6 shadow-lg',
