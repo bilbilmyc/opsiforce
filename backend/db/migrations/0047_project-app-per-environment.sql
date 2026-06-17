@@ -24,7 +24,7 @@ SELECT
 FROM "project_app" pa
 JOIN "project_environments" pe
 	ON pe."project_id" = pa."project_id"
-	AND (pe."id" = pa."project_id" OR pe."deployed_commit_sha" IS NOT NULL);
+	AND (pe."id" = pa."project_id" OR pe."deployed_commit_sha" IS NOT NULL OR pe."id" = coalesce(pa."pinned_environment_id", pa."project_id"));
 --> statement-breakpoint
 DROP TABLE "project_app";--> statement-breakpoint
 ALTER TABLE "project_app_new" RENAME TO "project_app";--> statement-breakpoint

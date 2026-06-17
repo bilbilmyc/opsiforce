@@ -85,6 +85,7 @@ const UNSCHEDULABLE_STARTUP_GRACE_MS = 180 * 1000;
 const STARTUP_RETRY_BASE_MS = 5 * 1000;
 const STARTUP_RETRY_MAX_MS = 5 * 60 * 1000;
 const DUPLICATE_APP_READY_TIMEOUT_MS = 5 * 60 * 1000;
+const APP_SERVING_PROBE_TIMEOUT_MS = 3 * 1000;
 
 interface AppMetaPatch {
   name?: string;
@@ -1474,7 +1475,7 @@ export class ProjectService implements OnApplicationBootstrap {
       if (job.status === ProjectDuplicateStatus.Starting) {
         const env = await this.projectEnvironmentService.findByIdOrNull(job.targetProjectId);
         if (env && env.status === ProjectStatus.Active && env.podIp) {
-          this.completeDuplicateWhenAppReady(job.targetProjectId, env.id);
+          this.completeDuplicateWhenAppReady(job.targetProjectId, env.id, true);
         } else {
           this.spawnStartupWorker(job.targetProjectId);
         }
@@ -1576,7 +1577,7 @@ export class ProjectService implements OnApplicationBootstrap {
     }
   }
 
-  private completeDuplicateWhenAppReady(projectId: string, envId: string): void {
+  private completeDuplicateWhenAppReady(projectId: string, envId: string, probeFirst = false): void {
     void (async () => {
       const [job] = await db
         .select({ id: projectDuplicateJobs.id })
@@ -1589,6 +1590,10 @@ export class ProjectService implements OnApplicationBootstrap {
         )
         .limit(1);
       if (!job) return;
+
+      if (probeFirst && (await this.probeAppServing(envId))) {
+        this.appReadiness.markServing(envId);
+      }
 
       const appReady = await this.appReadiness.awaitReady(envId, DUPLICATE_APP_READY_TIMEOUT_MS);
 
@@ -1617,6 +1622,16 @@ export class ProjectService implements OnApplicationBootstrap {
     })().catch((err) => {
       this.logger.warn(`Failed to finish duplicate for project ${projectId}: ${(err as Error).message}`);
     });
+  }
+
+  private async probeAppServing(envId: string): Promise<boolean> {
+    try {
+      const upstream = await this.proxyService.resolveAppUpstreamByEnvironmentId(envId);
+      const res = await fetch(`${upstream}/api/app-meta`, { signal: AbortSignal.timeout(APP_SERVING_PROBE_TIMEOUT_MS) });
+      return res.ok;
+    } catch {
+      return false;
+    }
   }
 
   private async requestEnvironmentStartup(
