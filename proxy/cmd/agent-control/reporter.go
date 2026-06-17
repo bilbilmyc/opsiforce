@@ -80,6 +80,7 @@ func runReporter() {
 		lastPushAt  time.Time
 		serving     bool
 		downStrikes int
+		hasPushed   bool
 	)
 
 	ticker := time.NewTicker(fastProbeInterval)
@@ -108,7 +109,7 @@ func runReporter() {
 
 		changed := !current.equal(last)
 		heartbeatDue := current.positive() && time.Since(lastPushAt) >= heartbeatInterval
-		if !changed && !heartbeatDue {
+		if hasPushed && !changed && !heartbeatDue {
 			return
 		}
 
@@ -116,6 +117,7 @@ func runReporter() {
 			return
 		}
 
+		hasPushed = true
 		last = current
 		lastPushAt = time.Now()
 	}

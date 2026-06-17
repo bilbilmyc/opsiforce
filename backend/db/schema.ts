@@ -228,23 +228,26 @@ export const projectPodSettings = pgTable("project_pod_settings", {
 export const projectApps = pgTable(
   "project_app",
   {
-    projectId: text("project_id")
+    projectEnvironmentId: text("project_environment_id")
       .primaryKey()
-      .references(() => projects.id, { onDelete: "cascade" }),
+      .references(() => projectEnvironments.id, { onDelete: "cascade" }),
+    projectId: text("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
     name: text("name"),
     description: text("description"),
-    iconUrl: text("icon_url"),
     isPinned: boolean("is_pinned").notNull().default(false),
-    pinnedEnvironmentId: text("pinned_environment_id").references(() => projectEnvironments.id, {
-      onDelete: "set null",
-    }),
     pinnedById: text("pinned_by_id").references(() => users.id, { onDelete: "set null" }),
     pinnedAt: timestamp("pinned_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
+    index("idx_project_app_project").on(table.projectId),
     index("idx_project_app_pinned").on(table.isPinned, table.pinnedAt),
+    uniqueIndex("uq_project_app_one_pin_per_project")
+      .on(table.projectId)
+      .where(sql`${table.isPinned}`),
   ],
 )
 

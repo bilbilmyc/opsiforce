@@ -12,7 +12,7 @@ import { DownloadService } from './download.service';
 import { ProjectDuplicateProcessor } from './project-duplicate.processor';
 import { ProjectEventsModule } from './project-events.module';
 import { AppService } from './app.service';
-import { AppReadinessService } from './app-readiness.service';
+import { AppReadinessModule } from './app-readiness.module';
 import { PROJECT_DUPLICATE_QUEUE } from './project-duplicate.types';
 import { PodModule } from '../pod/pod.module';
 import { TimeoutModule } from '../timeout/timeout.module';
@@ -42,17 +42,10 @@ import { ProjectEnvironmentModule } from '../project-environment/project-environ
     EnvironmentModule,
     ProjectEnvironmentModule,
     GitModule,
+    AppReadinessModule,
   ],
   controllers: [ProjectController, AppAgentController, PodClassController, DownloadController],
-  providers: [
-    ProjectService,
-    ProjectAuthService,
-    DownloadService,
-    ProjectDuplicateProcessor,
-    ProxyService,
-    AppService,
-    AppReadinessService,
-  ],
-  exports: [ProjectService, ProjectAuthService, AppReadinessService],
+  providers: [ProjectService, ProjectAuthService, DownloadService, ProjectDuplicateProcessor, ProxyService, AppService],
+  exports: [ProjectService, ProjectAuthService, AppReadinessModule],
 })
 export class ProjectModule {}

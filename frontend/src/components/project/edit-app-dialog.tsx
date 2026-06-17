@@ -28,6 +28,7 @@ function validateAppDescription(value: string): string | null {
 
 export interface EditAppDialogProps {
   projectId: string;
+  environmentId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   initialName: string | null;
@@ -73,7 +74,7 @@ export default function EditAppDialog(props: EditAppDialogProps) {
     }
 
     try {
-      await updateApp.mutateAsync({ projectId: props.projectId, payload });
+      await updateApp.mutateAsync({ projectId: props.projectId, environmentId: props.environmentId, payload });
       toast.success('App details updated');
       close();
     } catch (err) {

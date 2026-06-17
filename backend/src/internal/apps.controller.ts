@@ -1,6 +1,6 @@
 import { BadRequestException, Controller, Get, Headers, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db } from '../../db';
 import { environments, projectApps, projectEnvironments, projects } from '../../db/schema';
 import { appPublicUrl } from '../common/app-host';
@@ -48,10 +48,7 @@ export class InternalAppsController {
       })
       .from(projectApps)
       .innerJoin(projects, eq(projects.id, projectApps.projectId))
-      .innerJoin(
-        projectEnvironments,
-        eq(projectEnvironments.id, sql`coalesce(${projectApps.pinnedEnvironmentId}, ${projects.id})`)
-      )
+      .innerJoin(projectEnvironments, eq(projectEnvironments.id, projectApps.projectEnvironmentId))
       .leftJoin(environments, eq(environments.id, projectEnvironments.environmentId))
       .where(
         and(

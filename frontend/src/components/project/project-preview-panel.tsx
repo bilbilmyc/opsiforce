@@ -6,7 +6,7 @@ import { createResizablePanel } from '~/lib/create-resizable-panel';
 import { appPublicUrl } from '~/lib/app-url';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
-import { useProjects } from '~/api/projects';
+import { useProjectEnvironments } from '~/api/environments';
 import PinBadge from './pin-badge';
 import EditAppDialog from './edit-app-dialog';
 
@@ -28,10 +28,10 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
   const canPinApps = () => hasPermission(Permission.pinApps);
   const canEditAppDetails = () => hasPermission(Permission.editAppDetails);
   const projectsEnabled = () => canPinApps() || canEditAppDetails();
-  const projects = useProjects({ enabled: projectsEnabled });
-  const project = () => projects.data?.find((p) => p.id === props.projectId);
-  const isPinnedHere = () => project()?.pinnedEnvironmentId === props.environmentId;
-  const hasApp = () => project()?.hasApp === true;
+  const environments = useProjectEnvironments(() => props.projectId, { enabled: projectsEnabled });
+  const activeEnv = () => environments.data?.find((e) => e.id === props.environmentId);
+  const isPinnedHere = () => activeEnv()?.isPinned === true;
+  const hasApp = () => activeEnv()?.hasApp === true;
   const showEditAction = () => canEditAppDetails() && hasApp();
 
   const panel = createResizablePanel({
@@ -92,7 +92,9 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             <ToolbarButton onClick={() => setOpen(false)} tooltip="Close app">
               <PanelRightClose class="w-3.5 h-3.5" />
             </ToolbarButton>
-            <span class="text-xs font-medium text-muted-foreground truncate">{props.appName || 'App'}</span>
+            <span class="text-xs font-medium text-muted-foreground truncate">
+              {activeEnv()?.appName || props.appName || 'App'}
+            </span>
             <Show when={canPinApps()}>
               <PinBadge isPinned={isPinnedHere()} compact />
             </Show>
@@ -126,10 +128,11 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
         </div>
         <EditAppDialog
           projectId={props.projectId}
+          environmentId={props.environmentId}
           open={editAppOpen()}
           onOpenChange={setEditAppOpen}
-          initialName={project()?.appName ?? props.appName ?? null}
-          initialDescription={project()?.appDescription ?? null}
+          initialName={activeEnv()?.appName ?? props.appName ?? null}
+          initialDescription={activeEnv()?.appDescription ?? null}
         />
       </div>
     </Show>

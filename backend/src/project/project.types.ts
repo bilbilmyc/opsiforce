@@ -122,6 +122,9 @@ export interface ProjectEnvironmentSummary {
   deployedCommitSha: string | null;
   lastActiveAt: Date | null;
   isPinned: boolean;
+  hasApp: boolean;
+  appName: string | null;
+  appDescription: string | null;
   sessionId: string | null;
 }
 
@@ -176,4 +179,5 @@ export interface SetEnvironmentSessionDto {
 export interface UpdateAppDto {
   name?: string;
   description?: string | null;
+  environmentId?: string;
 }

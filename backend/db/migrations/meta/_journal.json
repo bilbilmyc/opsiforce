@@ -330,6 +330,13 @@
       "when": 1781508789090,
       "tag": "0046_add-duplicate-git-statuses",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1781625309937,
+      "tag": "0047_project-app-per-environment",
+      "breakpoints": true
     }
   ]
 }

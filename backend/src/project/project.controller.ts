@@ -348,7 +348,7 @@ export class ProjectController {
     @CurrentUser() user: UserContext
   ) {
     await this.gate(id, tenant, user);
-    return this.projectService.updateApp(id, tenant.tenantId, dto ?? {});
+    return this.projectService.updateApp(id, tenant.tenantId, dto?.environmentId, dto ?? {});
   }
 
   /** 404 if the caller can't see this project (avoids existence leak). */

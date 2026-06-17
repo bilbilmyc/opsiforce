@@ -31,7 +31,7 @@ consumers of AppReadinessService.awaitReady():
   preview gate (SSE) · publish · duplicate · schedule
 ```
 
-`agent-control` pushes one idempotent `{serving, live, name, description}` event whenever that state changes — `live` meaning `app.meta.json` is present *and* the app answers locally. The backend's `AppReadinessService` is the single owner of per-environment app state: it records identity into `projectApps`, notifies the open workspace over SSE so the app pane appears, and resolves `awaitReady` for whatever publish/duplicate/schedule flow is waiting. The runtime proxy keeps reporting the **down** direction from the real request path, as it already does.
+`agent-control` pushes one idempotent `{serving, live, name, description}` event whenever that state changes (and re-asserts it on a periodic keep-alive, described below) — `live` meaning `app.meta.json` is present *and* the app answers locally. The backend's `AppReadinessService` is the single owner of per-environment app state: it records identity into `projectApps`, notifies the open workspace over SSE so the app pane appears, and resolves `awaitReady` for whatever publish/duplicate/schedule flow is waiting. The runtime proxy keeps reporting the **down** direction from the real request path, as it already does.
 
 ### Why the inotify watch is safe here (cf. ADR-0009)
 
@@ -40,6 +40,12 @@ ADR-0009 rejected an in-pod inotify watch for the *Environment Variables* file b
 ## Reliability
 
 Reliability rests on the push, not a backstop probe: at-least-once delivery (agent-control retries until acked), identity persisted in `projectApps` so a backend restart never loses detection, and a startup resync in agent-control. There is one deliberately-accepted gap — a pod its kubelet can reach but the cluster cannot. The properties, and why that gap is acceptable, are in [ADR-0015 § Consequences](adr/0015-app-liveness-pushed-not-polled.md#consequences).
+
+## The 30s keep-alive
+
+`agent-control` re-sends its positive state every 30s, not only on change. This isn't polling and doesn't re-curate App Details — its sole job is to re-assert liveness in the in-memory (ephemeral, per ADR-0015) `AppReadinessService`, so a backend restart — which wipes the map — recovers within one interval. Without it, a stable app emits no push and `awaitReady` would stall after every redeploy.
+
+The cost is linear and trivial at hundreds of apps; the real limit is **multiple backend replicas** (the map isn't shared), not app count. When that comes, move readiness to Redis with a TTL (already used here) — the keep-alive becomes the TTL refresh and silent pod deaths self-expire. Not a Postgres column: a no-TTL boolean would report a long-dead pod as serving.
 
 ## Rollout
 
