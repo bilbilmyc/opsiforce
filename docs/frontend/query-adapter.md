@@ -10,7 +10,7 @@ TanStack's Solid adapter backs every query's `data` field with a Solid **resourc
 
 The two combine into a sharp edge: any refetch under a route — opening a dialog whose queries switch on, a window-focus refetch, an invalidation triggered by our project status stream — briefly re-suspends the route's boundary. Solid responds by **detaching and re-attaching the entire route subtree's DOM**. For most UI that's invisible, but our project page hosts two stateful things that don't survive a detach: the **preview `<iframe>`** (re-attaching forces a full document reload) and the **embedded chat** (re-attaching resets its scroll position to the top). The visible symptoms were panels "re-rendering" when opening Manage/Settings and the chat jumping to the top after switching browser tabs.
 
-This is a known upstream limitation (TanStack Query issues [#5010](https://github.com/TanStack/query/issues/5010), [#9883](https://github.com/TanStack/query/issues/9883), [#9955](https://github.com/TanStack/query/issues/9955)). It is fixed in `@tanstack/solid-query` v6 — but v6 requires Solid 2.0, which the app (and the vendored OpenCode UI) can't adopt yet.
+This is a known upstream limitation (TanStack Query issues [#5010](https://github.com/TanStack/query/issues/5010), [#9883](https://github.com/TanStack/query/issues/9883), [#9955](https://github.com/TanStack/query/issues/9955), with a partial fix in [PR #10053](https://github.com/TanStack/query/pull/10053)). It is fully resolved in `@tanstack/solid-query` v6 (`data` reads plain state, no resource coupling — exactly this approach) — but v6 requires Solid 2.0 (`solid-js >=2.0.0-beta.0`), which the app (and the vendored OpenCode UI + Kobalte) can't adopt yet.
 
 ## What the adapter does
 
