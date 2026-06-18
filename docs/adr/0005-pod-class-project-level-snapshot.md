@@ -16,6 +16,6 @@ We chose this to mirror ADR-0001's split: owner-set *policy* (budget, timeouts, 
 
 - A published **Production** pod runs at the **same class as Development**; sizing prod above dev is impossible until per-env overrides ship.
 - Re-tuning a preset (what "medium" means) is a code change **plus** an explicit backfill (`UPDATE … WHERE pod_class = 'medium'`); it never reaches existing projects automatically.
-- The warm pool stays homogeneous (always `small`): a new or pool-claimed project's **first** pod is `small`, and a chosen class materializes only on the next pod rebuild — resources are immutable on a running pod, so applying a class is always a pod recreate, never an in-place resize.
+- The pending pool stays homogeneous (always `small`): a new or pool-claimed project's **first** pod is `small`, and a chosen class materializes only on the next pod rebuild — resources are immutable on a running pod, so applying a class is always a pod recreate, never an in-place resize.
 - Changing class is non-destructive (it writes the row) and applies on next idle-resume or via an explicit "Restart to apply" on the current env; publishing brings a prod pod up at the project's current class by construction.
 - `agentResources` (the single Helm value) is removed, superseded by the hardcoded `small`; assigned pods read the row, pool/unassigned pods use hardcoded `small`.

@@ -1,6 +1,6 @@
 # App Details are per-environment; each ProjectEnvironment is its own App
 
-Status: accepted — implementation pending
+Status: accepted — implemented (migration `0047_project-app-per-environment.sql`; `project_app` is keyed by `project_environment_id`)
 
 App Details (name and description) were stored once per Project in `projectApps`, keyed by `projectId`, while the source of those details — `app.meta.json` — has always been **per-environment** (each ProjectEnvironment carries its own copy). That mismatch is the cross-environment clobber: every environment's 30s `live` heartbeat wrote the one shared row, so a published environment running an older snapshot kept overwriting Development's curated name (PR-1682, review comment #3). **We resolve it by moving `projectApps` to be keyed per ProjectEnvironment** — each environment is now its own App with its own App Details — so the DB matches the file reality and each environment writes only its own row. The Project becomes a shell that groups several Apps; a **Pin** still designates at most one of them to represent the Project in Makara.
 
