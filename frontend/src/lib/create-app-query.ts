@@ -2,7 +2,8 @@
  * createAppQuery — store-backed replacement for @tanstack/solid-query's `createQuery`
  * that avoids the Suspense-driven route-DOM detaches (preview iframe reload, chat scroll
  * reset). The rationale, reconcile semantics, upstream issues, and the conditions for
- * removing it (Solid 2.0 + solid-query v6) are in docs/frontend/query-adapter.md.
+ * removing it (Solid 2.0 + solid-query v6) are in
+ * packages/opsiforce/docs/frontend/query-adapter.md.
  */
 import { createComputed, createMemo, on, onCleanup } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
