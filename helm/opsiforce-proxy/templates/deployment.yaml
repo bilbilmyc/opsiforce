@@ -83,6 +83,7 @@ spec:
                 - --client-id={{ .Values.oauth2Proxy.clientId }}
                 - --cookie-secret={{ .Values.oauth2Proxy.cookieSecret }}
                 - --cookie-domain={{ .Values.oauth2Proxy.cookieDomain }}
+                - --cookie-name={{ .Values.oauth2Proxy.cookieName }}
                 - --session-store-type=redis
                 - --redis-connection-url={{ .Values.oauth2Proxy.redisPath }}
                 - --skip-provider-button=true

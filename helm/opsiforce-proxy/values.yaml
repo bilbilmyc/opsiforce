@@ -17,6 +17,7 @@ oauth2Proxy:
   clientId:
   cookieSecret:
   cookieDomain:
+  cookieName:
   clientSecret:
   issuerUrl:
   logoutUrl:

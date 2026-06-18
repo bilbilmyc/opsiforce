@@ -43,6 +43,7 @@ oauth2Proxy:
   clientSecret: opsiforce
   cookieSecret: localsecretlocal
   cookieDomain: .opsiforce.localtest.me
+  cookieName: _opsiforce_local
   redirectUrl: https://opsiforce.localtest.me/oauth2/callback
   issuerUrl: http://sima-keycloak-local-service:8086/realms/sima
   logoutUrl: "http://sima-keycloak-local-service:8086/realms/sima/protocol/openid-connect/logout?id_token_hint={id_token}"
