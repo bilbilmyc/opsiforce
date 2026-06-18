@@ -45,7 +45,7 @@ packages/opsiforce/
 
 ## See also
 
-The full, current documentation index lives in [`../CLAUDE.md`](../CLAUDE.md). The essentials:
+The full, current documentation index is in [README.md](README.md). The essentials:
 
 - [Commands](development/commands.md) and [`../README.md`](../README.md) — dev setup and day-to-day commands.
 - [Request Flows](runtime/request-flows.md) + [Pod Lifecycle](runtime/pod-lifecycle.md) — how a request reaches a pod and how pods are managed.
