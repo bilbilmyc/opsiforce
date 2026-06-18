@@ -1,44 +1,9 @@
 /**
- * createAppQuery — store-backed replacement for @tanstack/solid-query's `createQuery`.
- *
- * WHY THIS EXISTS
- * solid-query backs `query.data` with a Solid resource. Reading `data` subscribes the
- * read to the nearest <Suspense> boundary, and the adapter re-arms that resource on
- * every background refetch. TanStack Router's Solid port wraps every route match in its
- * own Suspense boundary, unconditionally (solid-router Match.tsx). So any refetch under a
- * route — a dialog switching its queries on, a window-focus refetch, an invalidation from
- * the project status SSE stream — re-suspends the boundary and makes Solid detach and
- * re-attach the entire route subtree. Re-attaching reloads our preview <iframe> (a fresh
- * document) and resets the embedded chat's scroll to the top. Those were the user-visible
- * symptoms: chat/preview "re-rendering" when opening Manage/Settings, and chat jumping to
- * the top after switching browser tabs.
- *
- * THE FIX
- * Build on @tanstack/query-core's QueryObserver (the engine the official adapters wrap)
- * and hold results in a Solid store instead of a resource. No resource means no Suspense
- * coupling: a refetch updates store fields in place and the route DOM is never detached.
- *
- * Results are reconciled into the store (solid-js/store `reconcile`) by default, keyed by
- * "id", so object fields and list item/array identities stay stable across refetches —
- * `<For>` rows keep their DOM nodes and local state instead of being recreated (an
- * unstable list identity is what made the sidebar rows remount and refetch in a loop).
- * Primitives and arrays of primitives (e.g. `string[]` permissions) can't be keyed, so
- * they're replaced wholesale. Pass `reconcile: "<field>"` to key a list by something other
- * than "id", or `reconcile: false` to opt out and replace the value on every settle.
- *
- * UPSTREAM — this is a known solid-query limitation, not our bug:
- *   - https://github.com/TanStack/query/issues/5010  refetch inside <Suspense> detaches DOM / resets focus
- *   - https://github.com/TanStack/query/issues/9883  refetchOnMount:false → unexpected suspense on mutation
- *   - https://github.com/TanStack/query/issues/9955  suspense triggered on data access after isSuccess
- *   - https://github.com/TanStack/query/pull/10053   partial upstream fix
- * Properly resolved in @tanstack/solid-query v6 (`data` reads plain state, no resource
- * coupling — exactly this approach), but v6 requires Solid 2.0
- * (peerDependencies: solid-js >=2.0.0-beta.0), which we can't adopt yet on Solid 1.9
- * alongside the vendored OpenCode UI + Kobalte.
- *
- * TODO: once the app is on Solid 2.0 + @tanstack/solid-query v6, delete this file and
- * revert the call sites to stock `createQuery` — behaviour is equivalent. See
- * docs/query-adapter.md for the full write-up.
+ * createAppQuery — store-backed replacement for @tanstack/solid-query's `createQuery`
+ * that avoids the Suspense-driven route-DOM detaches (preview iframe reload, chat scroll
+ * reset). The rationale, reconcile semantics, upstream issues, and the conditions for
+ * removing it (Solid 2.0 + solid-query v6) are in
+ * packages/opsiforce/docs/frontend/query-adapter.md.
  */
 import { createComputed, createMemo, on, onCleanup } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
