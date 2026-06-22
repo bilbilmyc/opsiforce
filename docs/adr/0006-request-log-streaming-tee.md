@@ -15,7 +15,7 @@ We chose this because the original design buffered whole bodies in memory *solel
 ## Consequences
 
 - Even at Full, the per-project log holds at most a bounded prefix of each body; full payloads can never be reconstructed from the log.
-- Worst-case proxy memory for queued log entries is `queueDepth × (request prefix + response prefix)` — bounded by the body-limit **ceiling (256 KB)**, the single lever that caps the shared proxy's exposure.
+- Worst-case proxy memory for queued log entries is `queueDepth × (request prefix + response prefix)` — bounded by the body-limit **ceiling (3 MB; default 256 KB)**, the single lever that caps the shared proxy's exposure. Raising the ceiling raises that exposure proportionally (`queueDepth` is the other factor), so it trades shared-proxy memory headroom for log completeness.
 - Two `io.ReadAll` paths remain for **non-logging** reasons (error responses, for pod-error detection; HTML, for upstream-path rewriting) and are bounded by response type.
 - A nil/absent logging policy from the control plane falls back to Full, so an older backend or a non-app surface behaves exactly as before.
 - Sensitive headers (credentials and session material, including `x-proxy-control-token`) are redacted before any header set is written to the log; end-user identity headers are left visible as debugging signal.

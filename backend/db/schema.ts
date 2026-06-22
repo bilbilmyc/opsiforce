@@ -212,7 +212,7 @@ export const projectSettings = pgTable("project_settings", {
   appTimeoutIdle: bigint("app_timeout_idle", { mode: "number" }).notNull(),
   timezone: text("timezone").notNull().default("UTC"),
   requestLogMode: requestLogModeEnum("request_log_mode").notNull().default("full"),
-  requestLogBodyLimit: integer("request_log_body_limit").notNull().default(10240),
+  requestLogBodyLimit: integer("request_log_body_limit").notNull().default(256 * 1024),
 })
 
 export const projectPodSettings = pgTable("project_pod_settings", {
