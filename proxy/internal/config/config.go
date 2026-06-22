@@ -28,7 +28,6 @@ type Config struct {
 	ControlPlaneTimeout  time.Duration
 	CompressionMinBytes  int
 	RequestBufferLimit   int64
-	ResponseBufferLimit  int64
 	RequestLogBodyLimit  int
 	RequestLogQueueDepth int
 }
@@ -50,8 +49,7 @@ func Load(modeArg string, portArg int) (Config, error) {
 		ControlPlaneTimeout:  durationEnv("OPSIFORCE_PROXY_CONTROL_TIMEOUT", 10*time.Second),
 		CompressionMinBytes:  intEnv("OPSIFORCE_PROXY_COMPRESSION_MIN_BYTES", 1024),
 		RequestBufferLimit:   int64(intEnv("OPSIFORCE_PROXY_REQUEST_BUFFER_LIMIT_BYTES", 1*1024*1024)),
-		ResponseBufferLimit:  int64(intEnv("OPSIFORCE_PROXY_RESPONSE_BUFFER_LIMIT_BYTES", 1*1024*1024)),
-		RequestLogBodyLimit:  intEnv("OPSIFORCE_PROXY_REQUEST_LOG_BODY_LIMIT_BYTES", 10*1024),
+		RequestLogBodyLimit:  intEnv("OPSIFORCE_PROXY_REQUEST_LOG_BODY_LIMIT_BYTES", 256*1024),
 		RequestLogQueueDepth: intEnv("OPSIFORCE_PROXY_REQUEST_LOG_QUEUE_DEPTH", 2048),
 	}, nil
 }

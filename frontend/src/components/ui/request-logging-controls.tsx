@@ -72,18 +72,18 @@ export function RequestLoggingControls(props: {
           <span class="text-xs font-medium text-foreground block">Body Capture Limit (KB)</span>
           <p class="text-xs text-muted-foreground/70">
             Maximum size of each request and response body kept in the log. Larger bodies are truncated at capture time,
-            so they never buffer in the proxy. Max 256 KB.
+            so they never buffer in the proxy. Max 3 MB.
           </p>
           <NumberField
             class="w-32"
             minValue={0}
-            maxValue={256}
+            maxValue={3072}
             step={1}
             value={props.bodyLimitKb}
             onChange={(v) => props.onBodyLimitKbChange(v)}
           >
             <NumberFieldGroup>
-              <NumberFieldInput placeholder="10" />
+              <NumberFieldInput placeholder="256" />
               <NumberFieldIncrementTrigger />
               <NumberFieldDecrementTrigger />
             </NumberFieldGroup>

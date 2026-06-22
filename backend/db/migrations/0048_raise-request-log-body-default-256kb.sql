@@ -1,0 +1,1 @@
+ALTER TABLE "project_settings" ALTER COLUMN "request_log_body_limit" SET DEFAULT 262144;

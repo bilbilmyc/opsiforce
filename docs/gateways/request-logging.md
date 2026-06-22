@@ -6,7 +6,7 @@ Every project's app traffic flows through the shared **app-mode runtime proxy**,
 
 - **Off** — nothing logged; the proxy streams every request/response without buffering. Lowest overhead.
 - **Metadata** — method, path, status, latency, size, redacted headers. No bodies, so no body buffering.
-- **Full** — metadata plus request/response bodies, each truncated to a per-project byte limit (capped at a 256 KB ceiling). **Full is the default**, so existing projects are unchanged.
+- **Full** — metadata plus request/response bodies, each truncated to a per-project byte limit (default 256 KB, capped at a 3 MB ceiling). **Full is the default**, so existing projects are unchanged.
 
 ## Why it exists, and why it's safe at Full
 

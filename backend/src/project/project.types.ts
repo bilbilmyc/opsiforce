@@ -21,8 +21,7 @@ export const RequestLogMode = {
 
 export type RequestLogMode = (typeof RequestLogMode)[keyof typeof RequestLogMode];
 
-export const REQUEST_LOG_BODY_LIMIT_DEFAULT = 10240;
-export const REQUEST_LOG_BODY_LIMIT_MAX = 256 * 1024;
+export const REQUEST_LOG_BODY_LIMIT_MAX = 3 * 1024 * 1024;
 
 export interface CreateProjectDto {
   title?: string;
@@ -60,12 +59,6 @@ export interface UpdateProjectPodClassDto {
   memoryLimitMib?: number;
 }
 
-/**
- * A Project merged with its Development ProjectEnvironment (whose id == the
- * project id). Runtime fields (status, podIp, directory, sessionId,
- * platformVersion, authMode, lastActiveAt) come from that environment; identity
- * and policy come from the project shell.
- */
 export interface ProjectResponse {
   id: string;
   tenantId: string | null;
