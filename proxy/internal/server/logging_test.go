@@ -7,8 +7,8 @@ import (
 	"testing"
 	"testing/iotest"
 
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/backend"
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/config"
+	"opsiforce/proxy/internal/backend"
+	"opsiforce/proxy/internal/config"
 )
 
 func TestCapturingReaderPassesThroughAndTruncates(t *testing.T) {

@@ -10,7 +10,7 @@ A duplicate is a faithful copy of the source's **Development** environment, but 
 
 - **Carried** — app source + git history, the agent's chat/session state, the app's databases, environment variables, the dev auth mode, project settings (timeouts, request logging), [Resources](../runtime/resources.md), and App Details (name, description, icon).
 - **Made fresh** — its own LLM keys and service-gateway key. A duplicate never shares credentials or budget plumbing with its source.
-- **Deliberately not carried** — the Makara Pin (a duplicate must not contend for the one catalog slot), and history belonging to the original (publish jobs, audit logs).
+- **Deliberately not carried** — the catalog Pin (a duplicate must not contend for the one catalog slot), and history belonging to the original (publish jobs, audit logs).
 - **Carried but paused** — Schedules. They come across switched off, so a duplicate never silently fires the same automation as its original; the user reviews and enables them.
 
 Only the Development environment is duplicated; published environments are re-created by publishing from the duplicate.

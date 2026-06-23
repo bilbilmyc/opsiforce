@@ -1,6 +1,6 @@
 import { toast } from 'solid-sonner';
 import { useSetAppPin } from '~/api/projects';
-import { useTenantSettings } from '~/api/tenant-settings';
+import { config } from '~/config/config';
 import ConfirmDialog from '~/components/ui/confirm-dialog';
 
 export type PinDialogAction = 'pin' | 'unpin' | null;
@@ -14,14 +14,8 @@ export interface PinAppDialogsProps {
 
 export default function PinAppDialogs(props: PinAppDialogsProps) {
   const setAppPin = useSetAppPin();
-  const tenantSettings = useTenantSettings();
 
   const close = () => props.onActionChange(null);
-
-  const makaraTenantLabel = () => {
-    const name = tenantSettings.data?.makaraTenantName;
-    return name ? `the ${name} organization` : 'your mapped organization';
-  };
 
   return (
     <>
@@ -30,14 +24,14 @@ export default function PinAppDialogs(props: PinAppDialogsProps) {
         onOpenChange={(open) => {
           if (!open) close();
         }}
-        title="Pin to Makara"
-        description={`This will make this app visible to all users in ${makaraTenantLabel()} who have the Apps permission in Makara. Continue?`}
+        title={`Pin to ${config.catalogLabel}`}
+        description={`This will make this app visible in your organization's catalog. Continue?`}
         confirmLabel="Pin"
         onConfirm={() =>
           setAppPin.mutate(
             { projectId: props.projectId, isPinned: true, environmentId: props.environmentId },
             {
-              onSuccess: () => toast.success('App pinned to Makara'),
+              onSuccess: () => toast.success(`App pinned to ${config.catalogLabel}`),
               onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to pin'),
             }
           )
@@ -48,15 +42,15 @@ export default function PinAppDialogs(props: PinAppDialogsProps) {
         onOpenChange={(open) => {
           if (!open) close();
         }}
-        title="Unpin from Makara"
-        description={`This will remove the app from Makara's side panel for everyone in ${makaraTenantLabel()}. Continue?`}
+        title={`Unpin from ${config.catalogLabel}`}
+        description={`This will remove the app from your organization's catalog. Continue?`}
         confirmLabel="Unpin"
         variant="destructive"
         onConfirm={() =>
           setAppPin.mutate(
             { projectId: props.projectId, isPinned: false },
             {
-              onSuccess: () => toast.success('App unpinned from Makara'),
+              onSuccess: () => toast.success(`App unpinned from ${config.catalogLabel}`),
               onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to unpin'),
             }
           )

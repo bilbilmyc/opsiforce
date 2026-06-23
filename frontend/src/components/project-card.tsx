@@ -2,6 +2,7 @@ import { Show, createSignal } from 'solid-js';
 import type { Project } from '~/api/client';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
+import { config } from '~/config/config';
 import { cn } from '~/lib/cn';
 import { projectDisplayTitle } from '~/lib/project-display';
 import PinBadge from './project/pin-badge';
@@ -17,7 +18,7 @@ export default function ProjectCard(props: {
   onDuplicated?: (project: Project) => void;
 }) {
   const { hasPermission } = usePermissions();
-  const canPinApps = () => hasPermission(Permission.pinApps);
+  const canPinApps = () => hasPermission(Permission.pinApps) && config.catalogEnabled;
   const isDisabled = () => props.project.status === 'disabled';
 
   const [editing, setEditing] = createSignal(false);

@@ -164,7 +164,7 @@ export interface ProjectOperation {
   updatedAt: string;
 }
 
-export type ProjectAuthMode = 'public' | 'manual' | 'makara';
+export type ProjectAuthMode = 'public' | 'manual' | 'managed';
 
 export interface ProjectAuthOidcConfig {
   clientId?: string;

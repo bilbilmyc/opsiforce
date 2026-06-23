@@ -12,6 +12,7 @@ import {
   Trash2,
 } from '~/components/icons';
 import { cn } from '~/lib/cn';
+import { config } from '~/config/config';
 import { appPublicUrl } from '~/lib/app-url';
 import {
   DropdownMenu,
@@ -124,13 +125,13 @@ export default function EnvManageRow(props: EnvManageRowProps) {
             <Show when={props.canPin && env().hasApp && env().isPinned}>
               <DropdownMenuItem onSelect={() => props.onUnpin()}>
                 <PinOff class="h-3.5 w-3.5 text-muted-foreground" />
-                Unpin from Makara
+                Unpin from {config.catalogLabel}
               </DropdownMenuItem>
             </Show>
             <Show when={props.canPin && env().hasApp && !env().isPinned}>
               <DropdownMenuItem disabled={!isPublic()} onSelect={() => props.onPin()}>
                 <Pin class="h-3.5 w-3.5 text-muted-foreground" />
-                {isPublic() ? 'Pin to Makara' : 'Pin to Makara (set auth public first)'}
+                {isPublic() ? `Pin to ${config.catalogLabel}` : `Pin to ${config.catalogLabel} (set auth public first)`}
               </DropdownMenuItem>
             </Show>
             <Show when={props.canSchedules}>

@@ -11,10 +11,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/backend"
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/config"
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/requestlog"
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/server"
+	"opsiforce/proxy/internal/backend"
+	"opsiforce/proxy/internal/config"
+	"opsiforce/proxy/internal/requestlog"
+	"opsiforce/proxy/internal/server"
 )
 
 func main() {

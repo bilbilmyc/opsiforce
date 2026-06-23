@@ -34,7 +34,7 @@ export class InternalAppsController {
       throw new BadRequestException('X-Tenant-Name header is required');
     }
 
-    const tenant = await this.tenantService.getTenantByMakaraName(tenantName);
+    const tenant = await this.tenantService.getTenantByExternalName(tenantName);
     if (!tenant) throw new NotFoundException(`Tenant ${tenantName} not found`);
 
     const rows = await db

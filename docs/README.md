@@ -19,7 +19,7 @@
 **Projects & apps** (`projects/`)
 - [Project Environments](projects/environments.md) — the Project/Environment/publish model ([ADRs](adr/README.md))
 - [Project Duplication](projects/duplication.md) — copy a project with working state ([ADR-0011](adr/0011-duplication-reuses-git-publish-path.md))
-- [Project Apps](projects/project-apps.md) — per-environment app identity, the Makara pin, editing ([ADR-0016](adr/0016-app-details-are-per-environment.md))
+- [Project Apps](projects/project-apps.md) — per-environment app identity, the catalog pin, editing ([ADR-0016](adr/0016-app-details-are-per-environment.md))
 - [App Readiness](projects/app-readiness.md) — go-live/serving pushed from the pod, not polled ([ADR-0015](adr/0015-app-liveness-pushed-not-polled.md))
 - [Schedules](projects/schedules.md) — per-environment agent-requested cron, wake-on-fire
 - [File Downloads](projects/file-downloads.md) — downloading workspace files from chat
@@ -39,7 +39,7 @@
 - [Permissions](organization/permissions.md) — Keycloak RBAC, why frontend gating ≠ enforcement, adding a permission
 - [Workspaces](organization/workspaces.md) — grouping projects, the membership-vs-permission visibility model
 - [Defaults](organization/defaults.md) — two-tier timeout/budget defaults (and what they exclude)
-- [Integrations](organization/integrations.md) — the Opsiforce↔Makara tenant-name mapping (`tenant_settings`)
+- [Integrations](organization/integrations.md) — the managed-auth external tenant-name mapping (`tenant_settings`)
 
 **Frontend** (`frontend/`)
 - [Query Adapter](frontend/query-adapter.md) — why reads use the in-house `createAppQuery` wrapper

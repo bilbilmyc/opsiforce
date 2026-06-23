@@ -81,9 +81,10 @@ export class ProjectAuthService {
   private readonly webappServiceName: string;
   private readonly webappServicePort: number;
   private readonly pluginSecret: string;
-  private readonly makaraClientId: string;
-  private readonly makaraClientSecret: string;
-  private readonly makaraIssuerUrl: string;
+  private readonly managedClientId: string;
+  private readonly managedClientSecret: string;
+  private readonly managedIssuerUrl: string;
+  private readonly managedTenantRolePrefix: string;
 
   constructor(private readonly configService: ConfigService) {
     const kc = loadKubeConfig();
@@ -93,9 +94,10 @@ export class ProjectAuthService {
     this.webappServiceName = this.configService.getOrThrow<string>('webappServiceName');
     this.webappServicePort = this.configService.getOrThrow<number>('webappServicePort');
     this.pluginSecret = this.configService.getOrThrow<string>('oidcPluginSecret');
-    this.makaraClientId = this.configService.getOrThrow<string>('makaraOidcClientId');
-    this.makaraClientSecret = this.configService.get<string>('makaraOidcClientSecret') ?? '';
-    this.makaraIssuerUrl = this.configService.getOrThrow<string>('makaraOidcIssuerUrl');
+    this.managedClientId = this.configService.getOrThrow<string>('managedOidcClientId');
+    this.managedClientSecret = this.configService.get<string>('managedOidcClientSecret') ?? '';
+    this.managedIssuerUrl = this.configService.get<string>('managedOidcIssuerUrl') ?? '';
+    this.managedTenantRolePrefix = this.configService.get<string>('managedTenantRolePrefix') ?? '';
   }
 
   private projectHost(routingId: string, slug: EnvironmentSlug): string {
@@ -179,7 +181,7 @@ export class ProjectAuthService {
       assertClaims: [
         {
           Name: 'realm_access.roles[*]',
-          AnyOf: [`makara_tenant_name_${tenantName}`],
+          AnyOf: [`${this.managedTenantRolePrefix}${tenantName}`],
         },
       ],
     };
@@ -283,22 +285,22 @@ export class ProjectAuthService {
     await this.upsert(INGRESSROUTES_PLURAL, ir.metadata.name, ir);
   }
 
-  async applyMakara(
+  async applyManaged(
     routingId: string,
     slug: EnvironmentSlug,
     tenantName: string,
     bypassAuthPaths?: string[]
   ): Promise<void> {
-    if (!this.makaraClientSecret) {
-      throw new Error('MAKARA_OIDC_CLIENT_SECRET is not set — cannot enable Makara auth.');
+    if (!this.managedClientSecret) {
+      throw new Error('MANAGED_OIDC_CLIENT_SECRET is not set — cannot enable managed auth.');
     }
     const config: ProjectAuthOidcConfig = {
-      clientId: this.makaraClientId,
-      clientSecret: this.makaraClientSecret,
-      discoveryUrl: `${this.makaraIssuerUrl}/.well-known/openid-configuration`,
+      clientId: this.managedClientId,
+      clientSecret: this.managedClientSecret,
+      discoveryUrl: `${this.managedIssuerUrl}/.well-known/openid-configuration`,
     };
     const extras: MiddlewareExtras = {
-      ...this.keycloakExtras(tenantName, this.makaraClientId),
+      ...this.keycloakExtras(tenantName, this.managedClientId),
       tokenValidation: 'AccessToken',
       bypassAuthPaths,
     };
@@ -313,12 +315,12 @@ export class ProjectAuthService {
     fromRoutingId: string,
     toRoutingId: string,
     toSlug: EnvironmentSlug,
-    makaraFallbackTenantName?: string
+    managedFallbackTenantName?: string
   ): Promise<void> {
     const sourceSpec = await this.readPluginSpec(fromRoutingId);
     if (!sourceSpec) {
-      if (makaraFallbackTenantName) {
-        await this.applyMakara(toRoutingId, toSlug, makaraFallbackTenantName);
+      if (managedFallbackTenantName) {
+        await this.applyManaged(toRoutingId, toSlug, managedFallbackTenantName);
         return;
       }
       throw new Error(`Cannot inherit app auth: source middleware ${middlewareName(fromRoutingId)} not found`);

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/backend"
+	"opsiforce/proxy/internal/backend"
 )
 
 type Cache struct {

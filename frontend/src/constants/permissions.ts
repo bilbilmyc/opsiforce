@@ -16,7 +16,6 @@ export const Permission = {
   moveProjectsBetweenWorkspaces: 'can_move_projects_between_workspaces',
   pinApps: 'can_pin_apps',
   editAppDetails: 'can_edit_app_details',
-  manageMakaraIntegration: 'can_manage_makara_integration',
   manageEnvironments: 'can_manage_environments',
   manageEnvironmentVariables: 'can_manage_environment_variables',
   publishProject: 'can_publish_project',

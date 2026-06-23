@@ -94,13 +94,13 @@ export class PublishProcessor extends WorkerHost {
       await this.writeEnvFile(prodEnv.directory, data.variables, data.isFirstPublish);
 
       if (data.isFirstPublish && devEnv.authMode !== 'public') {
-        const makaraFallbackTenantName =
-          devEnv.authMode === 'makara' ? await this.projectService.findMakaraTenantName(data.tenantId) : undefined;
+        const managedFallbackTenantName =
+          devEnv.authMode === 'managed' ? await this.projectService.findExternalTenantName(data.tenantId) : undefined;
         await this.projectAuthService.inheritAuth(
           devEnv.id,
           data.projectEnvironmentId,
           prodEnv.environmentSlug,
-          makaraFallbackTenantName
+          managedFallbackTenantName
         );
       }
 

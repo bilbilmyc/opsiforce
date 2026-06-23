@@ -97,10 +97,10 @@ export default () => {
     appsHostname: process.env.APPS_HOSTNAME || 'apps.opsiforce.localtest.me',
     webappServiceName: process.env.WEBAPP_SERVICE_NAME || 'proxy-app',
     webappServicePort: parseInt(process.env.WEBAPP_SERVICE_PORT || '3002', 10),
-    oidcPluginSecret: process.env.OIDC_PLUGIN_SECRET || 'opsiforcedev0123456789abcdef1234',
-    makaraOidcClientId: process.env.MAKARA_OIDC_CLIENT_ID || 'opsiforce-apps',
-    makaraOidcClientSecret: process.env.MAKARA_OIDC_CLIENT_SECRET || '',
-    makaraOidcIssuerUrl:
-      process.env.MAKARA_OIDC_ISSUER_URL || 'http://sima-keycloak-local-service.local.svc:8086/realms/sima',
+    oidcPluginSecret: process.env.OIDC_PLUGIN_SECRET || '',
+    managedOidcClientId: process.env.MANAGED_OIDC_CLIENT_ID || 'opsiforce-apps',
+    managedOidcClientSecret: process.env.MANAGED_OIDC_CLIENT_SECRET || '',
+    managedOidcIssuerUrl: process.env.MANAGED_OIDC_ISSUER_URL || '',
+    managedTenantRolePrefix: process.env.MANAGED_TENANT_ROLE_PREFIX || '',
   };
 };

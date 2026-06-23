@@ -1,8 +1,6 @@
 import { userApi } from './client';
 import { createAppQuery } from '~/lib/create-app-query';
 
-const MAKARA_GROUP_PREFIX = 'role:makara_tenant_name_';
-
 interface UserInfo {
   user: string;
   email: string;
@@ -25,10 +23,6 @@ export function useUserInfo() {
       };
     },
   }));
-}
-
-export function parseMakaraTenants(groups: string[]): string[] {
-  return groups.filter((g) => g.startsWith(MAKARA_GROUP_PREFIX)).map((g) => g.slice(MAKARA_GROUP_PREFIX.length));
 }
 
 export function useCurrentUser() {

@@ -1,7 +1,7 @@
 replicaCount: 1
 
 image:
-  repository: ghcr.io/simadevelopment/opsiforce
+  repository: ""
   tag: runtime-proxies
   pullPolicy: Always
 

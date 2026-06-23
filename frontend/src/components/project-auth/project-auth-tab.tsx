@@ -4,6 +4,7 @@ import { Button } from '~/components/ui/button';
 import ConfirmDialog from '~/components/ui/confirm-dialog';
 import Spinner from '~/components/ui/spinner';
 import type { ProjectAuthMode, ProjectAuthOidcConfig } from '~/api/client';
+import { config } from '~/config/config';
 import { AuthModeSelector } from './auth-mode-selector';
 import { OidcForm } from './oidc-form';
 import { BypassPathsEditor } from './bypass-paths-editor';
@@ -111,8 +112,8 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
     switch (to) {
       case 'public':
         return `You're about to update ${transition}. The app will be accessible to anyone without signing in.`;
-      case 'makara':
-        return `You're about to update ${transition}. Visitors will be required to sign in with Makara before the app loads.`;
+      case 'managed':
+        return `You're about to update ${transition}. Visitors will be required to sign in with ${config.managedAuthLabel} before the app loads.`;
       case 'manual':
         return `You're about to update ${transition}. Visitors will be required to sign in via the configured OIDC provider before the app loads.`;
     }

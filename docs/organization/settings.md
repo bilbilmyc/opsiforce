@@ -5,7 +5,7 @@
 `/settings` is where a member **configures** the Organization currently chosen in the selector. It replaced the old avatar-dropdown links and the "Tenant Settings" modal with one page whose left rail groups sections by area:
 
 - **Access** — Workspaces, Users
-- **Configuration** — Environments (the publish-target registry), Integrations (the Makara mapping), Defaults (timeouts/budgets seeded into new projects)
+- **Configuration** — Environments (the publish-target registry), Integrations (the managed-auth tenant mapping), Defaults (timeouts/budgets seeded into new projects)
 - **Billing** — spend and budget
 
 Schedules is deliberately **not** here — it's operational, project-scoped runtime data, so it stays top-level. The operational counterpart to Settings is [Admin](admin.md); the configure-vs-operate split is [ADR-0014](../adr/0014-admin-section-and-operational-view-module.md).

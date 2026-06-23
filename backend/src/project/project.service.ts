@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
+import { config as appConfig } from '../config/config';
 import { eq, and, desc, asc, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Queue } from 'bullmq';
@@ -65,6 +66,7 @@ import {
   ProjectLoggingResponse,
   RequestLogMode,
   REQUEST_LOG_BODY_LIMIT_MAX,
+  availableAuthModes,
 } from './project.types';
 import {
   buildPodClassCatalog,
@@ -862,7 +864,7 @@ export class ProjectService implements OnApplicationBootstrap {
     const callbackUrls = this.projectAuthService.callbackUrls(env.id, env.environmentSlug);
     if (env.authMode === 'public') return { mode: 'public', callbackUrls };
     const { config, bypassAuthPaths } = await this.projectAuthService.getConfig(env.id);
-    if (env.authMode === 'makara') return { mode: 'makara', bypassAuthPaths, callbackUrls };
+    if (env.authMode === 'managed') return { mode: 'managed', bypassAuthPaths, callbackUrls };
     return { mode: 'manual', config, bypassAuthPaths, callbackUrls };
   }
 
@@ -873,15 +875,19 @@ export class ProjectService implements OnApplicationBootstrap {
     tenantId: string
   ): Promise<ProjectAuthResponse> {
     const env = await this.resolveProjectEnvironment(projectId, environmentId, tenantId);
-    if (dto.mode !== 'public' && dto.mode !== 'manual' && dto.mode !== 'makara') {
-      throw new BadRequestException(`Unknown auth mode: ${String(dto.mode)}`);
+    const allowedModes = availableAuthModes({
+      managedOidcClientSecret: this.configService.get<string>('managedOidcClientSecret'),
+      managedOidcIssuerUrl: this.configService.get<string>('managedOidcIssuerUrl'),
+    });
+    if (!allowedModes.includes(dto.mode)) {
+      throw new BadRequestException(`Unknown or unavailable auth mode: ${String(dto.mode)}`);
     }
 
     if (dto.mode === 'manual') {
       await this.projectAuthService.apply(env.id, env.environmentSlug, dto.config ?? {}, dto.bypassAuthPaths);
-    } else if (dto.mode === 'makara') {
-      const makaraTenantName = await this.findMakaraTenantName(tenantId);
-      await this.projectAuthService.applyMakara(env.id, env.environmentSlug, makaraTenantName, dto.bypassAuthPaths);
+    } else if (dto.mode === 'managed') {
+      const externalTenantName = await this.findExternalTenantName(tenantId);
+      await this.projectAuthService.applyManaged(env.id, env.environmentSlug, externalTenantName, dto.bypassAuthPaths);
     } else {
       await this.projectAuthService.remove(env.id);
     }
@@ -1096,6 +1102,9 @@ export class ProjectService implements OnApplicationBootstrap {
     const project = await this.findOne(id, tenantId);
 
     if (isPinned) {
+      if (!appConfig.catalogEnabled) {
+        throw new BadRequestException('The app catalog is not enabled on this platform.');
+      }
       const targetEnvId = environmentId ?? project.pinnedEnvironmentId ?? id;
       const targetEnv = await this.projectEnvironmentService.findById(targetEnvId);
       if (targetEnv.projectId !== id) {
@@ -1103,7 +1112,7 @@ export class ProjectService implements OnApplicationBootstrap {
       }
       if (targetEnv.authMode !== 'public') {
         throw new BadRequestException(
-          "Only apps with public auth can be pinned to Makara. Change the environment's auth mode to public before pinning."
+          "Only apps with public auth can be pinned to the catalog. Change the environment's auth mode to public before pinning."
         );
       }
       const [targetApp] = await db
@@ -1135,17 +1144,17 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId);
   }
 
-  async findMakaraTenantName(tenantId: string): Promise<string> {
+  async findExternalTenantName(tenantId: string): Promise<string> {
     const [row] = await db
       .select({
-        makaraTenantName: tenantSettings.makaraTenantName,
+        externalTenantName: tenantSettings.externalTenantName,
         tenantName: tenants.name,
       })
       .from(tenants)
       .leftJoin(tenantSettings, eq(tenantSettings.tenantId, tenants.id))
       .where(eq(tenants.id, tenantId));
     if (!row) throw new BadRequestException(`Tenant ${tenantId} not found`);
-    return row.makaraTenantName ?? row.tenantName;
+    return row.externalTenantName ?? row.tenantName;
   }
 
   async reassignPodById(id: string): Promise<void> {

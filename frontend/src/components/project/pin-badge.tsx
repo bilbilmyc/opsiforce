@@ -1,5 +1,6 @@
 import { Show } from 'solid-js';
 import { Pin } from '~/components/icons';
+import { config } from '~/config/config';
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
 import { cn } from '~/lib/cn';
 
@@ -20,11 +21,11 @@ export default function PinBadge(props: PinBadgeProps) {
             props.compact ? 'w-4 h-4' : 'rounded-md px-1.5 py-0.5 bg-amber-50',
             props.class
           )}
-          aria-label="Pinned to Makara"
+          aria-label={`Pinned to ${config.catalogLabel}`}
         >
           <Pin class={props.compact ? 'w-3 h-3' : 'w-3.5 h-3.5'} />
         </TooltipTrigger>
-        <TooltipContent>Pinned to Makara</TooltipContent>
+        <TooltipContent>Pinned to {config.catalogLabel}</TooltipContent>
       </Tooltip>
     </Show>
   );

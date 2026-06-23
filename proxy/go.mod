@@ -1,4 +1,4 @@
-module github.com/simadevelopment/sima/packages/opsiforce/proxy
+module opsiforce/proxy
 
 go 1.26.2
 

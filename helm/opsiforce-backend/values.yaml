@@ -4,7 +4,7 @@ npmMigrationJob: true
 
 backend:
   image:
-    repository: ghcr.io/simadevelopment/opsiforce
+    repository: ""
     tag: backend
     pullPolicy: Always
   containerPort: 3001
@@ -48,9 +48,10 @@ config:
   webappServiceName: ""
   webappServicePort: "3002"
   oidcPluginSecret: ""
-  makaraOidcClientId: ""
-  makaraOidcClientSecret: ""
-  makaraOidcIssuerUrl: ""
+  managedOidcClientId: ""
+  managedOidcClientSecret: ""
+  managedOidcIssuerUrl: ""
+  managedTenantRolePrefix: ""
   agentAffinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
