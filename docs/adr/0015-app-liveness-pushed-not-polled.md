@@ -27,7 +27,7 @@ Pushing is the right direction because the producer — the pod — is the only 
 
 The first cut had the reporter re-push its positive state every 30s, and `AppReadinessService` held a `{serving, live}` level per environment. Reviewing it showed both were heavier than the problem:
 
-- **`live` in the readiness service was write-only.** The app pane and Makara read identity from `projectApps` (Postgres) over SSE; nothing read the in-memory `live`. It is removed — identity lives only in `projectApps`, and the service tracks `serving` alone.
+- **`live` in the readiness service was write-only.** The app pane and the app catalog read identity from `projectApps` (Postgres) over SSE; nothing read the in-memory `live`. It is removed — identity lives only in `projectApps`, and the service tracks `serving` alone.
 - **The 30s heartbeat defended a level with no reader.** `serving` has exactly one consumer, `awaitReady`, and every caller (publish, duplicate, schedule) recreates or wakes the pod — calling `markDown` — *before* it waits, so it always wants the next *edge*, never a remembered level. The heartbeat's only real job was rebuilding the map after a backend restart; with a single replica that is handled by the BullMQ caller re-running. The reporter now pushes **only on edges** (go-live, serving↑, serving↓); the localhost probe stays (in-pod, free).
 - **`markDown` now covers every backend-controlled pod-lifecycle boundary**, including project **disable** (previously missed — a stale `serving:true` could let a re-enabled project's `awaitReady` short-circuit before the replacement pod reported), and project/environment **delete** evicts the key via `clear` so the map cannot grow without bound.
 

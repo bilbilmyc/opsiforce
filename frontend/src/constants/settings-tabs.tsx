@@ -1,19 +1,12 @@
 import type { Component } from 'solid-js';
-import { FolderKanban, Layers, Plug, SlidersHorizontal, Users, Wallet } from '~/components/icons';
+import { FolderKanban, Layers, SlidersHorizontal, Users, Wallet } from '~/components/icons';
 import { Permission } from '~/constants/permissions';
-
-export type SettingsTabPath =
-  | '/settings/workspaces'
-  | '/settings/users'
-  | '/settings/environments'
-  | '/settings/integrations'
-  | '/settings/defaults'
-  | '/settings/billing';
+import { PRIVATE_TABS } from '~/private';
 
 export type SettingsGroup = 'Access' | 'Configuration' | 'Billing';
 
 export interface SettingsTab {
-  to: SettingsTabPath;
+  to: string;
   label: string;
   description: string;
   group: SettingsGroup;
@@ -48,14 +41,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
     icon: Layers,
     isPermitted: (has) => has(Permission.manageEnvironments),
   },
-  {
-    to: '/settings/integrations',
-    label: 'Integrations',
-    description: 'Connect this organization to external systems.',
-    group: 'Configuration',
-    icon: Plug,
-    isPermitted: (has) => has(Permission.manageMakaraIntegration),
-  },
+  ...PRIVATE_TABS,
   {
     to: '/settings/defaults',
     label: 'Defaults',

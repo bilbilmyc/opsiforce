@@ -27,7 +27,7 @@ export const projectStatusEnum = pgEnum("project_status", [
 
 export const keyTypeEnum = pgEnum("key_type", ["chat", "backend"])
 
-export const projectAuthModeEnum = pgEnum("project_auth_mode", ["public", "manual", "makara"])
+export const projectAuthModeEnum = pgEnum("project_auth_mode", ["public", "manual", "managed"])
 
 export const requestLogModeEnum = pgEnum("request_log_mode", ["off", "metadata", "full"])
 
@@ -75,7 +75,7 @@ export const tenantSettings = pgTable("tenant_settings", {
   tenantId: text("tenant_id")
     .primaryKey()
     .references(() => tenants.id, { onDelete: "cascade" }),
-  makaraTenantName: text("makara_tenant_name").notNull().unique(),
+  externalTenantName: text("external_tenant_name").notNull().unique(),
 })
 
 export const agents = pgTable("agents", {

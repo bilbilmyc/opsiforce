@@ -9,6 +9,6 @@ We chose two entities over the alternatives (a single `ProjectEnvironment` with 
 ## Consequences
 
 - Most of the old `projects` columns and its satellite tables move to, or re-point their FK to, `ProjectEnvironment`. `project_settings` splits: timeouts+timezone stay on the project, `authMode` moves to the env.
-- App identity (`name`/`description`/`icon`) stays per-project; the single Makara pin gains a `pinnedEnvironmentId` so the catalog link resolves to one specific env's URL.
-- **Pinning requires the targeted env's `authMode` to be `public`** (the existing precondition, kept for every env). The Makara catalog therefore lists public apps only; a `makara`-authed env is intentionally **not** pinnable. This is a deliberate "no" — to surface a prod app in the catalog, keep that env public; choosing login-gating forgoes catalog pinning.
+- App identity (`name`/`description`/`icon`) stays per-project; the single catalog pin gains a `pinnedEnvironmentId` so the catalog link resolves to one specific env's URL.
+- **Pinning requires the targeted env's `authMode` to be `public`** (the existing precondition, kept for every env). The app catalog therefore lists public apps only; a `managed`-authed env is intentionally **not** pinnable. This is a deliberate "no" — to surface a prod app in the catalog, keep that env public; choosing login-gating forgoes catalog pinning.
 - Agent-config updates target the **Development** env only — a published env is a frozen snapshot and must not receive live agent-config migrations.

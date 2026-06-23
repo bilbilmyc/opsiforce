@@ -50,28 +50,28 @@ ingress:
 
 ingressRoute:
   enabled: true
-  hostname: opsiforce.dev.opsima.com
-  traefikTarget: traefik.traefik.1d27b1e1-ef9f-407a-889a-6d80fc8fdd07.northamerica-central-1a.cfke.cloudfleet.dev
+  hostname: ""
+  traefikTarget: ""
   certResolver: letsencrypt
 
 appProxy:
   backendService: ""
   backendPort: "3002"
-  appsHostname: apps.dev.opsima.com
-  previewAppsHostname: preview.apps.dev.opsima.com
+  appsHostname: ""
+  previewAppsHostname: ""
 
 vscodeProxy:
   backendService: ""
-  appsHostname: code.dev.opsima.com
+  appsHostname: ""
 
 dbProxy:
   backendService: ""
-  appsHostname: db.dev.opsima.com
+  appsHostname: ""
 
 bifrostDashboard:
   enabled: true
   serviceName: ""
-  hostname: bifrost.dev.opsima.com
+  hostname: ""
 
 resources:
   requests:

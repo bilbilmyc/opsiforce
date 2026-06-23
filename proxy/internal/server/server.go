@@ -19,11 +19,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/backend"
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/bufferpool"
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/config"
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/proxycache"
-	"github.com/simadevelopment/sima/packages/opsiforce/proxy/internal/requestlog"
+	"opsiforce/proxy/internal/backend"
+	"opsiforce/proxy/internal/bufferpool"
+	"opsiforce/proxy/internal/config"
+	"opsiforce/proxy/internal/proxycache"
+	"opsiforce/proxy/internal/requestlog"
 )
 
 var projectIDPattern = regexp.MustCompile(`^[a-z0-9-]+$`)

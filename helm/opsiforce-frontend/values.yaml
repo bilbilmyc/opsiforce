@@ -2,7 +2,7 @@ replicaCount: 1
 
 frontend:
   image:
-    repository: ghcr.io/simadevelopment/opsiforce
+    repository: ""
     tag: frontend
     pullPolicy: Always
   containerPort: 80

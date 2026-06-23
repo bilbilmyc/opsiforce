@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/solid-router';
 import { toast } from 'solid-sonner';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
+import { config } from '~/config/config';
 import { useProjects } from '~/api/projects';
 import {
   useDeleteProjectEnvironment,
@@ -35,7 +36,7 @@ export interface EnvironmentsPopoverProps {
 export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
   const { hasPermission } = usePermissions();
   const canManageAuth = () => hasPermission(Permission.manageProjectAuthSettings);
-  const canPin = () => hasPermission(Permission.pinApps);
+  const canPin = () => hasPermission(Permission.pinApps) && config.catalogEnabled;
   const canRestart = () => hasPermission(Permission.restartProject);
   const canDelete = () => hasPermission(Permission.deleteEnvironment);
   const canPublish = () => hasPermission(Permission.publishProject);
@@ -96,7 +97,7 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
   const description = () => {
     const tail = canSchedules() ? ', or open schedules' : '';
     return canPin()
-      ? `Click an environment to view it. Publish the app, manage auth and variables, pin to the Makara catalog${tail}.`
+      ? `Click an environment to view it. Publish the app, manage auth and variables, pin to ${config.catalogLabel}${tail}.`
       : `Click an environment to view it. Publish the app, manage auth and variables${tail}.`;
   };
 

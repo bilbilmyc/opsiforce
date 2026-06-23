@@ -109,7 +109,7 @@ export function AppSidebar() {
             onClick={() => navigate({ to: '/' })}
             title="Home"
           >
-            <img alt="Opsiforce" src="/assets/icons/brands/opsima.svg" class="w-4 h-4" />
+            <img alt="Opsiforce" src="/assets/icons/brands/opsiforce.svg" class="w-4 h-4" />
           </div>
           <span class="font-semibold text-sm text-sidebar-foreground truncate group-data-[collapsible=icon]/sidebar:hidden">
             Opsiforce

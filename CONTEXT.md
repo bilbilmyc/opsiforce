@@ -41,11 +41,11 @@ The application the agent builds inside a ProjectEnvironment, served at that env
 _Avoid_: Project (when you mean the built application); "one App per Project" (retired — each ProjectEnvironment is its own App)
 
 **App Details**:
-An App's human-facing identity — its name and description — carried per ProjectEnvironment, since each environment is its own App. First published by the agent when that environment's App goes live, then re-curated by humans against whichever environment they are viewing; the running App reads its own name at runtime, and Makara shows the pinned App's copy. A published App's Details begin as a copy of Development's at publish and evolve independently afterwards.
+An App's human-facing identity — its name and description — carried per ProjectEnvironment, since each environment is its own App. First published by the agent when that environment's App goes live, then re-curated by humans against whichever environment they are viewing; the running App reads its own name at runtime, and the catalog shows the pinned App's copy. A published App's Details begin as a copy of Development's at publish and evolve independently afterwards.
 _Avoid_: App metadata (vague); Project title (the Project shell's label — a different thing); project-level identity (retired — App Details belong to each App/environment, not the Project)
 
 **Go-live**:
-The moment an App first exists and is running in a ProjectEnvironment — for Development, when the agent finishes the first feature, its checks pass, and it publishes App Details; for a published environment, when its freshly-deployed pod first serves. Each environment goes live independently. Before its App goes live an environment has a pod but no App; that environment's app pane — and its Makara catalog entry, if pinned — appears only once it happens.
+The moment an App first exists and is running in a ProjectEnvironment — for Development, when the agent finishes the first feature, its checks pass, and it publishes App Details; for a published environment, when its freshly-deployed pod first serves. Each environment goes live independently. Before its App goes live an environment has a pod but no App; that environment's app pane — and its catalog entry, if pinned — appears only once it happens.
 _Avoid_: Detection (the platform's inward-facing name for noticing the same moment); App ready, Launch; Deploy/Publish (which moves an already-live App between Environments)
 
 **Publish**:
@@ -69,15 +69,15 @@ Recreating a ProjectEnvironment's pod from scratch — the row-level Restart act
 _Avoid_: Reboot; conflating with App restart
 
 **App Auth**:
-Per-ProjectEnvironment control over how visitors sign in to the App at that environment's URL — one of **public** (anyone), **manual** (the owner's own OIDC provider), or **makara** (the platform's Keycloak, scoped to the tenant). Each ProjectEnvironment carries its own; a newly published environment is **seeded once** from Development's setting at first publish, then managed independently per environment.
+Per-ProjectEnvironment control over how visitors sign in to the App at that environment's URL — one of **public** (anyone), **manual** (the owner's own OIDC provider), or **managed** (a shared identity provider configured by the platform operator, scoped to the tenant). Each ProjectEnvironment carries its own; a newly published environment is **seeded once** from Development's setting at first publish, then managed independently per environment.
 _Avoid_: Project auth (it is not project-wide — each environment has its own); Login, SSO (non-canonical)
 
 **Auth mode**:
-The chosen App Auth setting for one ProjectEnvironment — `public`, `manual`, or `makara` (the stored identifier is `auth_mode`).
+The chosen App Auth setting for one ProjectEnvironment — `public`, `manual`, or `managed` (the stored identifier is `auth_mode`).
 _Avoid_: Auth type, Auth provider
 
-**Pin (to Makara)**:
-Designating the one App — i.e. the one ProjectEnvironment — that represents the Project in the tenant's Makara catalog. A Project has **at most one pin**; pinning another environment's App moves it. Only a public-auth environment may be pinned. Distinct from Publish (which deploys an environment) — pinning merely exposes an already-running App in the catalog. The name and description Makara shows are that pinned App's own App Details, not a shared project-level identity.
+**Pin (to catalog)**:
+Designating the one App — i.e. the one ProjectEnvironment — that represents the Project in the tenant's app catalog. A Project has **at most one pin**; pinning another environment's App moves it. Only a public-auth environment may be pinned. Distinct from Publish (which deploys an environment) — pinning merely exposes an already-running App in the catalog. The name and description the catalog shows are that pinned App's own App Details, not a shared project-level identity.
 _Avoid_: Publish, Share, Expose (non-canonical)
 
 **Resources**:

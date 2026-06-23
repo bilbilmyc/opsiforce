@@ -56,9 +56,10 @@ config:
   webappServiceName: "proxy-app"
   webappServicePort: "3002"
   oidcPluginSecret: "1198c2e7c224237098895d53543b074c"
-  makaraOidcClientId: "opsiforce-apps"
-  makaraOidcClientSecret: "a037227dd1c2aee75f1056ad6ab3c088"
-  makaraOidcIssuerUrl: "http://sima-keycloak-local-service:8086/realms/sima"
+  managedOidcClientId: "opsiforce-apps"
+  managedOidcClientSecret: "a037227dd1c2aee75f1056ad6ab3c088"
+  managedOidcIssuerUrl: "http://sima-keycloak-local-service:8086/realms/sima"
+  managedTenantRolePrefix: "makara_tenant_name_"
 
 affinity: ~
 nodeSelector: {}

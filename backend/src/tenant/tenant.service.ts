@@ -8,7 +8,6 @@ import { DefaultsService } from '../defaults/defaults.service';
 import { EnvironmentService } from '../environment/environment.service';
 
 export const OPSIFORCE_TENANT_GROUP_PREFIX = 'role:opsiforce_tenant_name_';
-export const MAKARA_TENANT_GROUP_PREFIX = 'role:makara_tenant_name_';
 
 @Injectable()
 export class TenantService {
@@ -64,7 +63,7 @@ export class TenantService {
         .onConflictDoNothing()
         .returning();
       if (!inserted) return undefined;
-      await tx.insert(tenantSettings).values({ tenantId: inserted.id, makaraTenantName: name }).onConflictDoNothing();
+      await tx.insert(tenantSettings).values({ tenantId: inserted.id, externalTenantName: name }).onConflictDoNothing();
       return inserted;
     });
 
@@ -89,7 +88,7 @@ export class TenantService {
     return tenant ?? null;
   }
 
-  async getTenantByMakaraName(makaraTenantName: string) {
+  async getTenantByExternalName(externalTenantName: string) {
     const [row] = await db
       .select({
         id: tenants.id,
@@ -100,7 +99,7 @@ export class TenantService {
       })
       .from(tenantSettings)
       .innerJoin(tenants, eq(tenants.id, tenantSettings.tenantId))
-      .where(eq(tenantSettings.makaraTenantName, makaraTenantName));
+      .where(eq(tenantSettings.externalTenantName, externalTenantName));
     return row ?? null;
   }
 }

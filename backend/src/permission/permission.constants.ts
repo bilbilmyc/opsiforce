@@ -1,7 +1,3 @@
-/**
- * Backend permission strings. Mirrors `frontend/src/constants/permissions.ts`.
- * Keep in sync with `packages/infra/pulumi/keycloak-configurator/opsiforce/permissions.ts`.
- */
 export const Perms = {
   manageProjectBudgetSettings: 'can_manage_project_budget_settings',
   manageProjectTimeoutSettings: 'can_manage_project_timeout_settings',
@@ -19,7 +15,6 @@ export const Perms = {
   pinApps: 'can_pin_apps',
   editAppDetails: 'can_edit_app_details',
   listPinnedAppsInternal: 'can_list_pinned_apps_internal',
-  manageMakaraIntegration: 'can_manage_makara_integration',
   manageEnvironments: 'can_manage_environments',
   manageEnvironmentVariables: 'can_manage_environment_variables',
   publishProject: 'can_publish_project',

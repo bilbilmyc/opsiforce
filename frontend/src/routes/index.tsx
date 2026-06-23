@@ -99,7 +99,7 @@ function HomePage() {
           <div class="flex flex-col items-center gap-5 text-center">
             <div class="relative">
               <div class="w-11 h-11 rounded-2xl bg-foreground/5 border border-foreground/10 flex items-center justify-center shadow-sm">
-                <img alt="Opsiforce" src="/assets/icons/brands/opsima.svg" class="w-6 h-6" />
+                <img alt="Opsiforce" src="/assets/icons/brands/opsiforce.svg" class="w-6 h-6" />
               </div>
             </div>
             <div class="flex flex-col gap-2">

@@ -13,7 +13,7 @@ storage:
 
 agent:
   image:
-    repository: ghcr.io/simadevelopment/opsiforce
+    repository: ""
     tag: agent
     pullPolicy: Always
   port: 4096

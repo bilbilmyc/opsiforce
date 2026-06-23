@@ -145,7 +145,20 @@ export interface ProjectAuthOidcConfig {
   scope?: string;
 }
 
-export type ProjectAuthMode = 'public' | 'manual' | 'makara';
+export type ProjectAuthMode = 'public' | 'manual' | 'managed';
+
+export interface ManagedAuthConfig {
+  managedOidcClientSecret?: string;
+  managedOidcIssuerUrl?: string;
+}
+
+export function availableAuthModes(config: ManagedAuthConfig): ProjectAuthMode[] {
+  const modes: ProjectAuthMode[] = ['public', 'manual'];
+  if (config.managedOidcClientSecret?.trim() && config.managedOidcIssuerUrl?.trim()) {
+    modes.push('managed');
+  }
+  return modes;
+}
 
 export interface ProjectAuthResponse {
   mode: ProjectAuthMode;

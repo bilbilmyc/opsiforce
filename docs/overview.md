@@ -2,7 +2,7 @@
 
 > The orientation doc: what Opsiforce is, how the pieces fit, and where to read next. Start here.
 
-Opsiforce embeds an AI coding assistant (powered by [OpenCode](https://github.com/sst/opencode)) into the Sima platform. A user converses with an agent inside an isolated Kubernetes pod to build an app, then promotes that app from its working environment to production-like ones. Each running unit — a **ProjectEnvironment** — gets its own pod with persistent storage; a **Project** is the shell that groups them. (The domain vocabulary is defined in [`../CONTEXT.md`](../CONTEXT.md) — it is the source of truth for terms like Project, Environment, App, and Organization.)
+Opsiforce is a self-hostable platform that embeds an AI coding assistant (powered by [OpenCode](https://github.com/sst/opencode)). A user converses with an agent inside an isolated Kubernetes pod to build an app, then promotes that app from its working environment to production-like ones. Each running unit — a **ProjectEnvironment** — gets its own pod with persistent storage; a **Project** is the shell that groups them. (The domain vocabulary is defined in [`../CONTEXT.md`](../CONTEXT.md) — it is the source of truth for terms like Project, Environment, App, and Organization.)
 
 ## How the pieces fit
 

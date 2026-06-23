@@ -1,10 +1,18 @@
 # Opsiforce
 
-Opsiforce local development runs the backend, runtime proxies, Bifrost, and project pods inside minikube. Tilt is required for the backend and proxy dev loop.
+Opsiforce is a self-hostable platform that embeds an AI coding assistant (powered by [OpenCode](https://github.com/sst/opencode)) into your own infrastructure. A user converses with an agent inside an isolated Kubernetes pod to build an app, then promotes that app from its working environment to production-like ones. Each running unit gets its own pod with persistent storage.
+
+For the full picture of what Opsiforce is and how the pieces fit together, start with [docs/overview.md](docs/overview.md); the documentation index is [docs/README.md](docs/README.md) and the domain vocabulary is in [CONTEXT.md](CONTEXT.md).
+
+## How it runs
+
+Opsiforce is a Kubernetes-native platform, and local development mirrors that: the backend, the runtime proxies, Bifrost, and the per-project agent pods all run inside a local Kubernetes cluster (minikube). [Tilt](https://tilt.dev/) drives the backend and proxy dev loop — building images into the cluster and live-updating source changes — while the frontend runs on the host through Vite HMR. Browser entrypoints are exposed under `*.opsiforce.localtest.me` (`localtest.me` resolves to `127.0.0.1`, so no host-file edits are needed).
+
+The platform expects a few supporting services to be reachable in the cluster: PostgreSQL (for the control plane and Bifrost), Redis (timeout TTLs and event pub/sub), and an OIDC identity provider (for sign-in and managed App Auth). The local dev flow provisions the application databases and installs the in-cluster components for you; bring the backing PostgreSQL/Redis up in the cluster first.
 
 ## Prerequisites
 
-Install these tools before running the Opsiforce dev environment:
+Install these tools before running Opsiforce locally:
 
 - Docker-compatible local container runtime
 - minikube
@@ -12,7 +20,7 @@ Install these tools before running the Opsiforce dev environment:
 - Helm
 - Tilt
 - mkcert
-- Go 1.26.2 for local proxy tests and direct proxy builds
+- Go 1.26.2 (for local proxy tests and direct proxy builds)
 - Node.js with Corepack enabled
 
 On macOS, Tilt can be installed with:
@@ -33,87 +41,44 @@ mkcert --version
 corepack --version
 ```
 
-## Local Development
-
-Opsiforce local development uses the shared Sima minikube stack:
-
-- PostgreSQL, Redis, Keycloak, and Traefik are installed by root scripts.
-- The frontend runs on the host through Vite HMR.
-- The backend, runtime proxies, Bifrost, opsiforce proxy, and project pods run inside minikube.
-- Tilt builds the backend and runtime proxy dev images, deploys them into the `local` namespace, and live-updates backend/proxy source changes.
-- Traefik exposes the browser entrypoints under `*.opsiforce.localtest.me`.
-
-Before running local scripts, make sure your Kubernetes context points at minikube, not a shared cluster:
+Before running anything, make sure your Kubernetes context points at your local minikube cluster, not a shared one:
 
 ```bash
 kubectl config current-context
 ```
 
-### First-Time Setup
+## Local Development
 
-From the repository root:
+From the repository root, install dependencies once:
 
 ```bash
 yarn install
-yarn run install-all
 ```
 
-`install-all` starts minikube and installs shared local infrastructure: PostgreSQL, Redis, Keycloak, local Traefik, TLS certs, and host entries used by the Sima local stack.
+### Backend and in-cluster stack
 
-### Daily Development
-
-Run these from the repository root in separate terminals:
-
-```bash
-yarn run tunnel-traefik
-```
-
-```bash
-yarn run port-forward-all
-```
-
-```bash
-yarn run dev-opsiforce-only
-```
-
-`tunnel-traefik` keeps the minikube LoadBalancer reachable from the host. It may ask for sudo and must stay running while using `https://opsiforce.localtest.me`.
-
-`port-forward-all` keeps PostgreSQL, Redis, Keycloak, and Keycloak configuration available to local processes.
-
-`dev-opsiforce-only` starts the Opsiforce backend workspace and frontend workspace:
-
-- backend storage setup in minikube
-- local agent image build into minikube
-- Opsiforce infra Helm install
-- Opsiforce and Bifrost DB creation
-- Drizzle migrations
-- Bifrost Helm install
-- Drizzle Studio
-- Mailgun mock
-- Tilt backend/proxy loop
-- Vite frontend server
-
-User Management also needs the shared keycloak-ms local stack. Run `yarn run dev-keycloak-ms-only` when working on `/users` — it builds keycloak-ms and serves it via `vite preview`, which the `/users` Module Federation remote (`/ms-assets/remoteEntry.js`) requires. Do not use `dev-ms-only` here: it runs keycloak-ms as a raw dev server that never emits `remoteEntry.js`.
-
-### Shortcut
-
-For a slower all-in-one startup, use:
-
-```bash
-yarn run dev-opsiforce
-```
-
-This runs `install-all`, `port-forward-all`, and `dev-opsiforce-only`. It does not replace `yarn run tunnel-traefik`; keep the Traefik tunnel running separately.
-
-### Backend-Only Flow
-
-The backend workspace exposes the in-cluster dev flow directly:
+The backend workspace owns the in-cluster dev flow. With minikube running and the backing PostgreSQL/Redis available in the cluster, start everything with:
 
 ```bash
 yarn workspace @opsiforce/backend run minikube-dev
 ```
 
-Use this only when the shared infrastructure is already up and you do not need to start the frontend workspace from the root script.
+This sets up minikube storage, builds the agent image into minikube, installs the Opsiforce infra Helm chart, creates the application databases, runs Drizzle migrations, installs Bifrost, and then runs Drizzle Studio, a Mailgun mock, and the Tilt backend/proxy loop together. Local environment values are read from `backend/local-envs.sh`.
+
+To bring the Tilt-managed resources up or down on their own:
+
+```bash
+yarn workspace @opsiforce/backend run tilt:up
+yarn workspace @opsiforce/backend run tilt:down
+```
+
+### Frontend
+
+The frontend runs on the host with Vite HMR:
+
+```bash
+yarn workspace @opsiforce/frontend run dev
+```
 
 ## Local URLs
 
@@ -126,7 +91,7 @@ Use this only when the shared infrastructure is already up and you do not need t
 | DB viewer | `https://{project}.db.opsiforce.localtest.me` |
 | Bifrost dashboard | `https://bifrost.opsiforce.localtest.me` |
 | Tilt UI | `https://tilt.opsiforce.localtest.me` |
-| Backend direct port-forward | `http://localhost:3010` |
+| Backend (Tilt port-forward) | `http://localhost:3010` |
 | Frontend Vite server | `http://localhost:8084` |
 | Drizzle Studio | `http://localhost:4983` |
 
@@ -144,3 +109,5 @@ yarn workspace @opsiforce/backend run db:migrate
 yarn workspace @opsiforce/backend run db:studio
 yarn workspace @opsiforce/backend run tilt:down
 ```
+
+Day-to-day command reference and local ports: [docs/development/commands.md](docs/development/commands.md).

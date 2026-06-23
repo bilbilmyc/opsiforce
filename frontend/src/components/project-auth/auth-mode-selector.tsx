@@ -1,5 +1,7 @@
 import { For, type JSX } from 'solid-js';
 import type { ProjectAuthMode } from '~/api/client';
+import { config } from '~/config/config';
+import { cn } from '~/lib/cn';
 import { Globe, Lock, ShieldCheck } from '~/components/icons';
 
 interface ModeOption {
@@ -9,26 +11,31 @@ interface ModeOption {
   icon: (props: { class?: string }) => JSX.Element;
 }
 
-const OPTIONS: ModeOption[] = [
-  {
-    value: 'public',
-    title: 'Public',
-    description: "Anyone can access this project's preview URL without signing in.",
-    icon: Globe,
-  },
-  {
-    value: 'makara',
-    title: 'Makara',
-    description: 'Reuse the existing Makara Keycloak sign-in — no configuration needed.',
-    icon: ShieldCheck,
-  },
-  {
+function options(): ModeOption[] {
+  const opts: ModeOption[] = [
+    {
+      value: 'public',
+      title: 'Public',
+      description: "Anyone can access this project's preview URL without signing in.",
+      icon: Globe,
+    },
+  ];
+  if (config.managedAuthEnabled) {
+    opts.push({
+      value: 'managed',
+      title: config.managedAuthLabel,
+      description: config.managedAuthDescription,
+      icon: ShieldCheck,
+    });
+  }
+  opts.push({
     value: 'manual',
     title: 'Manual',
     description: 'Require login via a custom auth provider before the preview loads.',
     icon: Lock,
-  },
-];
+  });
+  return opts;
+}
 
 export interface AuthModeSelectorProps {
   value: ProjectAuthMode;
@@ -37,9 +44,10 @@ export interface AuthModeSelectorProps {
 }
 
 export function AuthModeSelector(props: AuthModeSelectorProps) {
+  const opts = options();
   return (
-    <div role="radiogroup" class="grid grid-cols-3 gap-2">
-      <For each={OPTIONS}>
+    <div role="radiogroup" class={cn('grid gap-2', opts.length === 3 ? 'grid-cols-3' : 'grid-cols-2')}>
+      <For each={opts}>
         {(opt) => {
           const selected = () => props.value === opt.value;
           return (

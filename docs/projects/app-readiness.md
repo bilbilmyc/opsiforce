@@ -6,7 +6,7 @@
 
 Opsiforce cares about two separate facts about a Project's running App, and for a long time it conflated them:
 
-- **Go-live** — the App first exists and is running: the agent has written `app.meta.json` (so the App has a name) and its process answers on its port. This is what makes the in-workspace app pane appear and what Makara's catalog reflects.
+- **Go-live** — the App first exists and is running: the agent has written `app.meta.json` (so the App has a name) and its process answers on its port. This is what makes the in-workspace app pane appear and what the app catalog reflects.
 - **App serving** — the App's process is up and responding right now. Publishing, duplicating, and firing a schedule all have to wait for this before they proceed.
 
 These are different facts: an App can serve a starter page long before the agent decides to go live, and a gone-live App can later crash. Treating "does it serve?" and "has it gone live?" as one polled question is what produced both the wasted work and the confusing failure modes recorded in ADR-0015.
@@ -57,7 +57,7 @@ The trade behind dropping the re-push — why `serving` is never a Postgres colu
 
 ## See also
 
-- [Project Apps](project-apps.md) — how detected identity becomes per-environment App Details and the Makara pin.
+- [Project Apps](project-apps.md) — how detected identity becomes per-environment App Details and the catalog pin.
 - [Service Gateway](../gateways/service-gateway.md) — the channel the reporter pushes over.
 - [ADR-0015](../adr/0015-app-liveness-pushed-not-polled.md) (incl. the 2026-06-17 edges-not-a-heartbeat amendment) · [ADR-0009](../adr/0009-in-pod-control-process.md) (the in-pod control process the reporter sits beside).
 - Code: in-pod reporter `proxy/cmd/agent-control/reporter.go` (beside the `/health`+`/restart-app` server in `main.go`); backend owner `backend/src/project/app-readiness.service.ts` (`awaitReady`); push endpoint `backend/src/project/app.controller.agent.ts` (`POST gateway/app/state`, `GatewayAuthGuard`); identity via `AppService.upsertProjectApp`.

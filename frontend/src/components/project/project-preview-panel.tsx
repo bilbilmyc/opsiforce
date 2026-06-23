@@ -6,6 +6,7 @@ import { createResizablePanel } from '~/lib/create-resizable-panel';
 import { appPublicUrl } from '~/lib/app-url';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
+import { config } from '~/config/config';
 import { useProjectEnvironments } from '~/api/environments';
 import PinBadge from './pin-badge';
 import EditAppDialog from './edit-app-dialog';
@@ -25,7 +26,7 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
   const [editAppOpen, setEditAppOpen] = createSignal(false);
 
   const { hasPermission } = usePermissions();
-  const canPinApps = () => hasPermission(Permission.pinApps);
+  const canPinApps = () => hasPermission(Permission.pinApps) && config.catalogEnabled;
   const canEditAppDetails = () => hasPermission(Permission.editAppDetails);
   const projectsEnabled = () => canPinApps() || canEditAppDetails();
   const environments = useProjectEnvironments(() => props.projectId, { enabled: projectsEnabled });

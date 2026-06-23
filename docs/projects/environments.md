@@ -40,7 +40,7 @@ Beyond the publish form, every environment (including Development) has an **Envi
 
 ## App auth
 
-How visitors reach an app — **public**, **manual** (the owner's OIDC), or **makara** (the platform Keycloak, tenant-scoped) — is a property of the *environment*, not the project, enforced by a small OIDC gate on the environment's own host. A newly published environment **inherits Development's auth as a one-time, fail-closed seed** at first publish, then is managed independently. Only a `public` environment can be pinned to the Makara catalog. The enforcement model — keyed by routing id, seeded by cloning Development's middleware, applied before the app can serve — is [ADR-0007](../adr/0007-per-environment-app-auth.md).
+How visitors reach an app — **public**, **manual** (the owner's OIDC), or **managed** (a shared identity provider configured by the platform operator, tenant-scoped) — is a property of the *environment*, not the project, enforced by a small OIDC gate on the environment's own host. A newly published environment **inherits Development's auth as a one-time, fail-closed seed** at first publish, then is managed independently. Only a `public` environment can be pinned to the app catalog. The enforcement model — keyed by routing id, seeded by cloning Development's middleware, applied before the app can serve — is [ADR-0007](../adr/0007-per-environment-app-auth.md).
 
 ## Using it
 
@@ -53,6 +53,6 @@ Four permissions gate these surfaces: `can_manage_environments`, `can_publish_pr
 ## See also
 
 - [Duplication](duplication.md) — the sibling flow that copies a whole project (working state included), reusing the same git path ([ADR-0011](../adr/0011-duplication-reuses-git-publish-path.md)).
-- [Project Apps](project-apps.md) — per-environment app identity and the Makara pin ([ADR-0016](../adr/0016-app-details-are-per-environment.md)).
+- [Project Apps](project-apps.md) — per-environment app identity and the catalog pin ([ADR-0016](../adr/0016-app-details-are-per-environment.md)).
 - [App Readiness](app-readiness.md) · [Schedules](schedules.md) · [Resources](../runtime/resources.md).
 - Code: `backend/src/environment/` (registry), `backend/src/project-environment/` (per-project instances **and** the environment-variables service that writes `opsiforce.env.json`), `backend/src/publish/` (worker + SSE), `backend/src/git/` (`GitService`), `backend/src/project/project-auth.service.ts` (Traefik middleware keyed by routing id).
