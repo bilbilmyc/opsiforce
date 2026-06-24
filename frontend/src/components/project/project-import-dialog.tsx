@@ -29,8 +29,13 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
     return (workspaces.data ?? []).find((w) => w.type === 'private' && w.ownerId === uid);
   });
 
+  let workspaceInitialized = false;
   createEffect(() => {
-    if (workspaceId() === null && privateWorkspace()) setWorkspaceId(privateWorkspace()?.id ?? null);
+    const ws = privateWorkspace();
+    if (!workspaceInitialized && ws) {
+      workspaceInitialized = true;
+      setWorkspaceId(ws.id);
+    }
   });
 
   const reset = () => {

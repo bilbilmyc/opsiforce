@@ -110,6 +110,7 @@ export class ProjectImportService {
     } catch (err) {
       await rm(uploadPath, { force: true }).catch(() => {});
       await rm(archivePath, { force: true }).catch(() => {});
+      await this.projectService.cleanupFailedImport(project.id).catch(() => {});
       throw err;
     }
 
