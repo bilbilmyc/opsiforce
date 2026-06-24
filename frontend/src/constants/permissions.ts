@@ -12,6 +12,8 @@ export const Permission = {
   disableProject: 'can_disable_project',
   restartProject: 'can_restart_project',
   duplicateProject: 'can_duplicate_project',
+  exportProject: 'can_export_project',
+  importProject: 'can_import_project',
   manageWorkspaces: 'can_manage_workspaces',
   moveProjectsBetweenWorkspaces: 'can_move_projects_between_workspaces',
   pinApps: 'can_pin_apps',

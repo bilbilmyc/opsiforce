@@ -19,6 +19,7 @@
 **Projects & apps** (`projects/`)
 - [Project Environments](projects/environments.md) — the Project/Environment/publish model ([ADRs](adr/README.md))
 - [Project Duplication](projects/duplication.md) — copy a project with working state ([ADR-0011](adr/0011-duplication-reuses-git-publish-path.md))
+- [Project Export & Import](projects/export-import.md) — carry a project to another deployment as a file ([ADR-0017](adr/0017-project-export-is-a-faithful-full-workspace-zip.md))
 - [Project Apps](projects/project-apps.md) — per-environment app identity, the catalog pin, editing ([ADR-0016](adr/0016-app-details-are-per-environment.md))
 - [App Readiness](projects/app-readiness.md) — go-live/serving pushed from the pod, not polled ([ADR-0015](adr/0015-app-liveness-pushed-not-polled.md))
 - [Schedules](projects/schedules.md) — per-environment agent-requested cron, wake-on-fire
@@ -43,6 +44,7 @@
 
 **Frontend** (`frontend/`)
 - [Query Adapter](frontend/query-adapter.md) — why reads use the in-house `createAppQuery` wrapper
+- [Job Dock](frontend/job-dock.md) — one global progress surface for publish, duplicate, export, and import
 
 **Decisions** (`adr/`)
 - [Architecture Decision Records](adr/README.md) — the indexed *why* behind the above

@@ -15,7 +15,6 @@ export default function ProjectCard(props: {
   onRename: (id: string, title: string) => void;
   onSettings?: () => void;
   onDeleted?: () => void;
-  onDuplicated?: (project: Project) => void;
 }) {
   const { hasPermission } = usePermissions();
   const canPinApps = () => hasPermission(Permission.pinApps) && config.catalogEnabled;
@@ -99,7 +98,6 @@ export default function ProjectCard(props: {
             onRename={startRename}
             onSettings={props.onSettings}
             onDeleted={props.onDeleted}
-            onDuplicated={props.onDuplicated}
             triggerClass={cn(
               'inline-flex items-center justify-center rounded-md w-6 h-6 shrink-0 text-sidebar-muted-foreground transition-colors',
               'opacity-0 group-hover:opacity-100',

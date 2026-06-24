@@ -25,3 +25,14 @@ export interface ProjectDuplicateJobData {
   sourceProjectId: string;
   targetProjectId: string;
 }
+
+export interface ProjectDuplicateJobResponse {
+  id: string;
+  projectId: string;
+  status: ProjectDuplicateStatus;
+  bytesTotal: number;
+  bytesProcessed: number;
+  error: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}

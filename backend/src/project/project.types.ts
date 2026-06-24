@@ -99,7 +99,6 @@ export interface ProjectState {
   status: ProjectStatus;
   workspaceId: string | null;
   title: string | null;
-  operation: ProjectDuplicateOperation | null;
   app: ProjectAppMeta | null;
 }
 
@@ -119,17 +118,6 @@ export interface ProjectEnvironmentSummary {
   appName: string | null;
   appDescription: string | null;
   sessionId: string | null;
-}
-
-export interface ProjectDuplicateOperation {
-  type: 'duplicate';
-  status: 'queued' | 'committing' | 'cloning' | 'copying' | 'starting' | 'failed';
-  bytesTotal: number;
-  bytesCopied: number;
-  error: string | null;
-  startedAt: Date | null;
-  completedAt: Date | null;
-  updatedAt: Date;
 }
 
 export interface ProjectAppMeta {

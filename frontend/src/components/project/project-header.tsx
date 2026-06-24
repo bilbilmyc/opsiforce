@@ -6,7 +6,7 @@ import { Code as CodeIcon, Database, MessageSquare } from '~/components/icons';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import ProjectActionsMenu from '~/components/project-actions-menu';
 import EnvironmentsPopover from '~/components/project/environments/environments-popover';
-import type { Project, ProjectStatus } from '~/api/client';
+import type { ProjectStatus } from '~/api/client';
 import type { ProjectEnvironment } from '~/api/environments';
 
 export type ProjectTab = 'chat' | 'code' | 'db';
@@ -23,7 +23,6 @@ export interface ProjectHeaderProps {
   activeEnvironmentId: string;
   onActiveEnvironmentChange: (environmentId: string) => void;
   onDeleted: () => void;
-  onDuplicated: (p: Project) => void;
 }
 
 export default function ProjectHeader(props: ProjectHeaderProps) {
@@ -82,7 +81,6 @@ export default function ProjectHeader(props: ProjectHeaderProps) {
           project={project()}
           activeEnvironmentId={props.activeEnvironmentId}
           onDeleted={props.onDeleted}
-          onDuplicated={props.onDuplicated}
         />
       </div>
     </div>

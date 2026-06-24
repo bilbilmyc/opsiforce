@@ -18,7 +18,7 @@ import ConfirmDialog from '~/components/ui/confirm-dialog';
 import Skeleton from '~/components/ui/skeleton';
 import ProjectAuthDialog from '~/components/project-auth-dialog';
 import PinAppDialogs, { type PinDialogAction } from '../pin-app-dialogs';
-import { usePublishJobs } from './publish-jobs-context';
+import { useJobDock } from '~/components/project/jobs/job-dock-context';
 import EnvManageRow from './env-manage-row';
 import EnvTargetRow from './env-target-row';
 import EnvStatusDot from './env-status-dot';
@@ -46,9 +46,9 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
   const navigate = useNavigate();
   const [open, setOpen] = createSignal(false);
 
-  const publishJobs = usePublishJobs();
+  const jobDock = useJobDock();
   const publishIndicator = createMemo(() => {
-    const jobs = publishJobs.entries();
+    const jobs = jobDock.entries().filter((entry) => entry.kind === 'publish' && entry.projectId === props.projectId);
     if (jobs.length === 0) return null;
     const statuses = jobs.map((entry) => entry.job?.status);
     if (statuses.some((status) => status !== 'done' && status !== 'failed')) return 'running';

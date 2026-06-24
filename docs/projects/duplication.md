@@ -25,10 +25,11 @@ Publishing and duplicating share the git transfer code and can't run against the
 
 ## Progress and access
 
-Duplication is asynchronous and shows **publish-style step progress** on the new project's page (snapshot → clone → runtime-state copy → app starting), over the same Redis-backed SSE stream publishing uses. The final step waits for the app to actually respond, so the project opens only once its app is reachable. It is gated by its own permission, lands in the **same workspace** as its source (so it never widens who can see a project), and — being tenant-agnostic by design — is the foundation for planned cross-tenant duplication.
+Duplication is asynchronous and shows **step progress** (snapshot → clone → runtime-state copy → app starting) over its own SSE job stream, as a card in the global [job dock](../frontend/job-dock.md) — the same surface publish, export, and import use. The new project shows as `starting` in the project list while the copy runs, and the dock's final step waits for the app to actually respond, so "Open project" appears only once its app is reachable. It is gated by its own permission, lands in the **same workspace** as its source (so it never widens who can see a project), and — being tenant-agnostic by design — is the foundation for planned cross-tenant duplication.
 
 ## See also
 
 - [Project Environments](environments.md) — publishing, the git path duplication reuses ([ADR-0004](../adr/0004-git-based-incremental-publish.md)).
+- [Job Dock](../frontend/job-dock.md) — the shared progress surface duplication now renders into.
 - [ADR-0011](../adr/0011-duplication-reuses-git-publish-path.md) — the subtractive runtime-state copy and the dependency-store decision.
-- Code: `backend/src/project/project-duplicate.*` (the job), `backend/src/git/` (`GitService`), progress UI in `frontend/src/components/project/`.
+- Code: `backend/src/project/project-duplicate.*` (the job + its stream endpoint), `backend/src/git/` (`GitService`), progress UI in `frontend/src/components/project/jobs/`.

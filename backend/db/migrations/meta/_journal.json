@@ -351,6 +351,13 @@
       "when": 1782206848288,
       "tag": "0049_rename-makara-to-managed",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1782290674641,
+      "tag": "0050_add-project-transfer-jobs",
+      "breakpoints": true
     }
   ]
 }

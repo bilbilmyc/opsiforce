@@ -16,6 +16,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { Queue } from 'bullmq';
 import crypto from 'crypto';
 import path from 'path';
+import { rm } from 'node:fs/promises';
 import { db } from '../../db';
 import {
   projectSettings,
@@ -30,6 +31,7 @@ import {
   tenants,
   tenantSettings,
   projectDuplicateJobs,
+  projectTransferJobs,
 } from '../../db/schema';
 import { PodService, PodStartupFailedError } from '../pod/pod.service';
 import { ProxyService } from '../proxy/proxy.service';
@@ -49,6 +51,13 @@ import { EnvironmentService } from '../environment/environment.service';
 import { GitService } from '../git/git.service';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
 import type { ProjectEnvironmentContext } from '../project-environment/project-environment.types';
+import type {
+  ExportManifestAppDetails,
+  ExportManifestResources,
+  ExportManifestSchedule,
+  ExportManifestSettings,
+  JsonValue,
+} from '../export/project-export.types';
 import {
   CreateProjectDto,
   UpdateProjectDto,
@@ -59,7 +68,6 @@ import {
   ProjectState,
   ProjectAuthResponse,
   UpdateProjectAuthDto,
-  ProjectDuplicateOperation,
   UpdateAppDto,
   UpdateProjectPodClassDto,
   UpdateProjectLoggingDto,
@@ -75,6 +83,7 @@ import {
   resolvePreset,
   toK8sResources,
   type K8sResourceRequirements,
+  type PodClass,
   type PodClassCatalog,
   type PodResources,
 } from '../pod/pod-classes';
@@ -142,7 +151,9 @@ import {
   PROJECT_DUPLICATE_QUEUE,
   ProjectDuplicateStatus,
   type ProjectDuplicateJobData,
+  type ProjectDuplicateJobResponse,
 } from './project-duplicate.types';
+import { ACTIVE_IMPORT_STATUSES, ProjectImportStatus } from './project-import.types';
 import { ACTIVE_PUBLISH_STATUSES } from '../publish/publish.types';
 
 type ProjectActivityKind = 'agent' | 'app';
@@ -238,6 +249,9 @@ export class ProjectService implements OnApplicationBootstrap {
     });
     await this.recoverDuplicateJobs().catch((err) => {
       this.logger.warn(`Failed to recover duplicate jobs on startup: ${err.message}`);
+    });
+    await this.recoverImportJobs().catch((err) => {
+      this.logger.warn(`Failed to recover import jobs on startup: ${err.message}`);
     });
     await this.resumeStartingEnvironments().catch((err) => {
       this.logger.warn(`Failed to resume starting environments: ${err.message}`);
@@ -522,6 +536,158 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId);
   }
 
+  /**
+   * Creates the empty shell of an imported project: fresh identity, rows, and
+   * freshly-minted keys — but no workspace files and no startup. The import
+   * processor unpacks the bundle into the project directory and then boots it.
+   * Mirrors a duplicate's target rows, minus the source copy. Auth resets to
+   * `public` and the new environment carries the target's platform-version.
+   *
+   * The manifest's database-row state (settings, App Details, paused schedules)
+   * is rehydrated here. Resources cross as a class and are re-resolved against
+   * the target's hardware; schedules arrive paused and re-stamped to the
+   * import-time timezone, so no automation fires unexpectedly.
+   */
+  async createImportedProject(params: {
+    tenantId: string;
+    workspaceId: string | null;
+    title: string | null;
+    timezone: string;
+    agentId: string;
+    description: string | null;
+    settings: ExportManifestSettings | null;
+    resources: ExportManifestResources | null;
+    appDetails: ExportManifestAppDetails | null;
+    schedules: ExportManifestSchedule[];
+  }): Promise<ProjectResponse> {
+    const { tenantId, workspaceId, title, timezone, agentId, description, settings, resources, appDetails, schedules } =
+      params;
+    const id = crypto.randomUUID();
+    const directory = `projects/${id}`;
+    const platformVersion = this.configService.get<string>('platformVersion', '0.1.0');
+    const timeouts = await this.defaultsService.getTenantTimeouts(tenantId);
+    const defaultEnvironment = await this.environmentService.ensureDefaultForTenant(tenantId);
+    const tz = timezone || 'UTC';
+    const podResources = this.resolveImportedResources(resources);
+
+    await db.transaction(async (tx) => {
+      await tx.insert(projects).values({
+        id,
+        tenantId,
+        workspaceId,
+        agentId,
+        title,
+        description,
+      });
+
+      await tx.insert(projectSettings).values({
+        projectId: id,
+        timeoutIdle: settings?.timeoutIdle ?? timeouts.defaultTimeoutIdle,
+        appTimeoutIdle: settings?.appTimeoutIdle ?? timeouts.defaultAppTimeoutIdle,
+        timezone: tz,
+        ...(settings
+          ? { requestLogMode: settings.requestLogMode, requestLogBodyLimit: settings.requestLogBodyLimit }
+          : {}),
+      });
+
+      await tx.insert(projectPodSettings).values({
+        projectId: id,
+        podClass: podResources.podClass,
+        ...podResources.resources,
+      });
+
+      await tx.insert(projectEnvironments).values({
+        id,
+        projectId: id,
+        environmentId: defaultEnvironment.id,
+        isDefault: true,
+        directory,
+        platformVersion,
+        status: ProjectStatus.Starting,
+        authMode: 'public',
+      });
+
+      if (appDetails) {
+        await tx.insert(projectApps).values({
+          projectEnvironmentId: id,
+          projectId: id,
+          name: appDetails.name,
+          description: appDetails.description,
+        });
+      }
+
+      if (schedules.length > 0) {
+        await tx.insert(projectSchedules).values(
+          schedules.map((schedule) => ({
+            id: crypto.randomUUID(),
+            projectId: id,
+            projectEnvironmentId: id,
+            tenantId,
+            name: schedule.name,
+            cronPattern: schedule.cronPattern,
+            timeZone: tz,
+            targetPath: schedule.targetPath,
+            method: schedule.method,
+            body: schedule.body,
+            headers: schedule.headers,
+            isActive: false,
+          }))
+        );
+      }
+    });
+
+    await this.createBifrostResources(id, tenantId);
+    await this.createGatewayKey(id, id, tenantId);
+
+    return this.findOne(id, tenantId);
+  }
+
+  private resolveImportedResources(resources: ExportManifestResources | null): {
+    podClass: PodClass;
+    resources: PodResources;
+  } {
+    const smallOverride = this.podClassSmallOverride();
+    if (resources?.podClass === 'custom') {
+      return {
+        podClass: 'custom',
+        resources: clampCustom({
+          cpuMillicores: resources.cpuMillicores,
+          memoryRequestMib: resources.memoryRequestMib,
+          memoryLimitMib: resources.memoryLimitMib,
+        }),
+      };
+    }
+    if (resources && isPreset(resources.podClass)) {
+      return { podClass: resources.podClass, resources: resolvePreset(resources.podClass, smallOverride) };
+    }
+    return { podClass: 'small', resources: resolvePreset('small', smallOverride) };
+  }
+
+  async getSchedulesForExport(projectEnvironmentId: string): Promise<ExportManifestSchedule[]> {
+    const rows = await db
+      .select({
+        name: projectSchedules.name,
+        cronPattern: projectSchedules.cronPattern,
+        timeZone: projectSchedules.timeZone,
+        targetPath: projectSchedules.targetPath,
+        method: projectSchedules.method,
+        body: projectSchedules.body,
+        headers: projectSchedules.headers,
+      })
+      .from(projectSchedules)
+      .where(eq(projectSchedules.projectEnvironmentId, projectEnvironmentId));
+
+    return rows.map((row) => ({
+      name: row.name,
+      cronPattern: row.cronPattern,
+      timeZone: row.timeZone,
+      targetPath: row.targetPath,
+      method: row.method,
+      body: (row.body ?? null) as JsonValue,
+      headers: (row.headers ?? null) as Record<string, string> | null,
+    }));
+  }
+
   async ensureEnvironmentById(envId: string, activity: ProjectActivityKind): Promise<EnsureEnvironmentResult> {
     const env = await this.projectEnvironmentService.findByIdOrNull(envId);
     if (!env) throw new NotFoundException(`Project environment ${envId} not found`);
@@ -644,14 +810,12 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.assertProjectVisibleToUser(row.id, row.workspaceId, userId);
 
     const status = row.disabled ? ProjectStatus.Disabled : (row.status as ProjectStatus);
-    const operation = await this.findDuplicateOperation(row.id);
     const app = status === ProjectStatus.Active ? await this.appService.get(row.id) : null;
     return {
       id: row.id,
       status,
       workspaceId: row.workspaceId,
       title: row.title,
-      operation: operation ?? null,
       app,
     };
   }
@@ -1427,6 +1591,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (updated.isDefault) {
       this.completeDuplicateWhenAppReady(updated.projectId, envId);
+      this.completeImportWhenAppReady(updated.projectId, envId);
     }
 
     await Promise.allSettled([
@@ -1499,43 +1664,32 @@ export class ProjectService implements OnApplicationBootstrap {
     }
   }
 
-  private async findDuplicateOperation(projectId: string): Promise<ProjectDuplicateOperation | undefined> {
+  async getLatestDuplicateJob(projectId: string): Promise<ProjectDuplicateJobResponse | null> {
     const [job] = await db
       .select({
+        id: projectDuplicateJobs.id,
         status: projectDuplicateJobs.status,
         bytesTotal: projectDuplicateJobs.bytesTotal,
         bytesCopied: projectDuplicateJobs.bytesCopied,
         error: projectDuplicateJobs.error,
-        startedAt: projectDuplicateJobs.startedAt,
-        completedAt: projectDuplicateJobs.completedAt,
+        createdAt: projectDuplicateJobs.createdAt,
         updatedAt: projectDuplicateJobs.updatedAt,
       })
       .from(projectDuplicateJobs)
-      .where(
-        and(
-          eq(projectDuplicateJobs.targetProjectId, projectId),
-          inArray(projectDuplicateJobs.status, [
-            ProjectDuplicateStatus.Queued,
-            ProjectDuplicateStatus.Committing,
-            ProjectDuplicateStatus.Cloning,
-            ProjectDuplicateStatus.Copying,
-            ProjectDuplicateStatus.Starting,
-            ProjectDuplicateStatus.Failed,
-          ])
-        )
-      );
+      .where(eq(projectDuplicateJobs.targetProjectId, projectId))
+      .orderBy(desc(projectDuplicateJobs.createdAt))
+      .limit(1);
 
-    if (!job) return undefined;
-    if (job.status === ProjectDuplicateStatus.Completed) return undefined;
+    if (!job) return null;
 
     return {
-      type: 'duplicate',
+      id: job.id,
+      projectId,
       status: job.status,
       bytesTotal: job.bytesTotal,
-      bytesCopied: job.bytesCopied,
+      bytesProcessed: job.bytesCopied,
       error: job.error,
-      startedAt: job.startedAt,
-      completedAt: job.completedAt,
+      createdAt: job.createdAt,
       updatedAt: job.updatedAt,
     };
   }
@@ -1633,10 +1787,130 @@ export class ProjectService implements OnApplicationBootstrap {
     });
   }
 
+  private async hasBlockingImportOperation(projectId: string): Promise<boolean> {
+    const [job] = await db
+      .select({ id: projectTransferJobs.id })
+      .from(projectTransferJobs)
+      .where(
+        and(
+          eq(projectTransferJobs.kind, 'import'),
+          eq(projectTransferJobs.projectId, projectId),
+          inArray(projectTransferJobs.status, [
+            ProjectImportStatus.Queued,
+            ProjectImportStatus.Unpacking,
+            ProjectImportStatus.Failed,
+          ])
+        )
+      )
+      .limit(1);
+    return !!job;
+  }
+
+  private completeImportWhenAppReady(projectId: string, envId: string, probeFirst = false): void {
+    void (async () => {
+      const [job] = await db
+        .select({ id: projectTransferJobs.id })
+        .from(projectTransferJobs)
+        .where(
+          and(
+            eq(projectTransferJobs.kind, 'import'),
+            eq(projectTransferJobs.projectId, projectId),
+            eq(projectTransferJobs.status, ProjectImportStatus.Starting)
+          )
+        )
+        .limit(1);
+      if (!job) return;
+
+      if (probeFirst && (await this.probeAppServing(envId))) {
+        this.appReadiness.markServing(envId);
+      }
+
+      const appReady = await this.appReadiness.awaitReady(envId, DUPLICATE_APP_READY_TIMEOUT_MS);
+
+      const settled = await db
+        .update(projectTransferJobs)
+        .set(
+          appReady
+            ? { status: ProjectImportStatus.Completed, completedAt: new Date(), updatedAt: new Date() }
+            : {
+                status: ProjectImportStatus.Failed,
+                error: "The imported app didn't come online in time. Please try again.",
+                completedAt: new Date(),
+                updatedAt: new Date(),
+              }
+        )
+        .where(
+          and(
+            eq(projectTransferJobs.kind, 'import'),
+            eq(projectTransferJobs.projectId, projectId),
+            eq(projectTransferJobs.status, ProjectImportStatus.Starting)
+          )
+        )
+        .returning({ id: projectTransferJobs.id });
+
+      if (settled.length > 0) {
+        await this.projectEventsService.publish(projectId).catch(() => undefined);
+        if (!appReady) await this.cleanupFailedImport(projectId);
+      }
+    })().catch((err) => {
+      this.logger.warn(`Failed to finish import for project ${projectId}: ${(err as Error).message}`);
+    });
+  }
+
+  private async recoverImportJobs(): Promise<void> {
+    const activeJobs = await db
+      .select()
+      .from(projectTransferJobs)
+      .where(and(eq(projectTransferJobs.kind, 'import'), inArray(projectTransferJobs.status, ACTIVE_IMPORT_STATUSES)));
+
+    for (const job of activeJobs) {
+      if (job.status === ProjectImportStatus.Starting) {
+        const env = await this.projectEnvironmentService.findByIdOrNull(job.projectId);
+        if (env && env.status === ProjectStatus.Active && env.podIp) {
+          this.completeImportWhenAppReady(job.projectId, env.id, true);
+        } else {
+          this.spawnStartupWorker(job.projectId);
+        }
+        continue;
+      }
+
+      await db
+        .update(projectTransferJobs)
+        .set({
+          status: ProjectImportStatus.Failed,
+          error: 'Import interrupted by a server restart',
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(projectTransferJobs.id, job.id));
+      await this.projectEventsService.publish(job.projectId).catch(() => undefined);
+      await this.cleanupFailedImport(job.projectId);
+    }
+  }
+
+  async cleanupFailedImport(projectId: string): Promise<void> {
+    const project = await this.findOneById(projectId).catch(() => null);
+    if (!project || !project.tenantId) return;
+
+    const storageMountPath = this.configService.getOrThrow<string>('storageMountPath');
+    const projectDir = path.join(storageMountPath, project.directory);
+
+    await this.remove(projectId, project.tenantId).catch((err) => {
+      this.logger.warn(`Failed to remove project ${projectId} during import cleanup: ${(err as Error).message}`);
+    });
+    await rm(projectDir, { recursive: true, force: true }).catch((err) => {
+      this.logger.warn(
+        `Failed to remove project directory ${projectDir} during import cleanup: ${(err as Error).message}`
+      );
+    });
+  }
+
   private async probeAppServing(envId: string): Promise<boolean> {
     try {
       const upstream = await this.proxyService.resolveAppUpstreamByEnvironmentId(envId);
-      const res = await fetch(`${upstream}/api/app-meta`, { signal: AbortSignal.timeout(APP_SERVING_PROBE_TIMEOUT_MS) });
+      const res = await fetch(`${upstream}/api/app-meta`, {
+        signal: AbortSignal.timeout(APP_SERVING_PROBE_TIMEOUT_MS),
+      });
       return res.ok;
     } catch {
       return false;
@@ -1699,6 +1973,7 @@ export class ProjectService implements OnApplicationBootstrap {
     const current = await this.projectEnvironmentService.findByIdOrNull(envId).catch(() => null);
     if (!current || current.status !== ProjectStatus.Starting) return;
     if (current.isDefault && (await this.hasBlockingDuplicateOperation(current.projectId))) return;
+    if (current.isDefault && (await this.hasBlockingImportOperation(current.projectId))) return;
 
     const podName = this.podService.assignedPodName(envId);
     const recreateRequested = this.recreateRequests.delete(envId);
@@ -1794,12 +2069,7 @@ export class ProjectService implements OnApplicationBootstrap {
       controlToken: crypto.randomBytes(32).toString('hex'),
     };
 
-    const { created } = await this.podService.createAssignedPod(
-      env.id,
-      env.directory,
-      env.projectId,
-      tenantOptions
-    );
+    const { created } = await this.podService.createAssignedPod(env.id, env.directory, env.projectId, tenantOptions);
     if (created) this.appReadiness.markDown(env.id);
   }
 

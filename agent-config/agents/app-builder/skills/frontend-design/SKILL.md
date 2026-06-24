@@ -26,9 +26,9 @@ Before touching CSS or components, decide:
 
 ## Phase 2: Theme Setup
 
-### Pick a brand color that fits the tone
+Pick a brand color that fits the tone, then set it in `index.css`. The **`ui` skill owns the theming mechanics** — OKLCH variables, the `@theme inline` setup, the full semantic-token list, border radius, and the dark-mode toggle. This section is only about *which* colors to choose.
 
-Update `--primary` and related vars in `frontend/src/index.css`:
+### Starter palettes by app type
 
 | App type | Direction | OKLCH primary |
 |---|---|---|
@@ -40,11 +40,7 @@ Update `--primary` and related vars in `frontend/src/index.css`:
 | E-commerce | Fresh, actionable | `oklch(0.55 0.17 160)` — emerald |
 | Education | Bright, accessible | `oklch(0.65 0.16 85)` — amber |
 
-Don't just pick a primary — customize `--accent`, `--destructive`, and chart colors too. A cohesive palette has 1 dominant color + 1 accent + neutral grays.
-
-### Dark mode matters
-
-Always customize `.dark` vars too. Don't just invert — dark mode should feel intentional with slightly lighter/more saturated primaries and softer backgrounds.
+Don't just pick a primary — also choose `--accent`, `--destructive`, and chart colors. A cohesive palette is 1 dominant color + 1 accent + neutral grays. Make dark mode **intentional**, not a raw inversion: slightly lighter / more saturated primaries, softer backgrounds. (How to wire all of this into `index.css` lives in the `ui` skill's theming rules.)
 
 ## Phase 3: Typography Hierarchy
 
@@ -85,7 +81,7 @@ Use consistent, clear hierarchy:
 
 ### Don't be afraid of asymmetry
 - 2/3 + 1/3 split: `grid-cols-3` → `lg:col-span-2` + `lg:col-span-1`
-- Sidebar layouts, offset hero sections, mixed card sizes add visual interest
+- Sidebar layouts (always via the responsive App Shell in the `ui` skill — a desktop sidebar **must** collapse to a hamburger drawer on mobile), offset hero sections, mixed card sizes add visual interest
 
 ## Phase 5: Visual Polish
 
@@ -112,6 +108,8 @@ className="transition-all"        // multi-property
   Pending
 </span>
 ```
+
+These fixed light/dark colour pairs are the **one** sanctioned use of raw Tailwind colours — success / warning / info have no semantic token. Always include the `dark:` variant. For numeric metrics and everything else, use semantic tokens / `Badge` variants (see the `ui` skill's styling rules).
 
 ### Subtle backgrounds for sections
 ```tsx
@@ -191,6 +189,6 @@ Before finishing any app, verify:
 - [ ] All interactive elements have hover states and transitions
 - [ ] Empty states handled with icon + message + CTA
 - [ ] Icons used in buttons and navigation (Lucide)
-- [ ] Mobile-responsive with grid breakpoints
+- [ ] Mobile-responsive: grid breakpoints **and** reachable navigation (a sidebar collapses to a hamburger/drawer — see the `ui` skill's App Shell; verify at 375px)
 - [ ] Consistent spacing between sections
 - [ ] At least one "standout" visual element that makes the app distinctive

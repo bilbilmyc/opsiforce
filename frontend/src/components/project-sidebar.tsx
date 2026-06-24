@@ -229,7 +229,6 @@ export default function ProjectSidebar(props: { search: string }) {
                   onProjectDeleted={(id) => {
                     if (id === activeProjectId()) navigate({ to: '/' });
                   }}
-                  onProjectDuplicated={(p) => navigateToProject(p.id)}
                 />
               )}
             </For>
@@ -248,7 +247,6 @@ export default function ProjectSidebar(props: { search: string }) {
               onProjectDeleted={(id) => {
                 if (id === activeProjectId()) navigate({ to: '/' });
               }}
-              onProjectDuplicated={(p) => navigateToProject(p.id)}
             />
 
             <Show when={(workspaces.data?.length ?? 0) === 0 && (projects.data?.length ?? 0) === 0}>

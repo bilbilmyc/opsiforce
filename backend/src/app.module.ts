@@ -29,6 +29,7 @@ import { ProjectPoolModule } from './pool/project-pool.module';
 import { EnvironmentModule } from './environment/environment.module';
 import { ProjectEnvironmentModule } from './project-environment/project-environment.module';
 import { PublishModule } from './publish/publish.module';
+import { ProjectExportModule } from './export/project-export.module';
 import { AdminModule } from './admin/admin.module';
 
 function parseRedisUrl(url: string) {
@@ -79,6 +80,7 @@ function parseRedisUrl(url: string) {
     EnvironmentModule,
     ProjectEnvironmentModule,
     PublishModule,
+    ProjectExportModule,
     AdminModule,
   ],
   controllers: [HealthController],

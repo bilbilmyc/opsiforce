@@ -22,3 +22,4 @@ Format: Title / Status / Context + Decision / Considered options / Consequences.
 | [0014](0014-admin-section-and-operational-view-module.md) | Operational views live in an "Admin" section and their own backend module | → [admin.md](../organization/admin.md) |
 | [0015](0015-app-liveness-pushed-not-polled.md) | App liveness is pushed from the pod over the gateway channel, not polled | → [app-readiness.md](../projects/app-readiness.md); has a 2026-06-17 amendment |
 | [0016](0016-app-details-are-per-environment.md) | App Details are per-environment; each `ProjectEnvironment` is its own App | implemented (migration 0047) → [project-apps.md](../projects/project-apps.md) |
+| [0017](0017-project-export-is-a-faithful-full-workspace-zip.md) | A Project export is a faithful full-workspace zip, not a sanitized or rebuilt bundle | design — not yet implemented → [export-import.md](../projects/export-import.md) |

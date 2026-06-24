@@ -222,6 +222,66 @@ export class ProjectController {
     return this.projectService.duplicate(id, tenant.tenantId, dto);
   }
 
+  @Get(':id/duplicate/job')
+  @RequirePermission(Perms.duplicateProject)
+  async duplicateJob(
+    @Param('id') id: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext
+  ) {
+    await this.gate(id, tenant, user);
+    return this.projectService.getLatestDuplicateJob(id);
+  }
+
+  @Get(':id/duplicate/job/stream')
+  @RequirePermission(Perms.duplicateProject)
+  async duplicateJobStream(
+    @Param('id') id: string,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+    @Req() req: FastifyRequest,
+    @Res() reply: FastifyReply
+  ) {
+    await this.gate(id, tenant, user);
+
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+      'x-no-compression': '1',
+    });
+
+    let closed = false;
+    let lastSerialized: string | null = null;
+    let unsubscribe = () => {};
+    const heartbeat = setInterval(() => {
+      if (!closed) reply.raw.write(': ping\n\n');
+    }, 25000);
+    const close = () => {
+      closed = true;
+      clearInterval(heartbeat);
+      unsubscribe();
+    };
+
+    const send = async () => {
+      if (closed) return;
+      const job = await this.projectService.getLatestDuplicateJob(id);
+      if (closed || !job) return;
+      const serialized = JSON.stringify(job);
+      if (serialized === lastSerialized) return;
+      lastSerialized = serialized;
+      reply.raw.write(`data: ${serialized}\n\n`);
+    };
+
+    unsubscribe = this.projectEventsService.subscribe(id, () => {
+      void send();
+    });
+
+    req.raw.on('close', close);
+    await send();
+  }
+
   @Post(':id/disable')
   @RequirePermission(Perms.disableProject)
   async disable(@Param('id') id: string, @CurrentTenant() tenant: TenantContext, @CurrentUser() user: UserContext) {

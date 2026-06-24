@@ -7,7 +7,7 @@ import Skeleton from '~/components/ui/skeleton';
 import { GitBranch, Rocket } from '~/components/icons';
 import { usePublish, usePublishForm, type PublishTarget } from '~/api/publish';
 import { useProjects } from '~/api/projects';
-import { usePublishJobs } from './publish-jobs-context';
+import { useJobDock } from '~/components/project/jobs/job-dock-context';
 
 export interface PublishDialogProps {
   projectId: string;
@@ -30,7 +30,7 @@ export default function PublishDialog(props: PublishDialogProps) {
 
   const form = usePublishForm(projectId, targetId, { enabled: () => props.open });
   const publish = usePublish();
-  const publishJobs = usePublishJobs();
+  const jobDock = useJobDock();
 
   createEffect(() => {
     const data = form.data;
@@ -65,7 +65,8 @@ export default function PublishDialog(props: PublishDialogProps) {
         projectId: projectId(),
         dto: { environmentId: id, variables: variables(), scheduleIds: selectedScheduleIds },
       });
-      publishJobs.start({
+      jobDock.trackPublish({
+        projectId: projectId(),
         environmentId: id,
         environmentName: target.name,
         environmentSlug: target.slug,

@@ -53,6 +53,12 @@ export interface PublishJob {
   updatedAt: string;
 }
 
+export function publishEventsUrl(projectId: string, environmentId: string): string {
+  const tenant = localStorage.getItem('tenant');
+  const query = tenant ? `?tenant=${encodeURIComponent(tenant)}` : '';
+  return `/api/projects/${projectId}/publish/environments/${environmentId}/job/stream${query}`;
+}
+
 export const publishKeys = {
   targets: (projectId: string) => [...projectKeys.detail(projectId), 'publish', 'targets'] as const,
   form: (projectId: string, environmentId: string) =>

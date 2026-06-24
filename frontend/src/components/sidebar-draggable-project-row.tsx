@@ -12,7 +12,6 @@ export default function SidebarDraggableProjectRow(props: {
   onRename: (id: string, title: string) => void;
   onSettings: () => void;
   onDeleted: () => void;
-  onDuplicated: (p: Project) => void;
 }) {
   const sortable = useSortable({
     get id() {
@@ -40,7 +39,6 @@ export default function SidebarDraggableProjectRow(props: {
         onRename={props.onRename}
         onSettings={props.onSettings}
         onDeleted={props.onDeleted}
-        onDuplicated={props.onDuplicated}
       />
     </div>
   );
