@@ -43,17 +43,20 @@ function parsePodResourcesEnv(env: string | undefined): PodResources | null {
 const platformVersion = JSON.parse(readFileSync(join(process.cwd(), 'platform-version.json'), 'utf8'))
   .version as string;
 
+function resolveAgentImageVersion(): string {
+  try {
+    return JSON.parse(readFileSync(join(process.cwd(), '..', 'agent-config', 'agent-image-version.json'), 'utf8'))
+      .version as string;
+  } catch {
+    return platformVersion;
+  }
+}
+
+const agentImageVersion = resolveAgentImageVersion();
+
 function resolveAgentContainerImage(): string {
   if (process.env.AGENT_CONTAINER_IMAGE) return process.env.AGENT_CONTAINER_IMAGE;
-
-  let imageVersion = platformVersion;
-  try {
-    imageVersion = JSON.parse(
-      readFileSync(join(process.cwd(), '..', 'agent-config', 'agent-image-version.json'), 'utf8')
-    ).version as string;
-  } catch {}
-
-  return `opsiforce-agent:${imageVersion}`;
+  return `opsiforce-agent:${agentImageVersion}`;
 }
 
 export default () => {
@@ -72,6 +75,8 @@ export default () => {
     storageType: (process.env.STORAGE_TYPE || 'cephfs') as 'cephfs' | 'hostPath',
     agentContainerImagePullPolicy: process.env.AGENT_CONTAINER_IMAGE_PULL_POLICY || 'IfNotPresent',
     platformVersion: platformVersion,
+    agentImageVersion: agentImageVersion,
+    arch: process.arch,
     podClassSmall: parsePodResourcesEnv(process.env.POD_CLASS_SMALL),
     agentNodeSelector: parseJsonEnv<Record<string, string>>(process.env.AGENT_NODE_SELECTOR, {}),
     agentTolerations: parseJsonEnv<Array<Record<string, string>>>(process.env.AGENT_TOLERATIONS, []),
@@ -86,6 +91,7 @@ export default () => {
     bifrostAdminUsername: process.env.BIFROST_ADMIN_USERNAME || '',
     bifrostAdminPassword: process.env.BIFROST_ADMIN_PASSWORD || '',
     workspaceCleanupRetentionDays: 7,
+    exportRetentionMinutes: parseInt(process.env.EXPORT_RETENTION_MINUTES || '300', 10),
     requestLogRetentionDays: parseInt(process.env.REQUEST_LOG_RETENTION_DAYS || '3', 10),
     gatewayUrl: process.env.SERVICE_GATEWAY_URL || 'http://opsiforce-backend:3001/api/gateway',
     agentWorkspaceUpdateOnStartup: parseBooleanEnv(process.env.AGENT_WORKSPACE_UPDATE_ON_STARTUP, true),

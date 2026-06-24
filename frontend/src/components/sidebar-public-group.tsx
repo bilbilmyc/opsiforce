@@ -17,7 +17,6 @@ export default function SidebarPublicGroup(props: {
   onRenameProject: (id: string, title: string) => void;
   onProjectSettings: (id: string) => void;
   onProjectDeleted: (id: string) => void;
-  onProjectDuplicated: (p: Project) => void;
 }) {
   return (
     <div class="flex flex-col mt-2">
@@ -62,7 +61,6 @@ export default function SidebarPublicGroup(props: {
                   onRename={(id, title) => props.onRenameProject(id, title)}
                   onSettings={() => props.onProjectSettings(project.id)}
                   onDeleted={() => props.onProjectDeleted(project.id)}
-                  onDuplicated={(p) => props.onProjectDuplicated(p)}
                 />
               )}
             </For>

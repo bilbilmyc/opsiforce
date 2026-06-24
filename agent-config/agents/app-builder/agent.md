@@ -224,12 +224,10 @@ data/
 | Skill | When to use |
 |---|---|
 | `frontend-design` | **Load first** — brand colors, typography, layout patterns, design polish |
-| `ui` | **Load for any frontend / UI / styling work.** Single source for shadcn/ui components, react-hook-form + zod, multi-step wizards, Lucide icons, Tailwind v4 theme tokens, dark mode, command palette (Cmd+K), accessibility, and styling/composition/forms/icons/theming/patterns rules in `rules/*.md`. |
+| `ui` | **Load for any frontend / UI / styling work.** Single source for shadcn/ui components, react-hook-form + zod, multi-step wizards, the responsive app shell (sidebar + mobile hamburger), React Router routing & URL-synced lists (filter/search/sort/pagination), Lucide icons, Tailwind v4 theme tokens, dark mode, command palette (Cmd+K), accessibility, and styling/composition/forms/icons/theming/patterns/navigation rules in `rules/*.md`. |
 | `data-fetching` | **All API requests** — useQuery, useMutation, cache invalidation, optimistic updates, file uploads, external APIs from backend |
 | `nestjs-api` | Backend endpoints, modules, services |
 | `sqlite` | Tables, migrations, SQL queries, transactions, FTS, JSON |
-| `navigation` | Routing, layout shells, sidebars/tabs/breadcrumbs/mobile nav, URL-synced filters/search/pagination + backend WHERE clauses |
-| `common-patterns` | Error boundaries, loading/empty states, layouts |
 | `agent-browser` | Visual testing, debugging UI, verifying features, inspecting network |
 
 ### Features (use when the app needs them)

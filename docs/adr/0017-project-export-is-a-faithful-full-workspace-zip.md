@@ -1,0 +1,27 @@
+# A Project export is a faithful full-workspace zip, not a sanitized or rebuilt bundle
+
+Status: accepted
+
+Exporting a Project (for [import](../projects/export-import.md) into a *different* Opsiforce deployment) serializes the source's **Development** workspace as an opaque zip that is a faithful, near-complete copy: app source, the full agent conversation, the app's databases and generated output, uploaded files, the environment file **with its values**, and the **installed dependency store** — everything on the volume except the throwaway caches. Only keys are made fresh on import. This is the cross-deployment sibling of [Duplicate](../projects/duplication.md) ([ADR-0011](0011-duplication-reuses-git-publish-path.md)); it deliberately rejects the sanitized, rebuilt shape that [Publish](0004-git-based-incremental-publish.md) uses.
+
+The pull was toward the publish model — ship source only, keep secrets out of the artifact, install dependencies on arrival — because a Project export is a *file* that leaves the deployment: it sits at rest and may be handed to a customer. We chose fidelity over that hygiene for v1, for three reasons:
+
+- **An import that "just works" is the whole point.** The use case is moving a working workflow to a self-hosted instance; re-entering every environment value and waiting on a dependency install (which can fail, or resolve a different graph) undercuts that.
+- **The dependency store ships rather than rebuilds**, because installing on import needs registry/network access the target may not have (self-hosted instances are often air-gapped), and a fresh install risks a different dependency graph than the source ran. Copying is byte-faithful. The accepted cost is that a copied native binary only runs on a compatible agent image (same arch/libc); cross-arch import is unsupported in v1.
+- **Credentials are not actually in the files.** The LLM and service-gateway keys and their gateway URLs are injected as pod environment variables, never written to the workspace (`pod.template.ts`), so the faithful copy carries no live platform credential — the target deployment injects its own freshly-minted ones on first boot. The secrets the export *does* embed are the ones the user authored: the environment file's values and whatever sits in the conversation.
+
+## Considered options
+
+- **Sanitized, rebuilt bundle (the Publish shape)** — source only, env *keys* without values, dependencies installed on import. Safe at rest and small, but breaks the "just works" goal, needs registry access on a possibly-air-gapped target, and risks a divergent dependency graph. Rejected for v1.
+- **Ship dependencies but gate on a compatibility stamp** — carry everything, stamp `{platform, agent-image, arch}`, and refuse or rebuild on mismatch. The correct long-term answer to the arch-fragility this ADR accepts, but more machinery than v1 needs; deferred, not rejected.
+- **Encrypt the artifact at rest** — a secret-bearing zip arguably wants a passphrase. Deferred; v1 treats the file as sensitive and warns rather than encrypting.
+
+## Consequences
+
+- **The export is sensitive at rest.** It embeds environment-variable values and the full conversation in the clear. Producing one is gated by its own `can_export_project` permission, separate from `can_import_project`, and the artifact must be handled like a secret.
+- **An export is only portable to a compatible agent image.** With no compatibility gate in v1, importing onto a different arch/libc crash-loops on the copied native binaries. A `{exportFormatVersion, platformVersion, agentImageVersion, arch}` stamp rides in the manifest so a gate can be added later without a format change.
+- **Auth mode resets to `public`** on import, because a carried `manual`/`managed` mode points at an identity provider the target may not have.
+- **Full git history crosses.** The Development workspace is copied with its git repository intact (`git clone --local`), so the imported project keeps its source history and the agent's conversation, which opencode keys to the git root commit.
+- **A metadata manifest accompanies the files**, because a Project and its ProjectEnvironment are database rows, not files. It carries what `Duplicate` copies between rows — title, settings, App Details, paused schedules — and resolves cross-deployment references on import: the **agent by stable name** (falling back to the target's default if absent — load-bearing, since pod startup copies the agent's skills from `/opt/agents/$AGENT/` by name), the environment binding to the target's **Development**, and Resources by **class** (re-resolving the preset locally; Custom carries literal CPU/memory). Timezone is *not* carried — it is set at import like project creation, and paused schedules are re-stamped to it.
+- **Import is always a new, independent Project** (its own keys, paused schedules), reusing the duplicate/publish boot path; the carried dependency store means no install step. A failed or interrupted import cleans up the partially-created project, directory, and minted keys, and unpacking is confined to the target directory (no path traversal from an untrusted archive).
+- **Deferred, by name:** the compatibility gate, at-rest encryption, re-import to *update* an existing project, rewriting absolute self-references baked into app config, the export-vs-publish/duplicate git-lock interaction, and an audit-log entry per export.

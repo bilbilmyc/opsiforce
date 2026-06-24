@@ -51,6 +51,19 @@ export const projectPublishStatusEnum = pgEnum("project_publish_status", [
   "failed",
 ])
 
+export const projectTransferKindEnum = pgEnum("project_transfer_kind", ["export", "import"])
+
+export const projectTransferStatusEnum = pgEnum("project_transfer_status", [
+  "queued",
+  "committing",
+  "staging",
+  "archiving",
+  "unpacking",
+  "starting",
+  "completed",
+  "failed",
+])
+
 export const agentUpdateStatusEnum = pgEnum("agent_update_status", [
   "running",
   "reload_pending",
@@ -381,6 +394,37 @@ export const projectPublishJobs = pgTable(
     uniqueIndex("uq_project_publish_jobs_one_active")
       .on(table.projectId, table.environmentId)
       .where(sql`${table.status} in ('queued', 'committing', 'swapping', 'building', 'migrating')`),
+  ],
+)
+
+export const projectTransferJobs = pgTable(
+  "project_transfer_jobs",
+  {
+    id: text("id").primaryKey(),
+    kind: projectTransferKindEnum("kind").notNull(),
+    projectId: text("project_id")
+      .references(() => projects.id, { onDelete: "cascade" })
+      .notNull(),
+    tenantId: text("tenant_id").notNull(),
+    status: projectTransferStatusEnum("status").notNull().default("queued"),
+    bytesTotal: bigint("bytes_total", { mode: "number" }).notNull().default(0),
+    bytesProcessed: bigint("bytes_processed", { mode: "number" }).notNull().default(0),
+    fileName: text("file_name"),
+    fileSize: bigint("file_size", { mode: "number" }),
+    agentFallbackFrom: text("agent_fallback_from"),
+    error: text("error"),
+    startedAt: timestamp("started_at"),
+    completedAt: timestamp("completed_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("idx_project_transfer_jobs_project").on(table.projectId),
+    index("idx_project_transfer_jobs_status").on(table.status),
+    index("idx_project_transfer_jobs_kind").on(table.kind),
+    uniqueIndex("uq_project_transfer_jobs_one_active")
+      .on(table.kind, table.projectId)
+      .where(sql`${table.status} not in ('completed', 'failed')`),
   ],
 )
 

@@ -1,22 +1,10 @@
----
-name: navigation
-description: Set up app routing, layout chrome, and URL-synced state. Use for multi-page apps with React Router v7 (routes, params, nested layouts), layout shells with sidebars / tabs / breadcrumbs / mobile hamburger menus, and list pages where search / filter / sort / pagination live in the URL — including the dynamic backend WHERE clauses that read those params. Uses pre-installed Radix primitives and Vaul.
----
+# Routing & URL state
 
-# Navigation — Routing, Layout, and URL State
-
-Everything to do with how a user moves through the app and how that movement is reflected in the URL.
-
-- **Routing** — pages, params, nested routes, programmatic navigation (React Router v7)
-- **Layout chrome** — dashboard shells, sidebars, breadcrumbs, mobile hamburger
-- **In-page navigation** — tabs (Radix-based)
-- **URL-synced state** — filter bars, search, sort, pagination, plus the matching backend query
+How a user moves through a multi-page app and how that movement is reflected in the URL: React Router v7 routing, breadcrumbs, and list pages whose search / filter / sort / pagination live in the URL. The visual **app shell** (sidebar + mobile hamburger) lives in [patterns.md](patterns.md) → "Responsive App Shell".
 
 All Radix primitives below are pre-installed.
 
----
-
-## 1. Routing (React Router v7)
+## Routing (React Router v7)
 
 ### Setup in App.tsx
 
@@ -63,6 +51,8 @@ function Layout() {
 ```
 
 **Key:** `<Outlet />` renders the matched child route. This is how you share a navbar/sidebar across all pages.
+
+> For a **sidebar** app, use the **Responsive App Shell** ([patterns.md](patterns.md) → "Responsive App Shell") as the `element` of the layout route instead of this top-nav `Layout` — it already carries the mobile hamburger drawer.
 
 ### URL params
 
@@ -140,125 +130,7 @@ Place `<Route path="*" element={<NotFound />} />` as the **last route** inside t
 
 `<Route index>` matches the parent path exactly (`/settings`).
 
----
-
-## 2. Layout chrome
-
-### Dashboard shell (sidebar + header + content)
-
-```tsx
-import { Outlet } from "react-router-dom"
-
-function DashboardLayout() {
-  return (
-    <div className="flex h-screen bg-background">
-      <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-14 border-b flex items-center justify-between px-6">
-          <h1 className="text-sm font-medium">Dashboard</h1>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon"><Bell className="h-4 w-4" /></Button>
-            <Button variant="ghost" size="icon"><User className="h-4 w-4" /></Button>
-          </div>
-        </header>
-        <main className="flex-1 overflow-y-auto p-6">
-          <Outlet />
-        </main>
-      </div>
-    </div>
-  )
-}
-```
-
-Use as a layout route in App.tsx:
-```tsx
-<Route element={<DashboardLayout />}>
-  <Route path="/" element={<Overview />} />
-  <Route path="/documents" element={<Documents />} />
-</Route>
-```
-
-### Collapsible sidebar with sections
-
-```tsx
-import * as CollapsiblePrimitive from "@radix-ui/react-collapsible"
-import { ChevronRight, Home, FileText, Settings, Users } from "lucide-react"
-import { NavLink } from "react-router-dom"
-
-const navSections = [
-  { title: "Main", items: [
-    { label: "Dashboard", href: "/", icon: Home },
-    { label: "Documents", href: "/documents", icon: FileText },
-  ]},
-  { title: "Admin", items: [
-    { label: "Users", href: "/users", icon: Users },
-    { label: "Settings", href: "/settings", icon: Settings },
-  ]},
-]
-
-function Sidebar() {
-  return (
-    <aside className="w-64 border-r bg-sidebar text-sidebar-foreground p-4 space-y-4">
-      <h2 className="text-lg font-semibold px-2">App Name</h2>
-      {navSections.map((section) => (
-        <CollapsiblePrimitive.Root key={section.title} defaultOpen>
-          <CollapsiblePrimitive.Trigger className="flex items-center gap-1 w-full px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider hover:text-foreground">
-            <ChevronRight className="h-3 w-3 transition-transform data-[state=open]:rotate-90" />
-            {section.title}
-          </CollapsiblePrimitive.Trigger>
-          <CollapsiblePrimitive.Content className="space-y-0.5 mt-1">
-            {section.items.map((item) => (
-              <NavLink
-                key={item.href}
-                to={item.href}
-                className={({ isActive }) => cn(
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm",
-                  isActive ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50"
-                )}
-              >
-                <item.icon className="h-4 w-4" />
-                {item.label}
-              </NavLink>
-            ))}
-          </CollapsiblePrimitive.Content>
-        </CollapsiblePrimitive.Root>
-      ))}
-    </aside>
-  )
-}
-```
-
-### Mobile hamburger menu (with Vaul drawer)
-
-```tsx
-import { Drawer } from "vaul"
-import { Menu } from "lucide-react"
-
-function MobileNav() {
-  return (
-    <div className="md:hidden">
-      <Drawer.Root direction="left">
-        <Drawer.Trigger asChild>
-          <Button variant="ghost" size="icon"><Menu className="h-5 w-5" /></Button>
-        </Drawer.Trigger>
-        <Drawer.Portal>
-          <Drawer.Overlay className="fixed inset-0 bg-black/40 z-50" />
-          <Drawer.Content className="fixed left-0 top-0 bottom-0 z-50 w-72 bg-background">
-            <div className="p-4">
-              <Drawer.Title className="text-lg font-semibold mb-4">Navigation</Drawer.Title>
-              <Sidebar />
-            </div>
-          </Drawer.Content>
-        </Drawer.Portal>
-      </Drawer.Root>
-    </div>
-  )
-}
-```
-
-Show the sidebar on desktop (`hidden md:block`) and the hamburger on mobile (`md:hidden`).
-
-### Breadcrumbs
+## Breadcrumbs
 
 ```tsx
 import { useLocation, Link } from "react-router-dom"
@@ -291,40 +163,11 @@ function Breadcrumbs() {
 }
 ```
 
----
+## In-page tabs
 
-## 3. In-page navigation: Tabs
+For tabbed sections within a page, use the `Tabs` component — see [patterns.md](patterns.md) → "Tabs". Radix manages the active tab internally (style with `data-[state=active]:`); no `useState` needed.
 
-```tsx
-import * as TabsPrimitive from "@radix-ui/react-tabs"
-
-function TabsSection() {
-  return (
-    <TabsPrimitive.Root defaultValue="overview" className="w-full">
-      <TabsPrimitive.List className="flex border-b">
-        <TabsPrimitive.Trigger value="overview" className="px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary -mb-px">
-          Overview
-        </TabsPrimitive.Trigger>
-        <TabsPrimitive.Trigger value="details" className="px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary -mb-px">
-          Details
-        </TabsPrimitive.Trigger>
-        <TabsPrimitive.Trigger value="settings" className="px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:text-foreground data-[state=active]:border-b-2 data-[state=active]:border-primary -mb-px">
-          Settings
-        </TabsPrimitive.Trigger>
-      </TabsPrimitive.List>
-      <TabsPrimitive.Content value="overview" className="py-4">Overview content</TabsPrimitive.Content>
-      <TabsPrimitive.Content value="details" className="py-4">Details content</TabsPrimitive.Content>
-      <TabsPrimitive.Content value="settings" className="py-4">Settings content</TabsPrimitive.Content>
-    </TabsPrimitive.Root>
-  )
-}
-```
-
-**Key:** `data-[state=active]:` is how Radix exposes state in Tailwind. No `useState` needed — Radix manages active tab internally.
-
----
-
-## 4. URL-synced search, filter, sort, pagination
+## URL-synced search, filter, sort, pagination
 
 Combines a search input + dropdown filters + sort + pagination, all reflected in URL params so filters survive refresh and can be shared as links.
 
@@ -456,64 +299,7 @@ useEffect(() => {
 <Input value={localQuery} onChange={(e) => setLocalQuery(e.target.value)} />
 ```
 
-### Backend: dynamic WHERE clauses (safe, parameterized)
-
-```typescript
-@Get()
-findAll(
-  @Query("q") q?: string,
-  @Query("status") status?: string,
-  @Query("category") category?: string,
-  @Query("sort") sort?: string,
-  @Query("page") page?: string,
-  @Query("limit") limit?: string,
-) {
-  const conditions: string[] = []
-  const params: unknown[] = []
-
-  if (q) {
-    conditions.push("(title LIKE ? OR description LIKE ?)")
-    params.push(`%${q}%`, `%${q}%`)
-  }
-  if (status) {
-    conditions.push("status = ?")
-    params.push(status)
-  }
-  if (category) {
-    conditions.push("category = ?")
-    params.push(category)
-  }
-
-  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
-
-  const orderMap: Record<string, string> = {
-    newest: "created_at DESC",
-    oldest: "created_at ASC",
-    name: "title ASC",
-  }
-  const orderBy = orderMap[sort ?? "newest"] ?? "created_at DESC"
-
-  const pageNum = Math.max(1, Number(page ?? 1))
-  const pageSize = Math.min(100, Math.max(1, Number(limit ?? 20)))
-  const offset = (pageNum - 1) * pageSize
-
-  const items = this.db.queryAll(
-    `SELECT * FROM items ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`,
-    [...params, pageSize, offset]
-  )
-
-  const { total } = this.db.queryOne<{ total: number }>(
-    `SELECT COUNT(*) as total FROM items ${where}`,
-    params
-  )!
-
-  return { items, total, page: pageNum, pageSize, totalPages: Math.ceil(total / pageSize) }
-}
-```
-
-**CRITICAL:** Always use `?` placeholders for user input. Never interpolate `q` directly into SQL strings — SQL injection risk.
-
----
+The backend reads these query params and returns the filtered, sorted, paginated page — see the `sqlite` and `nestjs-api` skills for the server side.
 
 ## Common mistakes
 
@@ -521,14 +307,9 @@ findAll(
 1. **Forgetting `<Outlet />`** in layout components — child routes won't render.
 2. **Using `<a href>` instead of `<Link to>`** — causes full page reload, loses app state.
 3. **Not guarding `useParams()` with `enabled: !!id`** — `useParams` returns `string | undefined`; unguarded queries fire with `undefined`.
-
-**Layout chrome**
-4. **Sidebar visible on mobile** — always hide with `hidden md:block` and provide a hamburger/drawer alternative.
-5. **Forgetting `overflow-hidden` on the dashboard shell** — without it, sidebar and content scroll together instead of independently.
-6. **Hand-rolling tab state** — Radix manages it; style with `data-[state=active]:` rather than tracking active tab in `useState`.
+4. **Desktop-only sidebar (no mobile nav)** — a sidebar hidden on mobile with no hamburger leaves mobile users with no navigation at all. Use the Responsive App Shell ([patterns.md](patterns.md)); verify at 375px.
 
 **URL-synced filters**
-7. **Not resetting page when filters change** — changing a filter should reset to page 1, or users see empty pages.
-8. **Interpolating search terms directly into SQL** — always use `?` parameterized queries to prevent injection.
-9. **Filter state held in `useState` instead of URL** — use `useSearchParams` so filters survive refresh and are shareable.
-10. **Filtering large datasets client-side** — for 100+ items, filter on the backend. Client-side filtering is OK for under 100 items.
+5. **Not resetting page when filters change** — changing a filter should reset to page 1, or users see empty pages.
+6. **Filter state held in `useState` instead of URL** — use `useSearchParams` so filters survive refresh and are shareable.
+7. **Filtering large datasets client-side** — for 100+ items, filter on the backend. Client-side filtering is OK for under 100 items.

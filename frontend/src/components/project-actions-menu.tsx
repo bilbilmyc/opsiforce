@@ -4,6 +4,9 @@ import { toast } from 'solid-sonner';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
 import { api, type Project } from '~/api/client';
+import { startProjectExport, type ExportJob } from '~/api/export';
+import { startProjectDuplicate } from '~/api/duplicate';
+import { useJobDock } from '~/components/project/jobs/job-dock-context';
 import { useRestartProjectEnvironment } from '~/api/environments';
 import { PUBLIC_LABEL, useMoveProject, useWorkspaces } from '~/api/workspaces';
 import {
@@ -15,6 +18,7 @@ import {
   EllipsisVertical,
   FolderKanban,
   Globe,
+  Package,
   Pencil,
   RotateCcw,
   Settings,
@@ -48,12 +52,12 @@ export default function ProjectActionsMenu(props: {
   onRename?: () => void;
   onSettings?: () => void;
   onDeleted?: () => void;
-  onDuplicated?: (project: Project) => void;
   triggerClass?: string;
   onTriggerClick?: (e: MouseEvent) => void;
 }) {
   const qc = useQueryClient();
   const { hasPermission } = usePermissions();
+  const jobDock = useJobDock();
 
   const canSeeSettings = () =>
     hasPermission(Permission.manageProjectBudgetSettings) ||
@@ -63,11 +67,14 @@ export default function ProjectActionsMenu(props: {
   const canDisable = () => hasPermission(Permission.disableProject);
   const canRestart = () => hasPermission(Permission.restartProject);
   const canDuplicate = () => hasPermission(Permission.duplicateProject);
+  const canExport = () => hasPermission(Permission.exportProject);
   const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces);
   const isDisabled = () => props.status === 'disabled';
 
   const [settingsOpen, setSettingsOpen] = createSignal(false);
-  const [confirmAction, setConfirmAction] = createSignal<'delete' | 'duplicate' | 'disable' | 'restart' | null>(null);
+  const [confirmAction, setConfirmAction] = createSignal<
+    'delete' | 'duplicate' | 'export' | 'disable' | 'restart' | null
+  >(null);
   const [pendingMove, setPendingMove] = createSignal<PendingMove | null>(null);
 
   const workspaces = useWorkspaces();
@@ -105,13 +112,20 @@ export default function ProjectActionsMenu(props: {
   }));
 
   const duplicateProject = createMutation(() => ({
-    mutationFn: () => api.post<Project>(`/projects/${props.projectId}/duplicate`),
+    mutationFn: () => startProjectDuplicate(props.projectId),
     onSuccess: (p: Project) => {
       qc.invalidateQueries({ queryKey: ['projects'] });
-      toast.success('Duplicate started');
-      props.onDuplicated?.(p);
+      jobDock.trackDuplicate({ projectId: p.id, title: p.title?.trim() || projectTitle() });
     },
     onError: () => toast.error('Failed to duplicate project'),
+  }));
+
+  const exportProject = createMutation(() => ({
+    mutationFn: () => startProjectExport(props.projectId),
+    onSuccess: (job: ExportJob) => {
+      jobDock.trackExport({ projectId: props.projectId, title: projectTitle(), job });
+    },
+    onError: () => toast.error('Failed to start export'),
   }));
 
   const disableProject = createMutation(() => ({
@@ -170,6 +184,12 @@ export default function ProjectActionsMenu(props: {
             <DropdownMenuItem onSelect={() => setConfirmAction('duplicate')}>
               <Copy class="w-3.5 h-3.5 text-muted-foreground" />
               Duplicate
+            </DropdownMenuItem>
+          </Show>
+          <Show when={canExport()}>
+            <DropdownMenuItem onSelect={() => setConfirmAction('export')}>
+              <Package class="w-3.5 h-3.5 text-muted-foreground" />
+              Export
             </DropdownMenuItem>
           </Show>
           <Show when={canRestart() && !isDisabled()}>
@@ -300,6 +320,17 @@ export default function ProjectActionsMenu(props: {
         description="This will create a copy of the project with the same workspace files."
         confirmLabel="Duplicate"
         onConfirm={() => duplicateProject.mutate(undefined as never)}
+      />
+
+      <ConfirmDialog
+        open={confirmAction() === 'export'}
+        onOpenChange={(open) => {
+          if (!open) setConfirmAction(null);
+        }}
+        title="Export project"
+        description="This exports the project's Development environment to a downloadable file. The file contains live environment variable values and the full conversation — treat it as sensitive and share it carefully."
+        confirmLabel="Export"
+        onConfirm={() => exportProject.mutate(undefined as never)}
       />
 
       <ConfirmDialog

@@ -26,6 +26,8 @@ export { default as CirclePlay } from 'lucide-solid/icons/circle-play';
 export { default as Copy } from 'lucide-solid/icons/copy';
 export { default as ChevronsUpDown } from 'lucide-solid/icons/chevrons-up-down';
 export { default as Upload } from 'lucide-solid/icons/upload';
+export { default as Download } from 'lucide-solid/icons/download';
+export { default as Package } from 'lucide-solid/icons/package';
 export { default as File } from 'lucide-solid/icons/file';
 export { default as Folder } from 'lucide-solid/icons/folder';
 export { default as FolderOpen } from 'lucide-solid/icons/folder-open';

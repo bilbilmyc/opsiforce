@@ -56,6 +56,18 @@ _Avoid_: Deploy, Release, Promote, Redeploy
 Creating a new Project in the same tenant and workspace from an existing one, preserving its working state in full — App source and history, the agent conversation, the App's databases, Environment Variables, settings, Resources, and App Details. The duplicate is independent: it gets its own keys, never inherits the source's Pin, and its Schedules arrive **paused** so no automation fires twice. Only the Development ProjectEnvironment is duplicated — published environments are re-created by publishing from the duplicate.
 _Avoid_: Copy, Clone, Fork (non-canonical); conflating with Publish (which transports App source only, never working state)
 
+**Export**:
+Producing a Project export from a Project's Development working state, to carry it to a *different* Opsiforce deployment. The cross-deployment sibling of Duplicate — same bundle and carry-rules — but the destination is another instance reached through a file rather than a local copy. Only the Development ProjectEnvironment is exported.
+_Avoid_: Share; Download (the chat file-download is a different feature); conflating with Publish (which moves App source between Environments within one deployment) or Duplicate (same-deployment copy)
+
+**Import**:
+Creating a new, independent Project on this deployment from a Project export — the consume side of Export. The result behaves like a freshly duplicated Project: its own keys, Schedules paused.
+_Avoid_: Restore (implies returning to the deployment it left); Upload (the transport, not the act)
+
+**Project export**:
+The opaque, versioned file an Export produces and an Import consumes — a sealed copy of a Project's Development working state, meaningful only when imported back into an Opsiforce deployment, never read or edited on its own.
+_Avoid_: Workflow (colloquial — maps to no entity; the exported unit is a Project); Workspace export (Workspace is the Org-level project grouping, a different thing); Blueprint, Template, Package (non-canonical)
+
 **Active environment**:
 The one ProjectEnvironment the project workspace is currently showing — chat, code, DB, and the app pane all follow it. Chosen by clicking an environment in the Environments panel, or via **View environment** after a Publish completes; defaults to Development. Viewing changes nothing about the environment itself — it only re-points the workspace.
 _Avoid_: Current env, Selected env (spell out "environment"); conflating with Development (the default, not a synonym)

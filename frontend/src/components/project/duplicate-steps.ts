@@ -1,7 +1,7 @@
-import type { ProjectOperationStatus } from '~/api/client';
+import type { DuplicateJobStatus } from '~/api/duplicate';
 
 export interface DuplicateStep {
-  key: Exclude<ProjectOperationStatus, 'failed'>;
+  key: Exclude<DuplicateJobStatus, 'failed'>;
   label: string;
   detail: string;
 }
@@ -12,9 +12,10 @@ export const DUPLICATE_STEPS: DuplicateStep[] = [
   { key: 'cloning', label: 'Preparing copy', detail: 'Cloning the project' },
   { key: 'copying', label: 'Copying data', detail: 'Copying databases and conversation history' },
   { key: 'starting', label: 'Starting the app', detail: 'Launching the copied project' },
+  { key: 'completed', label: 'Ready', detail: 'The copied app is online' },
 ];
 
-export const DUPLICATE_STEP_ORDER: (ProjectOperationStatus | 'completed')[] = [
+const DUPLICATE_STEP_ORDER: DuplicateJobStatus[] = [
   'queued',
   'committing',
   'cloning',
@@ -23,7 +24,7 @@ export const DUPLICATE_STEP_ORDER: (ProjectOperationStatus | 'completed')[] = [
   'completed',
 ];
 
-export function duplicateStepIndex(status: ProjectOperationStatus): number {
+export function duplicateStepIndex(status: DuplicateJobStatus): number {
   const idx = DUPLICATE_STEP_ORDER.indexOf(status);
   return idx === -1 ? 0 : idx;
 }

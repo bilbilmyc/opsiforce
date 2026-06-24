@@ -37,6 +37,7 @@
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.19",
     "@nestjs/platform-fastify": "^11.1.19",
+    "archiver": "^7.0.1",
     "bullmq": "^5.73.5",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.8.5",
@@ -48,11 +49,14 @@
     "rxjs": "^7.8.2",
     "sqlite": "^5.1.1",
     "sqlite3": "^6.0.1",
-    "tsx": "^4.21.0"
+    "tsx": "^4.21.0",
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.19",
+    "@types/archiver": "^6.0.4",
     "@types/node": "^22.0.0",
+    "@types/yauzl": "^3.4.0",
     "concurrently": "^9.2.1",
     "drizzle-kit": "^0.31.10",
     "env-cmd": "^11.0.0",

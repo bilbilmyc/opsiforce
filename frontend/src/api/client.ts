@@ -141,7 +141,6 @@ export interface ProjectState {
   status: ProjectStatus;
   workspaceId: string | null;
   title: string | null;
-  operation: ProjectOperation | null;
   app: ProjectAppMeta | null;
 }
 
@@ -149,19 +148,6 @@ export interface ProjectAppMeta {
   exists: boolean;
   name: string | null;
   description: string | null;
-}
-
-export type ProjectOperationStatus = 'queued' | 'committing' | 'cloning' | 'copying' | 'starting' | 'failed';
-
-export interface ProjectOperation {
-  type: 'duplicate';
-  status: ProjectOperationStatus;
-  bytesTotal: number;
-  bytesCopied: number;
-  error: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  updatedAt: string;
 }
 
 export type ProjectAuthMode = 'public' | 'manual' | 'managed';

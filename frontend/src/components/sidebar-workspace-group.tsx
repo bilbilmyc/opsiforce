@@ -20,7 +20,6 @@ export default function SidebarWorkspaceGroup(props: {
   onRenameProject: (id: string, title: string) => void;
   onProjectSettings: (id: string) => void;
   onProjectDeleted: (id: string) => void;
-  onProjectDuplicated: (p: Project) => void;
 }) {
   const sortable = useSortable({
     get id() {
@@ -103,7 +102,6 @@ export default function SidebarWorkspaceGroup(props: {
                   onRename={(id, title) => props.onRenameProject(id, title)}
                   onSettings={() => props.onProjectSettings(project.id)}
                   onDeleted={() => props.onProjectDeleted(project.id)}
-                  onDuplicated={(p) => props.onProjectDuplicated(p)}
                 />
               )}
             </For>

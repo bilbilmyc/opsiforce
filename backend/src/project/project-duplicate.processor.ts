@@ -2,7 +2,7 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
-import { chmod, copyFile, lstat, mkdir, readdir, readlink, rm, rename, symlink } from 'fs/promises';
+import { chmod, copyFile, mkdir, readlink, rm, rename, symlink } from 'fs/promises';
 import path from 'path';
 import { eq } from 'drizzle-orm';
 import { db } from '../../db';
@@ -10,30 +10,15 @@ import { projectDuplicateJobs } from '../../db/schema';
 import { GitService } from '../git/git.service';
 import { ProjectService } from './project.service';
 import { ProjectEventsService } from './project-events.service';
+import { ProjectFilesService, type ProjectFileEntry } from './project-files.service';
 import {
   PROJECT_DUPLICATE_QUEUE,
   ProjectDuplicateStatus,
   type ProjectDuplicateJobData,
 } from './project-duplicate.types';
 
-interface CopyEntry {
-  source: string;
-  target: string;
-  size: number;
-  mode: number;
-  type: 'file' | 'directory' | 'symlink';
-}
-
 interface CopyProgress {
   bytesCopied: number;
-}
-
-function isEphemeralCache(relPath: string): boolean {
-  const segments = relPath.split('/');
-  if (segments.includes('.cache')) return true;
-  if (segments.includes('.bun')) return true;
-  if (relPath === '.xdg/cache' || relPath.startsWith('.xdg/cache/')) return true;
-  return false;
 }
 
 @Processor(PROJECT_DUPLICATE_QUEUE)
@@ -45,7 +30,8 @@ export class ProjectDuplicateProcessor extends WorkerHost {
     private readonly configService: ConfigService,
     private readonly projectService: ProjectService,
     private readonly projectEventsService: ProjectEventsService,
-    private readonly gitService: GitService
+    private readonly gitService: GitService,
+    private readonly projectFilesService: ProjectFilesService
   ) {
     super();
     this.storageMountPath = this.configService.getOrThrow<string>('storageMountPath');
@@ -73,7 +59,7 @@ export class ProjectDuplicateProcessor extends WorkerHost {
       await this.gitService.removeOrigin(tempPath);
 
       await this.markStatus(duplicateJobId, targetProjectId, ProjectDuplicateStatus.Copying);
-      const entries = await this.collectIgnoredEntries(sourcePath, tempPath);
+      const entries = await this.projectFilesService.collectRuntimeEntries(sourcePath);
       const bytesTotal = entries.reduce((total, entry) => total + entry.size, 0);
 
       await this.updateProgress(duplicateJobId, targetProjectId, { bytesTotal, bytesCopied: 0 });
@@ -89,7 +75,7 @@ export class ProjectDuplicateProcessor extends WorkerHost {
       };
 
       for (const entry of entries) {
-        await this.copyEntry(entry, progress);
+        await this.copyEntry(entry, tempPath, progress);
         await persistProgress();
       }
 
@@ -108,57 +94,25 @@ export class ProjectDuplicateProcessor extends WorkerHost {
     }
   }
 
-  private async collectIgnoredEntries(sourceRoot: string, targetRoot: string): Promise<CopyEntry[]> {
-    const ignored = await this.gitService.listIgnored(sourceRoot);
-    const entries: CopyEntry[] = [];
-    for (const relPath of ignored) {
-      await this.walk(path.join(sourceRoot, relPath), path.join(targetRoot, relPath), relPath, entries);
-    }
-    return entries;
-  }
+  private async copyEntry(entry: ProjectFileEntry, targetRoot: string, progress: CopyProgress): Promise<void> {
+    const target = path.join(targetRoot, entry.relPath);
 
-  private async walk(sourcePath: string, targetPath: string, relPath: string, entries: CopyEntry[]): Promise<void> {
-    if (isEphemeralCache(relPath)) return;
-
-    const stats = await lstat(sourcePath).catch(() => null);
-    if (!stats) return;
-
-    if (stats.isDirectory()) {
-      entries.push({ source: sourcePath, target: targetPath, size: 0, mode: stats.mode, type: 'directory' });
-      const children = await readdir(sourcePath);
-      for (const child of children) {
-        await this.walk(path.join(sourcePath, child), path.join(targetPath, child), `${relPath}/${child}`, entries);
-      }
-      return;
-    }
-
-    if (stats.isSymbolicLink()) {
-      entries.push({ source: sourcePath, target: targetPath, size: 0, mode: stats.mode, type: 'symlink' });
-      return;
-    }
-
-    if (stats.isFile()) {
-      entries.push({ source: sourcePath, target: targetPath, size: stats.size, mode: stats.mode, type: 'file' });
-    }
-  }
-
-  private async copyEntry(entry: CopyEntry, progress: CopyProgress): Promise<void> {
     if (entry.type === 'directory') {
-      await mkdir(entry.target, { recursive: true });
-      await chmod(entry.target, entry.mode);
+      await mkdir(target, { recursive: true });
+      await chmod(target, entry.mode);
       return;
     }
 
-    await mkdir(path.dirname(entry.target), { recursive: true });
+    await mkdir(path.dirname(target), { recursive: true });
 
     if (entry.type === 'symlink') {
       const link = await readlink(entry.source);
-      await symlink(link, entry.target);
+      await symlink(link, target);
       return;
     }
 
-    await copyFile(entry.source, entry.target);
-    await chmod(entry.target, entry.mode);
+    await copyFile(entry.source, target);
+    await chmod(target, entry.mode);
     progress.bytesCopied += entry.size;
   }
 

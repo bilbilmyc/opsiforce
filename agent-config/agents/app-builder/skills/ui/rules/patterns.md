@@ -147,6 +147,105 @@ function ResponsiveModal({ open, onOpenChange, title, children }: {
 }
 ```
 
+## Responsive App Shell (sidebar + mobile drawer)
+
+The layout for any app with two or more pages. **One component, one nav list** — rendered in both the desktop sidebar and the mobile drawer, so they can never diverge and the mobile menu can't be omitted. This is the fix for the most common mobile bug: a sidebar that's hidden on mobile with nothing to replace it.
+
+```tsx
+import { useState } from "react"
+import { NavLink, Outlet } from "react-router-dom"
+import { Menu, LayoutDashboard, FileText, Settings } from "lucide-react"
+import { Drawer, DrawerContent, DrawerTrigger, DrawerTitle } from "@/components/ui/drawer"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
+
+const NAV = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/documents", label: "Documents", icon: FileText },
+  { to: "/settings", label: "Settings", icon: Settings },
+]
+
+function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  return (
+    <nav className="flex flex-col gap-1">
+      {NAV.map(({ to, label, icon: Icon, end }) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={end}
+          onClick={onNavigate}
+          className={({ isActive }) =>
+            cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              isActive
+                ? "bg-secondary text-secondary-foreground"
+                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground",
+            )
+          }
+        >
+          <Icon className="size-4 shrink-0" />
+          {label}
+        </NavLink>
+      ))}
+    </nav>
+  )
+}
+
+export function AppShell() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="flex min-h-screen bg-background text-foreground">
+      {/* Desktop sidebar — md and up */}
+      <aside className="hidden w-64 shrink-0 border-r p-4 md:block">
+        <div className="mb-6 px-3 text-lg font-semibold">App Name</div>
+        <NavLinks />
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Header with hamburger — below md only */}
+        <header className="flex h-14 items-center gap-3 border-b px-4">
+          <Drawer open={open} onOpenChange={setOpen} direction="left">
+            <DrawerTrigger asChild>
+              <Button variant="ghost" size="icon" className="md:hidden" aria-label="Open navigation">
+                <Menu className="size-5" />
+              </Button>
+            </DrawerTrigger>
+            <DrawerContent className="p-4">
+              <DrawerTitle className="mb-6 px-3 text-lg">App Name</DrawerTitle>
+              <NavLinks onNavigate={() => setOpen(false)} />
+            </DrawerContent>
+          </Drawer>
+          <span className="font-medium">Dashboard</span>
+        </header>
+
+        <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  )
+}
+```
+
+Wire it in as a layout route, exactly like any other shared layout:
+
+```tsx
+<Route element={<AppShell />}>
+  <Route path="/" element={<Dashboard />} />
+  <Route path="/documents" element={<Documents />} />
+  <Route path="/settings" element={<Settings />} />
+</Route>
+```
+
+**Why it can't break on mobile:**
+- The sidebar is `hidden md:block`; the hamburger is `md:hidden`. Exactly one is visible at every width — never both, never neither.
+- Both the `<aside>` and the `<DrawerContent>` render the same `<NavLinks>` from the same `NAV` array, so the menus can't drift.
+- `onNavigate={() => setOpen(false)}` closes the drawer after a tap — without it the menu stays open over the freshly-navigated page.
+- `min-w-0` on the content column stops long content from pushing the layout wider than the viewport.
+- `DrawerContent` reads `direction="left"` and anchors itself full-height on the left automatically — no positioning classes needed.
+
+**Verify at 375px** with `agent-browser`: the hamburger appears, opens the drawer, and every destination is reachable; at ≥768px the sidebar is visible and the hamburger is gone.
+
 ## Tabs
 
 ```tsx

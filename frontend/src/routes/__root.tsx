@@ -6,6 +6,7 @@ import { SolidQueryDevtoolsPanel } from '@tanstack/solid-query-devtools';
 import { TanStackRouterDevtoolsPanel } from '@tanstack/solid-router-devtools';
 import { ApiError } from '~/api/client';
 import { AppSidebar } from '~/components/app-sidebar';
+import { JobDockHost } from '~/components/project/jobs/job-dock-host';
 import { useSidebar } from '~/components/ui/sidebar';
 import { Button } from '~/components/ui/button';
 import { Menu } from '~/components/icons';
@@ -43,21 +44,23 @@ function SidebarLayout() {
   const { sidebarResize } = useSidebar();
 
   return (
-    <div
-      class="group/sidebar-wrapper flex h-full w-full"
-      style={{
-        '--sidebar-width': `${sidebarResize.width()}px`,
-        '--sidebar-width-icon': '3rem',
-      }}
-    >
-      <AppSidebar />
-      <div class="flex flex-1 flex-col min-w-0 h-full overflow-hidden bg-background">
-        <MobileHeader />
-        <div class="flex-1 min-w-0 h-full overflow-hidden">
-          <Outlet />
+    <JobDockHost>
+      <div
+        class="group/sidebar-wrapper flex h-full w-full"
+        style={{
+          '--sidebar-width': `${sidebarResize.width()}px`,
+          '--sidebar-width-icon': '3rem',
+        }}
+      >
+        <AppSidebar />
+        <div class="flex flex-1 flex-col min-w-0 h-full overflow-hidden bg-background">
+          <MobileHeader />
+          <div class="flex-1 min-w-0 h-full overflow-hidden">
+            <Outlet />
+          </div>
         </div>
       </div>
-    </div>
+    </JobDockHost>
   );
 }
 

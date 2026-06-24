@@ -36,6 +36,11 @@ export class AgentService {
     return row.name;
   }
 
+  async findIdByName(name: string): Promise<string | null> {
+    const [row] = await db.select({ id: agents.id }).from(agents).where(eq(agents.name, name));
+    return row?.id ?? null;
+  }
+
   /**
    * Default agent for new projects when the create DTO doesn't specify one.
    * Resolved from the `agents` table by well-known name and cached for the
