@@ -23,13 +23,13 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
   const [error, setError] = createSignal<unknown>();
 
   const applyStatus = (status: ProjectState) => {
-    const prev = data();
+    const changed = JSON.stringify(data()) !== JSON.stringify(status);
     setData(status);
     setError(undefined);
     if (status.status === 'suspended') {
       fetch(`/api/proxy/${status.id}/ping`).catch(() => {});
     }
-    if (!prev || prev.status !== status.status) {
+    if (changed) {
       qc.invalidateQueries({ queryKey: environmentKeys.forProject(status.id) });
     }
   };
