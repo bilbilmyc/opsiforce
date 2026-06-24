@@ -11,6 +11,7 @@ import { CurrentUser, type UserContext } from '../user/user.decorator';
 import { UserService } from '../user/user.service';
 import { RequirePermission } from '../permission/permission.guard';
 import { Perms } from '../permission/permission.constants';
+import { getGroupsHeader, hasPermission } from '../permission/permission.utils';
 
 interface MultipartField {
   type: 'field';
@@ -33,7 +34,11 @@ export class ProjectImportController {
 
   @Post('import')
   @RequirePermission(Perms.importProject)
-  async start(@CurrentTenant() tenant: TenantContext, @Req() req: MultipartRequest) {
+  async start(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+    @Req() req: MultipartRequest
+  ) {
     const filePath = this.importService.newUploadPath();
     const fields = new Map<string, string>();
     let received = false;
@@ -51,9 +56,13 @@ export class ProjectImportController {
       if (!received) throw new BadRequestException('No file was uploaded');
 
       const workspaceId = fields.get('workspaceId')?.trim() || null;
+      const userId = await this.resolveUserId(user, tenant.tenantId);
+      const canManageWorkspaces = hasPermission(getGroupsHeader(req), Perms.manageWorkspaces);
       return await this.importService.startImport({
         tenantId: tenant.tenantId,
         workspaceId,
+        userId,
+        canManageWorkspaces,
         titleOverride: fields.get('title') ?? null,
         timezone: fields.get('timezone')?.trim() || 'UTC',
         uploadPath: filePath,

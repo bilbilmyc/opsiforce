@@ -11,7 +11,7 @@ import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import yauzl from 'yauzl';
 import { db } from '../../db';
-import { projectTransferJobs, workspaces } from '../../db/schema';
+import { projectTransferJobs, workspaceMembers, workspaces } from '../../db/schema';
 import { AgentService } from '../agent/agent.service';
 import { ProjectService } from './project.service';
 import { ProjectEventsService } from './project-events.service';
@@ -64,13 +64,15 @@ export class ProjectImportService {
   async startImport(params: {
     tenantId: string;
     workspaceId: string | null;
+    userId: string;
+    canManageWorkspaces: boolean;
     titleOverride: string | null;
     timezone: string;
     uploadPath: string;
   }): Promise<StartImportResult> {
-    const { tenantId, workspaceId, titleOverride, timezone, uploadPath } = params;
+    const { tenantId, workspaceId, userId, canManageWorkspaces, titleOverride, timezone, uploadPath } = params;
 
-    if (workspaceId) await this.assertWorkspaceInTenant(workspaceId, tenantId);
+    if (workspaceId) await this.assertWorkspaceAccessible(workspaceId, tenantId, userId, canManageWorkspaces);
 
     const manifest = await this.readManifest(uploadPath);
     const { agentId, agentFallbackFrom } = await this.resolveAgent(manifest.agentName);
@@ -118,13 +120,28 @@ export class ProjectImportService {
     return { projectId: project.id, job: await this.getJob(importJobId) };
   }
 
-  private async assertWorkspaceInTenant(workspaceId: string, tenantId: string): Promise<void> {
-    const [row] = await db
-      .select({ id: workspaces.id })
+  private async assertWorkspaceAccessible(
+    workspaceId: string,
+    tenantId: string,
+    userId: string,
+    canManageWorkspaces: boolean
+  ): Promise<void> {
+    const [workspace] = await db
+      .select({ type: workspaces.type })
       .from(workspaces)
       .where(and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId)))
       .limit(1);
-    if (!row) throw new BadRequestException('The selected workspace was not found.');
+    if (!workspace) throw new NotFoundException(`Workspace ${workspaceId} not found`);
+
+    const adminBypass = canManageWorkspaces && workspace.type === 'shared';
+    if (adminBypass) return;
+
+    const [member] = await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
+      .limit(1);
+    if (!member) throw new NotFoundException(`Workspace ${workspaceId} not found`);
   }
 
   private async resolveAgent(agentName: string | null): Promise<{ agentId: string; agentFallbackFrom: string | null }> {
