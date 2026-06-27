@@ -1,13 +1,15 @@
 FROM golang:1.26.2-alpine
 
+ARG PKG_PREFIX=
+
 RUN apk add --no-cache ca-certificates
 
 WORKDIR /src/packages/opsiforce/proxy
 
-COPY packages/opsiforce/proxy/go.mod packages/opsiforce/proxy/go.sum ./
+COPY ${PKG_PREFIX}proxy/go.mod ${PKG_PREFIX}proxy/go.sum ./
 RUN go mod download
 
-COPY packages/opsiforce/proxy /src/packages/opsiforce/proxy
+COPY ${PKG_PREFIX}proxy /src/packages/opsiforce/proxy
 
 RUN go build -o /usr/local/bin/opsiforce-proxy ./cmd/opsiforce-proxy
 

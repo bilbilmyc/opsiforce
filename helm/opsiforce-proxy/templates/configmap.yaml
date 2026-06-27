@@ -73,6 +73,7 @@ data:
           location /api/gateway {
             return 403;
           }
+          {{- if .Values.keycloakMs.enabled }}
           location /ms-api {
             set $keycloak_ms_api_backend {{ .Values.proxy.keycloakMsApiBackend }};
             proxy_http_version 1.1;
@@ -101,12 +102,16 @@ data:
             proxy_ssl_server_name on;
             proxy_pass $keycloak_ms_assets_backend;
           }
+          {{- end }}
           location /api/proxy {
             proxy_http_version 1.1;
             proxy_buffering off;
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
             proxy_set_header Host $host;
+            {{- if eq .Values.auth.mode "static" }}
+            {{- include "opsiforce-proxy.staticHeaders" . | nindent 12 }}
+            {{- end }}
             proxy_read_timeout 86400s;
             proxy_pass {{ .Values.proxy.agentService }};
           }
@@ -118,6 +123,9 @@ data:
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
             proxy_set_header Host $host;
+            {{- if eq .Values.auth.mode "static" }}
+            {{- include "opsiforce-proxy.staticHeaders" . | nindent 12 }}
+            {{- end }}
             proxy_read_timeout 86400s;
             proxy_send_timeout 86400s;
             proxy_pass {{ .Values.proxy.backendService }};

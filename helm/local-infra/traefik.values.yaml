@@ -1,0 +1,67 @@
+experimental:
+  abortOnPluginFailure: true
+  localPlugins:
+    traefik-oidc-auth:
+      type: localPath
+      moduleName: github.com/sevensolutions/traefik-oidc-auth
+      mountPath: /plugins-local/src/github.com/sevensolutions/traefik-oidc-auth
+      volumeName: plugins-local
+      subPath: src/github.com/sevensolutions/traefik-oidc-auth
+
+providers:
+  kubernetesCRD:
+    enabled: true
+    allowCrossNamespace: true
+    allowExternalNameServices: true
+  kubernetesIngress:
+    enabled: true
+
+service:
+  type: LoadBalancer
+
+ports:
+  web:
+    port: 80
+    exposedPort: 80
+    protocol: TCP
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+  websecure:
+    port: 443
+    exposedPort: 443
+    protocol: TCP
+    http:
+      tls:
+        enabled: true
+
+persistence:
+  enabled: false
+
+deployment:
+  replicas: 1
+  additionalVolumes:
+    - name: plugins-local
+      emptyDir: {}
+  initContainers:
+    - name: fetch-traefik-oidc-auth-plugin
+      image: alpine/git:2.49.1
+      command: ["/bin/sh", "-ec"]
+      args:
+        - >
+          mkdir -p /plugins-local/src/github.com/sevensolutions &&
+          rm -rf /plugins-local/src/github.com/sevensolutions/traefik-oidc-auth &&
+          git clone --depth 1 --branch @@OIDC_PLUGIN_VERSION@@
+          https://github.com/sevensolutions/traefik-oidc-auth.git
+          /plugins-local/src/github.com/sevensolutions/traefik-oidc-auth
+      volumeMounts:
+        - name: plugins-local
+          mountPath: /plugins-local
+
+logs:
+  general:
+    level: INFO
+  access:
+    enabled: true

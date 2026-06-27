@@ -22,7 +22,7 @@ spec:
       kind: Rule
       services:
         - name: {{ include "opsiforce-proxy.fullname" . }}
-          port: 4180
+          port: {{ include "opsiforce-proxy.proxyPort" . }}
     {{- end }}
   {{- if .Values.ingressRoute.certResolver }}
   tls:

@@ -40,3 +40,27 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{- define "opsiforce-proxy.proxyPort" -}}
+{{- if eq .Values.auth.mode "static" }}
+{{- .Values.service.port }}
+{{- else }}
+{{- 4180 }}
+{{- end }}
+{{- end }}
+
+{{- define "opsiforce-proxy.staticGroups" -}}
+{{- $tenant := printf "role:opsiforce_tenant_name_%s" .Values.auth.static.tenantName }}
+{{- $roles := list $tenant }}
+{{- range .Values.auth.static.permissions }}
+{{- $roles = append $roles (printf "role:opsiforce_%s" .) }}
+{{- end }}
+{{- join "," $roles }}
+{{- end }}
+
+{{- define "opsiforce-proxy.staticHeaders" -}}
+proxy_set_header X-Forwarded-User "{{ .Values.auth.static.userId }}";
+proxy_set_header X-Forwarded-Preferred-Username "{{ .Values.auth.static.preferredUsername }}";
+proxy_set_header X-Forwarded-Email "{{ .Values.auth.static.email }}";
+proxy_set_header X-Forwarded-Groups "{{ include "opsiforce-proxy.staticGroups" . }}";
+{{- end }}

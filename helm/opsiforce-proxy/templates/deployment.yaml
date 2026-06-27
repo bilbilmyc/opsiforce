@@ -60,6 +60,7 @@ spec:
                 mountPath: /etc/nginx/templates/nginx.conf.template
                 subPath: nginx.conf.template
                 readOnly: true
+          {{- if eq .Values.auth.mode "oidc" }}
           - name: opsiforce-oauth2-proxy
             image: {{ .Values.oauth2Proxy.image }}
             readinessProbe:
@@ -99,6 +100,9 @@ spec:
                 - --redirect-url={{ .Values.oauth2Proxy.redirectUrl }}
                 - --skip-auth-route=GET=^/assets/.*$
                 - --skip-auth-route=GET=^/favicon/.*$
+                {{- if .Values.keycloakMs.enabled }}
                 - --skip-auth-route=GET=^/ms-assets/.*$
+                {{- end }}
                 - --skip-auth-route=GET=^/manifest.webmanifest$
                 - --cookie-refresh=4m
+          {{- end }}

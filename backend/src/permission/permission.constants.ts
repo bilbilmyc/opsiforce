@@ -5,6 +5,8 @@ export const Perms = {
   manageProjectAuthSettings: 'can_manage_project_auth_settings',
   manageProjectPodSettings: 'can_manage_project_pod_settings',
   manageTenantBudget: 'can_manage_tenant_budget',
+  managePlatformDefaults: 'can_manage_platform_defaults',
+  manageTenantDefaults: 'can_manage_tenant_defaults',
   viewCodeTab: 'can_view_code_tab',
   viewDbTab: 'can_view_db_tab',
   disableProject: 'can_disable_project',
@@ -24,4 +26,5 @@ export const Perms = {
   manageUsers: 'can_manage_users',
   manageSchedules: 'can_manage_schedules',
   viewPods: 'can_view_pods',
+  manageExternalIntegration: 'can_manage_external_integration',
 } as const;

@@ -2,6 +2,12 @@ replicaCount: 1
 
 imagePullSecrets: []
 
+auth:
+  mode: static
+
+keycloakMs:
+  enabled: false
+
 ingress:
   enabled: false
 
@@ -15,8 +21,6 @@ proxy:
   agentService: "http://proxy-agent:3005"
   backendService: "http://opsiforce-backend:3001"
   frontendService: "http://host.minikube.internal:8084"
-  keycloakMsApiBackend: "http://local-keycloakms-proxy-keycloak-ms-proxy-oauth2-proxy.local.svc.cluster.local:4180"
-  keycloakMsAssetsBackend: "http://local-keycloakms-proxy-keycloak-ms-proxy-oauth2-proxy.local.svc.cluster.local:4180"
 
 appProxy:
   backendService: "proxy-app"
@@ -36,18 +40,6 @@ bifrostDashboard:
   enabled: true
   serviceName: opsiforce-bifrost
   hostname: bifrost.opsiforce.localtest.me
-
-oauth2Proxy:
-  image: quay.io/oauth2-proxy/oauth2-proxy:v7.13.0
-  clientId: opsiforce
-  clientSecret: opsiforce
-  cookieSecret: localsecretlocal
-  cookieDomain: .opsiforce.localtest.me
-  cookieName: _opsiforce_local
-  redirectUrl: https://opsiforce.localtest.me/oauth2/callback
-  issuerUrl: http://sima-keycloak-local-service:8086/realms/sima
-  logoutUrl: "http://sima-keycloak-local-service:8086/realms/sima/protocol/openid-connect/logout?id_token_hint={id_token}"
-  redisPath: redis://redis-session-storage-local-master:6379/0
 
 affinity: ~
 nodeSelector: {}

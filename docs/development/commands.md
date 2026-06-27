@@ -1,12 +1,12 @@
 # Commands Reference
 
-> Day-to-day dev commands for Opsiforce — type-check, lint, database, local ports. For first-time setup and the run loop, [`../README.md`](../../README.md) is canonical.
+> Day-to-day dev commands for Opsiforce — type-check, lint, database, local ports. For first-time setup and the run loop, the [Quickstart](../quickstart.md) (`yarn dev`) is canonical.
 
-Setup and the daily run loop (`install-all`, `tunnel-traefik`, `port-forward-all`, `dev-opsiforce-only`) live in [`../README.md`](../../README.md). This page covers the commands you run *while* developing.
+Setup and the run loop are one command — `yarn dev` (the [Quickstart](../quickstart.md)). This page covers the commands you run *while* developing, once the stack is up.
 
 ## Type check, lint, format
 
-Opsiforce TS/JS uses the Rust-based [OXC](https://oxc.rs) toolchain — **oxlint** + **oxfmt**, not ESLint/Prettier. Config lives at `packages/opsiforce/.oxlintrc.json` (shared base, extended per package) and `.oxfmtrc.json`. Run per workspace (swap `@opsiforce/backend` for `@opsiforce/frontend`):
+Opsiforce TS/JS uses the Rust-based [OXC](https://oxc.rs) toolchain — **oxlint** + **oxfmt**, not ESLint/Prettier. Config lives at `.oxlintrc.json` (shared base, extended per package) and `.oxfmtrc.json`. Run per workspace (swap `@opsiforce/backend` for `@opsiforce/frontend`):
 
 ```bash
 yarn workspace @opsiforce/backend run ts        # tsc type-check

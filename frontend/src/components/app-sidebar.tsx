@@ -4,7 +4,7 @@ import { useNavigate } from '@tanstack/solid-router';
 import { type Agent, type Project } from '~/api/client';
 import { useAgents } from '~/api/agents';
 import { usePermissions } from '~/api/permissions';
-import { useCurrentUser, useUserInfo } from '~/api/user';
+import { useCurrentUser } from '~/api/user';
 import { useCreateProjectInWorkspace, useWorkspaces } from '~/api/workspaces';
 import { Permission } from '~/constants/permissions';
 import { firstPermittedSettingsTab } from '~/constants/settings-tabs';
@@ -51,7 +51,6 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { toggleSidebar } = useSidebar();
   const { hasPermission } = usePermissions();
-  const userInfo = useUserInfo();
   const currentUser = useCurrentUser();
   const workspaces = useWorkspaces();
   const agents = useAgents();
@@ -94,7 +93,7 @@ export function AppSidebar() {
     );
   };
 
-  const userName = () => userInfo.data?.preferredUsername ?? '';
+  const userName = () => currentUser.data?.displayName ?? '';
   const userInitial = () => {
     const name = userName();
     return name ? name.charAt(0).toUpperCase() : 'U';

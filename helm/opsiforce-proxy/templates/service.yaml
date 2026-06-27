@@ -7,8 +7,8 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: 4180
-      targetPort: 4180
+    - port: {{ include "opsiforce-proxy.proxyPort" . }}
+      targetPort: {{ include "opsiforce-proxy.proxyPort" . }}
       protocol: TCP
       name: http
   selector:

@@ -1,4 +1,6 @@
-FROM node:24.14-alpine
+FROM node:24.18.0-alpine
+
+ARG PKG_PREFIX=
 
 RUN apk add --no-cache python3 make g++ git
 
@@ -7,13 +9,13 @@ WORKDIR /app
 COPY package.json yarn.lock .yarnrc.yml ./
 COPY .yarn/releases .yarn/releases
 
-COPY packages/opsiforce/backend/ ./packages/opsiforce/backend/
-COPY packages/opsiforce/agent-config/agent-image-version.json ./packages/opsiforce/agent-config/agent-image-version.json
-COPY packages/opsiforce/agent-config/agents.json ./packages/opsiforce/agent-config/agents.json
+COPY ${PKG_PREFIX}backend/ ./${PKG_PREFIX}backend/
+COPY ${PKG_PREFIX}agent-config/agent-image-version.json ./${PKG_PREFIX}agent-config/agent-image-version.json
+COPY ${PKG_PREFIX}agent-config/agents.json ./${PKG_PREFIX}agent-config/agents.json
 
 RUN yarn workspaces focus @opsiforce/backend
 
-WORKDIR /app/packages/opsiforce/backend
+WORKDIR /app/${PKG_PREFIX}backend
 
 ENV NODE_OPTIONS="--max-http-header-size=128000"
 EXPOSE 3001 9229

@@ -1,8 +1,10 @@
 FROM golang:1.26.2-alpine AS builder
 
+ARG PKG_PREFIX=packages/opsiforce/
+
 WORKDIR /src/packages/opsiforce/proxy
 
-COPY packages/opsiforce/proxy/ ./
+COPY ${PKG_PREFIX}proxy/ ./
 
 RUN go mod download
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/opsiforce-proxy ./cmd/opsiforce-proxy

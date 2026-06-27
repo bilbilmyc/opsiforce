@@ -1,0 +1,15 @@
+architecture: standalone
+
+auth:
+  enabled: false
+
+master:
+  disableCommands: []
+  persistence:
+    enabled: true
+
+commonConfiguration: |-
+  notify-keyspace-events Ex
+
+image:
+  repository: bitnamilegacy/redis
