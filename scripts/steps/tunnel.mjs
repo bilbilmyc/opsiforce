@@ -116,14 +116,21 @@ export async function run(ctx) {
   }
 
   ctx.print(ctx.c.bold('The network tunnel needs administrator access once.'));
-  ctx.print(ctx.c.dim('This is the only privileged step — macOS prompts for your password so traffic to'));
-  ctx.print(ctx.c.dim('the cluster can be routed. The tunnel then runs in the background.'));
+  ctx.print(ctx.c.dim('This is the only privileged step — the system prompts for your password so traffic'));
+  ctx.print(ctx.c.dim('to the cluster can be routed (no prompt if sudo is already authorized). The tunnel'));
+  ctx.print(ctx.c.dim('then runs in the background.'));
   ctx.print('');
 
   ctx.run('sudo', ['-v']);
 
   const out = openSync(logFile, 'a');
-  const child = spawn('nohup', ['minikube', 'tunnel'], { detached: false, stdio: ['ignore', out, out] });
+  // Bind to 127.0.0.1 explicitly: with the docker driver on Linux the tunnel
+  // otherwise only adds a route to the LoadBalancer's external IP and never
+  // binds localhost, so *.localtest.me (127.0.0.1) would be unreachable.
+  const child = spawn('nohup', ['minikube', 'tunnel', '--bind-address=127.0.0.1'], {
+    detached: false,
+    stdio: ['ignore', out, out],
+  });
 
   let exitedWith = null;
   child.on('exit', (code, signal) => {

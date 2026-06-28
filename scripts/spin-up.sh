@@ -4,11 +4,6 @@ set -eu
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 orchestrator="${script_dir}/spin-up.mjs"
 
-if [ "$(uname -s)" != "Darwin" ]; then
-  echo "Opsiforce Quickstart supports macOS only (detected $(uname -s))." >&2
-  exit 1
-fi
-
 auto_yes=0
 for arg in "$@"; do
   case "$arg" in
@@ -71,7 +66,17 @@ ensure_node() {
   fi
 }
 
-ensure_homebrew
-ensure_node
+# Homebrew is only the macOS bootstrap mechanism. On other platforms (Linux),
+# prerequisites are installed via the system package manager beforehand; we just
+# need Node on PATH to launch the orchestrator.
+if [ "$(uname -s)" = "Darwin" ]; then
+  ensure_homebrew
+  ensure_node
+else
+  if ! command -v node >/dev/null 2>&1; then
+    echo "Node.js is required but isn't on PATH. Install Node 24+ and re-run 'yarn dev'." >&2
+    exit 1
+  fi
+fi
 
 exec node "$orchestrator" "$@"

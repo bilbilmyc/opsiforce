@@ -255,7 +255,7 @@ function label(index, color) {
 
 async function run(versions, prompts, flags) {
   heading('Opsiforce Quickstart');
-  console.log(`${INDENT}${dim('macOS · one-command local setup')}`);
+  console.log(`${INDENT}${dim('macOS & Linux · one-command local setup')}`);
   console.log('');
 
   const state = loadState();
@@ -349,7 +349,7 @@ function reset() {
 }
 
 function printUsage() {
-  console.log(`${bold('Opsiforce Quickstart')} — one-command local setup (macOS)`);
+  console.log(`${bold('Opsiforce Quickstart')} — one-command local setup (macOS & Linux)`);
   console.log('');
   console.log('Usage:');
   console.log('  yarn dev                 Run the Quickstart (idempotent; resumes after a failed step)');
@@ -397,9 +397,9 @@ function parseArgs(argv) {
   return options;
 }
 
-function assertMacOS() {
-  if (process.platform === 'darwin') return;
-  console.error(red('Opsiforce Quickstart supports macOS only.'));
+function assertSupportedPlatform() {
+  if (process.platform === 'darwin' || process.platform === 'linux') return;
+  console.error(red('Opsiforce Quickstart supports macOS and Linux only.'));
   console.error(dim(`Detected platform: ${process.platform}.`));
   process.exit(1);
 }
@@ -420,7 +420,7 @@ async function main() {
     return;
   }
 
-  assertMacOS();
+  assertSupportedPlatform();
 
   if (options.reset) {
     reset();

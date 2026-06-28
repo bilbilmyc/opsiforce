@@ -5,8 +5,9 @@ export async function run(ctx) {
   ctx.print(ctx.c.bold(APP_URL));
 
   if (!process.stdin.isTTY) return;
+  const opener = process.platform === 'darwin' ? 'open' : 'xdg-open';
   try {
-    ctx.run('open', [APP_URL]);
+    ctx.run(opener, [APP_URL]);
   } catch (error) {
     ctx.warn(`Could not open a browser automatically (${error.message}). Open ${APP_URL} yourself.`);
   }

@@ -1,7 +1,11 @@
 import { recommendClusterSize } from './resources.mjs';
 
 const HOST_CLIS = [
-  { key: 'homebrew', label: 'Homebrew', bin: 'brew', versionArgs: ['--version'] },
+  // Homebrew is the macOS install mechanism, not a runtime dependency — only
+  // require/inspect it there. On Linux the tools come from the system package manager.
+  ...(process.platform === 'darwin'
+    ? [{ key: 'homebrew', label: 'Homebrew', bin: 'brew', versionArgs: ['--version'] }]
+    : []),
   { key: 'minikube', label: 'minikube', bin: 'minikube', versionArgs: ['version', '--short'] },
   { key: 'kubectl', label: 'kubectl', bin: 'kubectl', versionArgs: ['version', '--client'] },
   { key: 'helm', label: 'Helm', bin: 'helm', versionArgs: ['version', '--short'] },
@@ -171,6 +175,15 @@ function describePlan(ctx, plan) {
 }
 
 async function installPlan(ctx, plan) {
+  // Automated installs are macOS/Homebrew-only. On other platforms, point the
+  // user at their package manager rather than shelling out to brew.
+  if (process.platform !== 'darwin' && (plan.brewFormulas.length || plan.colima)) {
+    const tools = [...plan.brewFormulas];
+    if (plan.colima) tools.push('a running container runtime (e.g. Docker Engine)');
+    throw new Error(
+      `Missing prerequisites: ${tools.join(', ')}. Install them with your system package manager and re-run \`yarn dev\`.`
+    );
+  }
   if (plan.brewFormulas.length) {
     if (!ctx.commandExists('brew')) {
       throw new Error(
