@@ -2,7 +2,7 @@
 
 Opsiforce is a self-hosted, multi-tenant **web platform** for building and running AI-generated apps inside your own infrastructure. You deploy it once to a **Kubernetes cluster** and your team uses it from the browser — it is a service you host and operate, not a desktop app that runs on each person's machine. Each user gets a chat interface backed by an isolated Linux/Kubernetes workspace where an agent can write real code, run commands, install packages, edit files, inspect data, and serve the resulting app through the platform.
 
-It is meant to be an open alternative to products like Lovable, Base44, and AI coworker-style app builders, but with two different assumptions. First, the platform and the apps it builds should run on **your own infrastructure** — self-hosted in your cloud or cluster — rather than on a vendor's hosted stack. Second, the generated app should not be locked to one frontend framework, one backend runtime, or one database. Each app runs in a generic container with a persistent filesystem, project-level credentials, environment-specific configuration, and HTTPS routes managed by the platform.
+It is meant to be an open alternative to products like Lovable, Base44, and AI coworker-style app builders, but with two different assumptions. First, building the app is only half the job — the platform should also **host and run** it, with a persistent runtime, live HTTPS URLs, and multiple environments, instead of generating code you then have to deploy and operate yourself. Second, the generated app should not be locked to one frontend framework, one backend runtime, or one database. Each app runs in a generic container with a persistent filesystem, project-level credentials, environment-specific configuration, and HTTPS routes managed by the platform.
 
 Community: [Join the Opsiforce Discord](https://discord.gg/kMUW2zR4R)
 
@@ -16,11 +16,11 @@ Community: [Join the Opsiforce Discord](https://discord.gg/kMUW2zR4R)
 
 ## Why Opsiforce Exists
 
-Most AI app builders are vendor-hosted SaaS — the builder, the generated apps, and their data all live on someone else's cloud, and you cannot run the platform yourself. That is fine for a quick CRUD screen, but not if you need to **self-host the whole thing in your own infrastructure**, embed AI app building into a product, connect it to internal systems, or let users build more than a React + Supabase app.
+Most AI tools stop at building. Coding assistants generate a real app but never host it — you still have to deploy, route, persist, and run the result yourself; hosted builders run the app but lock it to a narrow stack on their cloud. That gap is fine for a quick CRUD screen, but not if you want the platform to **build and host** the app for you, embed AI app building into a product, connect it to internal systems, or let users build more than a React + Supabase app.
 
 Opsiforce is designed for teams that want:
 
-- A self-hosted AI app builder that runs entirely in their own Kubernetes cluster — the platform, user code, data, and the generated apps never leave their infrastructure.
+- An AI app builder that also **hosts and runs** the apps it generates — persistent workspaces, live HTTPS URLs, and Development/Production environments — not just code you have to deploy yourself.
 - A white-label experience that can be embedded into an existing product.
 - Real code generation rather than low-code graph execution.
 - Persistent workspaces, files, databases, chat history, and IDE state across pod restarts.
