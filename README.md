@@ -16,14 +16,14 @@ Community: [Join the Opsiforce Discord](https://discord.gg/kMUW2zR4R)
 
 ## Why Opsiforce Exists
 
-Most AI tools stop at building. Coding assistants generate a real app but never host it, so you still have to deploy, route, persist, and run the result yourself; hosted builders run the app but lock it to a narrow stack on their cloud. That gap is fine for a quick CRUD screen, but not if you want the platform to **build and host** the app for you, embed AI app building into a product, connect it to internal systems, or let users build more than a React + Supabase app.
+Most AI tools stop at building. Coding assistants generate a real app but never host it, so you still have to deploy, route, persist, and run the result yourself; hosted builders run the app but lock it to a narrow stack on their cloud. In both cases the agent's context and session live on one machine or an ephemeral sandbox, so they are lost on the next restart, not just the app. That gap is fine for a quick CRUD screen, but not if you want the platform to **build and host** the app for you, keep the agent's session alive across restarts, embed AI app building into a product, connect it to internal systems, or let users build more than a React + Supabase app.
 
 Opsiforce is designed for teams that want:
 
 - An AI app builder that also **hosts and runs** the apps it generates (persistent workspaces, live HTTPS URLs, and Development/Production environments), not just code you have to deploy yourself.
 - A white-label experience that can be embedded into an existing product.
 - Real code generation rather than low-code graph execution.
-- Persistent workspaces, files, databases, chat history, and IDE state across pod restarts.
+- Persistent state across pod restarts: not only files, databases, and IDE state, but the agent's own context and session, so a project resumes exactly where it left off.
 - A generic runtime that can support different frameworks, languages, tools, and databases.
 - Multiple environments, such as Development, Production, and custom environments.
 - Reverse-proxied HTTPS routes for every app, preview, code editor, and database viewer surface.
