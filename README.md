@@ -1,6 +1,6 @@
 # Opsiforce
 
-Opsiforce is a self-hostable, white-label platform for building and running AI-generated apps inside your own infrastructure. It gives users a chat interface backed by an isolated Linux/Kubernetes workspace where an agent can write real code, run commands, install packages, edit files, inspect data, and serve the resulting app through the platform.
+Opsiforce is a self-hosted, multi-tenant **web platform** for building and running AI-generated apps inside your own infrastructure. You deploy it once to a **Kubernetes cluster** and your team uses it from the browser — it is a service you host and operate, not a desktop app that runs on each person's machine. Each user gets a chat interface backed by an isolated Linux/Kubernetes workspace where an agent can write real code, run commands, install packages, edit files, inspect data, and serve the resulting app through the platform.
 
 It is meant to be an open alternative to products like Lovable, Base44, and AI coworker-style app builders, but with a different assumption: the generated app should not be locked to one frontend framework, one backend runtime, or one database. Each app runs in a generic container with a persistent filesystem, project-level credentials, environment-specific configuration, and HTTPS routes managed by the platform.
 
@@ -12,7 +12,7 @@ Community: [Join the Opsiforce Discord](https://discord.gg/kMUW2zR4R)
 
 [Watch the demo on YouTube](https://www.youtube.com/watch?v=9eyzwXZlU8Y)
 
-[Run it locally](#running-it-locally)
+[Run it locally for development](#running-it-locally) · [Running in production](#running-in-production)
 
 ## Why Opsiforce Exists
 
