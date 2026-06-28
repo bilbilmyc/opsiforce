@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Opsiforce Architecture</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: radial-gradient(1200px 600px at 50% -10%, #ffffff 0%, #eef1f6 60%, #e7ebf2 100%);
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #0f172a;
+    padding: 40px 24px;
+    display: flex;
+    justify-content: center;
+  }
+  #figure {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 18px;
+    box-shadow: 0 24px 60px -28px rgba(15, 23, 42, 0.35), 0 2px 8px -2px rgba(15,23,42,0.08);
+    padding: 8px;
+    width: 1280px;
+    max-width: 100%;
+  }
+  svg { display: block; width: 100%; height: auto; }
+  .hint { width: 1280px; max-width: 100%; margin: 14px auto 0; text-align: center; color: #64748b; font-size: 13px; }
+  .hint code { background:#f1f5f9; padding:1px 6px; border-radius:6px; }
+</style>
+</head>
+<body>
+<div id="figure">
+  <svg viewBox="0 0 1280 1080" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+    <defs>
+      <marker id="aSolid" markerWidth="7" markerHeight="7" refX="5.4" refY="3" orient="auto">
+        <path d="M0,0 L6.5,3 L0,6 Z" fill="#334155"/>
+      </marker>
+      <marker id="aDash" markerWidth="7" markerHeight="7" refX="5.4" refY="3" orient="auto">
+        <path d="M0,0 L6.5,3 L0,6 Z" fill="#64748b"/>
+      </marker>
+      <style>
+        .sub  { fill:#64748b; }
+        .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+        .flow { stroke:#334155; stroke-width:2.6; fill:none; marker-end:url(#aSolid); }
+        .ctrl { stroke:#64748b; stroke-width:2;   fill:none; stroke-dasharray:7 5; marker-end:url(#aDash); }
+        text  { fill:#0f172a; }
+      </style>
+    </defs>
+
+    <!-- Heading -->
+    <text x="60" y="52" font-size="30" font-weight="800" letter-spacing="-0.5">Opsiforce Architecture</text>
+    <text x="60" y="80" font-size="15" class="sub">A Kubernetes-native control plane and stateless Go runtime proxies behind a Traefik ingress, streaming to isolated per-environment pods.</text>
+
+    <!-- ===== Browser (outside cluster) ===== -->
+    <rect x="540" y="104" width="200" height="50" rx="12" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="640" y="134" font-size="16" font-weight="700" text-anchor="middle">Browser</text>
+
+    <!-- ===== Kubernetes cluster boundary (Kubernetes blue) ===== -->
+    <rect x="56" y="196" width="1168" height="838" rx="20" fill="#f5f9ff" stroke="#326ce5" stroke-width="2" stroke-dasharray="10 7"/>
+    <rect x="74" y="182" width="214" height="28" rx="9" fill="#326ce5"/>
+    <text x="181" y="201" font-size="12.5" font-weight="700" text-anchor="middle" fill="#ffffff">Kubernetes cluster</text>
+
+    <!-- ===== Ingress: Traefik + auth ===== -->
+    <rect x="110" y="250" width="1060" height="120" rx="12" fill="#eef2ff" stroke="#6366f1"/>
+    <text x="640" y="281" font-size="18" font-weight="800" text-anchor="middle" fill="#3730a3">Ingress — Traefik</text>
+    <text x="640" y="302" font-size="12.5" text-anchor="middle" class="sub">ingress controller · TLS termination · host &amp; path routing</text>
+    <rect x="348" y="314" width="258" height="32" rx="7" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="477" y="334" font-size="11" text-anchor="middle">OAuth2 Proxy · OIDC (platform SSO)</text>
+    <rect x="620" y="314" width="300" height="32" rx="7" fill="#ffffff" stroke="#c7d2fe"/>
+    <text x="770" y="334" font-size="11" text-anchor="middle">per-env App Auth — Traefik middleware</text>
+    <text x="640" y="361" font-size="11.5" text-anchor="middle" class="mono sub">/ → frontend    /api → backend    /api/proxy/:id/* · {env}.apps | code | db → runtime proxies</text>
+
+    <!-- ===== Lane 1: Frontend ===== -->
+    <rect x="90" y="412" width="300" height="124" rx="12" fill="#ecfdf5" stroke="#10b981"/>
+    <text x="240" y="448" font-size="17" font-weight="700" text-anchor="middle" fill="#047857">Frontend</text>
+    <text x="240" y="470" font-size="13" text-anchor="middle">Vite + Solid.js SPA</text>
+    <text x="240" y="490" font-size="11.5" text-anchor="middle" class="sub">OpenCode UI embedded at source</text>
+    <text x="240" y="514" font-size="12" text-anchor="middle" class="mono sub">served at  /</text>
+
+    <!-- ===== Lane 2: Backend (control plane) ===== -->
+    <rect x="430" y="412" width="300" height="124" rx="12" fill="#f5f3ff" stroke="#8b5cf6"/>
+    <rect x="522" y="420" width="116" height="17" rx="8.5" fill="#7c3aed"/>
+    <text x="580" y="432.5" font-size="9.5" font-weight="700" letter-spacing="1.2" text-anchor="middle" fill="#ffffff">CONTROL PLANE</text>
+    <text x="580" y="461" font-size="17" font-weight="700" text-anchor="middle" fill="#6d28d9">Backend</text>
+    <text x="580" y="482" font-size="12.5" text-anchor="middle">NestJS + Fastify</text>
+    <text x="580" y="501" font-size="11.5" text-anchor="middle" class="sub">manages pods · runs the ensure gate</text>
+    <text x="580" y="520" font-size="11" text-anchor="middle" class="sub" font-style="italic">does not stream project traffic</text>
+
+    <!-- ===== Lane 3: Runtime proxies ===== -->
+    <rect x="810" y="412" width="330" height="124" rx="12" fill="#eff6ff" stroke="#3b82f6"/>
+    <text x="975" y="446" font-size="17" font-weight="700" text-anchor="middle" fill="#1d4ed8">Runtime proxies</text>
+    <text x="975" y="468" font-size="12.5" text-anchor="middle">4 stateless Go proxies</text>
+    <text x="975" y="491" font-size="12" text-anchor="middle" class="mono">agent :3005   ·   app :3002</text>
+    <text x="975" y="512" font-size="12" text-anchor="middle" class="mono">vscode :3003   ·   db :3004</text>
+
+    <!-- ===== Backing services + Schedules ===== -->
+    <rect x="110" y="586" width="168" height="86" rx="12" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="194" y="622" font-size="13" font-weight="700" text-anchor="middle" fill="#326ce5">Kubernetes API</text>
+    <text x="194" y="643" font-size="10" text-anchor="middle" class="sub">create / watch pods</text>
+
+    <rect x="288" y="586" width="150" height="86" rx="12" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="363" y="622" font-size="13" font-weight="700" text-anchor="middle" fill="#2f6792">PostgreSQL</text>
+    <text x="363" y="643" font-size="10" text-anchor="middle" class="sub">state &amp; settings</text>
+
+    <rect x="448" y="586" width="108" height="86" rx="12" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="502" y="622" font-size="13" font-weight="700" text-anchor="middle" fill="#c63027">Redis</text>
+    <text x="502" y="643" font-size="9.5" text-anchor="middle" class="sub">TTLs · pub/sub</text>
+
+    <rect x="566" y="586" width="158" height="86" rx="12" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="645" y="616" font-size="13" font-weight="700" text-anchor="middle" fill="#7c3aed">Bifrost</text>
+    <text x="645" y="635" font-size="9.5" text-anchor="middle" class="sub">LLM gateway · virtual keys</text>
+    <text x="645" y="653" font-size="9" text-anchor="middle" class="sub" font-style="italic">→ OpenAI · Anthropic · local</text>
+
+    <rect x="734" y="586" width="170" height="86" rx="12" fill="#f8fafc" stroke="#94a3b8"/>
+    <text x="819" y="616" font-size="13" font-weight="700" text-anchor="middle" fill="#b45309">Schedules</text>
+    <text x="819" y="635" font-size="9.5" text-anchor="middle" class="sub">BullMQ worker · cron (Redis)</text>
+    <text x="819" y="653" font-size="9" text-anchor="middle" class="sub" font-style="italic">wakes pod · calls app endpoint</text>
+
+    <!-- ===== Project-Environment Pod (stack = many concurrent copies) ===== -->
+    <rect x="160" y="694" width="1060" height="176" rx="14" fill="#fff7ed" stroke="#f59e0b" opacity="0.35"/>
+    <rect x="135" y="707" width="1060" height="176" rx="14" fill="#fff7ed" stroke="#f59e0b" opacity="0.65"/>
+    <rect x="110" y="720" width="1060" height="176" rx="14" fill="#fff7ed" stroke="#f59e0b"/>
+    <text x="1198" y="704" font-size="12" font-weight="800" text-anchor="middle" fill="#b45309">× N</text>
+    <rect x="1000" y="730" width="158" height="17" rx="8.5" fill="#d97706"/>
+    <text x="1079" y="742.5" font-size="9.5" font-weight="700" letter-spacing="1.2" text-anchor="middle" fill="#ffffff">DATA PLANE · POD</text>
+    <text x="138" y="748" font-size="17" font-weight="700" fill="#b45309">Project-Environment Pod</text>
+    <text x="138" y="768" font-size="12" class="sub">scales out — one pod per active environment · disposable pod, durable workspace</text>
+
+    <rect x="140" y="780" width="235" height="60" rx="9" fill="#ffffff" stroke="#fcd34d"/>
+    <text x="257" y="806" font-size="13" font-weight="600" text-anchor="middle">OpenCode agent</text>
+    <text x="257" y="826" font-size="12" text-anchor="middle" class="mono sub">:4096</text>
+
+    <rect x="395" y="780" width="195" height="60" rx="9" fill="#ffffff" stroke="#fcd34d"/>
+    <text x="492" y="806" font-size="13" font-weight="600" text-anchor="middle">App server</text>
+    <text x="492" y="826" font-size="12" text-anchor="middle" class="mono sub">:3000</text>
+
+    <rect x="610" y="780" width="230" height="60" rx="9" fill="#ffffff" stroke="#fcd34d"/>
+    <text x="725" y="806" font-size="12.5" font-weight="600" text-anchor="middle">code-server (VS Code)</text>
+    <text x="725" y="826" font-size="12" text-anchor="middle" class="mono sub">:8080</text>
+
+    <rect x="860" y="780" width="250" height="60" rx="9" fill="#ffffff" stroke="#fcd34d"/>
+    <text x="985" y="806" font-size="12.5" font-weight="600" text-anchor="middle">Datasette · DB viewer</text>
+    <text x="985" y="826" font-size="12" text-anchor="middle" class="mono sub">:8081</text>
+
+    <text x="640" y="872" font-size="11" text-anchor="middle" class="sub" font-style="italic">created &amp; watched by the Kubernetes API · routed to by the runtime proxies</text>
+
+    <!-- ===== Persistent storage ===== -->
+    <rect x="300" y="912" width="680" height="56" rx="10" fill="#fffbeb" stroke="#f59e0b" stroke-dasharray="6 5"/>
+    <text x="640" y="936" font-size="13" font-weight="700" text-anchor="middle" fill="#b45309">Persistent /workspace volume</text>
+    <text x="640" y="954" font-size="11" text-anchor="middle" class="sub">CephFS / RWX storage — survives pod replacement</text>
+
+    <!-- =========================================================
+         ARROWS (drawn last, on top of every box so none are hidden)
+         ========================================================= -->
+    <path class="flow" d="M640,154 L640,246"/>               <!-- browser -> ingress -->
+    <path class="flow" d="M240,370 L240,409"/>               <!-- ingress -> frontend -->
+    <path class="flow" d="M580,370 L580,409"/>               <!-- ingress -> backend -->
+    <path class="flow" d="M975,370 L975,409"/>               <!-- ingress -> runtime -->
+
+    <path class="ctrl" d="M808,474 L736,474"/>               <!-- runtime -> backend (ensure) -->
+    <rect x="745" y="455" width="52" height="15" rx="4" fill="#ffffff"/>
+    <text x="771" y="466" font-size="10.5" text-anchor="middle" class="sub">ensure</text>
+
+    <path class="ctrl" d="M580,536 L197,584"/>               <!-- backend -> backing services -->
+    <path class="ctrl" d="M580,536 L364,584"/>
+    <path class="ctrl" d="M580,536 L502,584"/>
+    <path class="ctrl" d="M582,536 L644,584"/>
+    <path class="ctrl" d="M585,536 L814,584"/>
+
+    <path class="flow" d="M975,536 L975,719"/>               <!-- runtime -> pod (stream) -->
+    <rect x="943" y="612" width="64" height="15" rx="4" fill="#ffffff"/>
+    <text x="975" y="623" font-size="10.5" text-anchor="middle" class="sub">stream</text>
+
+    <path class="ctrl" d="M819,674 L819,718"/>               <!-- schedules -> pod (wake) -->
+    <rect x="828" y="688" width="44" height="14" rx="4" fill="#fbfdff"/>
+    <text x="850" y="698" font-size="10" text-anchor="middle" class="sub">wake</text>
+
+    <path class="flow" d="M640,896 L640,911"/>               <!-- pod -> storage (mounts) -->
+    <rect x="648" y="896" width="50" height="14" rx="4" fill="#fff7ed"/>
+    <text x="673" y="906" font-size="10" text-anchor="middle" class="sub">mounts</text>
+
+    <!-- ===== Legend ===== -->
+    <line x1="130" y1="1058" x2="174" y2="1058" class="flow"/>
+    <text x="184" y="1062" font-size="12" class="sub">request / traffic — data plane</text>
+    <line x1="432" y1="1058" x2="476" y2="1058" class="ctrl"/>
+    <text x="486" y="1062" font-size="12" class="sub">control / consult — control plane</text>
+    <text x="1160" y="1062" font-size="11" text-anchor="end" class="sub" font-style="italic">ports are in-cluster</text>
+  </svg>
+</div>
+<p class="hint">Open in a browser, then screenshot the white card (or print → save as PDF). Source: <code>/tmp/opsiforce-architecture.html</code></p>
+</body>
+</html>

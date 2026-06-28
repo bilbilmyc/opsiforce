@@ -67,19 +67,7 @@ The important distinction is that Opsiforce provides the workspace, hosting, pro
 
 Opsiforce is a Kubernetes-native control plane plus a set of runtime proxies.
 
-```text
-Browser
-  -> Edge proxy / OAuth2 Proxy
-  -> Opsiforce frontend and backend
-  -> Runtime proxies for agent, app, VS Code, and DB viewer
-  -> Isolated project-environment pod
-       - OpenCode agent on :4096
-       - User app on :3000
-       - code-server on :8080
-       - Datasette DB viewer on :8081
-       - Persistent /workspace volume
-```
-
+![Opsiforce architecture — the browser reaches a Traefik ingress (OAuth2 Proxy / OIDC, per-env App Auth); the frontend, NestJS control-plane backend, and four stateless Go runtime proxies run in-cluster; the backend drives the Kubernetes API, PostgreSQL, Redis, Bifrost, and a BullMQ schedule worker; runtime proxies stream to isolated per-environment pods (OpenCode :4096, app :3000, code-server :8080, Datasette :8081) on a persistent CephFS/RWX workspace volume](docs/assets/architecture.png)
 The backend is the control plane. It creates and wakes pods, manages projects and environments, writes settings, enforces permissions, talks to Kubernetes, and manages gateway credentials. It does not stream app traffic. The Go runtime proxies carry traffic to the right pod after checking with the backend that the environment is ready.
 
 Each project environment is disposable at the pod layer and durable at the workspace layer. If a pod is suspended, evicted, restarted, or recreated, the same persistent workspace is mounted back into the next pod.
