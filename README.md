@@ -10,7 +10,9 @@ Community: [Join the Opsiforce Discord](https://discord.gg/kMUW2zR4R)
 
 [![Watch the Opsiforce demo](https://opsima-static-html.s3.us-east-1.amazonaws.com/s1-im.png)](https://www.youtube.com/watch?v=3Z3u4DJovnA)
 
-[Watch the demo on YouTube](https://www.youtube.com/watch?v=3Z3u4DJovnA)
+[Watch the demo on YouTube](https://www.youtube.com/watch?v=9eyzwXZlU8Y)
+
+[Run it locally](#running-it-locally)
 
 ## Why Opsiforce Exists
 
@@ -158,15 +160,49 @@ Opsiforce is licensed under the [GNU Affero General Public License v3.0](LICENSE
 
 Opsiforce is a Kubernetes-native platform, and local development mirrors that: the backend, the runtime proxies, the LLM gateway, and the per-project agent pods all run inside a local Kubernetes cluster (minikube), while the frontend is served on the host through Vite. Browser entrypoints are exposed under `*.opsiforce.localtest.me` (`localtest.me` resolves to `127.0.0.1`, so there are no host-file edits).
 
-On macOS, one command stands the whole thing up:
+One command stands the whole thing up:
 
 ```bash
-yarn dev
+yarn && yarn dev
 ```
 
-This is the **Quickstart**. From a fresh clone it checks and — with your consent — installs the pinned prerequisites (a container runtime, minikube, kubectl, Helm, Tilt, mkcert, Node, and Yarn), sizes and starts the cluster, generates a locally trusted TLS certificate, brings up PostgreSQL, Redis, ingress, and the LLM gateway, builds the images, migrates the databases, connects an LLM, and opens the app — already signed in as a local dev user with full access, no identity provider to configure. It is idempotent and resumable: run it again to bring the stack back up, a failed step is resumed on the next run, and `yarn dev --reset` tears everything down for a clean start. macOS only.
+This is the Quickstart — `yarn` installs the workspace dependencies, then `yarn dev` runs the orchestrator. It works on macOS and Linux. From a fresh clone it sizes and starts the cluster, generates a locally trusted TLS certificate, brings up PostgreSQL, Redis, ingress, and the LLM gateway, builds the images, migrates the databases, connects an LLM, and opens the app — already signed in as a local dev user with full access, no identity provider to configure. It is idempotent and resumable: run it again to bring the stack back up, a failed step is resumed on the next run, and `yarn dev --reset` tears everything down for a clean start.
 
-For the LLM, you can drive a **ChatGPT/Codex subscription** you already pay for (the default — a one-time browser sign-in, no API credits) or **your own OpenAI API key**. The full walkthrough — every numbered step, the LLM choices, the pinned-versions manifest, and day-two re-runs — is in the **[Quickstart guide](docs/quickstart.md)**.
+### Prerequisites
+
+On macOS there is nothing to install up front: the Quickstart detects missing tools and, with your consent, installs them via Homebrew (a container runtime, minikube, kubectl, Helm, Tilt, mkcert, Node, and Yarn).
+
+On Linux you install the prerequisites yourself, then run `yarn && yarn dev`. On Ubuntu:
+
+```bash
+# Docker Engine (official script — includes Buildx and Compose)
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER"          # log out/in so the group applies
+
+# kubectl, Helm, Go
+sudo snap install kubectl --classic
+sudo snap install helm --classic
+sudo snap install go --classic
+
+# Node 24 + Corepack (provides Yarn)
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+sudo apt-get install -y nodejs
+sudo corepack enable
+
+# minikube
+curl -fsSLo minikube "https://storage.googleapis.com/minikube/releases/latest/minikube-linux-$(dpkg --print-architecture)"
+sudo install minikube /usr/local/bin/ && rm minikube
+
+# Tilt
+curl -fsSL https://raw.githubusercontent.com/tilt-dev/tilt/master/scripts/install.sh | sudo bash
+
+# mkcert + NSS tools (locally trusted TLS for the browser)
+sudo apt-get update && sudo apt-get install -y mkcert libnss3-tools
+```
+
+On Linux the cluster uses the Docker driver and `minikube tunnel` binds `127.0.0.1:80` and `:443` for ingress, so the Quickstart asks for `sudo` once to bind those privileged ports.
+
+For the LLM, the default local proxy lets you drive a **ChatGPT/Codex subscription** you already pay for (a one-time browser sign-in, no API credits) or **your own OpenAI API key**. You are not limited to those: the LLM gateway is Bifrost and the agent runtime is OpenCode, so any provider they support — Anthropic, Google, Azure OpenAI, AWS Bedrock, OpenRouter, local/self-hosted models, and more — can be used by configuring it in Bifrost and selecting the model in OpenCode. The full walkthrough — every numbered step, the LLM choices, the pinned-versions manifest, and day-two re-runs — is in the **[Quickstart guide](docs/quickstart.md)**.
 
 ## Local URLs
 
@@ -190,3 +226,13 @@ For the LLM, you can drive a **ChatGPT/Codex subscription** you already pay for 
 ## Useful commands
 
 The day-to-day commands you run *while* developing — type-check, lint, format, database, and the per-workspace tasks — are in the command reference: [docs/development/commands.md](docs/development/commands.md).
+
+## Running in production
+
+The Quickstart targets local development. A production deployment uses the same components on infrastructure you operate:
+
+- Kubernetes control plane — a managed or self-managed cluster (not minikube), sized for the control plane plus the per-project agent pods.
+- Traefik ingress controller — the app, runtime-proxy, and per-project routes expect Traefik; install it in-cluster and point DNS at its load balancer.
+- RWX persistent storage — project workspaces need ReadWriteMany volumes that survive pod replacement; back them with a shared-storage system such as Ceph (for example Rook-Ceph / CephFS) or another RWX-capable provisioner.
+- Container registry — build and host the Opsiforce images (agent, backend, runtime-proxy, frontend) in your own registry instead of building into minikube.
+- Helm values — adjust the charts for your environment: image references and tags, ingress hosts and TLS, storage classes, replica counts, resource requests/limits, PostgreSQL/Redis, and Bifrost provider secrets.
