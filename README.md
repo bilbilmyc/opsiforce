@@ -1,8 +1,8 @@
 # Opsiforce
 
-Opsiforce is a self-hosted, multi-tenant **web platform** for building and running AI-generated apps inside your own infrastructure. You deploy it once to a **Kubernetes cluster** and your team uses it from the browser — it is a service you host and operate, not a desktop app that runs on each person's machine. Each user gets a chat interface backed by an isolated Linux/Kubernetes workspace where an agent can write real code, run commands, install packages, edit files, inspect data, and serve the resulting app through the platform.
+Opsiforce is a self-hosted, multi-tenant **web platform** for building and running AI-generated apps inside your own infrastructure. You deploy it once to a **Kubernetes cluster** and your team uses it from the browser. It is a service you host and operate, not a desktop app that runs on each person's machine. Each user can create multiple projects, and every project is its own chat with an AI agent backed by an isolated Linux/Kubernetes workspace where the agent can write real code, run commands, install packages, edit files, inspect data, and serve the resulting app through the platform.
 
-It is meant to be an open alternative to products like Lovable, Base44, and AI coworker-style app builders, but with two different assumptions. First, building the app is only half the job — the platform should also **host and run** it, with a persistent runtime, live HTTPS URLs, and multiple environments, instead of generating code you then have to deploy and operate yourself. Second, the generated app should not be locked to one frontend framework, one backend runtime, or one database. Each app runs in a generic container with a persistent filesystem, project-level credentials, environment-specific configuration, and HTTPS routes managed by the platform.
+It is meant to be an open alternative to products like Lovable, Base44, and AI coworker-style app builders, but with two different assumptions. First, building the app is only half the job. The platform should also **host and run** it, with a persistent runtime, live HTTPS URLs, and multiple environments, instead of generating code you then have to deploy and operate yourself. Second, the generated app should not be locked to one frontend framework, one backend runtime, or one database. Each app runs in a generic container with a persistent filesystem, project-level credentials, environment-specific configuration, and HTTPS routes managed by the platform.
 
 Community: [Join the Opsiforce Discord](https://discord.gg/kMUW2zR4R)
 
@@ -12,15 +12,15 @@ Community: [Join the Opsiforce Discord](https://discord.gg/kMUW2zR4R)
 
 [Watch the demo on YouTube](https://www.youtube.com/watch?v=9eyzwXZlU8Y)
 
-[Run it locally for development](#running-it-locally) · [Running in production](#running-in-production)
+[Run it locally for development](#running-it-locally) | [Running in production](#running-in-production)
 
 ## Why Opsiforce Exists
 
-Most AI tools stop at building. Coding assistants generate a real app but never host it — you still have to deploy, route, persist, and run the result yourself; hosted builders run the app but lock it to a narrow stack on their cloud. That gap is fine for a quick CRUD screen, but not if you want the platform to **build and host** the app for you, embed AI app building into a product, connect it to internal systems, or let users build more than a React + Supabase app.
+Most AI tools stop at building. Coding assistants generate a real app but never host it, so you still have to deploy, route, persist, and run the result yourself; hosted builders run the app but lock it to a narrow stack on their cloud. That gap is fine for a quick CRUD screen, but not if you want the platform to **build and host** the app for you, embed AI app building into a product, connect it to internal systems, or let users build more than a React + Supabase app.
 
 Opsiforce is designed for teams that want:
 
-- An AI app builder that also **hosts and runs** the apps it generates — persistent workspaces, live HTTPS URLs, and Development/Production environments — not just code you have to deploy yourself.
+- An AI app builder that also **hosts and runs** the apps it generates (persistent workspaces, live HTTPS URLs, and Development/Production environments), not just code you have to deploy yourself.
 - A white-label experience that can be embedded into an existing product.
 - Real code generation rather than low-code graph execution.
 - Persistent workspaces, files, databases, chat history, and IDE state across pod restarts.
@@ -67,7 +67,7 @@ The important distinction is that Opsiforce provides the workspace, hosting, pro
 
 Opsiforce is a Kubernetes-native control plane plus a set of runtime proxies.
 
-![Opsiforce architecture — the browser reaches a Traefik ingress (OAuth2 Proxy / OIDC, per-env App Auth); the frontend, NestJS control-plane backend, and four stateless Go runtime proxies run in-cluster; the backend drives the Kubernetes API, PostgreSQL, Redis, Bifrost, and a BullMQ schedule worker; runtime proxies stream to isolated per-environment pods (OpenCode :4096, app :3000, code-server :8080, Datasette :8081) on a persistent CephFS/RWX workspace volume](docs/assets/architecture.png)
+![Opsiforce architecture: the browser reaches a Traefik ingress (OAuth2 Proxy / OIDC, per-env App Auth); the frontend, NestJS control-plane backend, and four stateless Go runtime proxies run in-cluster; the backend drives the Kubernetes API, PostgreSQL, Redis, Bifrost, and a BullMQ schedule worker; runtime proxies stream to isolated per-environment pods (OpenCode :4096, app :3000, code-server :8080, Datasette :8081) on a persistent CephFS/RWX workspace volume](docs/assets/architecture.png)
 The backend is the control plane. It creates and wakes pods, manages projects and environments, writes settings, enforces permissions, talks to Kubernetes, and manages gateway credentials. It does not stream app traffic. The Go runtime proxies carry traffic to the right pod after checking with the backend that the environment is ready.
 
 Each project environment is disposable at the pod layer and durable at the workspace layer. If a pod is suspended, evicted, restarted, or recreated, the same persistent workspace is mounted back into the next pod.
@@ -154,7 +154,7 @@ One command stands the whole thing up:
 yarn && yarn dev
 ```
 
-This is the Quickstart — `yarn` installs the workspace dependencies, then `yarn dev` runs the orchestrator. It works on macOS and Linux. From a fresh clone it sizes and starts the cluster, generates a locally trusted TLS certificate, brings up PostgreSQL, Redis, ingress, and the LLM gateway, builds the images, migrates the databases, connects an LLM, and opens the app — already signed in as a local dev user with full access, no identity provider to configure. It is idempotent and resumable: run it again to bring the stack back up, a failed step is resumed on the next run, and `yarn dev --reset` tears everything down for a clean start.
+This is the Quickstart: `yarn` installs the workspace dependencies, then `yarn dev` runs the orchestrator. It works on macOS and Linux. From a fresh clone it sizes and starts the cluster, generates a locally trusted TLS certificate, brings up PostgreSQL, Redis, ingress, and the LLM gateway, builds the images, migrates the databases, connects an LLM, and opens the app, already signed in as a local dev user with full access, no identity provider to configure. It is idempotent and resumable: run it again to bring the stack back up, a failed step is resumed on the next run, and `yarn dev --reset` tears everything down for a clean start.
 
 ### Prerequisites
 
@@ -163,7 +163,7 @@ On macOS there is nothing to install up front: the Quickstart detects missing to
 On Linux you install the prerequisites yourself, then run `yarn && yarn dev`. On Ubuntu:
 
 ```bash
-# Docker Engine (official script — includes Buildx and Compose)
+# Docker Engine (official script, includes Buildx and Compose)
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker "$USER"          # log out/in so the group applies
 
@@ -190,7 +190,7 @@ sudo apt-get update && sudo apt-get install -y mkcert libnss3-tools
 
 On Linux the cluster uses the Docker driver and `minikube tunnel` binds `127.0.0.1:80` and `:443` for ingress, so the Quickstart asks for `sudo` once to bind those privileged ports.
 
-For the LLM, the default local proxy lets you drive a **ChatGPT/Codex subscription** you already pay for (a one-time browser sign-in, no API credits) or **your own OpenAI API key**. You are not limited to those: the LLM gateway is Bifrost and the agent runtime is OpenCode, so any provider they support — Anthropic, Google, Azure OpenAI, AWS Bedrock, OpenRouter, local/self-hosted models, and more — can be used by configuring it in Bifrost and selecting the model in OpenCode. The full walkthrough — every numbered step, the LLM choices, the pinned-versions manifest, and day-two re-runs — is in the **[Quickstart guide](docs/quickstart.md)**.
+For the LLM, the default local proxy lets you drive a **ChatGPT/Codex subscription** you already pay for (a one-time browser sign-in, no API credits) or **your own OpenAI API key**. You are not limited to those: the LLM gateway is Bifrost and the agent runtime is OpenCode, so you can use any provider they support (Anthropic, Google, Azure OpenAI, AWS Bedrock, OpenRouter, local or self-hosted models, and more) by configuring it in Bifrost and selecting the model in OpenCode. For the full walkthrough (every numbered step, the LLM choices, the pinned-versions manifest, and day-two re-runs), see the **[Quickstart guide](docs/quickstart.md)**.
 
 ## Local URLs
 
@@ -213,14 +213,14 @@ For the LLM, the default local proxy lets you drive a **ChatGPT/Codex subscripti
 
 ## Useful commands
 
-The day-to-day commands you run *while* developing — type-check, lint, format, database, and the per-workspace tasks — are in the command reference: [docs/development/commands.md](docs/development/commands.md).
+The day-to-day commands you run *while* developing (type-check, lint, format, database, and the per-workspace tasks) are in the command reference: [docs/development/commands.md](docs/development/commands.md).
 
 ## Running in production
 
 The Quickstart targets local development. A production deployment uses the same components on infrastructure you operate:
 
-- Kubernetes control plane — a managed or self-managed cluster (not minikube), sized for the control plane plus the per-project agent pods.
-- Traefik ingress controller — the app, runtime-proxy, and per-project routes expect Traefik; install it in-cluster and point DNS at its load balancer.
-- RWX persistent storage — project workspaces need ReadWriteMany volumes that survive pod replacement; back them with a shared-storage system such as Ceph (for example Rook-Ceph / CephFS) or another RWX-capable provisioner.
-- Container registry — build and host the Opsiforce images (agent, backend, runtime-proxy, frontend) in your own registry instead of building into minikube.
-- Helm values — adjust the charts for your environment: image references and tags, ingress hosts and TLS, storage classes, replica counts, resource requests/limits, PostgreSQL/Redis, and Bifrost provider secrets.
+- Kubernetes control plane: a managed or self-managed cluster (not minikube), sized for the control plane plus the per-project agent pods.
+- Traefik ingress controller: the app, runtime-proxy, and per-project routes expect Traefik; install it in-cluster and point DNS at its load balancer.
+- RWX persistent storage: project workspaces need ReadWriteMany volumes that survive pod replacement; back them with a shared-storage system such as Ceph (for example Rook-Ceph or CephFS) or another RWX-capable provisioner.
+- Container registry: build and host the Opsiforce images (agent, backend, runtime-proxy, frontend) in your own registry instead of building into minikube.
+- Helm values, adjusted for your environment: image references and tags, ingress hosts and TLS, storage classes, replica counts, resource requests and limits, PostgreSQL/Redis, and Bifrost provider secrets.
