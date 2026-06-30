@@ -136,10 +136,8 @@ The container is ephemeral — installs don't persist across chats and can't bre
    - **Backend API** — create NestJS modules (load `nestjs-api` skill). **Register every module in `app.module.ts`** — this is the #1 error.
    - **Frontend pages** — build UI with shadcn + Tailwind, fetch data with TanStack Query
    - **Add pages only if the app genuinely needs multiple views** — create files in `pages/`, add `<Route>` and `<NavLink>` in `App.tsx`. A simple app should be a single page.
-5. **After modifying code, always run `cd /workspace/app && yarn check` first** — pure TypeScript `tsc --noEmit`. Catches type errors that tsx/Vite would silently *run* with (wrong prop types, bad response shapes). These never appear in logs. Fix all type errors before proceeding.
-   Then run the checks in §Verifying the app runs — these catch runtime boot failures (module resolution, SQL migration errors, unregistered NestJS modules, port conflicts) that never appear in `yarn check`.
-   Do both before opening `agent-browser` and again before telling the user the feature is done.
-6. **Go live: write `app/app.meta.json` — only after the first feature is built AND the step-5 checks pass.** This file is what makes the app live, so never create or update it while the app is broken or empty:
+5. **Before going live, run the two cheap gates** — the only thing go-live waits on: `cd /workspace/app && yarn check` (type errors don't crash the boot, so nothing else catches them), then confirm the dev servers booted. Both are detailed in §Verifying the app runs.
+6. **Go live: write `app/app.meta.json`** — as soon as the first feature is built and the step-5 gates pass. This is what makes the app pane appear and shares the link; do it early, **don't** hold it back for the feature testing in step 7 (that runs with the app already live):
    ```json
    {"name": "App Name", "description": "Short description"}
    ```
@@ -147,7 +145,8 @@ The container is ephemeral — installs don't persist across chats and can't bre
    - **If the file already exists, keep its `name` and `description` exactly as they are.** Users can edit them from the platform, and their edits must survive your changes. Change them only when the user explicitly asks to rename the app.
    - **Create the favicon at the same moment:** overwrite `frontend/public/favicon.svg` with a flat SVG on the app's brand color that represents what the app does — a simple glyph of a few basic shapes (the Lucide icon you chose for the app's UI is ideal). If no clear glyph fits, use the app name's initial as a letter mark. Never use image generation for the favicon unless the user asks for a fancier icon.
    - **The first time you create this file, share the app's link — once.** Read the public address from the `APP_PUBLIC_URL` environment variable (`echo "$APP_PUBLIC_URL"`) and include that link in your reply so the user can open and share their app, e.g. *"Your fuel log app is ready — open it here: <link>."* Share the link **only on this first creation**: never repeat it when you later modify the app, and never give out the `localhost` address. If `APP_PUBLIC_URL` is empty, just tell the user the app is ready without a link.
-7. Install additional packages with `cd /workspace/app && yarn add <package>`.
+7. **Before telling the user it's done, walk the real user flow in `agent-browser`** (§Browser). Go-live already happened, so any problem you find is fixed forward — the app stays up. Never call a feature ready without this.
+8. Install additional packages with `cd /workspace/app && yarn add <package>`.
 
 ## Frontend ↔ Backend communication
 

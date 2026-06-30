@@ -45,7 +45,7 @@ An App's human-facing identity — its name and description — carried per Proj
 _Avoid_: App metadata (vague); Project title (the Project shell's label — a different thing); project-level identity (retired — App Details belong to each App/environment, not the Project)
 
 **Go-live**:
-The moment an App first exists and is running in a ProjectEnvironment — for Development, when the agent finishes the first feature, its checks pass, and it publishes App Details; for a published environment, when its freshly-deployed pod first serves. Each environment goes live independently. Before its App goes live an environment has a pod but no App; that environment's app pane — and its catalog entry, if pinned — appears only once it happens.
+The moment an App first exists and is running in a ProjectEnvironment — for Development, when the agent finishes the first feature, it builds and boots, and the agent publishes App Details; for a published environment, when its freshly-deployed pod first serves. Go-live is decoupled from "done": it happens before the agent's feature testing, which follows with the App already live. Each environment goes live independently. Before its App goes live an environment has a pod but no App; that environment's app pane — and its catalog entry, if pinned — appears only once it happens.
 _Avoid_: Detection (the platform's inward-facing name for noticing the same moment); App ready, Launch; Deploy/Publish (which moves an already-live App between Environments)
 
 **Publish**:
