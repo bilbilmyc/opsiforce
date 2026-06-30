@@ -8,7 +8,7 @@ Community: [Join the Opsiforce Discord](https://discord.gg/kMUW2zR4R)
 
 ## Demo
 
-[![Watch the Opsiforce demo](https://opsima-static-html.s3.us-east-1.amazonaws.com/s1-im.png)](https://www.youtube.com/watch?v=3Z3u4DJovnA)
+[![Watch the Opsiforce demo](https://opsima-static-html.s3.us-east-1.amazonaws.com/s1-im.png)](https://www.youtube.com/watch?v=9eyzwXZlU8Y)
 
 [Watch the demo on YouTube](https://www.youtube.com/watch?v=9eyzwXZlU8Y)
 
