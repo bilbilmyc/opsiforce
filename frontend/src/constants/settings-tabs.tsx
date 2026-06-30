@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { FolderKanban, Layers, SlidersHorizontal, Users, Wallet } from '~/components/icons';
+import { FolderKanban, Layers, SlidersHorizontal, Wallet } from '~/components/icons';
 import { Permission } from '~/constants/permissions';
 import { PRIVATE_TABS } from '~/private';
 
@@ -24,14 +24,6 @@ export const SETTINGS_TABS: SettingsTab[] = [
     group: 'Access',
     icon: FolderKanban,
     isPermitted: (has) => has(Permission.manageWorkspaces),
-  },
-  {
-    to: '/settings/users',
-    label: 'Users',
-    description: 'Manage members and their access.',
-    group: 'Access',
-    icon: Users,
-    isPermitted: (has) => has(Permission.manageUsers),
   },
   {
     to: '/settings/environments',

@@ -1,3 +1,11 @@
+.yarn/*
+!.yarn/releases
+!.yarn/plugins
+.pnp.*
+/yarn.lock
+/*.pem
+/.env
+
 .scratch
 /docs/agents/domain.md
 /docs/agents/issue-tracker.md

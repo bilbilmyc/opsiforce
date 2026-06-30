@@ -12,7 +12,7 @@ ARG TARGETARCH=amd64
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/log-writer ./cmd/agent-log-writer
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/agent-control ./cmd/agent-control
 
-FROM node:24.14-slim
+FROM node:24.18.0-slim
 
 ARG OPENCODE_CONFIG=agent-config/opencode.json
 
@@ -35,7 +35,7 @@ RUN pip3 install --no-cache-dir --break-system-packages \
 
 RUN npm install -g bun opencode-ai@1.3.2 agent-browser
 
-RUN corepack enable && corepack prepare yarn@4.12.0 --activate
+RUN corepack enable && corepack prepare yarn@4.17.0 --activate
 
 RUN curl -fsSL https://code-server.dev/install.sh | sh -s -- --version 4.117.0
 

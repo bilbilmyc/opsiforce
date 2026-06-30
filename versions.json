@@ -1,0 +1,57 @@
+{
+  "_README": [
+    "Single source of truth for every version the Opsiforce Quickstart (yarn dev) pins.",
+    "Two tiers. 'exact' pins are reproducibility-critical and used as-is: Node, Yarn, the",
+    "cluster Kubernetes version, and the Helm chart versions. 'hostCli' tools are floor +",
+    "tested: the prerequisites step warns when an installed CLI drifts from 'tested' or",
+    "falls below 'floor', but never blocks.",
+    "Hand-edit the exact pins and the floors. Run `node scripts/capture-baseline.mjs` to",
+    "refresh the 'tested' observations and the cluster Kubernetes version from a known-good",
+    "machine. Read by scripts/spin-up.mjs. The agent image tag is pinned separately in",
+    "agent-config/agent-image-version.json."
+  ],
+  "exact": {
+    "node": "24.18.0",
+    "yarn": "4.17.0",
+    "kubernetes": "v1.32.0",
+    "charts": {
+      "traefik": "39.0.8",
+      "traefikOidcPlugin": "v0.19.0",
+      "postgresql": "15.5.38",
+      "redis": "20.2.1",
+      "bifrost": "2.0.15"
+    }
+  },
+  "hostCli": {
+    "homebrew": {
+      "tested": "6.0.3",
+      "floor": null,
+      "formula": null
+    },
+    "minikube": {
+      "tested": "1.35.0",
+      "floor": "1.34.0",
+      "formula": "minikube"
+    },
+    "kubectl": {
+      "tested": "1.32.2",
+      "floor": "1.31.0",
+      "formula": "kubernetes-cli"
+    },
+    "helm": {
+      "tested": "3.17.1",
+      "floor": "3.14.0",
+      "formula": "helm"
+    },
+    "tilt": {
+      "tested": "0.37.2",
+      "floor": "0.33.0",
+      "formula": "tilt-dev/tap/tilt"
+    },
+    "mkcert": {
+      "tested": "1.4.4",
+      "floor": "1.4.4",
+      "formula": "mkcert"
+    }
+  }
+}

@@ -34,7 +34,7 @@ The frontend does not iframe OpenCode — it imports OpenCode's Solid.js compone
 ## Packages
 
 ```
-packages/opsiforce/
+.
 ├── backend/        NestJS + Fastify control plane (pod orchestration, gateways, control APIs)
 ├── proxy/          One Go binary, mode-switched into the agent/app/vscode/db runtime proxies
 ├── frontend/       Vite + Solid.js SPA; frontend/opencode/ is vendored OpenCode source

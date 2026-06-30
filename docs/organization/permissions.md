@@ -16,7 +16,9 @@ OAuth2 Proxy  ──  x-forwarded-groups header  ──▶  Backend
                                               Frontend usePermissions().hasPermission(...)
 ```
 
-The canonical list of permission strings is the code, not this doc: backend `Perms` in `backend/src/permission/permission.constants.ts`, frontend `frontend/src/constants/permissions.ts`, and the Keycloak groups in `packages/infra/pulumi/keycloak-configurator/opsiforce/`. A few carry rules worth knowing beyond their name — `can_pin_apps` requires the target environment's auth to be `public`; `can_manage_workspaces` widens visibility only on `/settings/workspaces`; `can_list_pinned_apps_internal` is a **service-account-only** grant (never assign to humans) — but those rules live in the features' own docs ([Project Apps](../projects/project-apps.md), [Workspaces](workspaces.md)), not here.
+The canonical list of permission strings is the code, not this doc: backend `Perms` in `backend/src/permission/permission.constants.ts` and frontend `frontend/src/constants/permissions.ts`.
+
+The `OAuth2 Proxy` box above is the `oidc` path the `opsiforce-proxy` chart runs by default for real deployments with an identity provider. The chart also has a `static` auth mode (the standalone local Quickstart uses it): no OAuth2 Proxy, nginx itself injects a fixed local identity — a `test` user in the `local` tenant carrying *every* `can_*` role — directly into `x-forwarded-groups` on backend-bound routes, so the local operator has full access with no identity provider to stand up. The injected role set is the chart's hardcoded mirror of `Object.values(Perms)`; everything downstream of the header is identical to the OIDC path. A few carry rules worth knowing beyond their name — `can_pin_apps` requires the target environment's auth to be `public`; `can_manage_workspaces` widens visibility only on `/settings/workspaces`; `can_list_pinned_apps_internal` is a **service-account-only** grant (never assign to humans) — but those rules live in the features' own docs ([Project Apps](../projects/project-apps.md), [Workspaces](workspaces.md)), not here.
 
 ## Frontend gating is not enforcement
 
@@ -34,4 +36,4 @@ This is the load-bearing rule. `GET /api/permissions` powers **UI gating only** 
 
 - [Settings](settings.md) / [Admin](admin.md) — how section visibility is centralized and gated.
 - Feature docs own their own permission semantics: [Workspaces](workspaces.md), [Project Apps](../projects/project-apps.md), [Project Environments](../projects/environments.md), [Schedules](../projects/schedules.md), [Resources](../runtime/resources.md).
-- Code: `backend/src/permission/` (`permission.constants.ts`, `permission.guard.ts`, `@RequirePermission`), `frontend/src/api/permissions.ts`, `packages/infra/pulumi/keycloak-configurator/opsiforce/`.
+- Code: `backend/src/permission/` (`permission.constants.ts`, `permission.guard.ts`, `@RequirePermission`), `frontend/src/api/permissions.ts`.

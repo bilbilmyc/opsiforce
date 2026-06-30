@@ -1,0 +1,17 @@
+{
+  "name": "@opsiforce/root",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "yarn@4.17.0",
+  "workspaces": [
+    "backend",
+    "frontend",
+    "codex-proxy"
+  ],
+  "scripts": {
+    "dev": "sh scripts/spin-up.sh"
+  },
+  "resolutions": {
+    "bullmq/ioredis": "5.11.1"
+  }
+}

@@ -4,7 +4,9 @@
 
 **Orientation & dev**
 - [Overview](overview.md) — system diagram, the source-level OpenCode integration, package map
+- [Quickstart](quickstart.md) — what `yarn dev` does (macOS-only): the numbered steps, the two LLM choices, `--reset`, day-two re-runs, and the pinned-versions manifest
 - [Commands](development/commands.md) — type-check, lint, database, local ports (setup lives in [../README.md](../README.md))
+- [Local Orchestration](development/local-orchestration.md) — how `yarn dev` brings the stack up: the privileged tunnel, Tilt as the one-UI process orchestrator (in-cluster + host), and the static dev identity that lands you signed in
 - [Deployment](development/deployment.md) — CI/CD, the deploy-order dependency chain, rollout strategy
 
 **Runtime** (`runtime/`)
@@ -31,6 +33,7 @@
 
 **Gateways** (`gateways/`)
 - [LLM Gateway](gateways/llm-gateway.md) — Bifrost, per-project virtual keys, budget hierarchy ([ADR-0003](adr/0003-one-bifrost-team-per-project-keys-per-env.md))
+- [Codex Proxy](gateways/codex-proxy.md) — the host-run subscription bridge that serves the standalone local LLM ([ADR-0018](adr/0018-standalone-llm-access-via-codex-proxy.md))
 - [Service Gateway](gateways/service-gateway.md) — per-project credential isolation for non-LLM external services
 - [Request Logging](gateways/request-logging.md) — per-project Off/Metadata/Full traffic logging ([ADR-0006](adr/0006-request-log-streaming-tee.md))
 

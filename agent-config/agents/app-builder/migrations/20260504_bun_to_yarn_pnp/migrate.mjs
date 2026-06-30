@@ -88,7 +88,7 @@ async function writePackageJson() {
     "react-is": pkg.dependencies?.["react-is"] || "^19.2.0",
     rxjs: pkg.dependencies?.rxjs || "^7.8.2",
   }
-  pkg.packageManager = "yarn@4.12.0"
+  pkg.packageManager = "yarn@4.17.0"
   pkg.dependenciesMeta = {
     ...(pkg.dependenciesMeta && typeof pkg.dependenciesMeta === "object" ? pkg.dependenciesMeta : {}),
     "@nestjs/core": {
