@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
+import { buildAgentImage } from './images.mjs';
 
 const NAMESPACE = 'local';
 const RELEASE = 'opsiforce-bifrost';
@@ -94,13 +95,16 @@ function printChoiceCopy(ctx) {
 }
 
 async function chooseProvider(ctx) {
-  printChoiceCopy(ctx);
   const prior = ctx.config.llm?.provider;
-  const def = prior === 'key' ? '2' : '1';
-  const answer = (await ctx.ask(`  Choose [${def}]: `, { defaultValue: def })).trim().toLowerCase();
+  if (prior) return prior;
+
+  const hasKey = Boolean(process.env.OPENAI_API_KEY?.trim());
+  if (ctx.flags?.yes || !process.stdin.isTTY) return hasKey ? 'key' : 'subscription';
+
+  printChoiceCopy(ctx);
+  const answer = (await ctx.ask('  Choose [1]: ', { defaultValue: '1' })).trim().toLowerCase();
   if (answer === '2' || answer === 'key' || answer === 'openai') return 'key';
-  if (answer === '1' || answer === 'subscription' || answer === 'codex' || answer === 'chatgpt') return 'subscription';
-  return prior ?? 'subscription';
+  return 'subscription';
 }
 
 function ensureCodexLogin(ctx) {
@@ -120,6 +124,42 @@ function ensureCodexLogin(ctx) {
   }
 }
 
+function askSecret(promptText) {
+  return new Promise((resolve, reject) => {
+    const { stdin, stdout } = process;
+    stdout.write(promptText);
+    const wasRaw = Boolean(stdin.isRaw);
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf8');
+    let value = '';
+    const cleanup = () => {
+      stdin.removeListener('data', onData);
+      stdin.setRawMode(wasRaw);
+      stdin.pause();
+    };
+    const onData = (chunk) => {
+      for (const ch of chunk) {
+        if (ch === '\n' || ch === '\r' || ch === '\u0004') {
+          cleanup();
+          stdout.write('\n');
+          resolve(value);
+          return;
+        }
+        if (ch === '\u0003') {
+          cleanup();
+          stdout.write('\n');
+          reject(new Error('Aborted.'));
+          return;
+        }
+        if (ch === '\u007f' || ch === '\b') value = value.slice(0, -1);
+        else value += ch;
+      }
+    };
+    stdin.on('data', onData);
+  });
+}
+
 async function promptOpenAiKey(ctx) {
   const fromEnv = process.env.OPENAI_API_KEY?.trim();
   if (fromEnv) {
@@ -129,7 +169,7 @@ async function promptOpenAiKey(ctx) {
   if (!process.stdin.isTTY) {
     throw new Error('The OpenAI key path needs a key — set $OPENAI_API_KEY or run `yarn dev` interactively.');
   }
-  const key = (await ctx.ask('  Paste your OpenAI API key (sk-…): ')).trim();
+  const key = (await askSecret('  Paste your OpenAI API key (sk-…, hidden): ')).trim();
   if (!key) {
     throw new Error('No OpenAI API key entered. Re-run `yarn dev` and paste a key, or choose the subscription path.');
   }
@@ -138,20 +178,17 @@ async function promptOpenAiKey(ctx) {
 }
 
 function setOpenAiProviderKey(ctx, apiKey) {
-  const yaml = ctx.capture('kubectl', [
-    'create',
-    'secret',
-    'generic',
-    PROVIDER_KEYS_SECRET,
-    '--namespace',
-    NAMESPACE,
-    `--from-literal=openai-api-key=${apiKey}`,
-    '--from-literal=anthropic-api-key=',
-    '--dry-run=client',
-    '-o',
-    'yaml',
-  ]);
-  ctx.run('kubectl', ['apply', '-f', '-'], { input: yaml, stdio: ['pipe', 'inherit', 'inherit'] });
+  const manifest = JSON.stringify({
+    apiVersion: 'v1',
+    kind: 'Secret',
+    metadata: { name: PROVIDER_KEYS_SECRET, namespace: NAMESPACE },
+    type: 'Opaque',
+    data: {
+      'openai-api-key': Buffer.from(apiKey, 'utf8').toString('base64'),
+      'anthropic-api-key': '',
+    },
+  });
+  ctx.run('kubectl', ['apply', '-f', '-'], { input: manifest, stdio: ['pipe', 'inherit', 'inherit'] });
 }
 
 function writeOverlay(ctx, content) {
@@ -332,7 +369,15 @@ async function ensureUsableModel(ctx, availableIds) {
   setAgentModel(ctx, chosen);
   ctx.note(`agent default model set to openai/${chosen}.`);
   if (!wasBaked) {
-    ctx.warn(`${chosen} is not in the built agent image's whitelist — run \`yarn dev --reset\` to rebuild for it to take effect.`);
+    ctx.note(`${chosen} is not in the prebuilt agent image — rebuilding the agent image so new agents can use it…`);
+    try {
+      buildAgentImage(ctx, { force: true });
+      ctx.note('agent image rebuilt with the selected model.');
+    } catch (error) {
+      ctx.warn(
+        `Could not rebuild the agent image (${error.message}). Run \`yarn dev --reset\` so ${chosen} takes effect.`
+      );
+    }
   }
 }
 

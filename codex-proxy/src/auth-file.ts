@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { AUTH_FILE } from './config.ts';
 
@@ -39,4 +39,5 @@ export async function readAuth(): Promise<CodexAuth | undefined> {
 export async function writeAuth(auth: CodexAuth): Promise<void> {
   await mkdir(dirname(AUTH_FILE), { recursive: true });
   await writeFile(AUTH_FILE, `${JSON.stringify(auth, null, 2)}\n`, { mode: 0o600 });
+  await chmod(AUTH_FILE, 0o600);
 }

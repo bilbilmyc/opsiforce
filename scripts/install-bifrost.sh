@@ -11,9 +11,15 @@ helm repo update bifrost
 
 sh "${script_dir}/upsert-bifrost-secrets.sh" local
 
+set -- -f "${package_dir}/helm/bifrost/values.local.yaml"
+private_overlay="${script_dir}/private/bifrost.values.local.yaml"
+if [ -f "${private_overlay}" ]; then
+  set -- "$@" -f "${private_overlay}"
+fi
+
 helm upgrade --install --wait --namespace local --create-namespace \
   opsiforce-bifrost bifrost/bifrost \
   --version 2.0.15 \
-  -f "${package_dir}/helm/bifrost/values.local.yaml"
+  "$@"
 
 kubectl apply --namespace local -f "${package_dir}/helm/bifrost/networkpolicy.yaml"

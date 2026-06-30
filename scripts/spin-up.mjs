@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -104,7 +105,75 @@ function warn(text) {
 }
 
 function defaultState() {
-  return { version: STATE_VERSION, completed: {} };
+  return { version: STATE_VERSION, completed: {}, fingerprints: {} };
+}
+
+function sha256(data) {
+  return createHash('sha256').update(data).digest('hex');
+}
+
+function findUp(name, fromDir) {
+  let dir = fromDir;
+  for (let i = 0; i < 6; i++) {
+    const candidate = join(dir, name);
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+function hashFile(file) {
+  try {
+    return sha256(readFileSync(file));
+  } catch {
+    return 'missing';
+  }
+}
+
+function hashDir(dir) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return 'missing';
+  }
+  const parts = [];
+  for (const entry of entries.toSorted((a, b) => a.name.localeCompare(b.name))) {
+    const full = join(dir, entry.name);
+    parts.push(entry.isDirectory() ? `${entry.name}/${hashDir(full)}` : `${entry.name}:${hashFile(full)}`);
+  }
+  return sha256(parts.join('\n'));
+}
+
+// Reconciler steps re-run when the inputs they apply change, so a later `yarn dev`
+// (e.g. after a branch update) actually installs new deps, rebuilds bumped images,
+// applies new migrations, and reconciles provider/value changes instead of skipping.
+const STEP_FINGERPRINTS = {
+  install: () => hashFile(findUp('yarn.lock', PACKAGE_ROOT) ?? join(PACKAGE_ROOT, 'yarn.lock')),
+  images: () => hashFile(join(PACKAGE_ROOT, 'agent-config', 'agent-image-version.json')),
+  database: () => hashDir(join(PACKAGE_ROOT, 'backend', 'db', 'migrations')),
+  bifrost: (ctx) =>
+    sha256(`${hashFile(join(PACKAGE_ROOT, 'helm', 'bifrost', 'values.local.yaml'))}:${ctx.versions?.exact?.charts?.bifrost ?? ''}`),
+  llm: (ctx) => `${ctx.config.llm?.provider ?? 'none'}:${sha256(process.env.OPENAI_API_KEY ?? '')}`,
+};
+
+function computeFingerprint(stepId, ctx) {
+  const fn = STEP_FINGERPRINTS[stepId];
+  if (!fn) return null;
+  try {
+    return fn(ctx);
+  } catch {
+    return null;
+  }
+}
+
+function shouldSkip(state, stepId, forced, ctx) {
+  if (!state.completed[stepId] || forced.has(stepId)) return false;
+  if (!STEP_FINGERPRINTS[stepId]) return true;
+  const current = computeFingerprint(stepId, ctx);
+  return current !== null && current === state.fingerprints[stepId];
 }
 
 function loadState() {
@@ -259,20 +328,22 @@ async function run(versions, prompts, flags) {
   console.log('');
 
   const state = loadState();
+  state.fingerprints = state.fingerprints ?? {};
   const config = loadConfig();
   const forced = new Set(['tunnel', 'up']);
   if (flags.cpus != null || flags.memoryGb != null) forced.add('resources');
 
   for (let i = 0; i < STEP_COUNT; i++) {
     const step = STEPS[i];
-    if (state.completed[step.id] && !forced.has(step.id)) {
+    const ctx = stepContext(config, versions, prompts, flags);
+    if (shouldSkip(state, step.id, forced, ctx)) {
       console.log(`  ${label(i, dim)}  ${step.title}  ${dim('✓ cached')}`);
       continue;
     }
 
     console.log(`  ${label(i, cyan)}  ${bold(step.title)}  ${cyan('▶ running…')}`);
     try {
-      await runStep(step, stepContext(config, versions, prompts, flags));
+      await runStep(step, ctx);
     } catch (error) {
       console.log(`${INDENT}${red('✗ failed')}`);
       console.log('');
@@ -286,6 +357,7 @@ async function run(versions, prompts, flags) {
     }
 
     state.completed[step.id] = nowIso();
+    state.fingerprints[step.id] = computeFingerprint(step.id, ctx);
     saveState(state);
     saveConfig(config);
     console.log(`${INDENT}${green('✓ done')}`);

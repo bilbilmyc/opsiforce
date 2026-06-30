@@ -50,8 +50,8 @@ function minikubeDockerEnv(ctx) {
   return env;
 }
 
-function buildImage(ctx, { tag, context, dockerfile, buildArgs, hint }) {
-  if (imageExists(ctx, tag)) {
+function buildImage(ctx, { tag, context, dockerfile, buildArgs, hint, force = false }) {
+  if (!force && imageExists(ctx, tag)) {
     ctx.note(`reusing ${tag} — already in the cluster.`);
     return;
   }
@@ -67,17 +67,22 @@ function buildImage(ctx, { tag, context, dockerfile, buildArgs, hint }) {
   });
 }
 
+export function buildAgentImage(ctx, { force = false } = {}) {
+  buildImage(ctx, {
+    tag: readAgentImageTag(ctx),
+    context: ctx.paths.packageRoot,
+    dockerfile: 'docker/Dockerfile.agent',
+    buildArgs: { OPENCODE_CONFIG: 'agent-config/opencode.local.json' },
+    hint: 'the largest image (chromium, code-server, opencode, bun) — first build takes several minutes, then it is cached and reused.',
+    force,
+  });
+}
+
 export async function run(ctx) {
   ensureCluster(ctx);
   const context = ctx.paths.packageRoot;
 
-  buildImage(ctx, {
-    tag: readAgentImageTag(ctx),
-    context,
-    dockerfile: 'docker/Dockerfile.agent',
-    buildArgs: { OPENCODE_CONFIG: 'agent-config/opencode.local.json' },
-    hint: 'the largest image (chromium, code-server, opencode, bun) — first build takes several minutes, then it is cached and reused.',
-  });
+  buildAgentImage(ctx);
 
   buildImage(ctx, {
     tag: RUNTIME_PROXY_TAG,

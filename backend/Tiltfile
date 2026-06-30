@@ -157,12 +157,15 @@ spec:
 
 # Frontend dev server (Vite, :8084). opsiforce-proxy proxies the web app here; `/api` is
 # served by the in-cluster backend with the static dev identity, so the UI loads signed in.
-local_resource(
-    'frontend',
-    serve_cmd='yarn workspace @opsiforce/frontend run minikube-dev',
-    readiness_probe=probe(period_secs=5, http_get=http_get_action(port=8084, path='/')),
-    labels=['host'],
-)
+# Standalone-only: the monorepo `yarn dev-opsiforce` flow already starts @opsiforce/frontend
+# via `dev-opsiforce-only`, so launching it here too would collide on port 8084.
+if is_standalone:
+    local_resource(
+        'frontend',
+        serve_cmd='yarn workspace @opsiforce/frontend run minikube-dev',
+        readiness_probe=probe(period_secs=5, http_get=http_get_action(port=8084, path='/')),
+        labels=['host'],
+    )
 
 # Codex proxy (:8455) only matters on the subscription LLM path; on the OpenAI-key path
 # Bifrost calls api.openai.com directly. The Quickstart records the choice in the config.

@@ -226,7 +226,13 @@ export async function run(ctx) {
   for (const entry of [...present, node, yarn]) {
     if (entry.status === 'drift')
       warn(`${entry.label} ${entry.version} drifts from the pinned baseline (${entry.message}).`);
-    if (entry.status === 'below-floor') warn(`${entry.label} ${entry.version} is ${entry.message}.`);
+    if (entry.status === 'below-floor' && entry !== node) warn(`${entry.label} ${entry.version} is ${entry.message}.`);
+  }
+
+  if (node.status === 'below-floor') {
+    throw new Error(
+      `Node ${node.version} is too old — the Quickstart runs TypeScript entrypoints (e.g. codex-proxy/src/main.ts) directly with \`node\`, which needs Node ${ctx.versions.exact.node}. Install or activate it (nvm/fnm, Homebrew, or your package manager) and re-run \`yarn dev\`.`
+    );
   }
 
   if (runtime.status === 'stopped') {

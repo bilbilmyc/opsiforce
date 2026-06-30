@@ -124,7 +124,7 @@ bifrost:
             - gpt-5.2
             - codex-auto-review
       network_config:
-        base_url: "https://b3bff37a-6f24-48b2-a469-142a96bc4b39.apps.dev.opsima.com/api/openai-oauth"
+        base_url: ""
         default_request_timeout_in_seconds: 1200
         max_retries: 2
         retry_backoff_initial_ms: 500
@@ -159,7 +159,7 @@ bifrost:
           weight: 1
           models: ["*"]
       network_config:
-        base_url: "https://b3bff37a-6f24-48b2-a469-142a96bc4b39.apps.dev.opsima.com/api/openai-oauth"
+        base_url: ""
         default_request_timeout_in_seconds: 1200
         max_retries: 2
         retry_backoff_initial_ms: 500
@@ -194,7 +194,7 @@ bifrost:
           weight: 1
           models: ["*"]
       network_config:
-        base_url: "https://b3bff37a-6f24-48b2-a469-142a96bc4b39.apps.dev.opsima.com/api/openai-oauth"
+        base_url: ""
         default_request_timeout_in_seconds: 1200
         max_retries: 2
         retry_backoff_initial_ms: 500

@@ -30,7 +30,6 @@ auth:
       - can_manage_environment_variables
       - can_publish_project
       - can_delete_environment
-      - can_manage_users
       - can_manage_schedules
       - can_view_pods
       - can_manage_platform_defaults

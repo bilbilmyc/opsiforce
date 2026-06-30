@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
-import { CODEX_RESPONSES_URL, MODEL_CATALOG, ORIGINATOR, USER_AGENT, resolvePort } from './config.ts';
+import { CODEX_RESPONSES_URL, MODEL_CATALOG, ORIGINATOR, USER_AGENT, resolveMaxBodyBytes, resolvePort } from './config.ts';
 import type { CodexAuth } from './auth-file.ts';
 import { CodexAuthMissingError, getFreshAuth } from './token.ts';
 
@@ -11,6 +11,8 @@ interface ErrorBody {
 }
 
 type JsonRecord = Record<string, unknown>;
+
+class PayloadTooLargeError extends Error {}
 
 const isRecord = (value: unknown): value is JsonRecord =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -24,9 +26,22 @@ function sendError(res: ServerResponse, status: number, error: ErrorBody): void 
   sendJson(res, status, { error });
 }
 
-async function readBody(req: IncomingMessage): Promise<Buffer> {
+async function readBody(req: IncomingMessage, maxBytes: number): Promise<Buffer> {
+  const declared = Number(req.headers['content-length']);
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    throw new PayloadTooLargeError(`Request body exceeds the ${maxBytes}-byte limit.`);
+  }
   const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
+  let total = 0;
+  for await (const chunk of req) {
+    const buf = chunk as Buffer;
+    total += buf.length;
+    if (total > maxBytes) {
+      req.destroy();
+      throw new PayloadTooLargeError(`Request body exceeds the ${maxBytes}-byte limit.`);
+    }
+    chunks.push(buf);
+  }
   return Buffer.concat(chunks);
 }
 
@@ -125,7 +140,7 @@ async function collectCompletedResponseFromSse(stream: ReadableStream<Uint8Array
   );
 }
 
-async function handleResponses(req: IncomingMessage, res: ServerResponse): Promise<void> {
+async function handleResponses(req: IncomingMessage, res: ServerResponse, maxBodyBytes: number): Promise<void> {
   let auth: CodexAuth;
   try {
     auth = await getFreshAuth();
@@ -138,7 +153,17 @@ async function handleResponses(req: IncomingMessage, res: ServerResponse): Promi
     return;
   }
 
-  const raw = await readBody(req);
+  let raw: Buffer;
+  try {
+    raw = await readBody(req, maxBodyBytes);
+  } catch (error: unknown) {
+    if (error instanceof PayloadTooLargeError) {
+      sendError(res, 413, { message: error.message, type: 'payload_too_large' });
+      return;
+    }
+    sendError(res, 400, { message: 'Failed to read the request body.', type: 'invalid_request' });
+    return;
+  }
   let parsed: unknown;
   try {
     parsed = raw.length > 0 ? JSON.parse(raw.toString('utf-8')) : {};
@@ -211,7 +236,7 @@ function requestPath(req: IncomingMessage): string {
   return queryIndex === -1 ? url : url.slice(0, queryIndex);
 }
 
-function handleRequest(req: IncomingMessage, res: ServerResponse): void {
+function handleRequest(req: IncomingMessage, res: ServerResponse, maxBodyBytes: number): void {
   const path = requestPath(req);
   const method = req.method ?? 'GET';
 
@@ -224,7 +249,7 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
     return;
   }
   if (method === 'POST' && path.endsWith('/responses')) {
-    handleResponses(req, res).catch(() => {
+    handleResponses(req, res, maxBodyBytes).catch(() => {
       if (res.headersSent) res.destroy();
       else sendError(res, 500, { message: 'Internal proxy error.', type: 'codex_proxy_error' });
     });
@@ -235,7 +260,8 @@ function handleRequest(req: IncomingMessage, res: ServerResponse): void {
 
 export function startServer(): void {
   const port = resolvePort();
-  const server = createServer(handleRequest);
+  const maxBodyBytes = resolveMaxBodyBytes();
+  const server = createServer((req, res) => handleRequest(req, res, maxBodyBytes));
   server.listen(port, () => {
     process.stdout.write(`codex-proxy listening on port ${port}\n`);
   });

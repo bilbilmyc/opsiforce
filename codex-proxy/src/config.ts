@@ -17,6 +17,18 @@ export const USER_AGENT = process.env.CODEX_PROXY_USER_AGENT ?? 'opsiforce-codex
 
 export const AUTH_FILE = process.env.CODEX_AUTH_FILE ?? join(homedir(), '.opsiforce', 'codex-auth.json');
 
+const DEFAULT_MAX_BODY_BYTES = 64 * 1024 * 1024;
+
+export function resolveMaxBodyBytes(): number {
+  const raw = process.env.CODEX_PROXY_MAX_BODY_BYTES;
+  if (raw === undefined || raw === '') return DEFAULT_MAX_BODY_BYTES;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`CODEX_PROXY_MAX_BODY_BYTES must be a positive integer (got "${raw}").`);
+  }
+  return parsed;
+}
+
 export const TOKEN_REFRESH_SKEW_MS = 60_000;
 export const DEVICE_POLL_SAFETY_MARGIN_MS = 3000;
 
