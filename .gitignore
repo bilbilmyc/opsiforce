@@ -4,6 +4,7 @@
 .pnp.*
 /yarn.lock
 /*.pem
+/.env
 
 .scratch
 /docs/agents/domain.md
