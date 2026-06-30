@@ -34,9 +34,9 @@ docker_build(
         fall_back_on(root_up + 'yarn.lock'),
         fall_back_on(root_up + '.yarnrc.yml'),
         fall_back_on(root_up + '.yarn/releases'),
-        sync('./src', '/app/packages/opsiforce/backend/src'),
-        sync('./db', '/app/packages/opsiforce/backend/db'),
-        sync('../agent-config/agents.json', '/app/packages/opsiforce/agent-config/agents.json'),
+        sync('./src', '/app/' + pkg_prefix + 'backend/src'),
+        sync('./db', '/app/' + pkg_prefix + 'backend/db'),
+        sync('../agent-config/agents.json', '/app/' + pkg_prefix + 'agent-config/agents.json'),
     ],
 )
 

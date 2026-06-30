@@ -230,6 +230,11 @@ function tryCapture(command, args = []) {
   }
 }
 
+function minikubeRunning() {
+  if (!commandExists('minikube')) return false;
+  return tryCapture('minikube', ['status', '-f', '{{.Host}}']) === 'Running';
+}
+
 function runCommand(command, args = [], options = {}) {
   execFileSync(command, args, { stdio: 'inherit', ...options });
 }
@@ -332,6 +337,7 @@ async function run(versions, prompts, flags) {
   const config = loadConfig();
   const forced = new Set(['tunnel', 'up']);
   if (flags.cpus != null || flags.memoryGb != null) forced.add('resources');
+  if (!minikubeRunning()) forced.add('resources');
 
   for (let i = 0; i < STEP_COUNT; i++) {
     const step = STEPS[i];

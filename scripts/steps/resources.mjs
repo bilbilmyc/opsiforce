@@ -74,20 +74,21 @@ function startCluster(ctx, chosen, previous) {
   ]);
 }
 
-async function chooseSize(ctx, recommended) {
+async function chooseSize(ctx, recommended, previous) {
   const flags = ctx.flags ?? {};
   if (flags.cpus != null || flags.memoryGb != null) {
     const chosen = { cpus: flags.cpus ?? recommended.cpus, memoryGb: flags.memoryGb ?? recommended.memoryGb };
     ctx.note(`size from flags: ${chosen.cpus} CPU / ${chosen.memoryGb} GB.`);
     return chosen;
   }
-  const cpusAnswer = await ctx.ask(`  CPUs [${recommended.cpus}]: `, { defaultValue: String(recommended.cpus) });
-  const memoryAnswer = await ctx.ask(`  Memory GB [${recommended.memoryGb}]: `, {
-    defaultValue: String(recommended.memoryGb),
+  const fallback = previous ?? recommended;
+  const cpusAnswer = await ctx.ask(`  CPUs [${fallback.cpus}]: `, { defaultValue: String(fallback.cpus) });
+  const memoryAnswer = await ctx.ask(`  Memory GB [${fallback.memoryGb}]: `, {
+    defaultValue: String(fallback.memoryGb),
   });
   return {
-    cpus: parsePositiveInt(cpusAnswer, recommended.cpus, ctx, 'CPUs'),
-    memoryGb: parsePositiveInt(memoryAnswer, recommended.memoryGb, ctx, 'Memory GB'),
+    cpus: parsePositiveInt(cpusAnswer, fallback.cpus, ctx, 'CPUs'),
+    memoryGb: parsePositiveInt(memoryAnswer, fallback.memoryGb, ctx, 'Memory GB'),
   };
 }
 
@@ -109,7 +110,7 @@ export async function run(ctx) {
     `detected ${hostCores()} cores / ${hostMemoryGb()} GB — recommending ${recommended.cpus} CPU / ${recommended.memoryGb} GB (leaves headroom for your editor and browser).`
   );
 
-  const chosen = await chooseSize(ctx, recommended);
+  const chosen = await chooseSize(ctx, recommended, previous);
 
   if (chosen.cpus < FLOOR.cpus || chosen.memoryGb < FLOOR.memoryGb) {
     warn(
