@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as k8s from '@kubernetes/client-node';
 import { loadKubeConfig } from '../common/k8s-client';
-import { resolvePreset, toK8sResources, type PodResources } from '../pod/pod-classes';
+import { resolvePreset, toK8sResources } from '../pod/pod-classes';
 
 const JOB_COMPLETION_GRACE_MS = 60_000;
 
@@ -99,9 +99,7 @@ export class AgentUpdateK8sService {
                     subPath: options.directory,
                   },
                 ],
-                resources: toK8sResources(
-                  resolvePreset('small', this.configService.get<PodResources | null>('podClassSmall', null))
-                ),
+                resources: toK8sResources(resolvePreset('small')),
               },
             ],
             volumes: [this.workspaceVolume()],

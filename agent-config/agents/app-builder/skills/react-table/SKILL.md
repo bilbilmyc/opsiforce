@@ -1,6 +1,6 @@
 ---
 name: react-table
-description: Build data tables with @tanstack/react-table — column definitions, sorting, filtering, pagination. Use when displaying tabular data, building admin panels, or showing lists with sorting/filtering.
+description: Build data tables with @tanstack/react-table — column definitions, sorting, filtering, pagination. Use when displaying tabular data, building admin panels, or showing lists.
 ---
 
 # TanStack React Table

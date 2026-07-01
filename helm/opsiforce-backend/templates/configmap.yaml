@@ -25,9 +25,6 @@ data:
   AGENT_NAME: {{ .Values.config.agentName | quote }}
   AGENT_WORKSPACE_UPDATE_ON_STARTUP: {{ .Values.config.agentWorkspaceUpdateOnStartup | default "true" | quote }}
   AGENT_UPDATE_JOB_TIMEOUT_MS: {{ .Values.config.agentUpdateJobTimeoutMs | default "1800000" | quote }}
-  {{- if .Values.config.podClassSmall }}
-  POD_CLASS_SMALL: {{ .Values.config.podClassSmall | toJson | quote }}
-  {{- end }}
   {{- if .Values.config.agentNodeSelector }}
   AGENT_NODE_SELECTOR: {{ .Values.config.agentNodeSelector | toJson | quote }}
   {{- end }}

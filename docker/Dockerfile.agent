@@ -49,7 +49,15 @@ RUN npm ci --omit=dev --prefix /opt/opencode/plugins
 COPY agent-config/plugins/image-normalize.ts /opt/opencode/plugins/image-normalize.ts
 
 COPY agent-config/agents/ /opt/agents/
-COPY agent-config/agents.json /opt/agents/agents.json
+COPY agent-config/priv*/agents/ /opt/agents/
+COPY agent-config/agents.json /opt/agents/agents.public.json
+COPY agent-config/priv*/agents.json /opt/agents/private-registry/
+COPY agent-config/skills/ /opt/skills-shared/
+COPY agent-config/scripts/compose-skills.mjs agent-config/scripts/merge-registry.mjs /opt/opencode/
+RUN node /opt/opencode/compose-skills.mjs /opt/skills-shared /opt/agents \
+    && node /opt/opencode/merge-registry.mjs /opt/agents/agents.public.json /opt/agents/private-registry/agents.json /opt/agents/agents.json \
+    && rm -rf /opt/skills-shared /opt/agents/agents.public.json /opt/agents/private-registry \
+        /opt/agents/.gitkeep /opt/opencode/compose-skills.mjs /opt/opencode/merge-registry.mjs
 
 COPY agent-config/scripts/guard.sh /usr/local/bin/guard
 COPY agent-config/scripts/entrypoint.sh /usr/local/bin/entrypoint.sh

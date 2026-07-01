@@ -22,7 +22,7 @@ config:
   databaseUrl: "postgres://admin:dbpass1@local-pg-postgresql:5432/opsiforce"
   redisUrl: "redis://redis-session-storage-local-master:6379/2"
   k8sNamespace: "local"
-  poolSizeOverride: "1"
+  poolSizeOverride: "0"
   agentContainerImage: ""
   agentContainerImagePullPolicy: "Never"
   agentPort: "4096"
@@ -36,10 +36,6 @@ config:
   agentName: "app-builder"
   agentWorkspaceUpdateOnStartup: "true"
   agentUpdateJobTimeoutMs: "1800000"
-  podClassSmall:
-    cpuMillicores: 200
-    memoryRequestMib: 1312
-    memoryLimitMib: 2048
   agentNodeSelector: ~
   agentTolerations: ~
   agentAffinity: ~

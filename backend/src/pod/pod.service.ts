@@ -4,7 +4,7 @@ import * as k8s from '@kubernetes/client-node';
 import { loadKubeConfig } from '../common/k8s-client';
 import { buildPodSpec, PodTemplateOptions } from './pod.template';
 import { PodCacheService } from './pod.cache.service';
-import { resolvePreset, toK8sResources, type K8sResourceRequirements, type PodResources } from './pod-classes';
+import { resolvePreset, toK8sResources, type K8sResourceRequirements } from './pod-classes';
 
 export interface TenantPodOptions {
   bifrostApiKey?: string;
@@ -70,7 +70,7 @@ export class PodService {
   }
 
   private smallResources(): K8sResourceRequirements {
-    return toK8sResources(resolvePreset('small', this.configService.get<PodResources | null>('podClassSmall', null)));
+    return toK8sResources(resolvePreset('small'));
   }
 
   assignedPodName(environmentId: string): string {

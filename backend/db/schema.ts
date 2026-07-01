@@ -95,6 +95,7 @@ export const agents = pgTable("agents", {
   id: text("id").primaryKey(),
   name: text("name").notNull().unique(),
   displayName: text("display_name"),
+  description: text("description"),
 })
 
 const tenantIdField = text("tenant_id")

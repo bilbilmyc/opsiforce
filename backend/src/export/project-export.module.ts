@@ -27,9 +27,7 @@ import { ProjectEventsModule } from '../project/project-events.module';
   exports: [ProjectExportService],
 })
 export class ProjectExportModule implements OnApplicationBootstrap {
-  constructor(
-    @InjectQueue(PROJECT_EXPORT_CLEANUP_QUEUE) private readonly cleanupQueue: Queue
-  ) {}
+  constructor(@InjectQueue(PROJECT_EXPORT_CLEANUP_QUEUE) private readonly cleanupQueue: Queue) {}
 
   async onApplicationBootstrap(): Promise<void> {
     await this.cleanupQueue.upsertJobScheduler(

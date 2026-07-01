@@ -10,19 +10,37 @@ An **Agent** is the AI coding assistant a user converses with inside a ProjectEn
 agent-config/
 ├── agents.json                 ← registry: per-agent model, poolSize, template version
 ├── opencode.json               ← shared OpenCode config (providers, permissions, default_agent)
+├── skills/                     ← shared skill pool: UI-neutral skills every agent composes in
 ├── agents/<name>/
 │   ├── agent.md                ← OpenCode agent definition (frontmatter + system prompt)
-│   ├── skills/                 ← on-demand instruction modules (SKILL.md each)
+│   ├── skills/                 ← this agent's skill overrides (compose with the shared pool)
 │   └── template/               ← files copied into a new project's workspace
+├── private/                    ← private Agents + registry fragment, excluded from the standalone mirror
 ├── plugins/image-normalize.ts  ← OpenCode plugin (see below)
-└── scripts/{entrypoint,guard}.sh
+└── scripts/{entrypoint,guard,compose-skills}.{sh,mjs}
 ```
 
-`agents.json` is the registry — one entry per agent carrying its **model**, its [pending-pool](../runtime/pool.md) `poolSize`, and its template `version`. There is no per-agent `config.json`; the registry holds those fields. Only `app-builder` ships today.
+`agents.json` is the registry — one entry per agent carrying its **model**, its [pending-pool](../runtime/pool.md) `poolSize`, and its template `version`. There is no per-agent `config.json`; the registry holds those fields. The public registry ships `app-builder`; any further agents live in the private fragment (see [Private agents and the standalone seam](#private-agents-and-the-standalone-seam)).
+
+## Registry → database
+
+The registry is the single source of truth for **which agents exist**. The `agents` table — referenced by `projects.agentId` and surfaced in the Agent picker — is derived from it at backend boot, not hand-seeded. A reconciler (`backend/src/agent/agent-reconciler.service.ts`) runs once on startup: it loads the merged registry (the public `agents.json` plus an optional private fragment, for agents that never ship in the standalone mirror) and upserts the table **keyed by slug** (the registry key, which is the table's `name`). A slug present in the registry but missing from the table is inserted with a freshly generated id; a slug that already has a row keeps its id and picks up any display-name change. The slug is immutable once shipped — rename the display name, never the slug, or reconciliation would orphan the old row.
+
+Two invariants make this safe to run on every boot. It **never rewrites an existing id**, so `app-builder`'s id (referenced by every Project) survives untouched. And it is **additive only**: a row whose slug is absent from the registry is left exactly as-is — not deleted, not deactivated — so a retired agent's existing Projects keep resolving and running. Repeated boots converge to the same rows (idempotent). Description is not stored; it is read live from the registry at query time, so it always reflects the current `agents.json`.
+
+This extends [ADR-0008](../adr/0008-agent-model-owned-by-agent-config.md)'s "agent-config wins" principle from the agent's *model* to the agent's *identity*. The historical seed migrations stay immutable, but no new per-agent SQL seed migration is added going forward — registering an agent is a registry edit, and the reconciler does the rest.
+
+## Private agents and the standalone seam
+
+Some Agents ship only in the full distribution and never reach the **standalone** mirror. Such an Agent lives entirely under `agent-config/private/` — its profile, skill overrides, and template under `private/agents/<slug>/` (the same layout as a public agent), and its registry entry in the **private registry fragment** `private/agents.json`. The whole directory is excluded from the standalone mirror, so neither the Agent's files nor even its name appear there.
+
+The reconciler closes over this seam without branching on it. It reads the private fragment and merges it over the public registry — private entries are added, the public registry is never overwritten — then reconciles the `agents` table from the merged result. In the standalone build the mirror carries the empty **stub fragment** `private/agents.standalone.json` (`{ "agents": {} }`) in place of the real `agents.json`, so the merge yields only the public agents. The reconciler also falls back to that same empty stub when the private directory is absent, so a standalone build compiles and boots with `app-builder` alone and no dangling reference to the private location. The runtime config consumers read the same merged registry: pending-pool warm-up, the picker description, and the per-agent model and template version all honour a private Agent's fields wherever it ships, and in the standalone build — where the merge yields only the public agents — they see exactly `app-builder`. The agent image stages every agent the same way, baking a merged `agents.json` (public ∪ private fragment) so the in-pod workspace migration resolves the right model and version per agent.
+
+The standalone glossary in [CONTEXT.md](../../CONTEXT.md) is left untouched — its "the platform ships one — app-builder" statement is correct for the mirror and stays free of any private Agent's name. A private Agent's own domain notes live behind the seam, never in the mirror.
 
 ## How an agent reaches a workspace
 
-The image stages every agent under `/opt/agents/`. At pod startup an init container reads `AGENT_NAME` (default `app-builder`) and lays the profile onto the mounted workspace: the agent definition to `/workspace/.opencode/agents/<name>.md`, the skills to `/workspace/.opencode/skills/`, the injected model over the workspace `opencode.json`, and — only when `/workspace/app` does not yet exist — the starter template to `/workspace/`. OpenCode then merges config lowest-to-highest: workspace `opencode.json` → agent definition → skills.
+The image stages every agent under `/opt/agents/`, each with a complete, self-contained `skills/` directory already assembled at build time (see [Skills](#skills)). At pod startup an init container reads `AGENT_NAME` (default `app-builder`) and lays the profile onto the mounted workspace: the agent definition to `/workspace/.opencode/agents/<name>.md`, the skills to `/workspace/.opencode/skills/`, the injected model over the workspace `opencode.json`, and — only when `/workspace/app` does not yet exist — the starter template to `/workspace/`. OpenCode then merges config lowest-to-highest: workspace `opencode.json` → agent definition → skills.
 
 Agent-owned files (prompt, skills, config) are platform-owned and refreshed on every pod (re)assignment; the app template is project-owned after creation, so an existing app keeps its files unless an explicit migration changes them. Keeping long-running workspaces in step with a newer profile without a pod restart is the job of [Agent Updates](agent-updates.md).
 
@@ -32,7 +50,9 @@ app-builder runs on **GPT-5.5**, set as `model` in `agents.json` and mirrored as
 
 ## Skills
 
-Skills are OpenCode's on-demand instruction system: the agent sees each skill's name + description and loads the full `SKILL.md` only when a task matches. app-builder ships a library of them (UI, data-fetching, charts, auth, the `llm-api` skill, …) under `agents/app-builder/skills/` — that directory is the source of truth for which exist. They follow Anthropic's skill-authoring guidance: trigger-word-rich descriptions, project-specific patterns over generic library docs, a "common mistakes" section, and cross-references.
+Skills are OpenCode's on-demand instruction system: the agent sees each skill's name + description and loads the full `SKILL.md` only when a task matches. They follow Anthropic's skill-authoring guidance: trigger-word-rich descriptions, project-specific patterns over generic library docs, a "common mistakes" section, and cross-references.
+
+Skills are split across two locations so a UI-neutral skill is authored once for every agent. The **shared pool** at `agent-config/skills/` holds the UI-neutral skills (data-fetching, dates, the `llm-api` skill, `nestjs-api`, `sqlite`, …); each agent's `agents/<name>/skills/` holds only that agent's **overrides** (for app-builder: the UI-coupled `ui`, `charts`, `frontend-design`, `react-table`). At image-build time `scripts/compose-skills.mjs` assembles each agent's baked `skills/` as **shared ∪ overrides**, an override replacing a shared skill of the same `name` directory-for-directory. The result is a single self-contained directory per agent — no symlinks, no cross-agent references — so the runtime copy ([above](#how-an-agent-reaches-a-workspace)) is unchanged. The composed directory, not either source, is what each agent ships. Editing a shared skill fixes it for every agent on the next image build.
 
 ## App template
 
@@ -47,4 +67,4 @@ New app-builder projects start from `agents/app-builder/template/app/` — a Rea
 - [Agent Updates](agent-updates.md) — keeping persisted workspaces aligned with a newer profile.
 - [App Readiness](../projects/app-readiness.md) — go-live detection (the `app.meta.json` the template omits).
 - [Defaults](../organization/defaults.md) / [ADR-0008](../adr/0008-agent-model-owned-by-agent-config.md) — why the model is *not* a configurable default.
-- Code: `agent-config/` (profiles, `agents.json`, `opencode.json`, `plugins/`, `scripts/`), `backend/src/pod/pod.template.ts` (init-container injection), `backend/src/agent/agent-config.ts` (reads `agents.json`).
+- Code: `agent-config/` (profiles, `agents.json`, `opencode.json`, the shared `skills/` pool, `plugins/`, `scripts/`), `agent-config/scripts/compose-skills.mjs` (build-time skill compose) and `agent-config/scripts/merge-registry.mjs` (build-time public ∪ private registry merge), `docker/Dockerfile.agent` (runs both), `backend/src/pod/pod.template.ts` (init-container injection), `backend/src/agent/agent-config.ts` (reads and merges `agents.json`).

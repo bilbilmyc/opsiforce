@@ -17,7 +17,7 @@ import {
   projects,
   tenants,
 } from '../../db/schema';
-import { resolvePreset, type PodResources } from '../pod/pod-classes';
+import { resolvePreset } from '../pod/pod-classes';
 import { ProjectStatus } from '../project/project.types';
 import { PodService } from '../pod/pod.service';
 import { BifrostService } from '../bifrost/bifrost.service';
@@ -509,7 +509,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       await tx.insert(projectPodSettings).values({
         projectId: id,
         podClass: 'small',
-        ...resolvePreset('small', this.configService.get<PodResources | null>('podClassSmall', null)),
+        ...resolvePreset('small'),
       });
 
       await tx.insert(projectEnvironments).values({

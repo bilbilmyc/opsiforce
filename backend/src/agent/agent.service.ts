@@ -2,32 +2,26 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '../../db';
 import { agents } from '../../db/schema';
-import { readAgentConfig } from './agent-config';
 import { DEFAULT_AGENT_NAME, type AgentResponse } from './agent.types';
 
 @Injectable()
 export class AgentService {
   private defaultAgentIdCache: string | null = null;
-  private readonly descriptionsByName = readAgentConfig().descriptions;
 
   async findAll(): Promise<AgentResponse[]> {
-    const rows = await db
-      .select({ id: agents.id, name: agents.name, displayName: agents.displayName })
+    return db
+      .select({ id: agents.id, name: agents.name, displayName: agents.displayName, description: agents.description })
       .from(agents)
       .orderBy(asc(agents.name));
-    return rows.map((row) => ({
-      ...row,
-      description: this.descriptionsByName.get(row.name) ?? null,
-    }));
   }
 
   async findById(id: string): Promise<AgentResponse> {
     const [row] = await db
-      .select({ id: agents.id, name: agents.name, displayName: agents.displayName })
+      .select({ id: agents.id, name: agents.name, displayName: agents.displayName, description: agents.description })
       .from(agents)
       .where(eq(agents.id, id));
     if (!row) throw new NotFoundException(`Agent ${id} not found`);
-    return { ...row, description: this.descriptionsByName.get(row.name) ?? null };
+    return row;
   }
 
   async resolveName(id: string): Promise<string> {

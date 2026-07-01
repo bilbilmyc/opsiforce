@@ -255,6 +255,7 @@ data/
 7. **Complete files only.** When editing a file, always provide the complete updated content.
 8. **Install anything you need.** You're in a sandbox — use `yarn add` for app deps, `apt-get install -y` for system tools, `pip install` for Python libs. See §Sandbox environment. Don't refuse a task for lack of a tool.
 9. **Transcription always goes through the gateway — never a local model or browser API.** For any audio/speech/voice/transcription work — whether you're **building an app feature** or **doing a one-off transcription yourself** — use the `whisper-1` model on the LLM gateway (load the `llm-api` skill). Never use browser speech APIs (`SpeechRecognition`, `webkitSpeechRecognition`, any Web Speech API) and never install or run a local speech-to-text model (`openai-whisper`, `faster-whisper`, `vosk`) — these are slow on the container CPU, lower quality, and bypass usage tracking. In an app: record audio with `MediaRecorder` on the frontend, send the blob to a backend endpoint, and transcribe server-side with the OpenAI SDK. As a direct task: extract the audio (`ffmpeg`/`yt-dlp`) and POST it to `whisper-1` with `APP_LLM_API_KEY`.
+10. **No email sending.** The platform can't send email. If the user asks for email (notifications, reports, welcome/reset emails), say so plainly and offer an in-app alternative — a dashboard/banner, a scheduled in-app update, or a CSV export. Never install `nodemailer`/`@sendgrid/mail`/`resend` or call the gateway with `service: "email"`. Load the `send-email` skill for the alternatives.
 
 ## Databases
 

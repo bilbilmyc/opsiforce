@@ -1,6 +1,6 @@
 ---
 name: charts
-description: Charts and data visualization with Recharts — bar, stacked bar, horizontal bar, line, area, stacked area, pie, donut, scatter, composed (mixed line/bar/area), radar, radial bar. Plus reference lines/areas (targets, thresholds), brush (zoom), synced charts, click drill-down, custom theme-aware tooltips, sparklines in stat cards, axis formatters (currency/percentages/dates), responsive sizing, accessibility. Use whenever the user wants graphs, charts, dashboards, analytics, KPIs, trends, or any visual representation of numeric or temporal data. Always wrap in ResponsiveContainer and use theme tokens (`hsl(var(--chart-1..5))`) — never hardcoded colors.
+description: Charts and data visualization with Recharts — bar, line, area, pie/donut, scatter, and composed/radar/radial variants. Plus reference lines/areas (targets, thresholds), brush (zoom), synced charts, click drill-down, custom theme-aware tooltips, sparklines in stat cards, axis formatters (currency/percentages/dates), responsive sizing, accessibility. Use whenever the user wants graphs, charts, dashboards, analytics, KPIs, trends, or any visual representation of numeric or temporal data.
 ---
 
 # Charts (Recharts)
@@ -10,7 +10,7 @@ Recharts is preinstalled. Composable React + D3 charts. Charts are built by nest
 ## Project rules
 
 - **Always wrap charts in `<ResponsiveContainer width="100%" height={N}>`** — without it the chart renders at 0px height. The parent must have a defined width; height must be a number, not a percentage.
-- **Always use theme tokens** for colors: `hsl(var(--chart-1))` through `hsl(var(--chart-5))`. Never hardcode hex values — they break dark mode and look generic.
+- **Always use theme tokens** for colors: `var(--chart-1)` through `var(--chart-5)`. Never hardcode hex values — they break dark mode and look generic.
 - **Always render a custom tooltip** so it matches the app's card/border styling (default tooltip is white-on-white in dark mode).
 - **Always handle empty data** — render a skeleton or empty state when `data.length === 0`. An empty chart shows axes and confuses users.
 
@@ -26,7 +26,7 @@ const data = [
 ]
 ```
 
-`dataKey` props map object properties to chart components: `dataKey="revenue"`, or `dataKey={(entry) => entry.revenue - entry.expenses}` for derived values (memoize the function — see Performance).
+`dataKey` props map object properties to chart components: `dataKey="revenue"`, or `dataKey={(entry) => entry.revenue - entry.expenses}` for derived values (memoize the function with `useCallback` — see references/advanced.md).
 
 ## Bar chart
 
@@ -40,8 +40,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
     <YAxis className="text-xs fill-muted-foreground" />
     <Tooltip content={<ChartTooltip />} />
     <Legend />
-    <Bar dataKey="revenue" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} />
-    <Bar dataKey="expenses" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+    <Bar dataKey="revenue" fill="var(--chart-1)" radius={[4, 4, 0, 0]} />
+    <Bar dataKey="expenses" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
   </BarChart>
 </ResponsiveContainer>
 ```
@@ -49,8 +49,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 **Stacked bars** — share a `stackId`, only the top bar gets `radius`:
 
 ```tsx
-<Bar dataKey="completed" stackId="a" fill="hsl(var(--chart-1))" />
-<Bar dataKey="pending" stackId="a" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} />
+<Bar dataKey="completed" stackId="a" fill="var(--chart-1)" />
+<Bar dataKey="pending" stackId="a" fill="var(--chart-2)" radius={[4, 4, 0, 0]} />
 ```
 
 **Horizontal bar** — flip layout and swap axis types:
@@ -59,7 +59,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 <BarChart layout="vertical" data={data}>
   <XAxis type="number" />
   <YAxis type="category" dataKey="name" />
-  <Bar dataKey="value" fill="hsl(var(--chart-1))" />
+  <Bar dataKey="value" fill="var(--chart-1)" />
 </BarChart>
 ```
 
@@ -74,8 +74,8 @@ import { LineChart, Line } from "recharts"
     <XAxis dataKey="month" className="text-xs fill-muted-foreground" />
     <YAxis className="text-xs fill-muted-foreground" />
     <Tooltip content={<ChartTooltip />} />
-    <Line type="monotone" dataKey="value" stroke="hsl(var(--chart-1))" strokeWidth={2} dot={false} />
-    <Line type="monotone" dataKey="target" stroke="hsl(var(--chart-2))" strokeWidth={2} strokeDasharray="5 5" />
+    <Line type="monotone" dataKey="value" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
+    <Line type="monotone" dataKey="target" stroke="var(--chart-2)" strokeWidth={2} strokeDasharray="5 5" />
   </LineChart>
 </ResponsiveContainer>
 ```
@@ -93,7 +93,7 @@ import { AreaChart, Area } from "recharts"
     <XAxis dataKey="month" className="text-xs fill-muted-foreground" />
     <YAxis className="text-xs fill-muted-foreground" />
     <Tooltip content={<ChartTooltip />} />
-    <Area type="monotone" dataKey="value" stroke="hsl(var(--chart-1))" fill="hsl(var(--chart-1))" fillOpacity={0.2} />
+    <Area type="monotone" dataKey="value" stroke="var(--chart-1)" fill="var(--chart-1)" fillOpacity={0.2} />
   </AreaChart>
 </ResponsiveContainer>
 ```
@@ -101,8 +101,8 @@ import { AreaChart, Area } from "recharts"
 **Stacked areas** — share a `stackId`:
 
 ```tsx
-<Area type="monotone" dataKey="ios" stackId="1" stroke="hsl(var(--chart-1))" fill="hsl(var(--chart-1))" fillOpacity={0.4} />
-<Area type="monotone" dataKey="android" stackId="1" stroke="hsl(var(--chart-2))" fill="hsl(var(--chart-2))" fillOpacity={0.4} />
+<Area type="monotone" dataKey="ios" stackId="1" stroke="var(--chart-1)" fill="var(--chart-1)" fillOpacity={0.4} />
+<Area type="monotone" dataKey="android" stackId="1" stroke="var(--chart-2)" fill="var(--chart-2)" fillOpacity={0.4} />
 ```
 
 **Gradient fill** — define once in `<defs>`, reference by URL:
@@ -111,11 +111,11 @@ import { AreaChart, Area } from "recharts"
 <AreaChart data={data}>
   <defs>
     <linearGradient id="fillValue" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.6} />
-      <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
+      <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.6} />
+      <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
     </linearGradient>
   </defs>
-  <Area type="monotone" dataKey="value" stroke="hsl(var(--chart-1))" fill="url(#fillValue)" />
+  <Area type="monotone" dataKey="value" stroke="var(--chart-1)" fill="url(#fillValue)" />
 </AreaChart>
 ```
 
@@ -125,11 +125,11 @@ import { AreaChart, Area } from "recharts"
 import { PieChart, Pie, Cell } from "recharts"
 
 const COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
 ]
 
 <ResponsiveContainer width="100%" height={300}>
@@ -166,33 +166,12 @@ import { ScatterChart, Scatter } from "recharts"
     <XAxis type="number" dataKey="x" name="Weight" className="text-xs fill-muted-foreground" />
     <YAxis type="number" dataKey="y" name="Height" className="text-xs fill-muted-foreground" />
     <Tooltip cursor={{ strokeDasharray: "3 3" }} content={<ChartTooltip />} />
-    <Scatter name="Sample A" data={data} fill="hsl(var(--chart-1))" />
+    <Scatter name="Sample A" data={data} fill="var(--chart-1)" />
   </ScatterChart>
 </ResponsiveContainer>
 ```
 
 For bubble charts, add `<ZAxis dataKey="size" range={[60, 400]} />` and the scatter dots scale with the third dimension.
-
-## Composed chart (mixed types)
-
-When one viewpoint needs a bar (totals) plus a line (trend) plus an area (band):
-
-```tsx
-import { ComposedChart, Bar, Line, Area } from "recharts"
-
-<ResponsiveContainer width="100%" height={300}>
-  <ComposedChart data={data}>
-    <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-    <XAxis dataKey="month" className="text-xs fill-muted-foreground" />
-    <YAxis className="text-xs fill-muted-foreground" />
-    <Tooltip content={<ChartTooltip />} />
-    <Legend />
-    <Area type="monotone" dataKey="band" fill="hsl(var(--chart-3))" stroke="hsl(var(--chart-3))" fillOpacity={0.2} />
-    <Bar dataKey="actual" barSize={20} fill="hsl(var(--chart-1))" />
-    <Line type="monotone" dataKey="forecast" stroke="hsl(var(--chart-2))" strokeWidth={2} />
-  </ComposedChart>
-</ResponsiveContainer>
-```
 
 ## Reference lines and areas
 
@@ -203,32 +182,12 @@ import { ReferenceLine, ReferenceArea } from "recharts"
 
 <LineChart data={data}>
   {/* ... axes, lines */}
-  <ReferenceLine y={5000} label="Target" stroke="hsl(var(--chart-3))" strokeDasharray="3 3" />
-  <ReferenceArea x1="Jan" x2="Mar" fill="hsl(var(--chart-2))" fillOpacity={0.1} label="Q1" />
+  <ReferenceLine y={5000} label="Target" stroke="var(--chart-3)" strokeDasharray="3 3" />
+  <ReferenceArea x1="Jan" x2="Mar" fill="var(--chart-2)" fillOpacity={0.1} label="Q1" />
 </LineChart>
 ```
 
-## Brush (zoom range selector)
-
-For long time series — adds a draggable range selector below the chart:
-
-```tsx
-import { Brush } from "recharts"
-
-<LineChart data={data}>
-  {/* ... */}
-  <Brush dataKey="date" height={30} stroke="hsl(var(--chart-1))" />
-</LineChart>
-```
-
-## Synchronized charts
-
-Link the cursor and tooltip across multiple charts with the same `syncId`:
-
-```tsx
-<LineChart data={revenue} syncId="dashboard">{/* ... */}</LineChart>
-<LineChart data={users} syncId="dashboard">{/* ... */}</LineChart>
-```
+For live/streaming data, many-chart dashboards, or radar/radial/composed/synced/brush charts, Read references/advanced.md.
 
 ## Click and hover events
 
@@ -236,7 +195,7 @@ Link the cursor and tooltip across multiple charts with the same `syncId`:
 <BarChart onClick={(state) => console.log("chart click", state)}>
   <Bar
     dataKey="sales"
-    fill="hsl(var(--chart-1))"
+    fill="var(--chart-1)"
     onClick={(payload, index) => navigate(`/items/${payload.id}`)}
   />
 </BarChart>
@@ -333,8 +292,8 @@ function StatCard({ title, value, trend, data }: {
             <Area
               type="monotone"
               dataKey="v"
-              stroke="hsl(var(--chart-1))"
-              fill="hsl(var(--chart-1))"
+              stroke="var(--chart-1)"
+              fill="var(--chart-1)"
               fillOpacity={0.1}
               strokeWidth={1.5}
             />
@@ -358,61 +317,6 @@ No axes, no tooltip, no grid — just the trend.
 </LineChart>
 ```
 
-## Performance
-
-For dashboards with several charts or live data:
-
-1. **Stable references** — wrap inline functions in `useCallback`:
-
-```tsx
-const accessor = useCallback((e: Row) => e.sales * 2, [])
-<Line dataKey={accessor} />
-```
-
-2. **Memoize the chart** when its parent re-renders frequently:
-
-```tsx
-const RevenueChart = React.memo(({ data }: { data: Row[] }) => (
-  <LineChart data={data}>{/* ... */}</LineChart>
-))
-```
-
-3. **Aggregate large datasets** — bin or downsample before rendering. Recharts paints every point; >1000 points per series is usually wasted.
-
-```tsx
-const binned = useMemo(() => downsample(rawData, 200), [rawData])
-```
-
-4. **Disable animation for streaming data** — `isAnimationActive={false}` on the series prevents re-animating on every update.
-
-5. **Debounce mouse handlers** — `onMouseMove` fires at every pixel:
-
-```tsx
-const handleMove = useDebouncedCallback((e) => setCursor(e.activeLabel), 16)
-<LineChart onMouseMove={handleMove}>{/* ... */}</LineChart>
-```
-
-## Real-time data
-
-```tsx
-const [data, setData] = useState<Row[]>([])
-
-useEffect(() => {
-  const id = setInterval(() => {
-    setData((prev) => [...prev.slice(-49), nextPoint()])  // keep last 50
-  }, 1000)
-  return () => clearInterval(id)
-}, [])
-
-<LineChart data={data}>
-  <XAxis dataKey="time" />
-  <YAxis domain={["auto", "auto"]} />
-  <Line type="monotone" dataKey="value" stroke="hsl(var(--chart-1))" isAnimationActive={false} />
-</LineChart>
-```
-
-For server-driven data, prefer `useQuery` from the `data-fetching` skill over `useEffect` polling.
-
 ## Empty / loading states
 
 ```tsx
@@ -431,9 +335,6 @@ return <ResponsiveContainer height={300}>{/* chart */}</ResponsiveContainer>
 
 | Symptom | Fix |
 |---|---|
-| Chart renders blank / collapsed | Parent has no height, or `ResponsiveContainer` height is a percent. Set `height={300}` (number). |
-| Tooltip shows white-on-white | You forgot `<Tooltip content={<ChartTooltip />} />` — default tooltip ignores theme. |
-| All pie slices same color | Missing `<Cell key={i} fill={...} />` for each datum. |
 | Axis labels overlap | `<XAxis angle={-45} textAnchor="end" height={80} />` or `interval="preserveStartEnd"`. |
 | `dataKey` shows nothing | Property name typo or property is missing on some rows — Recharts silently treats `undefined` as a gap. |
 | Animation stutters with live data | `isAnimationActive={false}` on the series. |
@@ -441,13 +342,10 @@ return <ResponsiveContainer height={300}>{/* chart */}</ResponsiveContainer>
 
 ## Common mistakes
 
-1. **Forgetting `ResponsiveContainer`** — chart renders at 0px height. Always wrap.
-2. **Hardcoded hex colors** (`#8884d8`) — break dark mode, look generic. Use `hsl(var(--chart-N))`.
-3. **No empty state** — empty axes with no data are confusing. Render a placeholder when `data.length === 0`.
-4. **Missing custom tooltip** — default tooltip is unstyled and clashes with the app theme.
-5. **`Cell` count mismatch** — if you map `Cell` over data you must use the same array; mismatched length leaves slices uncolored.
-6. **`syncId` shared with unrelated charts** — every chart with that id syncs, including ones in other parts of the page. Scope ids to a dashboard.
-7. **Re-creating the data array on every render** — causes the chart to re-animate. Memoize with `useMemo` if the source data is stable.
+Beyond the four project rules above:
+
+1. **`Cell` count mismatch** — if you map `Cell` over data you must use the same array; mismatched length leaves slices uncolored.
+2. **Re-creating the data array on every render** — causes the chart to re-animate. Memoize with `useMemo` if the source data is stable.
 
 ## Resources
 

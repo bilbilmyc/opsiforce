@@ -76,7 +76,7 @@ These attributes change keyboard, autofill, and validation behavior — set them
 - **Use a meaningful `name`** — browser autofill uses `name`, not `id`.
 - **Disable spellcheck on emails, codes, usernames, identifiers**: `spellCheck={false}`.
 - **Never block paste** (`onPaste` + `preventDefault`) — it's hostile to password managers and accessibility.
-- **`autoFocus` sparingly** — acceptable on a single primary input on a desktop form. Avoid on mobile (pops the keyboard immediately).
+- **`autoFocus` sparingly** — see `accessibility.md`.
 
 ```tsx
 <Input type="email" name="email" autoComplete="email" />
@@ -397,6 +397,6 @@ For 2–7 mutually exclusive options, build a `ToggleGroup` wrapper rather than 
 1. **`z.number()` on `<input type="number">`** — HTML inputs always give strings. Use `z.coerce.number()`.
 2. **Forgetting `defaultValues`** — uncontrolled fields start as `undefined`; React then warns when you switch from uncontrolled to controlled. Always set `defaultValues` (per-field or at the form level).
 3. **Not disabling submit during mutation** — always `disabled={mutation.isPending}` to prevent double-submit.
-4. **Using `space-y-*` between fields** — `flex flex-col gap-4` is the rule.
+4. **Using `space-y-*` between fields** — use `flex flex-col gap-4`; full rule in `styling.md`.
 5. **Forgetting `htmlFor` / `id` pairs** — labels must connect to inputs by id for accessibility and for `peer-*` selectors to work.
 6. **Using `register()` on `Select`/`Switch`/`Checkbox`** — these emit `onValueChange` / `onCheckedChange`, not `onChange`. Wrap with `<Controller>`.

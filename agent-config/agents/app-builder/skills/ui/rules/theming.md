@@ -124,7 +124,7 @@ Combine `fade-in` + `slide-in-from-*` + `zoom-in-*` with `duration-*` and `delay
 In Tailwind classes: `text-chart-1`, `bg-chart-1`, `fill-chart-1`, `stroke-chart-1`. In Recharts / SVG inline:
 
 ```tsx
-<Bar fill="oklch(var(--chart-1))" />
+<Bar fill="var(--chart-1)" />
 ```
 
 ## Common mistakes

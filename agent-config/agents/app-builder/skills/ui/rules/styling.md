@@ -30,7 +30,7 @@ Use `Badge` variants or semantic tokens — never `text-emerald-600`, `text-red-
 <span className="text-destructive">-3.2%</span>
 ```
 
-**Exception — multi-state status hues.** The theme ships only `--destructive`; success / warning / info have no semantic token. For status badges (Active / Pending / Failed), a fixed light + dark colour pair is the sanctioned pattern — always with the `dark:` variant so it survives dark mode: `bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400` (see the `frontend-design` skill). That is the *only* place raw colours are allowed; for metrics and deltas, stick to `Badge` / `text-destructive` above.
+**Exception — multi-state status hues.** Status badges (Active / Pending / Failed) are the one sanctioned use of raw Tailwind colours, since success / warning / info have no semantic token. The `frontend-design` skill owns this rule (the light + `dark:` colour pairs). For metrics and deltas, stick to `Badge` / `text-destructive` above.
 
 ## Built-in variants first
 
@@ -138,5 +138,4 @@ import { cn } from "@/lib/utils"
 
 ## Hover & focus visual contrast
 
-- Buttons and links need a `hover:` state — if the rest looks identical to the hover, the user can't tell when they're pointing at it.
-- Hover / active / focus should **increase contrast** vs. rest (bolder color, brighter ring, deeper background).
+Interactive elements need a `hover:` state that **increases contrast** vs. rest. Full rule in `accessibility.md`.

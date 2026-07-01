@@ -409,7 +409,7 @@ export class ProjectService implements OnApplicationBootstrap {
       await tx.insert(projectPodSettings).values({
         projectId: id,
         podClass: 'small',
-        ...resolvePreset('small', this.podClassSmallOverride()),
+        ...resolvePreset('small'),
       });
 
       await tx.insert(projectEnvironments).values({
@@ -646,7 +646,6 @@ export class ProjectService implements OnApplicationBootstrap {
     podClass: PodClass;
     resources: PodResources;
   } {
-    const smallOverride = this.podClassSmallOverride();
     if (resources?.podClass === 'custom') {
       return {
         podClass: 'custom',
@@ -658,9 +657,9 @@ export class ProjectService implements OnApplicationBootstrap {
       };
     }
     if (resources && isPreset(resources.podClass)) {
-      return { podClass: resources.podClass, resources: resolvePreset(resources.podClass, smallOverride) };
+      return { podClass: resources.podClass, resources: resolvePreset(resources.podClass) };
     }
-    return { podClass: 'small', resources: resolvePreset('small', smallOverride) };
+    return { podClass: 'small', resources: resolvePreset('small') };
   }
 
   async getSchedulesForExport(projectEnvironmentId: string): Promise<ExportManifestSchedule[]> {
@@ -928,7 +927,7 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   getPodClassCatalog(): PodClassCatalog {
-    return buildPodClassCatalog(this.podClassSmallOverride());
+    return buildPodClassCatalog();
   }
 
   async updatePodClass(id: string, dto: UpdateProjectPodClassDto, tenantId: string): Promise<ProjectResponse> {
@@ -963,11 +962,7 @@ export class ProjectService implements OnApplicationBootstrap {
     if (!isPreset(dto.podClass)) {
       throw new BadRequestException(`Unknown pod class: ${String(dto.podClass)}`);
     }
-    return resolvePreset(dto.podClass, this.podClassSmallOverride());
-  }
-
-  private podClassSmallOverride(): PodResources | null {
-    return this.configService.get<PodResources | null>('podClassSmall', null);
+    return resolvePreset(dto.podClass);
   }
 
   private async podResourcesForProject(projectId: string): Promise<K8sResourceRequirements> {
@@ -979,7 +974,7 @@ export class ProjectService implements OnApplicationBootstrap {
       })
       .from(projectPodSettings)
       .where(eq(projectPodSettings.projectId, projectId));
-    return toK8sResources(row ?? resolvePreset('small', this.podClassSmallOverride()));
+    return toK8sResources(row ?? resolvePreset('small'));
   }
 
   async getLogging(id: string, tenantId: string): Promise<ProjectLoggingResponse> {

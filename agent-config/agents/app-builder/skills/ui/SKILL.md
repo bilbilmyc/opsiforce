@@ -1,6 +1,6 @@
 ---
 name: ui
-description: Load for ANY frontend / UI / styling work. Single source of truth for shadcn/ui components (Button, Card, Input, Badge, Dialog, Sheet, Drawer, DropdownMenu, Select, Command palette, Popover, Tooltip, Tabs, Switch, Checkbox, Skeleton, Alert, Avatar + every Radix primitive), react-hook-form + zod forms, multi-step wizards, responsive app shells (desktop sidebar ↔ mobile hamburger drawer), React Router routing & URL-synced lists (filter/search/sort/pagination), Lucide icons, Tailwind v4 theming, accessibility (focus, ARIA, prefers-reduced-motion, hydration), and styling / composition / forms / icons / patterns rules. Use whenever building or modifying any user interface, form, modal, drawer, bottom sheet, menu, searchable selector, toast notification, icon, status indicator, theme color, dark-mode toggle, or any styled / interactive element.
+description: Load for ANY frontend / UI / styling work — shadcn/ui components, react-hook-form + zod forms, multi-step wizards, responsive app shells (desktop sidebar ↔ mobile hamburger drawer), React Router routing & URL-synced lists (filter/search/sort/pagination), Lucide icons, Tailwind v4 theming, accessibility (focus, ARIA, prefers-reduced-motion, hydration), and styling / composition / forms / icons / patterns rules. Use whenever building or modifying any user interface, form, modal, drawer, bottom sheet, menu, searchable selector, toast notification, icon, status indicator, card, tabs, badge, toggle, theme color, dark-mode toggle, or any styled / interactive element.
 ---
 
 # shadcn/ui
@@ -68,4 +68,3 @@ Detail lives alongside this file — load the relevant page when generating non-
 3. **`onSelect` vs `onClick` on menu items** — Radix menu/command items fire `onSelect`. `onClick` works but doesn't auto-close the menu.
 4. **`cmdk` filters by item text** — `<CommandItem value="...">` is what's matched against the input. If you render JSX inside, set `value` explicitly to control matching.
 5. **Native `<select>` in forms** — for styled selects, use the `Select` component, not `<select>`. Wrap with `Controller` for `react-hook-form`.
-6. **Desktop-only sidebar** — an `aside` that's `hidden md:block` with no hamburger leaves mobile with zero navigation. Sidebar + mobile drawer are one component fed by one nav list (see "App shell & responsive navigation"); verify at 375px.

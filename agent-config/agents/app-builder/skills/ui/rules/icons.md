@@ -100,27 +100,7 @@ Outside of a styled component, size with `size-*` (not `w-N h-N`) and color with
 
 ## Accessibility: `aria-label` and `aria-hidden`
 
-**Icon-only buttons need `aria-label`.** Screen readers announce nothing meaningful otherwise.
-
-```tsx
-// Bad — announced as "button"
-<Button size="icon" variant="ghost"><Trash2 /></Button>
-
-// Good
-<Button size="icon" variant="ghost" aria-label="Delete item"><Trash2 /></Button>
-```
-
-**Decorative icons next to text need `aria-hidden="true"`.** When the adjacent text already conveys the meaning, hide the icon from assistive tech to avoid double-announcement.
-
-```tsx
-// Good — text says "Add item"; the icon is decoration
-<Button>
-  <Plus data-icon="inline-start" aria-hidden="true" />
-  Add item
-</Button>
-```
-
-Rule of thumb: if removing the icon doesn't change what a screen-reader user understands, mark it `aria-hidden`.
+Icon-only buttons need an `aria-label`; decorative icons beside text need `aria-hidden="true"`. Full rules and examples in `accessibility.md`.
 
 ## Pass icons as component values, not string keys
 

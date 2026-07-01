@@ -30,8 +30,7 @@ export function isPreset(podClass: PodClass): podClass is PodPreset {
   return podClass === 'small' || podClass === 'medium' || podClass === 'large';
 }
 
-export function resolvePreset(preset: PodPreset, smallOverride?: PodResources | null): PodResources {
-  if (preset === 'small' && smallOverride) return smallOverride;
+export function resolvePreset(preset: PodPreset): PodResources {
   return PRESETS[preset];
 }
 
@@ -85,10 +84,10 @@ export interface PodClassCatalog {
   customBounds: PodClassBounds;
 }
 
-export function buildPodClassCatalog(smallOverride?: PodResources | null): PodClassCatalog {
+export function buildPodClassCatalog(): PodClassCatalog {
   return {
     presets: [
-      { podClass: 'small', resources: resolvePreset('small', smallOverride) },
+      { podClass: 'small', resources: resolvePreset('small') },
       { podClass: 'medium', resources: resolvePreset('medium') },
       { podClass: 'large', resources: resolvePreset('large') },
     ],

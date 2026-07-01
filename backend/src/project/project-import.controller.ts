@@ -34,11 +34,7 @@ export class ProjectImportController {
 
   @Post('import')
   @RequirePermission(Perms.importProject)
-  async start(
-    @CurrentTenant() tenant: TenantContext,
-    @CurrentUser() user: UserContext,
-    @Req() req: MultipartRequest
-  ) {
+  async start(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: UserContext, @Req() req: MultipartRequest) {
     const filePath = this.importService.newUploadPath();
     const fields = new Map<string, string>();
     let received = false;

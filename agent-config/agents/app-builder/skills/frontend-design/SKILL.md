@@ -81,7 +81,7 @@ Use consistent, clear hierarchy:
 
 ### Don't be afraid of asymmetry
 - 2/3 + 1/3 split: `grid-cols-3` → `lg:col-span-2` + `lg:col-span-1`
-- Sidebar layouts (always via the responsive App Shell in the `ui` skill — a desktop sidebar **must** collapse to a hamburger drawer on mobile), offset hero sections, mixed card sizes add visual interest
+- Sidebar layouts (always via the responsive App Shell in the `ui` skill), offset hero sections, mixed card sizes add visual interest
 
 ## Phase 5: Visual Polish
 

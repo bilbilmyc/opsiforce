@@ -121,16 +121,7 @@ Image loads can fail. Always provide initials or a fallback icon.
 
 ## Choosing form controls
 
-| Need                              | Use                                            |
-| --------------------------------- | ---------------------------------------------- |
-| Free-form text                    | `Input`                                        |
-| Multi-line text                   | `Textarea`                                     |
-| Predefined options dropdown       | `Select`                                       |
-| Searchable dropdown               | `Command` inside `Popover` (combobox pattern)  |
-| Boolean toggle (settings)         | `Switch`                                       |
-| Boolean toggle (form field)       | `Checkbox`                                     |
-| Single choice from few options    | Radix `RadioGroup` (build wrapper)             |
-| Toggle 2–5 options                | Radix `ToggleGroup` (build wrapper)            |
+Full "Choosing a control" table (Input / Textarea / Select / combobox / Switch / Checkbox / RadioGroup / ToggleGroup / OTP / date) is in `forms.md`.
 
 ## URL reflects significant state
 
