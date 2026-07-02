@@ -52,12 +52,8 @@ export class DownloadController {
       userId: dbUser.id,
     });
 
-    let directory = project.directory;
-    if (environmentId && environmentId !== projectId) {
-      const env = await this.projectEnvironmentService.findById(environmentId);
-      if (env.projectId !== projectId) throw new NotFoundException(`Environment ${environmentId} not found`);
-      directory = env.directory;
-    }
+    const env = await this.projectEnvironmentService.findRequestedForProject(projectId, environmentId);
+    const directory = env?.directory ?? project.directory;
 
     const filePath = this.downloadService.resolveWorkspacePath(directory, requestedPath);
 

@@ -1,4 +1,4 @@
-import { Controller, Post, Param, Query, Req, Res, Logger, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Param, Query, Req, Res, Logger } from '@nestjs/common';
 import type { MultipartFile } from '@fastify/multipart';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { UploadService } from './upload.service';
@@ -32,14 +32,8 @@ export class UploadController {
   ) {
     const project = await this.projectService.findOne(projectId, tenant.tenantId);
 
-    let directory = project.directory;
-    if (environmentId && environmentId !== projectId) {
-      const env = await this.projectEnvironmentService.findById(environmentId);
-      if (env.projectId !== projectId) {
-        throw new NotFoundException(`Environment ${environmentId} not found`);
-      }
-      directory = env.directory;
-    }
+    const env = await this.projectEnvironmentService.findRequestedForProject(projectId, environmentId);
+    const directory = env?.directory ?? project.directory;
 
     this.projectService.touchActivity(environmentId ?? projectId).catch(() => {});
 

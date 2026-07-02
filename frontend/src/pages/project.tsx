@@ -7,7 +7,7 @@ import { useProjectStatus } from '~/api/projects';
 import { useProjectEnvironments, useSetEnvironmentSession } from '~/api/environments';
 import Spinner from '~/components/ui/spinner';
 import ProjectHeader, { type ProjectTab } from '~/components/project/project-header';
-import ProjectChatTab from '~/components/project/project-chat-tab';
+import { ProjectChatTab } from '~/components/project/project-chat-tab';
 import ProjectCodeTab from '~/components/project/project-code-tab';
 import ProjectDbTab from '~/components/project/project-db-tab';
 import ProjectPreviewPanel from '~/components/project/project-preview-panel';

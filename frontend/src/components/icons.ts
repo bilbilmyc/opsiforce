@@ -6,6 +6,7 @@ export { default as Building2 } from 'lucide-solid/icons/building-2';
 export { default as PanelLeft } from 'lucide-solid/icons/panel-left';
 export { default as FolderKanban } from 'lucide-solid/icons/folder-kanban';
 export { default as Menu } from 'lucide-solid/icons/menu';
+export { default as Mic } from 'lucide-solid/icons/mic';
 export { default as Settings } from 'lucide-solid/icons/settings';
 export { default as CircleDollarSign } from 'lucide-solid/icons/circle-dollar-sign';
 export { default as Clock } from 'lucide-solid/icons/clock';

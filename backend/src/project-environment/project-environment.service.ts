@@ -74,6 +74,16 @@ export class ProjectEnvironmentService {
     return row;
   }
 
+  async findRequestedForProject(
+    projectId: string,
+    environmentId: string | undefined
+  ): Promise<ProjectEnvironmentContext | undefined> {
+    if (!environmentId || environmentId === projectId) return undefined;
+    const env = await this.findById(environmentId);
+    if (env.projectId !== projectId) throw new NotFoundException(`Environment ${environmentId} not found`);
+    return env;
+  }
+
   defaultEnvironmentId(projectId: string): string {
     return projectId;
   }

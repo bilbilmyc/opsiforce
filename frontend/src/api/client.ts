@@ -9,7 +9,7 @@ export class ApiError extends Error {
   }
 }
 
-async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
+export async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
   try {
     const text = await res.text();
     if (!text) return fallback;

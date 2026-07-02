@@ -6,6 +6,7 @@ import { ServerConnection } from '@opencode-ai/app/context/server';
 import { useGlobalSDK } from '@opencode-ai/app/context/global-sdk';
 import { useSyncProjectTitle } from '~/api/projects';
 import FileUpload from '~/components/file-upload';
+import { DictationButton } from '~/components/dictation-button';
 import WorkspaceDownloadLinks from './workspace-download-links';
 import OpencodeOverrides from './opencode-overrides';
 import { platform } from './platform';
@@ -39,7 +40,7 @@ export interface ProjectChatTabProps {
   onPreviewReload: () => void;
 }
 
-export default function ProjectChatTab(props: ProjectChatTabProps) {
+export function ProjectChatTab(props: ProjectChatTabProps) {
   const syncTitle = useSyncProjectTitle();
   const tunnelUrl = () => `${window.location.origin}/api/proxy/${props.environmentId}`;
 
@@ -64,6 +65,7 @@ export default function ProjectChatTab(props: ProjectChatTabProps) {
           );
         }}
       </Show>
+      <DictationButton projectId={props.projectId} environmentId={props.environmentId} />
       <FileUpload projectId={props.projectId} environmentId={props.environmentId} />
       <WorkspaceDownloadLinks projectId={props.projectId} environmentId={props.environmentId} />
     </>

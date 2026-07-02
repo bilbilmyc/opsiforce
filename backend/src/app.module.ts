@@ -10,6 +10,7 @@ import { ProjectModule } from './project/project.module';
 import { TimeoutModule } from './timeout/timeout.module';
 import { ProxyModule } from './proxy/proxy.module';
 import { UploadModule } from './upload/upload.module';
+import { TranscriptionModule } from './transcription/transcription.module';
 import { TenantModule } from './tenant/tenant.module';
 import { TenantGuard } from './tenant/tenant.guard';
 import { HealthController } from './health.controller';
@@ -67,6 +68,7 @@ function parseRedisUrl(url: string) {
     TimeoutModule,
     ProxyModule,
     UploadModule,
+    TranscriptionModule,
     BifrostModule,
     PermissionModule,
     CleanupModule,

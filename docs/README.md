@@ -26,6 +26,7 @@
 - [App Readiness](projects/app-readiness.md) — go-live/serving pushed from the pod, not polled ([ADR-0015](adr/0015-app-liveness-pushed-not-polled.md))
 - [Schedules](projects/schedules.md) — per-environment agent-requested cron, wake-on-fire
 - [File Downloads](projects/file-downloads.md) — downloading workspace files from chat
+- [Dictation](projects/dictation.md) — voice input for the chat prompt, and why transcription is pinned to the real OpenAI provider
 
 **Agents** (`agents/`)
 - [Agents](agents/agent-system.md) — agent profiles, how they reach a workspace, the model ([ADR-0008](adr/0008-agent-model-owned-by-agent-config.md))

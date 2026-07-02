@@ -212,6 +212,20 @@ export class BifrostService {
     return err.message.includes('(404)');
   }
 
+  async hasKeyedOpenAiProvider(): Promise<boolean> {
+    if (!this.isEnabled()) return false;
+    try {
+      const data = await this.request<{ keys?: Array<{ value?: { value?: string }; enabled?: boolean }> }>(
+        'GET',
+        '/api/providers/openai/keys'
+      );
+      return (data.keys ?? []).some((key) => key.enabled !== false && (key.value?.value ?? '') !== '');
+    } catch (err) {
+      if (err instanceof Error && this.isNotFoundError(err)) return false;
+      throw err;
+    }
+  }
+
   async getTeamBudget(teamId: string): Promise<BifrostBudget | null> {
     const data = await this.request<{ team: { budgets?: BifrostBudget[] } }>('GET', `/api/governance/teams/${teamId}`);
     return data.team.budgets?.[0] ?? null;
@@ -338,6 +352,26 @@ export class BifrostService {
       bifrostBackendApiKey: backendKey.bifrostKeyToken,
       bifrostProxyUrl: this.podProxyUrl,
     };
+  }
+
+  async getProjectChatKeyToken(projectId: string, projectEnvironmentId?: string): Promise<string | null> {
+    const keys = await db
+      .select()
+      .from(projectVirtualKeys)
+      .where(
+        and(
+          eq(projectVirtualKeys.projectId, projectId),
+          eq(projectVirtualKeys.keyType, 'chat'),
+          eq(projectVirtualKeys.status, 'active')
+        )
+      );
+
+    const environmentKey = projectEnvironmentId
+      ? keys.find((k) => k.projectEnvironmentId === projectEnvironmentId)
+      : undefined;
+    const projectKey = keys.find((k) => k.projectEnvironmentId === null);
+    const key = environmentKey ?? projectKey ?? keys[0];
+    return key?.bifrostKeyToken ?? null;
   }
 
   async getProjectKeyBudgets(projectId: string): Promise<Array<{ keyType: KeyType; budget: BifrostBudget | null }>> {
