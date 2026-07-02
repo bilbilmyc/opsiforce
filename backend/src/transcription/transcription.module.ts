@@ -6,9 +6,10 @@ import { TranscriptionAvailabilityService } from './transcription-availability.s
 import { BifrostModule } from '../bifrost/bifrost.module';
 import { ProjectModule } from '../project/project.module';
 import { ProjectEnvironmentModule } from '../project-environment/project-environment.module';
+import { UserModule } from '../user/user.module';
 
 @Module({
-  imports: [BifrostModule, ProjectModule, ProjectEnvironmentModule],
+  imports: [BifrostModule, ProjectModule, ProjectEnvironmentModule, UserModule],
   controllers: [TranscriptionController, TranscriptionAvailabilityController],
   providers: [TranscriptionService, TranscriptionAvailabilityService],
 })

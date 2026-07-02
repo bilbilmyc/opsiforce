@@ -22,7 +22,9 @@ import {
 import { BifrostService } from '../bifrost/bifrost.service';
 import { ProjectService } from '../project/project.service';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
+import { UserService } from '../user/user.service';
 import { CurrentTenant, type TenantContext } from '../tenant/tenant.decorator';
+import { CurrentUser, type UserContext } from '../user/user.decorator';
 
 interface MultipartRequest extends FastifyRequest {
   parts(options?: { limits?: { fileSize?: number; fields?: number } }): AsyncIterableIterator<Multipart>;
@@ -40,7 +42,8 @@ export class TranscriptionController {
     private readonly transcriptionService: TranscriptionService,
     private readonly bifrostService: BifrostService,
     private readonly projectService: ProjectService,
-    private readonly projectEnvironmentService: ProjectEnvironmentService
+    private readonly projectEnvironmentService: ProjectEnvironmentService,
+    private readonly userService: UserService
   ) {}
 
   @Post(':projectId/transcription')
@@ -48,9 +51,18 @@ export class TranscriptionController {
     @Param('projectId') projectId: string,
     @Query('environmentId') environmentId: string | undefined,
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
     @Req() req: MultipartRequest
   ): Promise<{ text: string }> {
-    await this.projectService.findOne(projectId, tenant.tenantId);
+    const dbUser = await this.userService.getOrCreateUser(
+      { keycloakId: user.userId, email: user.email ?? undefined, displayName: user.displayName ?? undefined },
+      tenant.tenantId
+    );
+    await this.projectService.findOneForUser({
+      projectId,
+      tenantId: tenant.tenantId,
+      userId: dbUser.id,
+    });
 
     const env = await this.projectEnvironmentService.findRequestedForProject(projectId, environmentId);
     const projectEnvironmentId = env?.id;
