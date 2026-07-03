@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { Outlet, createRootRoute, useRouter, useLocation } from '@tanstack/solid-router';
 import { TanStackDevtools } from '@tanstack/solid-devtools';
@@ -10,7 +10,7 @@ import { JobDockHost } from '~/components/project/jobs/job-dock-host';
 import { useSidebar } from '~/components/ui/sidebar';
 import { Button } from '~/components/ui/button';
 import { Menu } from '~/components/icons';
-import { HotjarScript } from '~/scripts/hotjar';
+import { PRIVATE_ROOT_COMPONENTS } from '~/private-loader';
 import { Toaster } from 'solid-sonner';
 
 const queryClient = new QueryClient({
@@ -84,7 +84,7 @@ function AppContent() {
   return (
     <>
       <Toaster position="bottom-right" richColors />
-      <HotjarScript />
+      <For each={PRIVATE_ROOT_COMPONENTS}>{(PrivateRootComponent) => <PrivateRootComponent />}</For>
       <Show when={!isPermissionDenied()} fallback={<Outlet />}>
         <SidebarLayout />
       </Show>

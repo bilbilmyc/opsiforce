@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/solid-router';
-import { IntegrationsPage } from '~/private';
+import { privateRouteComponent } from '~/private-loader';
 
 export const Route = createFileRoute('/settings/integrations')({
-  component: IntegrationsPage,
+  component: privateRouteComponent('/settings/integrations'),
 });

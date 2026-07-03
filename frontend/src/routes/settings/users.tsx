@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/solid-router';
-import { UsersPage } from '~/private';
+import { privateRouteComponent } from '~/private-loader';
 
 export const Route = createFileRoute('/settings/users')({
-  component: UsersPage,
+  component: privateRouteComponent('/settings/users'),
 });

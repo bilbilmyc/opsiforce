@@ -1,4 +1,4 @@
-import { config as privateConfig } from '../private/config';
+import { privateConfig } from '../private-loader';
 
 export interface AppConfig {
   catalogEnabled: boolean;

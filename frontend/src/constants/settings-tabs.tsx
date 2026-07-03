@@ -1,7 +1,7 @@
 import type { Component } from 'solid-js';
 import { FolderKanban, Layers, SlidersHorizontal, Wallet } from '~/components/icons';
 import { Permission } from '~/constants/permissions';
-import { PRIVATE_TABS } from '~/private';
+import { PRIVATE_TABS } from '~/private-loader';
 
 export type SettingsGroup = 'Access' | 'Configuration' | 'Billing';
 
