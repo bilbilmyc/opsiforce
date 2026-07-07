@@ -1139,6 +1139,11 @@ export class ProjectService implements OnApplicationBootstrap {
     const project = await this.findOne(id, tenantId);
     const envs = await this.projectEnvironmentService.listByProjectId(id);
 
+    await db
+      .update(projectEnvironments)
+      .set({ status: ProjectStatus.Suspended, podIp: null, updatedAt: new Date() })
+      .where(eq(projectEnvironments.projectId, id));
+
     await Promise.allSettled([
       ...envs.map((env) => this.safeDeletePod(this.podService.assignedPodName(env.id), `removing project ${id}`)),
       this.bifrostService.isEnabled()
@@ -1243,6 +1248,8 @@ export class ProjectService implements OnApplicationBootstrap {
     if (env.isDefault) {
       throw new BadRequestException('The Development environment cannot be deleted');
     }
+
+    await this.projectEnvironmentService.patch(env.id, { status: ProjectStatus.Suspended, podIp: null });
 
     await Promise.allSettled([
       this.safeDeletePod(this.podService.assignedPodName(env.id), `deleting environment ${env.id}`),
