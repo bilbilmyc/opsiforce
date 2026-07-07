@@ -398,11 +398,17 @@ export class ProjectService implements OnApplicationBootstrap {
     }
     if (pod && !pod.metadata?.deletionTimestamp) return false;
 
-    const updated = await this.projectEnvironmentService.patch(
-      env.id,
-      { status: ProjectStatus.Starting, podIp: null },
-      ProjectStatus.Active
-    );
+    const [updated] = await db
+      .update(projectEnvironments)
+      .set({ status: ProjectStatus.Starting, podIp: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(projectEnvironments.id, env.id),
+          eq(projectEnvironments.status, ProjectStatus.Active),
+          sql`exists (select 1 from ${projects} where ${projects.id} = ${projectEnvironments.projectId} and ${projects.disabled} = false)`
+        )
+      )
+      .returning({ id: projectEnvironments.id });
     if (!updated) return false;
 
     this.logger.log(`Recovering environment ${env.id}: pod ${podName} gone while status was 'active'`);
@@ -1175,11 +1181,6 @@ export class ProjectService implements OnApplicationBootstrap {
 
     const envs = await this.projectEnvironmentService.listByProjectId(id);
 
-    await Promise.allSettled([
-      ...envs.map((env) => this.safeDeletePod(this.podService.assignedPodName(env.id), `disabling project ${id}`)),
-      ...envs.map((env) => this.timeoutService.clear(env.id)),
-    ]);
-
     await db.transaction(async (tx) => {
       await tx.update(projects).set({ disabled: true, updatedAt: new Date() }).where(eq(projects.id, id));
       await tx
@@ -1187,6 +1188,11 @@ export class ProjectService implements OnApplicationBootstrap {
         .set({ podIp: null, updatedAt: new Date() })
         .where(eq(projectEnvironments.projectId, id));
     });
+
+    await Promise.allSettled([
+      ...envs.map((env) => this.safeDeletePod(this.podService.assignedPodName(env.id), `disabling project ${id}`)),
+      ...envs.map((env) => this.timeoutService.clear(env.id)),
+    ]);
 
     envs.forEach((env) => this.appReadiness.markDown(env.id));
 
