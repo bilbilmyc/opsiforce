@@ -11,7 +11,6 @@ export interface AgentUpdateJobOptions {
   directory: string;
   agentName: string;
   targetVersion: string;
-  agentModel?: string;
 }
 
 export interface AgentUpdateRunResult {
@@ -90,7 +89,6 @@ export class AgentUpdateK8sService {
                   { name: 'AGENT_NAME', value: options.agentName },
                   { name: 'TARGET_VERSION', value: options.targetVersion },
                   { name: 'WORKSPACE', value: '/workspace' },
-                  ...(options.agentModel ? [{ name: 'AGENT_MODEL', value: options.agentModel }] : []),
                 ],
                 volumeMounts: [
                   {

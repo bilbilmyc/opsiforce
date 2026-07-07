@@ -8,6 +8,7 @@
 - [Commands](development/commands.md) — type-check, lint, database, local ports (setup lives in [../README.md](../README.md))
 - [Local Orchestration](development/local-orchestration.md) — how `yarn dev` brings the stack up: the privileged tunnel, Tilt as the one-UI process orchestrator (in-cluster + host), and the static dev identity that lands you signed in
 - [Deployment](development/deployment.md) — CI/CD, the deploy-order dependency chain, rollout strategy
+- [Deploy to Azure (AKS)](development/deploy-azure.md) — the platform contract for self-hosting on Azure: VNet/AKS, Rook-Ceph storage, in-cluster operators, and Azure AI Foundry behind Bifrost
 
 **Runtime** (`runtime/`)
 - [Request Flows](runtime/request-flows.md) — runtime-proxy topology, the shared ensure gate, per-surface routing
@@ -31,7 +32,7 @@
 **Agents** (`agents/`)
 - [Agents](agents/agent-system.md) — agent profiles, how they reach a workspace, the model ([ADR-0008](adr/0008-agent-model-owned-by-agent-config.md))
 - [Agent Updates](agents/agent-updates.md) — keeping persisted workspaces aligned with a newer profile
-- [Agent Status](agents/agent-status.md) — the Working/Idle signal behind the sidebar spinner, pushed from the pod ([ADR-0019](adr/0019-agent-status-pushed-and-resynced-not-heartbeated.md))
+- [Agent Status](agents/agent-status.md) — the Working/Idle signal behind the sidebar spinner, pushed from the pod ([ADR-0020](adr/0020-agent-status-pushed-and-resynced-not-heartbeated.md))
 
 **Gateways** (`gateways/`)
 - [LLM Gateway](gateways/llm-gateway.md) — Bifrost, per-project virtual keys, budget hierarchy ([ADR-0003](adr/0003-one-bifrost-team-per-project-keys-per-env.md))

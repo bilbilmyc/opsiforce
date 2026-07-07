@@ -67,21 +67,48 @@ async function modelOverride(agentConfig, currentConfig) {
   return typeof currentConfig?.model === "string" ? currentConfig.model : ""
 }
 
-async function applyModelOverride(model) {
-  if (!model) return
+function variantOverride(agentConfig, currentConfig) {
+  if (process.env.AGENT_VARIANT) return process.env.AGENT_VARIANT
+  if (typeof agentConfig?.variant === "string") return agentConfig.variant
+  const agent = currentConfig?.agent?.[agentName]
+  if (agent && typeof agent === "object" && typeof agent.variant === "string") return agent.variant
+  return ""
+}
+
+function currentAgentConfig(config) {
+  const agent = config?.agent?.[agentName]
+  return agent && typeof agent === "object" ? agent : {}
+}
+
+async function applyOpenCodeConfig(model, variant) {
   const config = await readJson(opencodeConfigPath, {})
-  await writeJson(opencodeConfigPath, { ...config, model })
+  const next = { ...config }
+  if (model) next.model = model
+  if (model || variant) {
+    next.agent = { ...(next.agent ?? {}) }
+    next.agent[agentName] = { ...(currentAgentConfig(next) ?? {}) }
+    if (model) next.agent[agentName].model = model
+    if (variant) next.agent[agentName].variant = variant
+  }
+  await writeJson(opencodeConfigPath, next)
 }
 
 async function copyAgentOwnedFiles() {
   const agentConfig = await loadAgentConfig()
   const currentConfig = await readJson(opencodeConfigPath, {})
   const model = await modelOverride(agentConfig, currentConfig)
-  if (model && currentConfig?.model !== model) summary.requiresOpenCodeReload = true
+  const variant = variantOverride(agentConfig, currentConfig)
+  const currentAgent = currentAgentConfig(currentConfig)
+  if (
+    (model && currentConfig?.model !== model) ||
+    (model && currentAgent.model !== model) ||
+    (variant && currentAgent.variant !== variant)
+  )
+    summary.requiresOpenCodeReload = true
   await mkdir(path.dirname(opencodeConfigPath), { recursive: true })
   await mkdir(path.join(workspace, ".opencode", "agents"), { recursive: true })
   await cp(path.join(opencodeRoot, "opencode.json"), opencodeConfigPath)
-  await applyModelOverride(model)
+  await applyOpenCodeConfig(model, variant)
   await cp(path.join(agentRoot, "agent.md"), path.join(workspace, ".opencode", "agents", `${agentName}.md`))
   await rm(path.join(workspace, ".opencode", "skills"), { recursive: true, force: true })
   if (await exists(path.join(agentRoot, "skills"))) {
@@ -263,6 +290,12 @@ async function seedBaseline() {
   await writeSummaryFile()
 }
 
+async function syncAgentFiles() {
+  summary.targetVersion = await resolveTargetVersion()
+  await copyAgentOwnedFiles()
+  console.log(JSON.stringify(summary))
+}
+
 async function main() {
   summary.targetVersion = await resolveTargetVersion()
   const ledger = await readJson(ledgerPath, {})
@@ -285,7 +318,11 @@ async function main() {
   console.log(JSON.stringify(summary))
 }
 
-const entrypoint = process.argv.includes("--seed-baseline") ? seedBaseline : main
+const entrypoint = process.argv.includes("--seed-baseline")
+  ? seedBaseline
+  : process.argv.includes("--sync-agent-files")
+    ? syncAgentFiles
+    : main
 
 entrypoint().catch(async (error) => {
   const message = error instanceof Error ? error.message : String(error)

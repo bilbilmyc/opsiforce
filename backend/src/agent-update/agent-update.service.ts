@@ -7,7 +7,7 @@ import { db } from '../../db';
 import { agents, projectAgentUpdates } from '../../db/schema';
 import { ProjectService } from '../project/project.service';
 import { ProjectStatus } from '../project/project.types';
-import { readAgentConfig, type AgentRuntimeConfig } from '../agent/agent-config';
+import { readAgentConfig, type AgentModelSelection, type AgentRuntimeConfig } from '../agent/agent-config';
 import {
   AGENT_WORKSPACE_UPDATE_QUEUE,
   AgentUpdateStatus,
@@ -89,8 +89,8 @@ export class AgentUpdateService implements OnApplicationBootstrap {
     return resolved;
   }
 
-  agentModel(agentName: string = this.agentName()): string | undefined {
-    return this.agentConfig.models.get(agentName);
+  agentModelSelection(agentName: string = this.agentName()): AgentModelSelection | undefined {
+    return this.agentConfig.modelSelections.get(agentName);
   }
 
   async enqueueProjectSweep(): Promise<void> {

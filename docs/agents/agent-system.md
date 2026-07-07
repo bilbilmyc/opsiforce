@@ -8,7 +8,7 @@ An **Agent** is the AI coding assistant a user converses with inside a ProjectEn
 
 ```
 agent-config/
-├── agents.json                 ← registry: per-agent model, poolSize, template version
+├── agents.json                 ← registry: per-agent model, variant, poolSize, template version
 ├── opencode.json               ← shared OpenCode config (providers, permissions, default_agent)
 ├── skills/                     ← shared skill pool: UI-neutral skills every agent composes in
 ├── agents/<name>/
@@ -20,7 +20,7 @@ agent-config/
 └── scripts/{entrypoint,guard,compose-skills}.{sh,mjs}
 ```
 
-`agents.json` is the registry — one entry per agent carrying its **model**, its [pending-pool](../runtime/pool.md) `poolSize`, and its template `version`. There is no per-agent `config.json`; the registry holds those fields. The public registry ships `app-builder`; any further agents live in the private fragment (see [Private agents and the standalone seam](#private-agents-and-the-standalone-seam)).
+`agents.json` is the registry — one entry per agent carrying its **model**, OpenCode model `variant`, [pending-pool](../runtime/pool.md) `poolSize`, and template `version`. There is no per-agent `config.json`; the registry holds those fields. The public registry ships `app-builder`; any further agents live in the private fragment (see [Private agents and the standalone seam](#private-agents-and-the-standalone-seam)).
 
 ## Registry → database
 
@@ -40,13 +40,13 @@ The standalone glossary in [CONTEXT.md](../../CONTEXT.md) is left untouched — 
 
 ## How an agent reaches a workspace
 
-The image stages every agent under `/opt/agents/`, each with a complete, self-contained `skills/` directory already assembled at build time (see [Skills](#skills)). At pod startup an init container reads `AGENT_NAME` (default `app-builder`) and lays the profile onto the mounted workspace: the agent definition to `/workspace/.opencode/agents/<name>.md`, the skills to `/workspace/.opencode/skills/`, the injected model over the workspace `opencode.json`, and — only when `/workspace/app` does not yet exist — the starter template to `/workspace/`. OpenCode then merges config lowest-to-highest: workspace `opencode.json` → agent definition → skills.
+The image stages every agent under `/opt/agents/`, each with a complete, self-contained `skills/` directory already assembled at build time (see [Skills](#skills)). At pod startup an init container reads `AGENT_NAME` (default `app-builder`) and lays the profile onto the mounted workspace: the agent definition to `/workspace/.opencode/agents/<name>.md`, the skills to `/workspace/.opencode/skills/`, the injected model and variant over the workspace `opencode.json`, and — only when `/workspace/app` does not yet exist — the starter template to `/workspace/`. OpenCode then merges config lowest-to-highest: workspace `opencode.json` → agent definition → skills.
 
 Agent-owned files (prompt, skills, config) are platform-owned and refreshed on every pod (re)assignment; the app template is project-owned after creation, so an existing app keeps its files unless an explicit migration changes them. Keeping long-running workspaces in step with a newer profile without a pod restart is the job of [Agent Updates](agent-updates.md).
 
 ## Model
 
-app-builder runs on **GPT-5.5**, set as `model` in `agents.json` and mirrored as the baked default in `opencode.json`. The model is a property of the agent profile, uniform across every tenant and project — **not** a tunable default; changing it is a code/config rollout. That deliberate asymmetry (the model lives with the agent, while timeouts and budgets are per-tenant [Defaults](../organization/defaults.md)) is recorded in [ADR-0008](../adr/0008-agent-model-owned-by-agent-config.md). OpenCode's built-in `build` agent is disabled and `plan` (read-only) is kept, so app-builder is the only build-capable agent.
+app-builder runs on **GPT-5.5** with OpenCode's **high** model variant, set as `model` and `variant` in `agents.json`. The model is mirrored as the baked default in `opencode.json`, the provider policy pins high reasoning effort, and the pod init/update paths inject the agent-specific variant into each workspace's OpenCode config. The model is a property of the agent profile, uniform across every tenant and project — **not** a tunable default; changing it is a code/config rollout. That deliberate asymmetry (the model lives with the agent, while timeouts and budgets are per-tenant [Defaults](../organization/defaults.md)) is recorded in [ADR-0008](../adr/0008-agent-model-owned-by-agent-config.md). OpenCode's built-in `build` agent is disabled and `plan` (read-only) is kept, so app-builder is the only build-capable agent.
 
 ## Skills
 
