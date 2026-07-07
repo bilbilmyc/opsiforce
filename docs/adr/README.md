@@ -24,3 +24,4 @@ Format: Title / Status / Context + Decision / Considered options / Consequences.
 | [0016](0016-app-details-are-per-environment.md) | App Details are per-environment; each `ProjectEnvironment` is its own App | implemented (migration 0047) → [project-apps.md](../projects/project-apps.md) |
 | [0017](0017-project-export-is-a-faithful-full-workspace-zip.md) | A Project export is a faithful full-workspace zip, not a sanitized or rebuilt bundle | design — not yet implemented → [export-import.md](../projects/export-import.md) |
 | [0018](0018-standalone-llm-access-via-codex-proxy.md) | standalone local LLM runs through a host Codex-subscription proxy (BYO-key alternative) | implemented → [Quickstart](../quickstart.md) |
+| [0019](0019-agent-status-pushed-and-resynced-not-heartbeated.md) | Agent Status is pushed from the pod and re-synced at boundaries — no heartbeat, no persistence | implemented (self-healing) → [agent-status.md](../agents/agent-status.md) |

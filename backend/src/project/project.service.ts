@@ -146,6 +146,7 @@ import { ProjectAuthService } from './project-auth.service';
 import { ProjectEventsService } from './project-events.service';
 import { AppService } from './app.service';
 import { AppReadinessService } from './app-readiness.service';
+import { AgentStatusService } from './agent-status.service';
 import {
   ACTIVE_DUPLICATE_STATUSES,
   PROJECT_DUPLICATE_QUEUE,
@@ -232,6 +233,7 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly projectEventsService: ProjectEventsService,
     private readonly appService: AppService,
     private readonly appReadiness: AppReadinessService,
+    private readonly agentStatusService: AgentStatusService,
     private readonly agentService: AgentService,
     private readonly environmentService: EnvironmentService,
     private readonly gitService: GitService,
@@ -699,8 +701,9 @@ export class ProjectService implements OnApplicationBootstrap {
 
   async findAllForUser(params: { tenantId: string; userId: string }): Promise<ProjectResponse[]> {
     const { tenantId, userId } = params;
+    const visible = this.visibleToUser(tenantId, userId);
 
-    return db
+    const rows = (await db
       .select(projectSelectFields)
       .from(projects)
       .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
@@ -708,17 +711,36 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
       .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
-      .leftJoin(
-        workspaceMembers,
-        and(eq(workspaceMembers.workspaceId, projects.workspaceId), eq(workspaceMembers.userId, userId))
-      )
-      .where(
-        and(
-          eq(projects.tenantId, tenantId),
-          or(isNull(projects.workspaceId), sql`${workspaceMembers.workspaceId} is not null`)
-        )
-      )
-      .orderBy(...projectOrderBy()) as Promise<ProjectResponse[]>;
+      .leftJoin(workspaceMembers, visible.memberJoin)
+      .where(visible.where)
+      .orderBy(...projectOrderBy())) as ProjectResponse[];
+
+    for (const row of rows) {
+      row.agentStatus = this.agentStatusService.statusOf(row.id);
+    }
+    return rows;
+  }
+
+  async findVisibleProjectIds(params: { tenantId: string; userId: string }): Promise<string[]> {
+    const { tenantId, userId } = params;
+    const visible = this.visibleToUser(tenantId, userId);
+
+    const rows = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .leftJoin(workspaceMembers, visible.memberJoin)
+      .where(visible.where);
+    return rows.map((row) => row.id);
+  }
+
+  private visibleToUser(tenantId: string, userId: string): { memberJoin: SQL; where: SQL } {
+    return {
+      memberJoin: and(eq(workspaceMembers.workspaceId, projects.workspaceId), eq(workspaceMembers.userId, userId))!,
+      where: and(
+        eq(projects.tenantId, tenantId),
+        or(isNull(projects.workspaceId), sql`${workspaceMembers.workspaceId} is not null`)
+      )!,
+    };
   }
 
   async findAllInWorkspace(tenantId: string, workspaceId: string): Promise<ProjectResponse[]> {
@@ -1079,7 +1101,10 @@ export class ProjectService implements OnApplicationBootstrap {
       ...envs.map((env) => this.timeoutService.clear(env.id)),
     ]);
 
-    envs.forEach((env) => this.appReadiness.clear(env.id));
+    envs.forEach((env) => {
+      this.appReadiness.clear(env.id);
+      this.agentStatusService.clear(id, env.id);
+    });
 
     await db.delete(projects).where(eq(projects.id, id));
 
@@ -1118,7 +1143,10 @@ export class ProjectService implements OnApplicationBootstrap {
         .where(eq(projectEnvironments.projectId, id));
     });
 
-    envs.forEach((env) => this.appReadiness.markDown(env.id));
+    envs.forEach((env) => {
+      this.appReadiness.markDown(env.id);
+      this.agentStatusService.clear(id, env.id);
+    });
 
     await this.projectEventsService.publish(id);
 
@@ -1188,6 +1216,7 @@ export class ProjectService implements OnApplicationBootstrap {
     ]);
 
     this.appReadiness.clear(env.id);
+    this.agentStatusService.clear(projectId, env.id);
 
     await this.projectEnvironmentService.delete({
       id: env.id,
@@ -1339,6 +1368,7 @@ export class ProjectService implements OnApplicationBootstrap {
       ]
     );
     if (updated) {
+      this.agentStatusService.clear(updated.projectId, envId);
       await this.projectEventsService.publish(updated.projectId).catch(() => undefined);
     }
   }
@@ -1375,6 +1405,7 @@ export class ProjectService implements OnApplicationBootstrap {
       ProjectStatus.Publishing
     );
     if (updated) {
+      this.agentStatusService.clear(updated.projectId, envId);
       await this.projectEventsService.publish(updated.projectId).catch(() => undefined);
     }
   }
@@ -1916,6 +1947,8 @@ export class ProjectService implements OnApplicationBootstrap {
     env: ProjectEnvironmentContext,
     options: { deleteExistingPod: boolean }
   ): Promise<ProjectEnvironmentContext> {
+    this.agentStatusService.clear(env.projectId, env.id);
+
     if (env.status === ProjectStatus.Starting) {
       if (options.deleteExistingPod) {
         const podName = this.podService.assignedPodName(env.id);
@@ -2101,6 +2134,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (isPermanentFailure) {
       this.startupRetries.delete(envId);
+      this.agentStatusService.clear(projectId, envId);
       await this.projectEnvironmentService.patch(
         envId,
         { status: ProjectStatus.Failed, podIp: null },

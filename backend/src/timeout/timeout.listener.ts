@@ -8,6 +8,7 @@ import { TimeoutService } from './timeout.service';
 import { PodService } from '../pod/pod.service';
 import { ProjectEventsService } from '../project/project-events.service';
 import { AppReadinessService } from '../project/app-readiness.service';
+import { AgentStatusService } from '../project/agent-status.service';
 
 @Injectable()
 export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
@@ -19,7 +20,8 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
     private readonly timeoutService: TimeoutService,
     private readonly podService: PodService,
     private readonly projectEventsService: ProjectEventsService,
-    private readonly appReadiness: AppReadinessService
+    private readonly appReadiness: AppReadinessService,
+    private readonly agentStatusService: AgentStatusService
   ) {}
 
   async onModuleInit() {
@@ -86,6 +88,7 @@ export class TimeoutListener implements OnModuleInit, OnModuleDestroy {
     });
 
     this.appReadiness.markDown(envId);
+    this.agentStatusService.clear(updated.projectId, envId);
 
     this.logger.log(`Environment ${envId} suspended due to idle timeout`);
     await this.projectEventsService.publish(updated.projectId);
