@@ -63,17 +63,17 @@ Every other path to a pod is the same on-demand reconciliation, driven by `Proje
 
 `ensureEnvironment` dispatches on status into `wakeSuspendedEnvironment`, `handleStartingEnvironment`, `verifyActiveEnvironment`, and the active fast path; `runStartupWorker` performs the claim-or-create-pod / wait-for-ready cycle asynchronously and flips the status to `active` on success. Readiness waits on informer events (polling only when the informer is unavailable), checking `conditions[Ready]` + `podIP`, and fast-fails on `ImagePullBackOff`/`ErrImagePill` because recreating the pod can't fix a broken image.
 
-## Recovery is lazy and self-healing
+## Recovery is event-driven and self-healing
 
-There is no separate reconciler. The next request *is* the recovery:
+There is no polling reconciler. Recovery reacts to events — a pod delete event, a backend boot, a failed request:
 
-- **External pod deletion** (kubectl, eviction, node drain, OOMKill, scale-to-zero) — the proxy's upstream call fails, it reports `/failure`, the backend sees the pod gone, flips the environment to `starting`, and a new pod with the same deterministic name and `subPath` comes up against the persisted workspace. Same code path for every cause.
+- **External pod deletion** (kubectl, eviction, node drain, OOMKill) — a global subscription to the pod informer's delete events resolves the environment from the deleted pod's `opsiforce.io/environment-id` label and, for an enabled `active` environment with live Keep-alive timers whose pod is confirmed gone, flips it to `starting` and spawns the normal startup worker ([ADR-0019](../adr/0019-externally-deleted-pods-recreated-eagerly.md)). The pod is back within seconds, with no user traffic. Self-inflicted deletions (suspend, restart, publish, disable) no-op structurally: every internal flow moves the row out of `active` — or, for disable, commits the project-level flag — before deleting the pod, and the conditional flip requires `active` *and* an enabled project atomically, so it matches zero rows — no allow-list of "our own" deletions exists. The watcher is best-effort: deletions missed during an informer reconnect gap are caught by the boot sweep below or, ultimately, by the lazy path — the proxy's upstream call fails, it reports `/failure`, the backend sees the pod gone and flips the environment to `starting`. Every cause funnels into the same startup worker, and the new pod with the same deterministic name and `subPath` comes up against the persisted workspace.
 - **Backend crash mid-startup** — leaves the environment `starting` with a partially-created or already-Ready pod. The next access reads K8s and either flips to `active` (pod became Ready while no worker watched) or spawns a fresh worker (pod never got created). No boot-time recovery state machine is needed.
 - **Timeout listener vs. in-flight startup** — when an idle TTL expires at the same moment a user returns, both race for the row. The listener's `UPDATE … WHERE status='active'` affects zero rows if a startup already moved the row to `starting`, so it exits without touching Kubernetes.
 - **CrashLoopBackOff** — given 60s (K8s `restartPolicy: Always` may recover a transient crash); past that, the pod is deleted so a fresh one is created. No "give up" counter — an operator disables the project if it's unrecoverable.
 - **ImagePullBackOff** — terminal: the environment moves to `failed` with a retry action, instead of an endless spinner.
 
-A short boot pass complements this: orphaned agent pods (whose `opsiforce.io/project-id` label has no matching row) are deleted, and environments stranded in `starting` get workers resumed. Everything else waits for traffic.
+A short boot pass complements this: orphaned agent pods (whose `opsiforce.io/project-id` label has no matching row) are deleted, environments stranded in `starting` get workers resumed, and `active` environments whose pod is gone are flipped back to `starting` and recreated without waiting for traffic ([ADR-0019](../adr/0019-externally-deleted-pods-recreated-eagerly.md) — the repair for pods deleted while the backend was down; the delete-event watcher above covers deletions while it runs). Both ADR-0019 repairs are deliberately conservative: only a confirmed absence counts — an explicit K8s 404, or a pod already carrying a deletion timestamp; any other API outcome skips the environment, so a control-plane blip can never mass-flip the fleet. Recovery reads the Keep-alive timers but never refreshes them — environments past both TTLs are left to the expired-timer suspension sweep, and a recovered environment keeps its original suspension schedule.
 
 ## Suspension
 
@@ -82,7 +82,7 @@ Idle suspension is event-driven through Redis keyspace notifications. Each envir
 ## Trade-offs accepted
 
 - **Slightly more K8s reads during startup** — each access to a `starting` environment may trigger one `readNamespacedPod`; the informer cache and the proxy's short TTL keep this near zero at steady state.
-- **Active-project reconciliation stays lazy** — a stale `active` row self-heals on the next request, not proactively. Operators who must force it use the restart endpoint.
+- **Recovery is event-driven, not polled** — externally deleted pods are recreated eagerly (boot sweep + delete-event watcher, [ADR-0019](../adr/0019-externally-deleted-pods-recreated-eagerly.md)), but there is no interval reconciler: a deletion missed during an informer reconnect gap waits for the next boot or the next request. Accepted because the watcher plus boot sweep cover how fleets actually fail, and a polling loop would add bounded-staleness machinery for no additional coverage.
 - **Assumes K8s is reliable** — the system does not engineer around K8s API outages; ensure calls return 5xx and the frontend retries. These outages are rare and self-recovering, and not the failure mode customers hit.
 
 ## See also
