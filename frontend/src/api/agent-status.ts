@@ -1,5 +1,6 @@
 import { createEffect, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { createTenantState } from '~/lib/tenant-state';
 import type { AgentStatus, Project } from './client';
 
 interface AgentStatusEvent {
@@ -14,28 +15,30 @@ export function isAgentWorking(projectId: string): boolean {
 }
 
 export function useAgentStatusStream(projects: () => Project[] | undefined): void {
-  createEffect(() => {
-    for (const project of projects() ?? []) {
-      if (!(project.id in agentStatuses)) {
-        setAgentStatuses(project.id, project.agentStatus ?? 'idle');
-      }
-    }
-  });
+  const [tenant] = createTenantState();
 
-  const events = new EventSource(agentStatusEventsUrl());
-  events.addEventListener('message', (event) => {
-    try {
-      const { projectId, agentStatus } = JSON.parse(event.data) as AgentStatusEvent;
-      setAgentStatuses(projectId, agentStatus);
-    } catch {
+  createEffect(() => {
+    const tenantName = tenant();
+    const currentProjects = projects() ?? [];
+    setAgentStatuses({});
+    for (const project of currentProjects) {
+      setAgentStatuses(project.id, project.agentStatus ?? 'idle');
     }
+
+    const events = new EventSource(agentStatusEventsUrl(tenantName));
+    events.addEventListener('message', (event) => {
+      try {
+        const { projectId, agentStatus } = JSON.parse(event.data) as AgentStatusEvent;
+        setAgentStatuses(projectId, agentStatus);
+      } catch {
+      }
+    });
+    onCleanup(() => events.close());
   });
-  onCleanup(() => events.close());
 }
 
-function agentStatusEventsUrl(): string {
+function agentStatusEventsUrl(tenant: string): string {
   const params = new URLSearchParams();
-  const tenant = localStorage.getItem('tenant');
   if (tenant) params.set('tenant', tenant);
   const query = params.toString();
   return `/api/agent-status/events${query ? `?${query}` : ''}`;

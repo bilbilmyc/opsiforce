@@ -121,7 +121,9 @@ func (w *statusWatcher) stream() {
 	if !w.snapshot() {
 		return
 	}
-	w.sync(true)
+	if !w.sync(true) {
+		return
+	}
 
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -135,7 +137,9 @@ func (w *statusWatcher) stream() {
 			continue
 		}
 		if w.applyEvent(data) {
-			w.sync(false)
+			if !w.sync(false) {
+				return
+			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
@@ -168,22 +172,23 @@ func (w *statusWatcher) applyEvent(data string) bool {
 	return true
 }
 
-func (w *statusWatcher) sync(boundary bool) {
+func (w *statusWatcher) sync(boundary bool) bool {
 	working := len(w.sessions) > 0
 	if !boundary {
 		if w.hasPushed && working == w.last {
-			return
+			return true
 		}
 		if !w.hasPushed && !working {
-			return
+			return true
 		}
 	}
 	if !w.pushStatus(working) {
 		w.hasPushed = false
-		return
+		return false
 	}
 	w.hasPushed = true
 	w.last = working
+	return true
 }
 
 func (w *statusWatcher) pushStatus(working bool) bool {
