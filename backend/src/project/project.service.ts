@@ -1671,11 +1671,17 @@ export class ProjectService implements OnApplicationBootstrap {
       }
     }
 
-    const updated = await this.projectEnvironmentService.patch(
-      envId,
-      { status: ProjectStatus.Active, podIp, lastActiveAt: new Date() },
-      ProjectStatus.Starting
-    );
+    const [updated] = await db
+      .update(projectEnvironments)
+      .set({ status: ProjectStatus.Active, podIp, lastActiveAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(projectEnvironments.id, envId),
+          eq(projectEnvironments.status, ProjectStatus.Starting),
+          sql`exists (select 1 from ${projects} where ${projects.id} = ${projectEnvironments.projectId} and ${projects.disabled} = false)`
+        )
+      )
+      .returning({ projectId: projectEnvironments.projectId, isDefault: projectEnvironments.isDefault });
 
     if (!updated) {
       this.startupRetries.delete(envId);
@@ -2072,6 +2078,16 @@ export class ProjectService implements OnApplicationBootstrap {
     const current = await this.projectEnvironmentService.findByIdOrNull(envId).catch(() => null);
     if (!current || current.status !== ProjectStatus.Starting) {
       this.recoveryStartups.delete(envId);
+      return;
+    }
+    if (current.disabled) {
+      this.recoveryStartups.delete(envId);
+      this.startupRetries.delete(envId);
+      await this.projectEnvironmentService.patch(
+        envId,
+        { status: ProjectStatus.Suspended, podIp: null },
+        ProjectStatus.Starting
+      );
       return;
     }
     if (current.isDefault && (await this.hasBlockingDuplicateOperation(current.projectId))) {
