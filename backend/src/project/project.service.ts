@@ -2223,6 +2223,22 @@ export class ProjectService implements OnApplicationBootstrap {
       return;
     }
 
+    if (this.recoveryStartups.has(envId) && (await this.timeoutService.isFullyExpired(envId).catch(() => false))) {
+      const suspended = await this.projectEnvironmentService.patch(
+        envId,
+        { status: ProjectStatus.Suspended, podIp: null },
+        ProjectStatus.Starting
+      );
+      if (suspended) {
+        this.recoveryStartups.delete(envId);
+        this.startupRetries.delete(envId);
+        this.appReadiness.markDown(envId);
+        this.logger.log(`Environment ${envId} suspended after recovery: Keep-alive timers expired during startup`);
+        await this.projectEventsService.publish(suspended.projectId).catch(() => {});
+        return;
+      }
+    }
+
     const attempts = (this.startupRetries.get(envId) ?? 0) + 1;
     this.startupRetries.set(envId, attempts);
     const delay = Math.min(STARTUP_RETRY_BASE_MS * Math.pow(2, attempts - 1), STARTUP_RETRY_MAX_MS);
