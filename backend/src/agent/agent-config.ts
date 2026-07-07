@@ -8,6 +8,7 @@ export interface AgentRegistryEntry {
   port?: number;
   version?: string;
   model?: string;
+  variant?: string;
   poolSize?: number;
 }
 
@@ -15,10 +16,15 @@ export interface AgentRegistry {
   agents: Record<string, AgentRegistryEntry>;
 }
 
+export interface AgentModelSelection {
+  model: string;
+  variant?: string;
+}
+
 export interface AgentRuntimeConfig {
   poolSizes: Map<string, number>;
   versions: Map<string, string>;
-  models: Map<string, string>;
+  modelSelections: Map<string, AgentModelSelection>;
 }
 
 function readPublicRegistry(): AgentRegistry {
@@ -52,7 +58,7 @@ export function readMergedAgentRegistry(privateFragment?: AgentRegistry): AgentR
 export function readAgentConfig(): AgentRuntimeConfig {
   const poolSizes = new Map<string, number>();
   const versions = new Map<string, string>();
-  const models = new Map<string, string>();
+  const modelSelections = new Map<string, AgentModelSelection>();
   for (const [slug, conf] of Object.entries(readMergedAgentRegistry().agents)) {
     const poolSize = typeof conf.poolSize === 'number' && conf.poolSize > 0 ? conf.poolSize : 0;
     poolSizes.set(slug, poolSize);
@@ -60,8 +66,11 @@ export function readAgentConfig(): AgentRuntimeConfig {
       versions.set(slug, conf.version);
     }
     if (typeof conf.model === 'string' && conf.model.length > 0) {
-      models.set(slug, conf.model);
+      modelSelections.set(slug, {
+        model: conf.model,
+        ...(typeof conf.variant === 'string' && conf.variant.length > 0 ? { variant: conf.variant } : {}),
+      });
     }
   }
-  return { poolSizes, versions, models };
+  return { poolSizes, versions, modelSelections };
 }

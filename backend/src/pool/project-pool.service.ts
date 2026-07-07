@@ -25,7 +25,7 @@ import { GatewayKeyService } from '../gateway/gateway-key.service';
 import { DefaultsService } from '../defaults/defaults.service';
 import { TimeoutService } from '../timeout/timeout.service';
 import { EnvironmentService } from '../environment/environment.service';
-import { readAgentConfig } from '../agent/agent-config';
+import { readAgentConfig, type AgentModelSelection } from '../agent/agent-config';
 import {
   PROJECT_POOL_QUEUE,
   PROJECT_POOL_TEARDOWN_QUEUE,
@@ -69,7 +69,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
   private readonly poolSizeOverride: number | null;
   private readonly agentTargetByName: Map<string, number>;
   private readonly agentVersionByName: Map<string, string>;
-  private readonly agentModelByName: Map<string, string>;
+  private readonly agentModelSelectionByName: Map<string, AgentModelSelection>;
   private readonly agentIdToName = new Map<string, string>();
   private readonly agentNameToId = new Map<string, string>();
   private integrityTimer: NodeJS.Timeout | null = null;
@@ -95,7 +95,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
     const agentConfig = readAgentConfig();
     this.agentTargetByName = agentConfig.poolSizes;
     this.agentVersionByName = agentConfig.versions;
-    this.agentModelByName = agentConfig.models;
+    this.agentModelSelectionByName = agentConfig.modelSelections;
   }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -537,7 +537,6 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       await this.podService.createAssignedPod(id, directory, id, {
         ...bifrostOptions,
         agentName,
-        agentModel: this.agentModelByName.get(agentName),
         gatewayApiKey: gatewayApiKey ?? undefined,
         gatewayUrl: this.gatewayUrl,
         controlToken: crypto.randomBytes(32).toString('hex'),
@@ -815,8 +814,8 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
 
   private async workspaceAtTarget(directory: string, agentName: string): Promise<boolean> {
     const targetVersion = this.agentVersionByName.get(agentName);
-    const targetModel = this.agentModelByName.get(agentName);
-    if (!targetVersion && !targetModel) return true;
+    const modelSelection = this.agentModelSelectionByName.get(agentName);
+    if (!targetVersion && !modelSelection) return true;
     if (targetVersion) {
       const ledgerPath = join(this.storageMountPath, directory, '.opsiforce', 'agents', `${agentName}.json`);
       try {
@@ -827,11 +826,17 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       }
     }
 
-    if (!targetModel) return true;
+    if (!modelSelection) return true;
     const configPath = join(this.storageMountPath, directory, '.xdg', 'config', 'opencode', 'opencode.json');
     try {
-      const config = JSON.parse(await readFile(configPath, 'utf8')) as { model?: string };
-      return config.model === targetModel;
+      const config = JSON.parse(await readFile(configPath, 'utf8')) as {
+        model?: string;
+        agent?: Record<string, { model?: string; variant?: string } | undefined>;
+      };
+      const agent = config.agent?.[agentName];
+      if (config.model !== modelSelection.model || agent?.model !== modelSelection.model) return false;
+      if (modelSelection.variant && agent?.variant !== modelSelection.variant) return false;
+      return true;
     } catch {
       return false;
     }
