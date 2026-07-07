@@ -29,7 +29,6 @@ export interface PodTemplateOptions {
   bifrostBackendApiKey?: string;
   gatewayApiKey?: string;
   gatewayUrl?: string;
-  agentModel?: string;
   controlToken?: string;
   controlPort?: number;
 }
@@ -81,14 +80,8 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             '-c',
             'set -e; ' +
               `AGENT="\${AGENT_NAME:-app-builder}"; ` +
-              'mkdir -p /workspace/.xdg/config/opencode /workspace/.xdg/code-server /workspace/.opencode/agents; ' +
-              'cp /opt/opencode/opencode.json /workspace/.xdg/config/opencode/opencode.json; ' +
-              (options.agentModel
-                ? `sed -i 's|"model": "[^"]*"|"model": "${options.agentModel}"|' /workspace/.xdg/config/opencode/opencode.json; `
-                : '') +
-              'cp /opt/agents/$AGENT/agent.md /workspace/.opencode/agents/$AGENT.md; ' +
-              'rm -rf /workspace/.opencode/skills; ' +
-              'if [ -d /opt/agents/$AGENT/skills ]; then cp -a /opt/agents/$AGENT/skills /workspace/.opencode/skills; fi; ' +
+              'mkdir -p /workspace/.xdg/code-server; ' +
+              'AGENT_NAME=$AGENT WORKSPACE=/workspace agent-workspace-migrate --sync-agent-files; ' +
               'if [ ! -d /workspace/app ]; then ' +
               'cp -a /opt/agents/$AGENT/template/. /workspace/; ' +
               "cd /workspace && printf '.config/\\n.cache/\\n.bun/\\n.opencode/\\n.opsiforce/\\n.xdg/\\nnode_modules/\\ndata/\\n**/.yarn/cache\\n**/.yarn/unplugged\\n**/.yarn/build-state.yml\\n**/.yarn/install-state.gz\\n**/.yarn/sdks\\n**/.pnp.*\\n' > .gitignore && " +

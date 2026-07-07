@@ -46,7 +46,6 @@ import { DefaultsService } from '../defaults/defaults.service';
 import { GatewayKeyService } from '../gateway/gateway-key.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { AgentService } from '../agent/agent.service';
-import { readAgentConfig } from '../agent/agent-config';
 import { EnvironmentService } from '../environment/environment.service';
 import { GitService } from '../git/git.service';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
@@ -215,8 +214,6 @@ export class ProjectService implements OnApplicationBootstrap {
   private readonly startupTasks = new Map<string, Promise<void>>();
   private readonly startupRetries = new Map<string, number>();
   private readonly recreateRequests = new Set<string>();
-  private readonly agentModelByName: Map<string, string>;
-
   constructor(
     private readonly podService: PodService,
     private readonly projectPoolService: ProjectPoolService,
@@ -239,9 +236,7 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly proxyService: ProxyService,
     @InjectQueue(PROJECT_DUPLICATE_QUEUE)
     private readonly duplicateQueue: Queue<ProjectDuplicateJobData>
-  ) {
-    this.agentModelByName = readAgentConfig().models;
-  }
+  ) {}
 
   async onApplicationBootstrap() {
     await this.cleanupOrphanedAssignedPods().catch((err) => {
@@ -2055,7 +2050,6 @@ export class ProjectService implements OnApplicationBootstrap {
     const tenantOptions = {
       ...bifrostOptions,
       agentName,
-      agentModel: this.agentModelByName.get(agentName),
       gatewayApiKey: gatewayApiKey ?? undefined,
       gatewayUrl: this.configService.get<string>('gatewayUrl', ''),
       opsiforceEnv: env.isDefault ? undefined : 'production',

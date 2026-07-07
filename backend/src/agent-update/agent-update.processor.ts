@@ -105,7 +105,6 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
         directory: project.directory,
         agentName: data.agentName,
         targetVersion: data.targetVersion,
-        agentModel: this.agentUpdateService.agentModel(data.agentName),
       });
       const summary = await this.readSummary(project.directory, data.agentName, result.logs);
       await this.recordOutcome(updateId, summary, result.succeeded);
@@ -138,9 +137,13 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     if (!directory) return false;
     const ledger = await this.readLedger(directory, agentName);
     if (ledger?.agentVersion !== targetVersion) return false;
-    const targetModel = this.agentUpdateService.agentModel(agentName);
-    if (!targetModel) return true;
-    return (await this.readWorkspaceModel(directory)) === targetModel;
+    const modelSelection = this.agentUpdateService.agentModelSelection(agentName);
+    if (!modelSelection) return true;
+    const config = await this.readWorkspaceOpenCodeConfig(directory);
+    const agent = config?.agent?.[agentName];
+    if (config?.model !== modelSelection.model || agent?.model !== modelSelection.model) return false;
+    if (modelSelection.variant && agent?.variant !== modelSelection.variant) return false;
+    return true;
   }
 
   private async lastAppliedVersion(projectId: string, agentId: string): Promise<string | null> {
@@ -232,11 +235,16 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     }
   }
 
-  private async readWorkspaceModel(directory: string): Promise<string | null> {
+  private async readWorkspaceOpenCodeConfig(directory: string): Promise<{
+    model?: string;
+    agent?: Record<string, { model?: string; variant?: string } | undefined>;
+  } | null> {
     const configPath = path.join(this.storageMountPath, directory, '.xdg', 'config', 'opencode', 'opencode.json');
     try {
-      const config = JSON.parse(await readFile(configPath, 'utf8')) as { model?: string };
-      return typeof config.model === 'string' ? config.model : null;
+      return JSON.parse(await readFile(configPath, 'utf8')) as {
+        model?: string;
+        agent?: Record<string, { model?: string; variant?: string } | undefined>;
+      };
     } catch {
       return null;
     }
