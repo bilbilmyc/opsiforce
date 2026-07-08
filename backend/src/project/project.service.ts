@@ -173,6 +173,7 @@ const effectiveStatus = sql<ProjectStatus>`CASE WHEN ${projects.disabled} THEN '
 
 const pinnedApp = alias(projectApps, 'pinned_app');
 const projectEnvAll = alias(projectEnvironments, 'project_env_all');
+const projectAppEnv = alias(projectApps, 'project_app_env');
 
 const projectSelectFields = {
   id: projects.id,
@@ -203,7 +204,9 @@ const projectSelectFields = {
   appDescription: projectApps.description,
   environmentIds: sql<string[]>`(
     SELECT COALESCE(array_agg(DISTINCT ${projectEnvAll.environmentId}), '{}')
-    FROM ${projectEnvAll}
+    FROM ${projectEnvironments} AS ${projectEnvAll}
+    INNER JOIN ${projectApps} AS ${projectAppEnv}
+      ON ${projectAppEnv.projectEnvironmentId} = ${projectEnvAll.id}
     WHERE ${projectEnvAll.projectId} = ${projects.id}
       AND ${projectEnvAll.environmentId} IS NOT NULL
   )`.as('environment_ids'),
