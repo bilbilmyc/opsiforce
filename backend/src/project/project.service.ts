@@ -172,6 +172,7 @@ const projectOrderBy = () =>
 const effectiveStatus = sql<ProjectStatus>`CASE WHEN ${projects.disabled} THEN 'disabled' ELSE ${projectEnvironments.status} END`;
 
 const pinnedApp = alias(projectApps, 'pinned_app');
+const projectEnvAll = alias(projectEnvironments, 'project_env_all');
 
 const projectSelectFields = {
   id: projects.id,
@@ -185,8 +186,6 @@ const projectSelectFields = {
   directory: projectEnvironments.directory,
   status: effectiveStatus.as('status'),
   podIp: projectEnvironments.podIp,
-  sessionId: projectEnvironments.sessionId,
-  platformVersion: projectEnvironments.platformVersion,
   authMode: projectEnvironments.authMode,
   timeoutIdle: projectSettings.timeoutIdle,
   appTimeoutIdle: projectSettings.appTimeoutIdle,
@@ -198,12 +197,16 @@ const projectSelectFields = {
   memoryRequestMib: projectPodSettings.memoryRequestMib,
   memoryLimitMib: projectPodSettings.memoryLimitMib,
   isPinned: sql<boolean>`${pinnedApp.projectEnvironmentId} is not null`.as('is_pinned'),
-  pinnedAt: pinnedApp.pinnedAt,
   pinnedEnvironmentId: pinnedApp.projectEnvironmentId,
   hasApp: sql<boolean>`${projectApps.projectEnvironmentId} is not null`.as('has_app'),
   appName: projectApps.name,
   appDescription: projectApps.description,
-  lastActiveAt: projectEnvironments.lastActiveAt,
+  environmentIds: sql<string[]>`(
+    SELECT COALESCE(array_agg(DISTINCT ${projectEnvAll.environmentId}), '{}')
+    FROM ${projectEnvAll}
+    WHERE ${projectEnvAll.projectId} = ${projects.id}
+      AND ${projectEnvAll.environmentId} IS NOT NULL
+  )`.as('environment_ids'),
   createdAt: projects.createdAt,
   updatedAt: projects.updatedAt,
 };

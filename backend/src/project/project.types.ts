@@ -71,10 +71,7 @@ export interface ProjectResponse {
   directory: string;
   status: ProjectStatus;
   podIp: string | null;
-  sessionId: string | null;
-  platformVersion: string;
   authMode: ProjectAuthMode;
-  lastActiveAt: Date | null;
   timeoutIdle: number;
   appTimeoutIdle: number;
   timezone: string;
@@ -85,11 +82,11 @@ export interface ProjectResponse {
   memoryRequestMib: number;
   memoryLimitMib: number;
   isPinned: boolean;
-  pinnedAt: Date | null;
   pinnedEnvironmentId: string | null;
   hasApp: boolean;
   appName: string | null;
   appDescription: string | null;
+  environmentIds: string[];
   createdAt: Date;
   updatedAt: Date;
 }

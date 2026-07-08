@@ -25,3 +25,4 @@ Format: Title / Status / Context + Decision / Considered options / Consequences.
 | [0017](0017-project-export-is-a-faithful-full-workspace-zip.md) | A Project export is a faithful full-workspace zip, not a sanitized or rebuilt bundle | design — not yet implemented → [export-import.md](../projects/export-import.md) |
 | [0018](0018-standalone-llm-access-via-codex-proxy.md) | standalone local LLM runs through a host Codex-subscription proxy (BYO-key alternative) | implemented → [Quickstart](../quickstart.md) |
 | [0019](0019-sidebar-orders-by-last-prompt.md) | The project sidebar orders by a new `last_prompt_at` (user sends only), not keep-alive `last_active_at` | implemented (migration 0052) |
+| [0020](0020-environment-identity-color.md) | Environment identity color: a stored registry attribute, distinct from status color | implemented (migration 0053); builds on [0001](0001-environment-vs-project-environment.md) |

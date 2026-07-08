@@ -21,6 +21,21 @@ const NAME_MAX_LENGTH = 60;
 const DESCRIPTION_MAX_LENGTH = 500;
 const SLUG_MAX_LENGTH = 26;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
+
+const DEVELOPMENT_ENVIRONMENT_COLOR = '#3B82F6';
+const PRODUCTION_ENVIRONMENT_COLOR = '#22C55E';
+
+const DEFAULT_ENVIRONMENT_COLORS = [
+  '#F97316',
+  '#A855F7',
+  '#EC4899',
+  '#14B8A6',
+  '#EAB308',
+  '#EF4444',
+  '#6366F1',
+  '#06B6D4',
+];
 
 export function slugifyEnvironmentName(name: string): string {
   return name
@@ -64,6 +79,7 @@ export class EnvironmentService {
         name: DEVELOPMENT_ENVIRONMENT_NAME,
         slug: DEVELOPMENT_ENVIRONMENT_SLUG,
         description: 'Default working environment',
+        color: DEVELOPMENT_ENVIRONMENT_COLOR,
         isDefault: true,
         isProtected: true,
       })
@@ -92,6 +108,7 @@ export class EnvironmentService {
         name: PRODUCTION_ENVIRONMENT_NAME,
         slug: PRODUCTION_ENVIRONMENT_SLUG,
         description: 'Live environment for published apps',
+        color: PRODUCTION_ENVIRONMENT_COLOR,
         isDefault: false,
         isProtected: true,
       })
@@ -121,16 +138,18 @@ export class EnvironmentService {
     await this.assertNameAvailable(tenantId, name, null);
     await this.assertSlugAvailable(tenantId, slug);
 
+    const color = dto.color !== undefined ? this.validateColor(dto.color) : await this.nextDefaultColor(tenantId);
+
     const [created] = await db
       .insert(environments)
-      .values({ id: crypto.randomUUID(), tenantId, name, slug, description, isDefault: false })
+      .values({ id: crypto.randomUUID(), tenantId, name, slug, description, color, isDefault: false })
       .returning();
     return toResponse(created);
   }
 
   async update(tenantId: string, id: string, dto: UpdateEnvironmentDto): Promise<EnvironmentResponse> {
     const current = await this.findForTenant(tenantId, id);
-    if (current.isProtected) {
+    if (current.isProtected && (dto.name !== undefined || dto.description !== undefined)) {
       throw new BadRequestException(`The ${current.name} environment is protected and cannot be modified`);
     }
 
@@ -142,6 +161,7 @@ export class EnvironmentService {
       patch.name = name;
     }
     if (dto.description !== undefined) patch.description = this.validateDescription(dto.description);
+    if (dto.color !== undefined) patch.color = this.validateColor(dto.color);
 
     if (Object.keys(patch).length === 0) return toResponse(current);
 
@@ -210,6 +230,25 @@ export class EnvironmentService {
     return trimmed;
   }
 
+  private validateColor(value: unknown): string {
+    if (typeof value !== 'string') throw new BadRequestException("'color' must be a string");
+    const trimmed = value.trim();
+    if (!COLOR_PATTERN.test(trimmed)) {
+      throw new BadRequestException("'color' must be a hex color in the form #RRGGBB");
+    }
+    return trimmed;
+  }
+
+  private async nextDefaultColor(tenantId: string): Promise<string> {
+    const rows = await db
+      .select({ color: environments.color })
+      .from(environments)
+      .where(and(eq(environments.tenantId, tenantId), eq(environments.isProtected, false)));
+    const used = new Set(rows.map((row) => row.color));
+    const unused = DEFAULT_ENVIRONMENT_COLORS.find((color) => !used.has(color));
+    return unused ?? DEFAULT_ENVIRONMENT_COLORS[rows.length % DEFAULT_ENVIRONMENT_COLORS.length];
+  }
+
   private validateName(value: unknown): string {
     if (typeof value !== 'string') throw new BadRequestException("'name' must be a string");
     const trimmed = value.trim();
@@ -236,6 +275,7 @@ function toResponse(row: EnvironmentRow): EnvironmentResponse {
     name: row.name,
     slug: row.slug,
     description: row.description,
+    color: row.color,
     isDefault: row.isDefault,
     isProtected: row.isProtected,
     createdAt: row.createdAt,

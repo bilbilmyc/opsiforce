@@ -24,6 +24,10 @@ _Avoid_: Tier, Target, Deployment target
 The short, immutable, URL-safe identifier an Environment carries alongside its name, shown as the environment suffix in an App's public URL. Fixed for the protected Environments (`dev` for Development, `prod` for Production); for a custom Environment it is prefilled from the whole name at creation and editable that one time before saving (it must be unique within the tenant), then immutable — renames never change it, so published URLs outlive renames. The slug is an identifier, not user-facing copy, so the "avoid Prod" rule does not apply to it.
 _Avoid_: Suffix (its position in the URL, not the concept); Short name; Code
 
+**Environment Color**:
+The color an Organization gives an Environment as its visual identity — the one hue that stands for that Environment wherever environments are shown at a glance (today, the environment markers beside a Project in the sidebar). Every Environment has one: the protected Development and Production Environments are seeded with defaults, and any Environment's color — protected ones included — can be changed by an admin from the Environment registry in Settings. It answers *which* Environment this is, and is deliberately a different axis from the status colors that signal *how* a running environment is doing (active, starting, suspended, failed) — a suspended Production is still "Production" and keeps its color.
+_Avoid_: Status color (the orthogonal running-state axis, not identity); Label color; Theme; Tag
+
 **ProjectEnvironment**:
 A per-Project instance of an Environment — the thing that actually runs. It owns the runtime state (its files, pod, URLs, and service-gateway key); it shares the Project's LLM virtual keys rather than owning its own. Every Project has one bound to Development; publishing creates additional ones bound to other Environments.
 _Avoid_: Instance, Deployment, Env

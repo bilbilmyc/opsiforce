@@ -6,9 +6,10 @@ import { config } from '~/config/config';
 import { cn } from '~/lib/cn';
 import { projectDisplayTitle } from '~/lib/project-display';
 import PinBadge from './project/pin-badge';
+import { EnvironmentDots } from './project/environment-dots';
 import ProjectActionsMenu from './project-actions-menu';
 
-export default function ProjectCard(props: {
+export function ProjectCard(props: {
   project: Project;
   isActive: boolean;
   onSelect: () => void;
@@ -83,8 +84,13 @@ export default function ProjectCard(props: {
               </Show>
             </div>
           </Show>
-          <Show when={isDisabled() && !editing()}>
-            <span class="block text-xs text-sidebar-muted-foreground mt-0.5">Disabled</span>
+          <Show when={!editing()}>
+            <div class="flex items-center gap-1.5 mt-0.5">
+              <Show when={isDisabled()}>
+                <span class="text-xs text-sidebar-muted-foreground">Disabled</span>
+              </Show>
+              <EnvironmentDots environmentIds={props.project.environmentIds} dimmed={isDisabled()} />
+            </div>
           </Show>
         </div>
 

@@ -2,35 +2,40 @@ import { Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { Lock, Pencil, Trash2, X } from '~/components/icons';
 import { Button } from '~/components/ui/button';
-import { useUpdateEnvironment, type Environment } from '~/api/environments';
+import { ColorPicker } from '~/components/ui/color-picker';
+import { useUpdateEnvironment, type Environment, type UpdateEnvironmentDto } from '~/api/environments';
 
 export interface EnvironmentRowProps {
   environment: Environment;
   onRequestDelete: (environment: Environment) => void;
 }
 
-export default function EnvironmentRow(props: EnvironmentRowProps) {
+export function EnvironmentRow(props: EnvironmentRowProps) {
   const update = useUpdateEnvironment();
   const [editing, setEditing] = createSignal(false);
   const [name, setName] = createSignal('');
   const [description, setDescription] = createSignal('');
+  const [color, setColor] = createSignal('');
 
   const isLocked = () => props.environment.isProtected;
 
   const startEdit = () => {
     setName(props.environment.name);
     setDescription(props.environment.description ?? '');
+    setColor(props.environment.color);
     setEditing(true);
   };
 
   const save = async () => {
     const trimmed = name().trim();
-    if (!trimmed) return;
+    if (!isLocked() && !trimmed) return;
     try {
-      await update.mutateAsync({
-        id: props.environment.id,
-        dto: { name: trimmed, description: description().trim() },
-      });
+      const dto: UpdateEnvironmentDto = { color: color() };
+      if (!isLocked()) {
+        dto.name = trimmed;
+        dto.description = description().trim();
+      }
+      await update.mutateAsync({ id: props.environment.id, dto });
       toast.success('Environment updated');
       setEditing(false);
     } catch (err) {
@@ -46,6 +51,11 @@ export default function EnvironmentRow(props: EnvironmentRowProps) {
           <div class="flex items-start justify-between gap-2">
             <div class="min-w-0">
               <div class="flex items-center gap-1.5">
+                <span
+                  class="size-3.5 shrink-0 rounded-full border border-black/10"
+                  style={{ 'background-color': props.environment.color }}
+                  aria-hidden="true"
+                />
                 <span class="text-xs font-medium text-foreground">{props.environment.name}</span>
                 <span
                   class="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
@@ -64,17 +74,17 @@ export default function EnvironmentRow(props: EnvironmentRowProps) {
                 {(description) => <p class="mt-0.5 truncate text-xs text-muted-foreground">{description()}</p>}
               </Show>
             </div>
-            <Show when={!isLocked()}>
-              <div class="flex shrink-0 items-center gap-1">
-                <button
-                  type="button"
-                  onClick={startEdit}
-                  class="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  title="Edit"
-                  aria-label="Edit environment"
-                >
-                  <Pencil class="h-3 w-3" />
-                </button>
+            <div class="flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                onClick={startEdit}
+                class="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                title="Edit"
+                aria-label="Edit environment"
+              >
+                <Pencil class="h-3 w-3" />
+              </button>
+              <Show when={!isLocked()}>
                 <button
                   type="button"
                   onClick={() => props.onRequestDelete(props.environment)}
@@ -84,8 +94,8 @@ export default function EnvironmentRow(props: EnvironmentRowProps) {
                 >
                   <Trash2 class="h-3 w-3" />
                 </button>
-              </div>
-            </Show>
+              </Show>
+            </div>
           </div>
         }
       >
@@ -101,29 +111,42 @@ export default function EnvironmentRow(props: EnvironmentRowProps) {
               <X class="h-3.5 w-3.5" />
             </button>
           </div>
-          <input
-            type="text"
-            value={name()}
-            onInput={(e) => setName(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && name().trim()) save();
-            }}
-            class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            placeholder="Name"
-            autofocus
-          />
-          <input
-            type="text"
-            value={description()}
-            onInput={(e) => setDescription(e.currentTarget.value)}
-            class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            placeholder="Description (optional)"
-          />
+          <Show
+            when={!isLocked()}
+            fallback={
+              <p class="text-xs text-muted-foreground">
+                {props.environment.name} is protected — its name and slug are locked, but you can change its color.
+              </p>
+            }
+          >
+            <input
+              type="text"
+              value={name()}
+              onInput={(e) => setName(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && name().trim()) save();
+              }}
+              class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="Name"
+              autofocus
+            />
+            <input
+              type="text"
+              value={description()}
+              onInput={(e) => setDescription(e.currentTarget.value)}
+              class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="Description (optional)"
+            />
+          </Show>
+          <div class="space-y-1">
+            <span class="text-xs text-muted-foreground">Color</span>
+            <ColorPicker value={color()} onChange={setColor} />
+          </div>
           <div class="flex justify-end gap-2">
             <Button size="sm" variant="outline" onClick={() => setEditing(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={save} loading={update.isPending} disabled={!name().trim()}>
+            <Button size="sm" onClick={save} loading={update.isPending} disabled={!isLocked() && !name().trim()}>
               Save
             </Button>
           </div>
