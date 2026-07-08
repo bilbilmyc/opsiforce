@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -162,33 +161,7 @@ func pushState(client *http.Client, url, key string, state appState) bool {
 		log.Printf("app-reporter: marshal state failed: %v", err)
 		return false
 	}
-
-	for attempt := 1; attempt <= pushAttempts; attempt++ {
-		if attempt > 1 {
-			time.Sleep(pushBackoff * time.Duration(attempt-1))
-		}
-
-		req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
-		if err != nil {
-			log.Printf("app-reporter: build request failed: %v", err)
-			return false
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+key)
-
-		resp, err := client.Do(req)
-		if err != nil {
-			log.Printf("app-reporter: push attempt %d failed: %v", attempt, err)
-			continue
-		}
-		ok := resp.StatusCode >= 200 && resp.StatusCode < 300
-		resp.Body.Close()
-		if ok {
-			return true
-		}
-		log.Printf("app-reporter: push attempt %d returned status %d", attempt, resp.StatusCode)
-	}
-	return false
+	return pushJSON(client, url, key, "app-reporter", payload)
 }
 
 func watchMeta(nudge chan<- struct{}) {

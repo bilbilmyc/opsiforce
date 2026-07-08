@@ -4,6 +4,8 @@ import { BullBoardModule } from '@bull-board/nestjs';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ProjectController } from './project.controller';
 import { AppAgentController } from './app.controller.agent';
+import { AgentStatusController } from './agent-status.controller';
+import { AgentStatusStreamController } from './agent-status-stream.controller';
 import { PodClassController } from './pod-class.controller';
 import { DownloadController } from './download.controller';
 import { ProjectService } from './project.service';
@@ -17,6 +19,7 @@ import { ProjectImportProcessor } from './project-import.processor';
 import { ProjectEventsModule } from './project-events.module';
 import { AppService } from './app.service';
 import { AppReadinessModule } from './app-readiness.module';
+import { AgentStatusModule } from './agent-status.module';
 import { PROJECT_DUPLICATE_QUEUE } from './project-duplicate.types';
 import { PROJECT_IMPORT_QUEUE } from './project-import.types';
 import { PodModule } from '../pod/pod.module';
@@ -53,8 +56,17 @@ import { ProjectEnvironmentModule } from '../project-environment/project-environ
     ProjectEnvironmentModule,
     GitModule,
     AppReadinessModule,
+    AgentStatusModule,
   ],
-  controllers: [ProjectController, AppAgentController, PodClassController, DownloadController, ProjectImportController],
+  controllers: [
+    ProjectController,
+    AppAgentController,
+    AgentStatusController,
+    AgentStatusStreamController,
+    PodClassController,
+    DownloadController,
+    ProjectImportController,
+  ],
   providers: [
     ProjectService,
     ProjectAuthService,
