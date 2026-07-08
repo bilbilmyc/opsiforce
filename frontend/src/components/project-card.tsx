@@ -1,13 +1,11 @@
 import { Show, createSignal } from 'solid-js';
+import { isAgentWorking } from '~/api/agent-status';
 import type { Project } from '~/api/client';
-import { usePermissions } from '~/api/permissions';
-import { Permission } from '~/constants/permissions';
-import { config } from '~/config/config';
 import { cn } from '~/lib/cn';
 import { projectDisplayTitle } from '~/lib/project-display';
-import PinBadge from './project/pin-badge';
 import { EnvironmentDots } from './project/environment-dots';
 import ProjectActionsMenu from './project-actions-menu';
+import Spinner from '~/components/ui/spinner';
 
 export function ProjectCard(props: {
   project: Project;
@@ -17,8 +15,6 @@ export function ProjectCard(props: {
   onSettings?: () => void;
   onDeleted?: () => void;
 }) {
-  const { hasPermission } = usePermissions();
-  const canPinApps = () => hasPermission(Permission.pinApps) && config.catalogEnabled;
   const isDisabled = () => props.project.status === 'disabled';
 
   const [editing, setEditing] = createSignal(false);
@@ -71,6 +67,11 @@ export function ProjectCard(props: {
             }
           >
             <div class="flex items-center gap-1 min-w-0">
+              <Show when={isAgentWorking(props.project.id)}>
+                <span role="status" aria-label="Agent working" class="flex items-center shrink-0">
+                  <Spinner size="xs" />
+                </span>
+              </Show>
               <span
                 class={cn(
                   'block text-xs font-medium truncate leading-tight flex-1 min-w-0',
@@ -79,9 +80,6 @@ export function ProjectCard(props: {
               >
                 {title()}
               </span>
-              <Show when={canPinApps()}>
-                <PinBadge isPinned={props.project.isPinned} compact />
-              </Show>
             </div>
           </Show>
           <Show when={!editing()}>

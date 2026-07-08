@@ -24,7 +24,6 @@ import { DefaultsModule } from './defaults/defaults.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 import { AgentModule } from './agent/agent.module';
 import { AgentUpdateModule } from './agent-update/agent-update.module';
-import { InternalAppsModule } from './internal/apps.module';
 import { PRIVATE_MODULES } from './private-loader';
 import { ProjectPoolModule } from './pool/project-pool.module';
 import { EnvironmentModule } from './environment/environment.module';
@@ -76,7 +75,6 @@ function parseRedisUrl(url: string) {
     ScheduleModule,
     DefaultsModule,
     AgentUpdateModule,
-    InternalAppsModule,
     ...PRIVATE_MODULES,
     ProjectPoolModule,
     EnvironmentModule,

@@ -16,7 +16,6 @@ export const Permission = {
   importProject: 'can_import_project',
   manageWorkspaces: 'can_manage_workspaces',
   moveProjectsBetweenWorkspaces: 'can_move_projects_between_workspaces',
-  pinApps: 'can_pin_apps',
   editAppDetails: 'can_edit_app_details',
   manageEnvironments: 'can_manage_environments',
   manageEnvironmentVariables: 'can_manage_environment_variables',

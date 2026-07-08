@@ -45,11 +45,11 @@ The application the agent builds inside a ProjectEnvironment, served at that env
 _Avoid_: Project (when you mean the built application); "one App per Project" (retired — each ProjectEnvironment is its own App)
 
 **App Details**:
-An App's human-facing identity — its name and description — carried per ProjectEnvironment, since each environment is its own App. First published by the agent when that environment's App goes live, then re-curated by humans against whichever environment they are viewing; the running App reads its own name at runtime, and the catalog shows the pinned App's copy. A published App's Details begin as a copy of Development's at publish and evolve independently afterwards.
+An App's human-facing identity — its name and description — carried per ProjectEnvironment, since each environment is its own App. First published by the agent when that environment's App goes live, then re-curated by humans against whichever environment they are viewing; the running App reads its own name at runtime. A published App's Details begin as a copy of Development's at publish and evolve independently afterwards.
 _Avoid_: App metadata (vague); Project title (the Project shell's label — a different thing); project-level identity (retired — App Details belong to each App/environment, not the Project)
 
 **Go-live**:
-The moment an App first exists and is running in a ProjectEnvironment — for Development, when the agent finishes the first feature, it builds and boots, and the agent publishes App Details; for a published environment, when its freshly-deployed pod first serves. Go-live is decoupled from "done": it happens before the agent's feature testing, which follows with the App already live. Each environment goes live independently. Before its App goes live an environment has a pod but no App; that environment's app pane — and its catalog entry, if pinned — appears only once it happens.
+The moment an App first exists and is running in a ProjectEnvironment — for Development, when the agent finishes the first feature, it builds and boots, and the agent publishes App Details; for a published environment, when its freshly-deployed pod first serves. Go-live is decoupled from "done": it happens before the agent's feature testing, which follows with the App already live. Each environment goes live independently. Before its App goes live an environment has a pod but no App; that environment's app pane appears only once it happens.
 _Avoid_: Detection (the platform's inward-facing name for noticing the same moment); App ready, Launch; Deploy/Publish (which moves an already-live App between Environments)
 
 **Publish**:
@@ -57,7 +57,7 @@ The act of materializing or updating a non-Development ProjectEnvironment from t
 _Avoid_: Deploy, Release, Promote, Redeploy
 
 **Duplicate**:
-Creating a new Project in the same tenant and workspace from an existing one, preserving its working state in full — App source and history, the agent conversation, the App's databases, Environment Variables, settings, Resources, and App Details. The duplicate is independent: it gets its own keys, never inherits the source's Pin, and its Schedules arrive **paused** so no automation fires twice. Only the Development ProjectEnvironment is duplicated — published environments are re-created by publishing from the duplicate.
+Creating a new Project in the same tenant and workspace from an existing one, preserving its working state in full — App source and history, the agent conversation, the App's databases, Environment Variables, settings, Resources, and App Details. The duplicate is independent: it gets its own keys, and its Schedules arrive **paused** so no automation fires twice. Only the Development ProjectEnvironment is duplicated — published environments are re-created by publishing from the duplicate.
 _Avoid_: Copy, Clone, Fork (non-canonical); conflating with Publish (which transports App source only, never working state)
 
 **Export**:
@@ -92,10 +92,6 @@ _Avoid_: Project auth (it is not project-wide — each environment has its own);
 The chosen App Auth setting for one ProjectEnvironment — `public`, `manual`, or `managed` (the stored identifier is `auth_mode`).
 _Avoid_: Auth type, Auth provider
 
-**Pin (to catalog)**:
-Designating the one App — i.e. the one ProjectEnvironment — that represents the Project in the tenant's app catalog. A Project has **at most one pin**; pinning another environment's App moves it. Only a public-auth environment may be pinned. Distinct from Publish (which deploys an environment) — pinning merely exposes an already-running App in the catalog. The name and description the catalog shows are that pinned App's own App Details, not a shared project-level identity.
-_Avoid_: Publish, Share, Expose (non-canonical)
-
 **Resources**:
 The CPU/memory size of a Project's agent pod, chosen as a class — Small, Medium, Large, or Custom. A project-level policy: one choice applies to every one of the Project's ProjectEnvironment pods (Development and any published target alike).
 _Avoid_: Pod class (the internal identifier — never user-facing); Environment size (collides with Environment); Tier, Machine size, Compute (non-canonical — say Resources)
@@ -109,6 +105,10 @@ _Avoid_: Bot, Assistant (non-canonical)
 **Agent Model**:
 The LLM an Agent runs on. A platform-level property of the Agent profile, uniform across every tenant and Project — not a tenant- or project-configurable setting. Changing it is a platform rollout, not a default anyone tunes.
 _Avoid_: Default model (it is **not** a configurable default — Defaults covers timeouts and budgets only)
+
+**Agent Status**:
+Whether an Agent is **Working** — processing a run it was prompted to do, including any mid-run provider retries — or **Idle** (no run in flight; a suspended or absent pod is simply Idle, not a third state). Carried per ProjectEnvironment, since each environment has its own Agent; a Project counts as Working when any of its environments' Agents is, shown at-a-glance beside the project in the sidebar. Distinct from Keep-alive's *agent activity*, which is the user's traffic touching the pod — not the Agent thinking.
+_Avoid_: Agent activity (a Keep-alive kind — user-driven traffic, a different concept); Busy (the engine's wire value, not user-facing copy); Running (collides with pod lifecycle)
 
 **Prompt**:
 The single chat input a user composes and sends to the Agent — one turn's worth of instruction. Sending a Prompt is the canonical act of interacting with a Project's Agent, distinct from merely viewing or navigating the Project.

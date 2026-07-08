@@ -1,6 +1,6 @@
 # Environment identity color: a stored registry attribute, distinct from status color
 
-Status: accepted — implemented (migration 0053)
+Status: accepted — implemented (migration 0054)
 
 We give each tenant `Environment` (the registry row from [0001](0001-environment-vs-project-environment.md)) a stored **color** — a validated `#RRGGBB` hex — and render it as a small dot per environment beneath each Project's name in the sidebar, so the environments a Project runs in are legible at a glance. Color is a *stored* attribute of the `Environment`, not a value derived at render from the environment's name or id.
 

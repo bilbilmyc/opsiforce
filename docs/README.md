@@ -23,7 +23,7 @@
 - [Project Environments](projects/environments.md) — the Project/Environment/publish model ([ADRs](adr/README.md))
 - [Project Duplication](projects/duplication.md) — copy a project with working state ([ADR-0011](adr/0011-duplication-reuses-git-publish-path.md))
 - [Project Export & Import](projects/export-import.md) — carry a project to another deployment as a file ([ADR-0017](adr/0017-project-export-is-a-faithful-full-workspace-zip.md))
-- [Project Apps](projects/project-apps.md) — per-environment app identity, the catalog pin, editing ([ADR-0016](adr/0016-app-details-are-per-environment.md))
+- [Project Apps](projects/project-apps.md) — per-environment app identity and editing ([ADR-0016](adr/0016-app-details-are-per-environment.md))
 - [App Readiness](projects/app-readiness.md) — go-live/serving pushed from the pod, not polled ([ADR-0015](adr/0015-app-liveness-pushed-not-polled.md))
 - [Schedules](projects/schedules.md) — per-environment agent-requested cron, wake-on-fire
 - [File Downloads](projects/file-downloads.md) — downloading workspace files from chat
@@ -32,6 +32,7 @@
 **Agents** (`agents/`)
 - [Agents](agents/agent-system.md) — agent profiles, how they reach a workspace, the model ([ADR-0008](adr/0008-agent-model-owned-by-agent-config.md))
 - [Agent Updates](agents/agent-updates.md) — keeping persisted workspaces aligned with a newer profile
+- [Agent Status](agents/agent-status.md) — the Working/Idle signal behind the sidebar spinner, pushed from the pod ([ADR-0020](adr/0020-agent-status-pushed-and-resynced-not-heartbeated.md))
 
 **Gateways** (`gateways/`)
 - [LLM Gateway](gateways/llm-gateway.md) — Bifrost, per-project virtual keys, budget hierarchy ([ADR-0003](adr/0003-one-bifrost-team-per-project-keys-per-env.md))

@@ -13,6 +13,13 @@ export const ProjectStatus = {
 
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
 
+export const AgentStatus = {
+  Working: 'working',
+  Idle: 'idle',
+} as const;
+
+export type AgentStatus = (typeof AgentStatus)[keyof typeof AgentStatus];
+
 export const RequestLogMode = {
   Off: 'off',
   Metadata: 'metadata',
@@ -81,12 +88,11 @@ export interface ProjectResponse {
   cpuMillicores: number;
   memoryRequestMib: number;
   memoryLimitMib: number;
-  isPinned: boolean;
-  pinnedEnvironmentId: string | null;
   hasApp: boolean;
   appName: string | null;
   appDescription: string | null;
   environmentIds: string[];
+  agentStatus?: AgentStatus;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -110,7 +116,6 @@ export interface ProjectEnvironmentSummary {
   authMode: ProjectAuthMode;
   deployedCommitSha: string | null;
   lastActiveAt: Date | null;
-  isPinned: boolean;
   hasApp: boolean;
   appName: string | null;
   appDescription: string | null;
@@ -156,11 +161,6 @@ export interface UpdateProjectAuthDto {
   mode: ProjectAuthMode;
   config?: ProjectAuthOidcConfig;
   bypassAuthPaths?: string[];
-}
-
-export interface SetAppPinDto {
-  isPinned: boolean;
-  environmentId?: string;
 }
 
 export interface SetEnvironmentSessionDto {

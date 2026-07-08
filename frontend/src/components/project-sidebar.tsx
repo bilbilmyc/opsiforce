@@ -5,6 +5,7 @@ import { isSortable } from '@dnd-kit/solid/sortable';
 import { toast } from 'solid-sonner';
 import { type Project } from '~/api/client';
 import { usePermissions } from '~/api/permissions';
+import { useAgentStatusStream } from '~/api/agent-status';
 import { useCreateUnassignedProject, useProjects, useRenameProject } from '~/api/projects';
 import { PUBLIC_LABEL, useCreateProjectInWorkspace, useMoveProject, useWorkspaces } from '~/api/workspaces';
 import { useUpdateWorkspacePreferences } from '~/api/users';
@@ -47,6 +48,7 @@ export default function ProjectSidebar(props: { search: string }) {
   const [pendingMove, setPendingMove] = createSignal<PendingMove | null>(null);
 
   const projects = useProjects();
+  useAgentStatusStream(() => projects.data);
   const workspaces = useWorkspaces();
   const updatePrefs = useUpdateWorkspacePreferences();
   const createInWs = useCreateProjectInWorkspace();

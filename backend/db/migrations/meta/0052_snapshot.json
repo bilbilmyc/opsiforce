@@ -1,5 +1,5 @@
 {
-  "id": "ddfc6308-d262-4675-a4ae-ffbdf6b735e7",
+  "id": "af46d515-eaa6-49a6-b7ba-f52e38ff922f",
   "prevId": "34dfe227-f481-4b73-9a63-b8f55a919c20",
   "version": "7",
   "dialect": "postgresql",
@@ -734,25 +734,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "is_pinned": {
-          "name": "is_pinned",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "pinned_by_id": {
-          "name": "pinned_by_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pinned_at": {
-          "name": "pinned_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -783,43 +764,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "idx_project_app_pinned": {
-          "name": "idx_project_app_pinned",
-          "columns": [
-            {
-              "expression": "is_pinned",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "pinned_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "uq_project_app_one_pin_per_project": {
-          "name": "uq_project_app_one_pin_per_project",
-          "columns": [
-            {
-              "expression": "project_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"project_app\".\"is_pinned\"",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -847,19 +791,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "project_app_pinned_by_id_users_id_fk": {
-          "name": "project_app_pinned_by_id_users_id_fk",
-          "tableFrom": "project_app",
-          "tableTo": "users",
-          "columnsFrom": [
-            "pinned_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -2183,12 +2114,6 @@
         "bifrost_project_id": {
           "name": "bifrost_project_id",
           "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_prompt_at": {
-          "name": "last_prompt_at",
-          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },

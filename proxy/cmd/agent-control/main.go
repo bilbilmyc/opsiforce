@@ -23,6 +23,7 @@ var appGuardNames = []string{"app-backend", "app-frontend"}
 
 func main() {
 	go runReporter()
+	go runStatusWatcher()
 
 	token := os.Getenv("OPSIFORCE_CONTROL_TOKEN")
 	if token == "" {

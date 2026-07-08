@@ -369,15 +369,22 @@
     {
       "idx": 52,
       "version": "7",
-      "when": 1783512729778,
-      "tag": "0052_add-last-prompt-at-to-projects",
+      "when": 1783424069616,
+      "tag": "0052_drop-project-app-pin-columns",
       "breakpoints": true
     },
     {
       "idx": 53,
       "version": "7",
+      "when": 1783512729778,
+      "tag": "0053_add-last-prompt-at-to-projects",
+      "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
       "when": 1783520779825,
-      "tag": "0053_add-environment-color",
+      "tag": "0054_add-environment-color",
       "breakpoints": true
     }
   ]

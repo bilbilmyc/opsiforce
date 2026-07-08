@@ -5,7 +5,7 @@ import { useProjects } from '~/api/projects';
 import { Code as CodeIcon, Database, MessageSquare } from '~/components/icons';
 import { Tabs, TabsList, TabsTrigger } from '~/components/ui/tabs';
 import ProjectActionsMenu from '~/components/project-actions-menu';
-import EnvironmentsPopover from '~/components/project/environments/environments-popover';
+import { EnvironmentsPopover } from '~/components/project/environments/environments-popover';
 import type { ProjectStatus } from '~/api/client';
 import type { ProjectEnvironment } from '~/api/environments';
 

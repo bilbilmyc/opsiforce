@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
-import { config as appConfig } from '../config/config';
+import type { V1Pod } from '@kubernetes/client-node';
 import { eq, and, desc, asc, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Queue } from 'bullmq';
@@ -34,6 +34,7 @@ import {
   projectTransferJobs,
 } from '../../db/schema';
 import { PodService, PodStartupFailedError } from '../pod/pod.service';
+import { PodCacheService } from '../pod/pod.cache.service';
 import { ProxyService } from '../proxy/proxy.service';
 import { ProjectPoolService } from '../pool/project-pool.service';
 import { TimeoutService } from '../timeout/timeout.service';
@@ -102,6 +103,12 @@ interface AppMetaPatch {
   description?: string | null;
 }
 
+function environmentIdFromPodLabels(pod: V1Pod): string | null {
+  return (
+    pod.metadata?.labels?.['opsiforce.io/environment-id'] ?? pod.metadata?.labels?.['opsiforce.io/project-id'] ?? null
+  );
+}
+
 function validateUpdateAppDto(body: UpdateAppDto): AppMetaPatch {
   const patch: AppMetaPatch = {};
 
@@ -145,6 +152,7 @@ import { ProjectAuthService } from './project-auth.service';
 import { ProjectEventsService } from './project-events.service';
 import { AppService } from './app.service';
 import { AppReadinessService } from './app-readiness.service';
+import { AgentStatusService } from './agent-status.service';
 import {
   ACTIVE_DUPLICATE_STATUSES,
   PROJECT_DUPLICATE_QUEUE,
@@ -171,7 +179,6 @@ const projectOrderBy = () =>
 
 const effectiveStatus = sql<ProjectStatus>`CASE WHEN ${projects.disabled} THEN 'disabled' ELSE ${projectEnvironments.status} END`;
 
-const pinnedApp = alias(projectApps, 'pinned_app');
 const projectEnvAll = alias(projectEnvironments, 'project_env_all');
 const projectAppEnv = alias(projectApps, 'project_app_env');
 
@@ -197,8 +204,6 @@ const projectSelectFields = {
   cpuMillicores: projectPodSettings.cpuMillicores,
   memoryRequestMib: projectPodSettings.memoryRequestMib,
   memoryLimitMib: projectPodSettings.memoryLimitMib,
-  isPinned: sql<boolean>`${pinnedApp.projectEnvironmentId} is not null`.as('is_pinned'),
-  pinnedEnvironmentId: pinnedApp.projectEnvironmentId,
   hasApp: sql<boolean>`${projectApps.projectEnvironmentId} is not null`.as('has_app'),
   appName: projectApps.name,
   appDescription: projectApps.description,
@@ -220,8 +225,10 @@ export class ProjectService implements OnApplicationBootstrap {
   private readonly startupTasks = new Map<string, Promise<void>>();
   private readonly startupRetries = new Map<string, number>();
   private readonly recreateRequests = new Set<string>();
+  private readonly recoveryStartups = new Set<string>();
   constructor(
     private readonly podService: PodService,
+    private readonly podCache: PodCacheService,
     private readonly projectPoolService: ProjectPoolService,
     private readonly timeoutService: TimeoutService,
     private readonly configService: ConfigService,
@@ -235,6 +242,7 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly projectEventsService: ProjectEventsService,
     private readonly appService: AppService,
     private readonly appReadiness: AppReadinessService,
+    private readonly agentStatusService: AgentStatusService,
     private readonly agentService: AgentService,
     private readonly environmentService: EnvironmentService,
     private readonly gitService: GitService,
@@ -245,6 +253,7 @@ export class ProjectService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
+    this.podCache.onDelete((podName, pod) => this.handleAgentPodDeleteEvent(podName, pod));
     await this.cleanupOrphanedAssignedPods().catch((err) => {
       this.logger.warn(`Failed to clean up orphaned assigned pods: ${err.message}`);
     });
@@ -256,6 +265,9 @@ export class ProjectService implements OnApplicationBootstrap {
     });
     await this.resumeStartingEnvironments().catch((err) => {
       this.logger.warn(`Failed to resume starting environments: ${err.message}`);
+    });
+    await this.recoverActiveEnvironmentsMissingPods().catch((err) => {
+      this.logger.warn(`Failed to recover active environments with missing pods: ${err.message}`);
     });
   }
 
@@ -309,10 +321,7 @@ export class ProjectService implements OnApplicationBootstrap {
     const podRefs = agentPods
       .map((pod) => ({
         name: pod.metadata?.name ?? null,
-        envId:
-          pod.metadata?.labels?.['opsiforce.io/environment-id'] ??
-          pod.metadata?.labels?.['opsiforce.io/project-id'] ??
-          null,
+        envId: environmentIdFromPodLabels(pod),
       }))
       .filter((pod): pod is { name: string; envId: string } => !!pod.name && !!pod.envId);
 
@@ -344,6 +353,76 @@ export class ProjectService implements OnApplicationBootstrap {
         return this.safeDeletePod(pod.name, `orphaned environment ${pod.envId}`);
       })
     );
+  }
+
+  private async recoverActiveEnvironmentsMissingPods(): Promise<void> {
+    const activeEnvs = await this.projectEnvironmentService.listByStatus(ProjectStatus.Active);
+    const recovered: string[] = [];
+    for (const env of activeEnvs) {
+      try {
+        if (await this.recoverEnvironmentIfPodMissing(env)) recovered.push(env.id);
+      } catch (err) {
+        this.logger.warn(`Skipping recovery for environment ${env.id}: ${(err as Error).message}`);
+      }
+    }
+    if (recovered.length > 0) {
+      this.logger.log(
+        `Recovered ${recovered.length} active environment(s) whose pods were externally deleted: ${recovered.join(', ')}`
+      );
+    }
+  }
+
+  private handleAgentPodDeleteEvent(podName: string, pod: V1Pod): void {
+    const envId = environmentIdFromPodLabels(pod);
+    if (!envId) return;
+    void (async () => {
+      const env = await this.projectEnvironmentService.findByIdOrNull(envId);
+      if (!env) return;
+      if (await this.recoverEnvironmentIfPodMissing(env)) {
+        this.logger.log(`Delete event for pod ${podName}: recovery started for environment ${env.id}`);
+      }
+    })().catch((err) => {
+      this.logger.warn(`Failed to recover after delete event for pod ${podName}: ${(err as Error).message}`);
+    });
+  }
+
+  private async recoverEnvironmentIfPodMissing(env: ProjectEnvironmentContext): Promise<boolean> {
+    if (env.disabled || env.status !== ProjectStatus.Active) return false;
+    if (await this.timeoutService.isFullyExpired(env.id)) return false;
+
+    const podName = this.podService.assignedPodName(env.id);
+    let pod: V1Pod | null;
+    try {
+      pod = await this.readPodOrNull(podName);
+    } catch (err) {
+      this.logger.warn(
+        `Skipping recovery for environment ${env.id}: cannot confirm pod ${podName} is absent: ${(err as Error).message}`
+      );
+      return false;
+    }
+    if (pod && !pod.metadata?.deletionTimestamp) return false;
+
+    const [updated] = await db
+      .update(projectEnvironments)
+      .set({ status: ProjectStatus.Starting, podIp: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(projectEnvironments.id, env.id),
+          eq(projectEnvironments.status, ProjectStatus.Active),
+          sql`exists (select 1 from ${projects} where ${projects.id} = ${projectEnvironments.projectId} and ${projects.disabled} = false)`
+        )
+      )
+      .returning({ id: projectEnvironments.id });
+    if (!updated) return false;
+
+    this.logger.log(`Recovering environment ${env.id}: pod ${podName} gone while status was 'active'`);
+    this.appReadiness.markDown(env.id);
+    this.recoveryStartups.add(env.id);
+    this.spawnStartupWorker(env.id);
+    await this.projectEventsService.publish(env.projectId).catch((err) => {
+      this.logger.warn(`Failed to publish recovery event for environment ${env.id}: ${(err as Error).message}`);
+    });
+    return true;
   }
 
   async create(
@@ -537,18 +616,6 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId);
   }
 
-  /**
-   * Creates the empty shell of an imported project: fresh identity, rows, and
-   * freshly-minted keys — but no workspace files and no startup. The import
-   * processor unpacks the bundle into the project directory and then boots it.
-   * Mirrors a duplicate's target rows, minus the source copy. Auth resets to
-   * `public` and the new environment carries the target's platform-version.
-   *
-   * The manifest's database-row state (settings, App Details, paused schedules)
-   * is rehydrated here. Resources cross as a class and are re-resolved against
-   * the target's hardware; schedules arrive paused and re-stamped to the
-   * import-time timezone, so no automation fires unexpectedly.
-   */
   async createImportedProject(params: {
     tenantId: string;
     workspaceId: string | null;
@@ -700,26 +767,45 @@ export class ProjectService implements OnApplicationBootstrap {
 
   async findAllForUser(params: { tenantId: string; userId: string }): Promise<ProjectResponse[]> {
     const { tenantId, userId } = params;
+    const visible = this.visibleToUser(tenantId, userId);
 
-    return db
+    const rows = (await db
       .select(projectSelectFields)
       .from(projects)
       .innerJoin(projectEnvironments, eq(projectEnvironments.id, projects.id))
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
-      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
-      .leftJoin(
-        workspaceMembers,
-        and(eq(workspaceMembers.workspaceId, projects.workspaceId), eq(workspaceMembers.userId, userId))
-      )
-      .where(
-        and(
-          eq(projects.tenantId, tenantId),
-          or(isNull(projects.workspaceId), sql`${workspaceMembers.workspaceId} is not null`)
-        )
-      )
-      .orderBy(...projectOrderBy()) as Promise<ProjectResponse[]>;
+      .leftJoin(workspaceMembers, visible.memberJoin)
+      .where(visible.where)
+      .orderBy(...projectOrderBy())) as ProjectResponse[];
+
+    for (const row of rows) {
+      row.agentStatus = this.agentStatusService.statusOf(row.id);
+    }
+    return rows;
+  }
+
+  async findVisibleProjectIds(params: { tenantId: string; userId: string }): Promise<string[]> {
+    const { tenantId, userId } = params;
+    const visible = this.visibleToUser(tenantId, userId);
+
+    const rows = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .leftJoin(workspaceMembers, visible.memberJoin)
+      .where(visible.where);
+    return rows.map((row) => row.id);
+  }
+
+  private visibleToUser(tenantId: string, userId: string): { memberJoin: SQL; where: SQL } {
+    return {
+      memberJoin: and(eq(workspaceMembers.workspaceId, projects.workspaceId), eq(workspaceMembers.userId, userId))!,
+      where: and(
+        eq(projects.tenantId, tenantId),
+        or(isNull(projects.workspaceId), sql`${workspaceMembers.workspaceId} is not null`)
+      )!,
+    };
   }
 
   async findAllInWorkspace(tenantId: string, workspaceId: string): Promise<ProjectResponse[]> {
@@ -734,7 +820,6 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
-      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .where(where)
       .orderBy(...projectOrderBy()) as Promise<ProjectResponse[]>;
   }
@@ -747,7 +832,6 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
-      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .where(and(eq(projects.id, id), eq(projects.tenantId, tenantId)))) as ProjectResponse[];
     if (!project) throw new NotFoundException(`Project ${id} not found`);
     return project;
@@ -828,7 +912,6 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
-      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .where(eq(projects.id, id))) as ProjectResponse[];
 
     if (!project) throw new NotFoundException(`Project ${id} not found`);
@@ -843,7 +926,6 @@ export class ProjectService implements OnApplicationBootstrap {
         projectEnvironmentId: projectApps.projectEnvironmentId,
         name: projectApps.name,
         description: projectApps.description,
-        isPinned: projectApps.isPinned,
       })
       .from(projectApps)
       .where(eq(projectApps.projectId, projectId));
@@ -864,7 +946,6 @@ export class ProjectService implements OnApplicationBootstrap {
           authMode: env.authMode,
           deployedCommitSha: env.deployedCommitSha,
           lastActiveAt: env.lastActiveAt,
-          isPinned: app?.isPinned ?? false,
           hasApp: !!app,
           appName: app?.name ?? null,
           appDescription: app?.description ?? null,
@@ -1064,6 +1145,11 @@ export class ProjectService implements OnApplicationBootstrap {
     const project = await this.findOne(id, tenantId);
     const envs = await this.projectEnvironmentService.listByProjectId(id);
 
+    await db
+      .update(projectEnvironments)
+      .set({ status: ProjectStatus.Suspended, podIp: null, updatedAt: new Date() })
+      .where(eq(projectEnvironments.projectId, id));
+
     await Promise.allSettled([
       ...envs.map((env) => this.safeDeletePod(this.podService.assignedPodName(env.id), `removing project ${id}`)),
       this.bifrostService.isEnabled()
@@ -1080,7 +1166,10 @@ export class ProjectService implements OnApplicationBootstrap {
       ...envs.map((env) => this.timeoutService.clear(env.id)),
     ]);
 
-    envs.forEach((env) => this.appReadiness.clear(env.id));
+    envs.forEach((env) => {
+      this.appReadiness.clear(env.id);
+      this.agentStatusService.clear(id, env.id);
+    });
 
     await db.delete(projects).where(eq(projects.id, id));
 
@@ -1106,11 +1195,6 @@ export class ProjectService implements OnApplicationBootstrap {
 
     const envs = await this.projectEnvironmentService.listByProjectId(id);
 
-    await Promise.allSettled([
-      ...envs.map((env) => this.safeDeletePod(this.podService.assignedPodName(env.id), `disabling project ${id}`)),
-      ...envs.map((env) => this.timeoutService.clear(env.id)),
-    ]);
-
     await db.transaction(async (tx) => {
       await tx.update(projects).set({ disabled: true, updatedAt: new Date() }).where(eq(projects.id, id));
       await tx
@@ -1119,7 +1203,15 @@ export class ProjectService implements OnApplicationBootstrap {
         .where(eq(projectEnvironments.projectId, id));
     });
 
-    envs.forEach((env) => this.appReadiness.markDown(env.id));
+    await Promise.allSettled([
+      ...envs.map((env) => this.safeDeletePod(this.podService.assignedPodName(env.id), `disabling project ${id}`)),
+      ...envs.map((env) => this.timeoutService.clear(env.id)),
+    ]);
+
+    envs.forEach((env) => {
+      this.appReadiness.markDown(env.id);
+      this.agentStatusService.clear(id, env.id);
+    });
 
     await this.projectEventsService.publish(id);
 
@@ -1169,6 +1261,8 @@ export class ProjectService implements OnApplicationBootstrap {
       throw new BadRequestException('The Development environment cannot be deleted');
     }
 
+    await this.projectEnvironmentService.patch(env.id, { status: ProjectStatus.Suspended, podIp: null });
+
     await Promise.allSettled([
       this.safeDeletePod(this.podService.assignedPodName(env.id), `deleting environment ${env.id}`),
       this.projectAuthService.remove(env.id).catch((err) => {
@@ -1189,6 +1283,7 @@ export class ProjectService implements OnApplicationBootstrap {
     ]);
 
     this.appReadiness.clear(env.id);
+    this.agentStatusService.clear(projectId, env.id);
 
     await this.projectEnvironmentService.delete({
       id: env.id,
@@ -1252,58 +1347,6 @@ export class ProjectService implements OnApplicationBootstrap {
     await writeJsonAtomic(target, content);
   }
 
-  async setAppPin(
-    id: string,
-    tenantId: string,
-    userId: string,
-    isPinned: boolean,
-    environmentId?: string
-  ): Promise<ProjectResponse> {
-    const project = await this.findOne(id, tenantId);
-
-    if (isPinned) {
-      if (!appConfig.catalogEnabled) {
-        throw new BadRequestException('The app catalog is not enabled on this platform.');
-      }
-      const targetEnvId = environmentId ?? project.pinnedEnvironmentId ?? id;
-      const targetEnv = await this.projectEnvironmentService.findById(targetEnvId);
-      if (targetEnv.projectId !== id) {
-        throw new BadRequestException('Pinned environment does not belong to this project');
-      }
-      if (targetEnv.authMode !== 'public') {
-        throw new BadRequestException(
-          "Only apps with public auth can be pinned to the catalog. Change the environment's auth mode to public before pinning."
-        );
-      }
-      const [targetApp] = await db
-        .select({ projectEnvironmentId: projectApps.projectEnvironmentId })
-        .from(projectApps)
-        .where(eq(projectApps.projectEnvironmentId, targetEnv.id));
-      if (!targetApp) {
-        throw new BadRequestException(
-          'This environment has no detectable app yet. Make sure its web server is running before pinning.'
-        );
-      }
-      await db.transaction(async (tx) => {
-        await tx
-          .update(projectApps)
-          .set({ isPinned: false, pinnedById: null, pinnedAt: null, updatedAt: new Date() })
-          .where(and(eq(projectApps.projectId, id), eq(projectApps.isPinned, true)));
-        await tx
-          .update(projectApps)
-          .set({ isPinned: true, pinnedById: userId, pinnedAt: new Date(), updatedAt: new Date() })
-          .where(eq(projectApps.projectEnvironmentId, targetEnv.id));
-      });
-    } else {
-      await db
-        .update(projectApps)
-        .set({ isPinned: false, pinnedById: null, pinnedAt: null, updatedAt: new Date() })
-        .where(and(eq(projectApps.projectId, id), eq(projectApps.isPinned, true)));
-    }
-
-    return this.findOne(id, tenantId);
-  }
-
   async findExternalTenantName(tenantId: string): Promise<string> {
     const [row] = await db
       .select({
@@ -1340,6 +1383,7 @@ export class ProjectService implements OnApplicationBootstrap {
       ]
     );
     if (updated) {
+      this.agentStatusService.clear(updated.projectId, envId);
       await this.projectEventsService.publish(updated.projectId).catch(() => undefined);
     }
   }
@@ -1376,6 +1420,7 @@ export class ProjectService implements OnApplicationBootstrap {
       ProjectStatus.Publishing
     );
     if (updated) {
+      this.agentStatusService.clear(updated.projectId, envId);
       await this.projectEventsService.publish(updated.projectId).catch(() => undefined);
     }
   }
@@ -1577,11 +1622,35 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   private async markEnvironmentActive(envId: string, podIp: string, podName: string): Promise<void> {
-    const updated = await this.projectEnvironmentService.patch(
-      envId,
-      { status: ProjectStatus.Active, podIp, lastActiveAt: new Date() },
-      ProjectStatus.Starting
-    );
+    const recovery = this.recoveryStartups.delete(envId);
+
+    if (recovery && (await this.timeoutService.isFullyExpired(envId).catch(() => false))) {
+      const suspended = await this.projectEnvironmentService.patch(
+        envId,
+        { status: ProjectStatus.Suspended, podIp: null },
+        ProjectStatus.Starting
+      );
+      if (suspended) {
+        this.startupRetries.delete(envId);
+        await this.safeDeletePod(podName, `Keep-alive timers expired during recovery of environment ${envId}`);
+        this.appReadiness.markDown(envId);
+        this.logger.log(`Environment ${envId} suspended after recovery: Keep-alive timers expired during startup`);
+        await this.projectEventsService.publish(suspended.projectId).catch(() => {});
+        return;
+      }
+    }
+
+    const [updated] = await db
+      .update(projectEnvironments)
+      .set({ status: ProjectStatus.Active, podIp, lastActiveAt: new Date(), updatedAt: new Date() })
+      .where(
+        and(
+          eq(projectEnvironments.id, envId),
+          eq(projectEnvironments.status, ProjectStatus.Starting),
+          sql`exists (select 1 from ${projects} where ${projects.id} = ${projectEnvironments.projectId} and ${projects.disabled} = false)`
+        )
+      )
+      .returning({ projectId: projectEnvironments.projectId, isDefault: projectEnvironments.isDefault });
 
     if (!updated) {
       this.startupRetries.delete(envId);
@@ -1597,9 +1666,11 @@ export class ProjectService implements OnApplicationBootstrap {
     }
 
     await Promise.allSettled([
-      this.timeoutService.touch(envId).catch((err) => {
-        this.logger.warn(`Failed to touch timeout for environment ${envId}: ${(err as Error).message}`);
-      }),
+      recovery
+        ? Promise.resolve()
+        : this.timeoutService.touch(envId).catch((err) => {
+            this.logger.warn(`Failed to touch timeout for environment ${envId}: ${(err as Error).message}`);
+          }),
       this.projectEventsService.publish(updated.projectId).catch((err) => {
         this.logger.warn(`Failed to publish active event for environment ${envId}: ${(err as Error).message}`);
       }),
@@ -1923,6 +1994,8 @@ export class ProjectService implements OnApplicationBootstrap {
     env: ProjectEnvironmentContext,
     options: { deleteExistingPod: boolean }
   ): Promise<ProjectEnvironmentContext> {
+    this.agentStatusService.clear(env.projectId, env.id);
+
     if (env.status === ProjectStatus.Starting) {
       if (options.deleteExistingPod) {
         const podName = this.podService.assignedPodName(env.id);
@@ -1963,6 +2036,7 @@ export class ProjectService implements OnApplicationBootstrap {
     if (this.startupTasks.has(envId)) return;
     const task = this.runStartup(envId)
       .catch((err) => {
+        this.recoveryStartups.delete(envId);
         this.logger.warn(`Startup worker for environment ${envId} crashed: ${(err as Error).message}`);
       })
       .finally(() => {
@@ -1973,9 +2047,28 @@ export class ProjectService implements OnApplicationBootstrap {
 
   private async runStartup(envId: string): Promise<void> {
     const current = await this.projectEnvironmentService.findByIdOrNull(envId).catch(() => null);
-    if (!current || current.status !== ProjectStatus.Starting) return;
-    if (current.isDefault && (await this.hasBlockingDuplicateOperation(current.projectId))) return;
-    if (current.isDefault && (await this.hasBlockingImportOperation(current.projectId))) return;
+    if (!current || current.status !== ProjectStatus.Starting) {
+      this.recoveryStartups.delete(envId);
+      return;
+    }
+    if (current.disabled) {
+      this.recoveryStartups.delete(envId);
+      this.startupRetries.delete(envId);
+      await this.projectEnvironmentService.patch(
+        envId,
+        { status: ProjectStatus.Suspended, podIp: null },
+        ProjectStatus.Starting
+      );
+      return;
+    }
+    if (current.isDefault && (await this.hasBlockingDuplicateOperation(current.projectId))) {
+      this.recoveryStartups.delete(envId);
+      return;
+    }
+    if (current.isDefault && (await this.hasBlockingImportOperation(current.projectId))) {
+      this.recoveryStartups.delete(envId);
+      return;
+    }
 
     const podName = this.podService.assignedPodName(envId);
     const recreateRequested = this.recreateRequests.delete(envId);
@@ -2107,6 +2200,8 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (isPermanentFailure) {
       this.startupRetries.delete(envId);
+      this.agentStatusService.clear(projectId, envId);
+      this.recoveryStartups.delete(envId);
       await this.projectEnvironmentService.patch(
         envId,
         { status: ProjectStatus.Failed, podIp: null },
@@ -2114,6 +2209,22 @@ export class ProjectService implements OnApplicationBootstrap {
       );
       await this.projectEventsService.publish(projectId).catch(() => {});
       return;
+    }
+
+    if (this.recoveryStartups.has(envId) && (await this.timeoutService.isFullyExpired(envId).catch(() => false))) {
+      const suspended = await this.projectEnvironmentService.patch(
+        envId,
+        { status: ProjectStatus.Suspended, podIp: null },
+        ProjectStatus.Starting
+      );
+      if (suspended) {
+        this.recoveryStartups.delete(envId);
+        this.startupRetries.delete(envId);
+        this.appReadiness.markDown(envId);
+        this.logger.log(`Environment ${envId} suspended after recovery: Keep-alive timers expired during startup`);
+        await this.projectEventsService.publish(suspended.projectId).catch(() => {});
+        return;
+      }
     }
 
     const attempts = (this.startupRetries.get(envId) ?? 0) + 1;

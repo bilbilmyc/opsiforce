@@ -10,7 +10,7 @@ import ProjectHeader, { type ProjectTab } from '~/components/project/project-hea
 import { ProjectChatTab } from '~/components/project/project-chat-tab';
 import ProjectCodeTab from '~/components/project/project-code-tab';
 import ProjectDbTab from '~/components/project/project-db-tab';
-import ProjectPreviewPanel from '~/components/project/project-preview-panel';
+import { ProjectPreviewPanel } from '~/components/project/project-preview-panel';
 import ProjectDisabled from '~/components/project/project-disabled';
 import ProjectFailed from '~/components/project/project-failed';
 import EnvProdBanner from '~/components/project/environments/env-prod-banner';

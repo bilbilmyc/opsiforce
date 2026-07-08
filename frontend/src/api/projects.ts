@@ -62,7 +62,6 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
           events.close();
           return;
         } catch {
-          // fall through to generic disconnect
         }
       }
       setError(new Error('Project status stream disconnected'));
@@ -146,21 +145,6 @@ export function useCreateUnassignedProject() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: projectKeys.all });
       qc.invalidateQueries({ queryKey: ['workspaces'] });
-    },
-  }));
-}
-
-export function useSetAppPin() {
-  const qc = useQueryClient();
-  return createMutation(() => ({
-    mutationFn: (params: { projectId: string; isPinned: boolean; environmentId?: string }) =>
-      api.patch<Project>(`/projects/${params.projectId}/app/pin`, {
-        isPinned: params.isPinned,
-        ...(params.environmentId ? { environmentId: params.environmentId } : {}),
-      }),
-    onSuccess: (_data, params) => {
-      qc.invalidateQueries({ queryKey: projectKeys.all });
-      qc.invalidateQueries({ queryKey: environmentKeys.forProject(params.projectId) });
     },
   }));
 }

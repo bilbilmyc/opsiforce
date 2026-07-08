@@ -73,6 +73,8 @@ export interface Tenant {
 
 export type ProjectStatus = 'starting' | 'active' | 'suspended' | 'disabled' | 'failed';
 
+export type AgentStatus = 'working' | 'idle';
+
 export type RequestLogMode = 'off' | 'metadata' | 'full';
 
 export type PodClass = 'small' | 'medium' | 'large' | 'custom';
@@ -119,14 +121,14 @@ export interface Project {
   memoryRequestMib: number;
   memoryLimitMib: number;
   authMode: ProjectAuthMode;
-  isPinned: boolean;
   hasApp: boolean;
   appName: string | null;
   appDescription: string | null;
   environmentIds: string[];
+  agentStatus?: AgentStatus;
+  lastActiveAt: string | null;
   createdAt: string;
   disabled: boolean;
-  pinnedEnvironmentId: string | null;
 }
 
 export const podClassApi = {
