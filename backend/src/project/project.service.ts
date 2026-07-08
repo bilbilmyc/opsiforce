@@ -10,9 +10,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
-import { config as appConfig } from '../config/config';
 import { eq, and, desc, asc, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/pg-core';
 import { Queue } from 'bullmq';
 import crypto from 'crypto';
 import path from 'path';
@@ -171,8 +169,6 @@ const projectOrderBy = () =>
 
 const effectiveStatus = sql<ProjectStatus>`CASE WHEN ${projects.disabled} THEN 'disabled' ELSE ${projectEnvironments.status} END`;
 
-const pinnedApp = alias(projectApps, 'pinned_app');
-
 const projectSelectFields = {
   id: projects.id,
   tenantId: projects.tenantId,
@@ -197,9 +193,6 @@ const projectSelectFields = {
   cpuMillicores: projectPodSettings.cpuMillicores,
   memoryRequestMib: projectPodSettings.memoryRequestMib,
   memoryLimitMib: projectPodSettings.memoryLimitMib,
-  isPinned: sql<boolean>`${pinnedApp.projectEnvironmentId} is not null`.as('is_pinned'),
-  pinnedAt: pinnedApp.pinnedAt,
-  pinnedEnvironmentId: pinnedApp.projectEnvironmentId,
   hasApp: sql<boolean>`${projectApps.projectEnvironmentId} is not null`.as('has_app'),
   appName: projectApps.name,
   appDescription: projectApps.description,
@@ -531,18 +524,6 @@ export class ProjectService implements OnApplicationBootstrap {
     return this.findOne(id, tenantId);
   }
 
-  /**
-   * Creates the empty shell of an imported project: fresh identity, rows, and
-   * freshly-minted keys — but no workspace files and no startup. The import
-   * processor unpacks the bundle into the project directory and then boots it.
-   * Mirrors a duplicate's target rows, minus the source copy. Auth resets to
-   * `public` and the new environment carries the target's platform-version.
-   *
-   * The manifest's database-row state (settings, App Details, paused schedules)
-   * is rehydrated here. Resources cross as a class and are re-resolved against
-   * the target's hardware; schedules arrive paused and re-stamped to the
-   * import-time timezone, so no automation fires unexpectedly.
-   */
   async createImportedProject(params: {
     tenantId: string;
     workspaceId: string | null;
@@ -702,7 +683,6 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
-      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .leftJoin(
         workspaceMembers,
         and(eq(workspaceMembers.workspaceId, projects.workspaceId), eq(workspaceMembers.userId, userId))
@@ -728,7 +708,6 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
-      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .where(where)
       .orderBy(...projectOrderBy()) as Promise<ProjectResponse[]>;
   }
@@ -741,7 +720,6 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
-      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .where(and(eq(projects.id, id), eq(projects.tenantId, tenantId)))) as ProjectResponse[];
     if (!project) throw new NotFoundException(`Project ${id} not found`);
     return project;
@@ -822,7 +800,6 @@ export class ProjectService implements OnApplicationBootstrap {
       .innerJoin(projectSettings, eq(projectSettings.projectId, projects.id))
       .innerJoin(projectPodSettings, eq(projectPodSettings.projectId, projects.id))
       .leftJoin(projectApps, eq(projectApps.projectEnvironmentId, projects.id))
-      .leftJoin(pinnedApp, and(eq(pinnedApp.projectId, projects.id), eq(pinnedApp.isPinned, true)))
       .where(eq(projects.id, id))) as ProjectResponse[];
 
     if (!project) throw new NotFoundException(`Project ${id} not found`);
@@ -837,7 +814,6 @@ export class ProjectService implements OnApplicationBootstrap {
         projectEnvironmentId: projectApps.projectEnvironmentId,
         name: projectApps.name,
         description: projectApps.description,
-        isPinned: projectApps.isPinned,
       })
       .from(projectApps)
       .where(eq(projectApps.projectId, projectId));
@@ -858,7 +834,6 @@ export class ProjectService implements OnApplicationBootstrap {
           authMode: env.authMode,
           deployedCommitSha: env.deployedCommitSha,
           lastActiveAt: env.lastActiveAt,
-          isPinned: app?.isPinned ?? false,
           hasApp: !!app,
           appName: app?.name ?? null,
           appDescription: app?.description ?? null,
@@ -1244,58 +1219,6 @@ export class ProjectService implements OnApplicationBootstrap {
     const content: { name: string; description?: string } = { name: meta.name };
     if (meta.description !== null) content.description = meta.description;
     await writeJsonAtomic(target, content);
-  }
-
-  async setAppPin(
-    id: string,
-    tenantId: string,
-    userId: string,
-    isPinned: boolean,
-    environmentId?: string
-  ): Promise<ProjectResponse> {
-    const project = await this.findOne(id, tenantId);
-
-    if (isPinned) {
-      if (!appConfig.catalogEnabled) {
-        throw new BadRequestException('The app catalog is not enabled on this platform.');
-      }
-      const targetEnvId = environmentId ?? project.pinnedEnvironmentId ?? id;
-      const targetEnv = await this.projectEnvironmentService.findById(targetEnvId);
-      if (targetEnv.projectId !== id) {
-        throw new BadRequestException('Pinned environment does not belong to this project');
-      }
-      if (targetEnv.authMode !== 'public') {
-        throw new BadRequestException(
-          "Only apps with public auth can be pinned to the catalog. Change the environment's auth mode to public before pinning."
-        );
-      }
-      const [targetApp] = await db
-        .select({ projectEnvironmentId: projectApps.projectEnvironmentId })
-        .from(projectApps)
-        .where(eq(projectApps.projectEnvironmentId, targetEnv.id));
-      if (!targetApp) {
-        throw new BadRequestException(
-          'This environment has no detectable app yet. Make sure its web server is running before pinning.'
-        );
-      }
-      await db.transaction(async (tx) => {
-        await tx
-          .update(projectApps)
-          .set({ isPinned: false, pinnedById: null, pinnedAt: null, updatedAt: new Date() })
-          .where(and(eq(projectApps.projectId, id), eq(projectApps.isPinned, true)));
-        await tx
-          .update(projectApps)
-          .set({ isPinned: true, pinnedById: userId, pinnedAt: new Date(), updatedAt: new Date() })
-          .where(eq(projectApps.projectEnvironmentId, targetEnv.id));
-      });
-    } else {
-      await db
-        .update(projectApps)
-        .set({ isPinned: false, pinnedById: null, pinnedAt: null, updatedAt: new Date() })
-        .where(and(eq(projectApps.projectId, id), eq(projectApps.isPinned, true)));
-    }
-
-    return this.findOne(id, tenantId);
   }
 
   async findExternalTenantName(tenantId: string): Promise<string> {

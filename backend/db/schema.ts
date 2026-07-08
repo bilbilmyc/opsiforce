@@ -250,19 +250,10 @@ export const projectApps = pgTable(
       .notNull(),
     name: text("name"),
     description: text("description"),
-    isPinned: boolean("is_pinned").notNull().default(false),
-    pinnedById: text("pinned_by_id").references(() => users.id, { onDelete: "set null" }),
-    pinnedAt: timestamp("pinned_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (table) => [
-    index("idx_project_app_project").on(table.projectId),
-    index("idx_project_app_pinned").on(table.isPinned, table.pinnedAt),
-    uniqueIndex("uq_project_app_one_pin_per_project")
-      .on(table.projectId)
-      .where(sql`${table.isPinned}`),
-  ],
+  (table) => [index("idx_project_app_project").on(table.projectId)],
 )
 
 export const projectAgentUpdates = pgTable(

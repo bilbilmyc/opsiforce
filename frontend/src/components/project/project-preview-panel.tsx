@@ -6,9 +6,7 @@ import { createResizablePanel } from '~/lib/create-resizable-panel';
 import { appPublicUrl } from '~/lib/app-url';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
-import { config } from '~/config/config';
 import { useProjectEnvironments } from '~/api/environments';
-import PinBadge from './pin-badge';
 import EditAppDialog from './edit-app-dialog';
 
 export interface ProjectPreviewPanelProps {
@@ -19,19 +17,16 @@ export interface ProjectPreviewPanelProps {
   onReloadRef?: (reload: () => void) => void;
 }
 
-export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
+export function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
   const [open, setOpen] = createSignal(true);
   const [iframeLoading, setIframeLoading] = createSignal(true);
   const [copied, setCopied] = createSignal(false);
   const [editAppOpen, setEditAppOpen] = createSignal(false);
 
   const { hasPermission } = usePermissions();
-  const canPinApps = () => hasPermission(Permission.pinApps) && config.catalogEnabled;
   const canEditAppDetails = () => hasPermission(Permission.editAppDetails);
-  const projectsEnabled = () => canPinApps() || canEditAppDetails();
-  const environments = useProjectEnvironments(() => props.projectId, { enabled: projectsEnabled });
+  const environments = useProjectEnvironments(() => props.projectId, { enabled: canEditAppDetails });
   const activeEnv = () => environments.data?.find((e) => e.id === props.environmentId);
-  const isPinnedHere = () => activeEnv()?.isPinned === true;
   const hasApp = () => activeEnv()?.hasApp === true;
   const showEditAction = () => canEditAppDetails() && hasApp();
 
@@ -96,9 +91,6 @@ export default function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
             <span class="text-xs font-medium text-muted-foreground truncate">
               {activeEnv()?.appName || props.appName || 'App'}
             </span>
-            <Show when={canPinApps()}>
-              <PinBadge isPinned={isPinnedHere()} compact />
-            </Show>
             <Show when={showEditAction()}>
               <ToolbarButton onClick={() => setEditAppOpen(true)} tooltip="Edit app details">
                 <Pencil class="w-3 h-3" />

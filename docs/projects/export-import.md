@@ -20,7 +20,7 @@ The **manifest** carries what duplication copies between database rows — title
 - **Environment binding.** Import binds the new Development environment to the *target's* Development, never the source's.
 - **Resources by class.** The pod size crosses as its class (Small/Medium/Large); the target re-resolves what that class means for its own hardware. A Custom size carries its explicit CPU/memory, since there is no preset to re-resolve.
 
-A few things are deliberately **not** carried and are set on arrival: the project's identity, tenant, and workspace (import assigns them); its LLM and service-gateway keys (minted fresh — the live credentials were never in the files anyway, since the platform injects them as pod environment variables); the catalog Pin and all history; and the **timezone**, which is set at import the way project creation sets it, with the paused schedules re-stamped to it. **Auth mode resets to `public`**, because a carried `manual`/`managed` mode points at an identity provider the target may not have.
+A few things are deliberately **not** carried and are set on arrival: the project's identity, tenant, and workspace (import assigns them); its LLM and service-gateway keys (minted fresh — the live credentials were never in the files anyway, since the platform injects them as pod environment variables); all history; and the **timezone**, which is set at import the way project creation sets it, with the paused schedules re-stamped to it. **Auth mode resets to `public`**, because a carried `manual`/`managed` mode points at an identity provider the target may not have.
 
 ## How export works
 
