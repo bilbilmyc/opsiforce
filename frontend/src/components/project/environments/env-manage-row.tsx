@@ -3,8 +3,6 @@ import {
   Calendar,
   Check,
   EllipsisVertical,
-  Pin,
-  PinOff,
   Rocket,
   RotateCcw,
   ShieldCheck,
@@ -12,7 +10,6 @@ import {
   Trash2,
 } from '~/components/icons';
 import { cn } from '~/lib/cn';
-import { config } from '~/config/config';
 import { appPublicUrl } from '~/lib/app-url';
 import {
   DropdownMenu,
@@ -24,7 +21,6 @@ import {
 import { Button } from '~/components/ui/button';
 import EnvStatusDot from './env-status-dot';
 import EnvAppLinkButtons from './env-app-link-buttons';
-import PinBadge from '../pin-badge';
 import type { ProjectEnvironment } from '~/api/environments';
 
 export interface EnvManageRowProps {
@@ -33,7 +29,6 @@ export interface EnvManageRowProps {
   onSelect: () => void;
   hasApp: boolean;
   canManageAuth: boolean;
-  canPin: boolean;
   canRestart: boolean;
   canDelete: boolean;
   canPublish: boolean;
@@ -41,8 +36,6 @@ export interface EnvManageRowProps {
   canSchedules: boolean;
   restarting: boolean;
   onAuth: () => void;
-  onPin: () => void;
-  onUnpin: () => void;
   onSchedules: () => void;
   onRestart: () => void;
   onDelete: () => void;
@@ -50,10 +43,9 @@ export interface EnvManageRowProps {
   onVariables: () => void;
 }
 
-export default function EnvManageRow(props: EnvManageRowProps) {
+export function EnvManageRow(props: EnvManageRowProps) {
   const env = () => props.environment;
   const isDevelopment = () => env().isDefault;
-  const isPublic = () => env().authMode === 'public';
   const canDeleteEnv = () => props.canDelete && !isDevelopment();
   const canRestartEnv = () => props.canRestart && env().status !== 'disabled';
   const showPublish = () => props.canPublish && !isDevelopment() && props.hasApp;
@@ -90,9 +82,6 @@ export default function EnvManageRow(props: EnvManageRowProps) {
       </span>
       <div class="flex min-w-0 items-center gap-2">
         <EnvStatusDot status={env().status} withLabel />
-        <Show when={props.canPin}>
-          <PinBadge isPinned={env().isPinned} compact />
-        </Show>
       </div>
       <div class="flex shrink-0 items-center gap-1.5 justify-self-end" onClick={(e) => e.stopPropagation()}>
         <Show when={showPublish()}>
@@ -120,18 +109,6 @@ export default function EnvManageRow(props: EnvManageRowProps) {
               <DropdownMenuItem onSelect={() => props.onVariables()}>
                 <SlidersHorizontal class="h-3.5 w-3.5 text-muted-foreground" />
                 Environment variables
-              </DropdownMenuItem>
-            </Show>
-            <Show when={props.canPin && env().hasApp && env().isPinned}>
-              <DropdownMenuItem onSelect={() => props.onUnpin()}>
-                <PinOff class="h-3.5 w-3.5 text-muted-foreground" />
-                Unpin from {config.catalogLabel}
-              </DropdownMenuItem>
-            </Show>
-            <Show when={props.canPin && env().hasApp && !env().isPinned}>
-              <DropdownMenuItem disabled={!isPublic()} onSelect={() => props.onPin()}>
-                <Pin class="h-3.5 w-3.5 text-muted-foreground" />
-                {isPublic() ? `Pin to ${config.catalogLabel}` : `Pin to ${config.catalogLabel} (set auth public first)`}
               </DropdownMenuItem>
             </Show>
             <Show when={props.canSchedules}>

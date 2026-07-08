@@ -3,7 +3,6 @@ import { useNavigate } from '@tanstack/solid-router';
 import { toast } from 'solid-sonner';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
-import { config } from '~/config/config';
 import { useProjects } from '~/api/projects';
 import {
   useDeleteProjectEnvironment,
@@ -17,9 +16,8 @@ import { Check, ChevronsUpDown, Layers, LoaderCircle } from '~/components/icons'
 import ConfirmDialog from '~/components/ui/confirm-dialog';
 import Skeleton from '~/components/ui/skeleton';
 import ProjectAuthDialog from '~/components/project-auth-dialog';
-import PinAppDialogs, { type PinDialogAction } from '../pin-app-dialogs';
 import { useJobDock } from '~/components/project/jobs/job-dock-context';
-import EnvManageRow from './env-manage-row';
+import { EnvManageRow } from './env-manage-row';
 import EnvTargetRow from './env-target-row';
 import EnvStatusDot from './env-status-dot';
 import PublishDialog from './publish-dialog';
@@ -33,10 +31,9 @@ export interface EnvironmentsPopoverProps {
   onEnvironmentDeleted?: (environmentId: string) => void;
 }
 
-export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
+export function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
   const { hasPermission } = usePermissions();
   const canManageAuth = () => hasPermission(Permission.manageProjectAuthSettings);
-  const canPin = () => hasPermission(Permission.pinApps) && config.catalogEnabled;
   const canRestart = () => hasPermission(Permission.restartProject);
   const canDelete = () => hasPermission(Permission.deleteEnvironment);
   const canPublish = () => hasPermission(Permission.publishProject);
@@ -71,8 +68,6 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
   const [authEnv, setAuthEnv] = createSignal<ProjectEnvironment | null>(null);
   const [variablesEnv, setVariablesEnv] = createSignal<ProjectEnvironment | null>(null);
   const [publishTarget, setPublishTarget] = createSignal<PublishTarget | null>(null);
-  const [pinAction, setPinAction] = createSignal<PinDialogAction>(null);
-  const [pinEnvironmentId, setPinEnvironmentId] = createSignal<string | undefined>(undefined);
   const [pendingDelete, setPendingDelete] = createSignal<ProjectEnvironment | null>(null);
   const [pendingRestart, setPendingRestart] = createSignal<ProjectEnvironment | null>(null);
   const [restartingId, setRestartingId] = createSignal<string | null>(null);
@@ -96,9 +91,7 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   const description = () => {
     const tail = canSchedules() ? ', or open schedules' : '';
-    return canPin()
-      ? `Click an environment to view it. Publish the app, manage auth and variables, pin to ${config.catalogLabel}${tail}.`
-      : `Click an environment to view it. Publish the app, manage auth and variables${tail}.`;
+    return `Click an environment to view it. Publish the app, manage auth and variables${tail}.`;
   };
 
   const openSchedules = (env: ProjectEnvironment) => {
@@ -147,7 +140,6 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
     },
     hasApp: hasApp(),
     canManageAuth: canManageAuth(),
-    canPin: canPin(),
     canRestart: canRestart(),
     canDelete: canDelete(),
     canPublish: canPublish() && target !== null,
@@ -157,14 +149,6 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
     onAuth: () => setAuthEnv(env),
     onVariables: () => setVariablesEnv(env),
     onPublish: () => setPublishTarget(target),
-    onPin: () => {
-      setPinEnvironmentId(env.id);
-      setPinAction('pin');
-    },
-    onUnpin: () => {
-      setPinEnvironmentId(undefined);
-      setPinAction('unpin');
-    },
     onSchedules: () => openSchedules(env),
     onRestart: () => setPendingRestart(env),
     onDelete: () => setPendingDelete(env),
@@ -272,13 +256,6 @@ export default function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
           }}
         />
       </Show>
-
-      <PinAppDialogs
-        projectId={props.projectId}
-        environmentId={pinEnvironmentId()}
-        action={pinAction()}
-        onActionChange={setPinAction}
-      />
 
       <ConfirmDialog
         open={pendingRestart() !== null}

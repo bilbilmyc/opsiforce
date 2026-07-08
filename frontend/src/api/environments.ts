@@ -35,7 +35,6 @@ export interface ProjectEnvironment {
   authMode: string;
   deployedCommitSha: string | null;
   lastActiveAt: string | null;
-  isPinned: boolean;
   hasApp: boolean;
   appName: string | null;
   appDescription: string | null;

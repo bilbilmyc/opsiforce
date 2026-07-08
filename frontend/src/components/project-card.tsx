@@ -1,16 +1,12 @@
 import { Show, createSignal } from 'solid-js';
 import { isAgentWorking } from '~/api/agent-status';
 import type { Project } from '~/api/client';
-import { usePermissions } from '~/api/permissions';
-import { Permission } from '~/constants/permissions';
-import { config } from '~/config/config';
 import { cn } from '~/lib/cn';
 import { projectDisplayTitle } from '~/lib/project-display';
-import PinBadge from './project/pin-badge';
 import ProjectActionsMenu from './project-actions-menu';
 import Spinner from '~/components/ui/spinner';
 
-export default function ProjectCard(props: {
+export function ProjectCard(props: {
   project: Project;
   isActive: boolean;
   onSelect: () => void;
@@ -18,8 +14,6 @@ export default function ProjectCard(props: {
   onSettings?: () => void;
   onDeleted?: () => void;
 }) {
-  const { hasPermission } = usePermissions();
-  const canPinApps = () => hasPermission(Permission.pinApps) && config.catalogEnabled;
   const isDisabled = () => props.project.status === 'disabled';
 
   const [editing, setEditing] = createSignal(false);
@@ -85,9 +79,6 @@ export default function ProjectCard(props: {
               >
                 {title()}
               </span>
-              <Show when={canPinApps()}>
-                <PinBadge isPinned={props.project.isPinned} compact />
-              </Show>
             </div>
           </Show>
           <Show when={isDisabled() && !editing()}>

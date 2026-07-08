@@ -121,8 +121,6 @@ export interface Project {
   memoryRequestMib: number;
   memoryLimitMib: number;
   authMode: ProjectAuthMode;
-  isPinned: boolean;
-  pinnedAt: string | null;
   hasApp: boolean;
   appName: string | null;
   appDescription: string | null;
@@ -130,7 +128,6 @@ export interface Project {
   lastActiveAt: string | null;
   createdAt: string;
   disabled: boolean;
-  pinnedEnvironmentId: string | null;
 }
 
 export const podClassApi = {

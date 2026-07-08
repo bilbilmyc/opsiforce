@@ -21,7 +21,6 @@ import {
   DuplicateProjectDto,
   UpdateProjectAuthDto,
   UpdateProjectLoggingDto,
-  SetAppPinDto,
   SetEnvironmentSessionDto,
   UpdateAppDto,
   UpdateProjectPodClassDto,
@@ -44,11 +43,6 @@ export class ProjectController {
     private readonly environmentVariablesService: EnvironmentVariablesService
   ) {}
 
-  /**
-   * Create an unassigned project. Admin-only because unassigned projects are
-   * invisible to non-admins. Workspace-scoped creation uses
-   * POST /workspaces/:id/projects.
-   */
   @Post()
   @RequirePermission(Perms.manageWorkspaces)
   create(@Body() dto: CreateProjectDto | undefined, @CurrentTenant() tenant: TenantContext) {
@@ -383,22 +377,6 @@ export class ProjectController {
     return { ok: true };
   }
 
-  @Patch(':id/app/pin')
-  @RequirePermission(Perms.pinApps)
-  async setAppPin(
-    @Param('id') id: string,
-    @Body() dto: SetAppPinDto,
-    @CurrentTenant() tenant: TenantContext,
-    @CurrentUser() user: UserContext
-  ) {
-    await this.gate(id, tenant, user);
-    if (typeof dto?.isPinned !== 'boolean') {
-      throw new BadRequestException('isPinned must be a boolean');
-    }
-    const dbUserId = await this.resolveUserId(user, tenant.tenantId);
-    return this.projectService.setAppPin(id, tenant.tenantId, dbUserId, dto.isPinned, dto.environmentId);
-  }
-
   @Patch(':id/app')
   @RequirePermission(Perms.editAppDetails)
   async updateApp(
@@ -411,7 +389,6 @@ export class ProjectController {
     return this.projectService.updateApp(id, tenant.tenantId, dto?.environmentId, dto ?? {});
   }
 
-  /** 404 if the caller can't see this project (avoids existence leak). */
   private async gate(projectId: string, tenant: TenantContext, user: UserContext): Promise<void> {
     const dbUserId = await this.resolveUserId(user, tenant.tenantId);
     await this.projectService.findOneForUser({
@@ -421,7 +398,6 @@ export class ProjectController {
     });
   }
 
-  /** Keycloak sub → DB users.id uuid. workspace_members/prefs reference this. */
   private async resolveUserId(user: UserContext, tenantId: string): Promise<string> {
     const row = await this.userService.getOrCreateUser(
       {

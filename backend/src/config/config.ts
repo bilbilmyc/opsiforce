@@ -1,11 +1,7 @@
 import { privateConfig } from '../private-loader';
 
-export interface AppConfig {
-  catalogEnabled: boolean;
-}
+export interface AppConfig {}
 
-const defaults: AppConfig = {
-  catalogEnabled: false,
-};
+const defaults: AppConfig = {};
 
 export const config: AppConfig = { ...defaults, ...privateConfig };

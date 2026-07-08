@@ -1,7 +1,7 @@
 import { useSortable } from '@dnd-kit/solid/sortable';
 import { type Project } from '~/api/client';
 import { DndType } from '~/lib/sidebar-dnd';
-import ProjectCard from './project-card';
+import { ProjectCard } from './project-card';
 
 export default function SidebarDraggableProjectRow(props: {
   project: Project;

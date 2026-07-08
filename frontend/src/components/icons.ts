@@ -56,8 +56,6 @@ export { default as Box } from 'lucide-solid/icons/box';
 export { default as ArrowRightLeft } from 'lucide-solid/icons/arrow-right-left';
 export { default as Globe } from 'lucide-solid/icons/globe';
 export { default as ShieldCheck } from 'lucide-solid/icons/shield-check';
-export { default as Pin } from 'lucide-solid/icons/pin';
-export { default as PinOff } from 'lucide-solid/icons/pin-off';
 export { default as Rocket } from 'lucide-solid/icons/rocket';
 export { default as GitBranch } from 'lucide-solid/icons/git-branch';
 export { default as ExternalLink } from 'lucide-solid/icons/external-link';

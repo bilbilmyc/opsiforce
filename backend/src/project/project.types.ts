@@ -91,9 +91,6 @@ export interface ProjectResponse {
   cpuMillicores: number;
   memoryRequestMib: number;
   memoryLimitMib: number;
-  isPinned: boolean;
-  pinnedAt: Date | null;
-  pinnedEnvironmentId: string | null;
   hasApp: boolean;
   appName: string | null;
   appDescription: string | null;
@@ -121,7 +118,6 @@ export interface ProjectEnvironmentSummary {
   authMode: ProjectAuthMode;
   deployedCommitSha: string | null;
   lastActiveAt: Date | null;
-  isPinned: boolean;
   hasApp: boolean;
   appName: string | null;
   appDescription: string | null;
@@ -167,11 +163,6 @@ export interface UpdateProjectAuthDto {
   mode: ProjectAuthMode;
   config?: ProjectAuthOidcConfig;
   bypassAuthPaths?: string[];
-}
-
-export interface SetAppPinDto {
-  isPinned: boolean;
-  environmentId?: string;
 }
 
 export interface SetEnvironmentSessionDto {

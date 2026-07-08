@@ -23,9 +23,7 @@ auth:
       - can_import_project
       - can_manage_workspaces
       - can_move_projects_between_workspaces
-      - can_pin_apps
       - can_edit_app_details
-      - can_list_pinned_apps_internal
       - can_manage_environments
       - can_manage_environment_variables
       - can_publish_project
