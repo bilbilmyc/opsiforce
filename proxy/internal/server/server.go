@@ -28,6 +28,12 @@ import (
 
 var projectIDPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
 
+// promptSendPattern matches the opencode upstream paths a user Prompt send
+// crosses: POST /session/{id}/prompt and /session/{id}/prompt_async. It is the
+// single coupling point to opencode's naming; if those paths are renamed the
+// sidebar silently stops reordering, so the classification lives here alone.
+var promptSendPattern = regexp.MustCompile(`^/session/[^/]+/prompt(_async)?$`)
+
 const environmentIDLength = 36
 
 var (
@@ -199,7 +205,33 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isPromptSend(r.Method, upstreamPath) {
+		s.stampPrompt(projectID)
+	}
+
 	s.serveReverseProxy(w, r, projectID, targetURL, reverseProxyOptions{stripUserIdentity: true})
+}
+
+// isPromptSend reports whether a proxied agent request is a user Prompt send.
+// Only a POST to opencode's /session/{id}/prompt(_async) qualifies; event-stream
+// connects, message fetches, session creation, aborts, pings, uploads, and every
+// other surface are excluded.
+func isPromptSend(method string, upstreamPath string) bool {
+	return method == http.MethodPost && promptSendPattern.MatchString(upstreamPath)
+}
+
+// stampPrompt records a user Prompt against the environment on the control plane
+// as a best-effort, fire-and-forget signal. It runs on a detached context so it
+// never blocks, delays, or fails the proxied chat request; a failure is logged.
+func (s *Server) stampPrompt(environmentID string) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), s.cfg.ControlPlaneTimeout)
+		defer cancel()
+
+		if err := s.backend.StampPrompt(ctx, environmentID); err != nil {
+			slog.Warn("failed to stamp last prompt", "environmentId", environmentID, "error", err.Error())
+		}
+	}()
 }
 
 func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {

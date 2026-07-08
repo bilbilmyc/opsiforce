@@ -165,7 +165,7 @@ export interface EnsureEnvironmentResult {
 const projectOrderBy = () =>
   [
     asc(sql`CASE WHEN ${projects.disabled} THEN 1 ELSE 0 END`),
-    desc(projectEnvironments.lastActiveAt),
+    desc(sql`COALESCE(${projects.lastPromptAt}, ${projects.createdAt})`),
     desc(projects.createdAt),
   ] as const;
 
@@ -1429,6 +1429,12 @@ export class ProjectService implements OnApplicationBootstrap {
     const env = await this.projectEnvironmentService.findByIdOrNull(envId);
     if (!env) return false;
     return this.handleProxyFailureForEnvironment(env);
+  }
+
+  async stampLastPromptByEnvId(envId: string): Promise<void> {
+    const env = await this.projectEnvironmentService.findByIdOrNull(envId);
+    if (!env) return;
+    await db.update(projects).set({ lastPromptAt: new Date() }).where(eq(projects.id, env.projectId));
   }
 
   private async handleProxyFailureForEnvironment(env: ProjectEnvironmentContext): Promise<boolean> {

@@ -160,6 +160,7 @@ export const projects = pgTable(
     description: text("description"),
     disabled: boolean("disabled").notNull().default(false),
     bifrostProjectId: text("bifrost_project_id"),
+    lastPromptAt: timestamp("last_prompt_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },

@@ -24,3 +24,4 @@ Format: Title / Status / Context + Decision / Considered options / Consequences.
 | [0016](0016-app-details-are-per-environment.md) | App Details are per-environment; each `ProjectEnvironment` is its own App | implemented (migration 0047) → [project-apps.md](../projects/project-apps.md) |
 | [0017](0017-project-export-is-a-faithful-full-workspace-zip.md) | A Project export is a faithful full-workspace zip, not a sanitized or rebuilt bundle | design — not yet implemented → [export-import.md](../projects/export-import.md) |
 | [0018](0018-standalone-llm-access-via-codex-proxy.md) | standalone local LLM runs through a host Codex-subscription proxy (BYO-key alternative) | implemented → [Quickstart](../quickstart.md) |
+| [0019](0019-sidebar-orders-by-last-prompt.md) | The project sidebar orders by a new `last_prompt_at` (user sends only), not keep-alive `last_active_at` | implemented (migration 0052) |

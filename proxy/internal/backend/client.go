@@ -148,3 +148,38 @@ func (c *Client) ReportFailure(ctx context.Context, projectID string) (bool, err
 
 	return decoded.Restart, nil
 }
+
+// StampPrompt records that a user sent a Prompt to the given project
+// environment, moving its Project to the top of the sidebar. It is a
+// best-effort control-plane signal: callers fire it and forget, never
+// blocking the proxied chat request on its outcome.
+func (c *Client) StampPrompt(ctx context.Context, environmentID string) error {
+	req, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		fmt.Sprintf("%s/api/internal/proxy/projects/%s/prompt", c.baseURL, environmentID),
+		http.NoBody,
+	)
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("x-proxy-control-token", c.token)
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode >= 400 {
+		return &StatusError{StatusCode: resp.StatusCode, Body: body}
+	}
+
+	return nil
+}
