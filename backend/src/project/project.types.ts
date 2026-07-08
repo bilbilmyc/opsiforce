@@ -13,6 +13,13 @@ export const ProjectStatus = {
 
 export type ProjectStatus = (typeof ProjectStatus)[keyof typeof ProjectStatus];
 
+export const AgentStatus = {
+  Working: 'working',
+  Idle: 'idle',
+} as const;
+
+export type AgentStatus = (typeof AgentStatus)[keyof typeof AgentStatus];
+
 export const RequestLogMode = {
   Off: 'off',
   Metadata: 'metadata',
@@ -87,6 +94,7 @@ export interface ProjectResponse {
   hasApp: boolean;
   appName: string | null;
   appDescription: string | null;
+  agentStatus?: AgentStatus;
   createdAt: Date;
   updatedAt: Date;
 }

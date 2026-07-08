@@ -102,6 +102,10 @@ _Avoid_: Bot, Assistant (non-canonical)
 The LLM an Agent runs on. A platform-level property of the Agent profile, uniform across every tenant and Project — not a tenant- or project-configurable setting. Changing it is a platform rollout, not a default anyone tunes.
 _Avoid_: Default model (it is **not** a configurable default — Defaults covers timeouts and budgets only)
 
+**Agent Status**:
+Whether an Agent is **Working** — processing a run it was prompted to do, including any mid-run provider retries — or **Idle** (no run in flight; a suspended or absent pod is simply Idle, not a third state). Carried per ProjectEnvironment, since each environment has its own Agent; a Project counts as Working when any of its environments' Agents is, shown at-a-glance beside the project in the sidebar. Distinct from Keep-alive's *agent activity*, which is the user's traffic touching the pod — not the Agent thinking.
+_Avoid_: Agent activity (a Keep-alive kind — user-driven traffic, a different concept); Busy (the engine's wire value, not user-facing copy); Running (collides with pod lifecycle)
+
 **Dictation**:
 Speaking into the chat instead of typing — a recording made from the prompt's mic button is transcribed to text and inserted into the prompt draft for review; nothing is sent until the user sends. The audio is transient input, never a stored artifact. The spoken language is auto-detected by default, with an explicit per-browser language override.
 _Avoid_: Voice message (implies the audio itself is attached or kept); Voice chat, Speech-to-text (the mechanism, not the feature); Transcription (the backend step, not the user-facing act)

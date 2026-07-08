@@ -16,7 +16,7 @@ function OpenCodeEventBridge(props: { onReload: () => void; onTitle: (title: str
   let timer: ReturnType<typeof setTimeout> | undefined;
   const unsub = globalSDK.event.listen((e) => {
     const event = e.details;
-    if (event.type === 'session.idle') {
+    if (event.type === 'session.status' && event.properties.status.type === 'idle') {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => props.onReload(), 1500);
       return;
