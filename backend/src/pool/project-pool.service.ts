@@ -326,6 +326,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
           workspaceId: claim.workspaceId,
           title: claim.title,
           description: claim.description,
+          lastPromptAt: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         })

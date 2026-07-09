@@ -18,6 +18,7 @@ export interface Environment {
   name: string;
   slug: string;
   description: string | null;
+  color: string;
   isDefault: boolean;
   isProtected: boolean;
   createdAt: string;
@@ -45,11 +46,13 @@ export interface CreateEnvironmentDto {
   name: string;
   slug: string;
   description?: string;
+  color?: string;
 }
 
 export interface UpdateEnvironmentDto {
   name?: string;
   description?: string;
+  color?: string;
 }
 
 export const environmentKeys = {

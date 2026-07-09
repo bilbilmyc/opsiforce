@@ -13,6 +13,7 @@ export interface EnvironmentResponse {
   name: string;
   slug: string;
   description: string | null;
+  color: string;
   isDefault: boolean;
   isProtected: boolean;
   createdAt: Date;
@@ -23,9 +24,11 @@ export interface CreateEnvironmentDto {
   name?: string;
   slug?: string;
   description?: string | null;
+  color?: string;
 }
 
 export interface UpdateEnvironmentDto {
   name?: string;
   description?: string | null;
+  color?: string;
 }

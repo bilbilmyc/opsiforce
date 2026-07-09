@@ -124,6 +124,7 @@ export interface Project {
   hasApp: boolean;
   appName: string | null;
   appDescription: string | null;
+  environmentIds: string[];
   agentStatus?: AgentStatus;
   lastActiveAt: string | null;
   createdAt: string;

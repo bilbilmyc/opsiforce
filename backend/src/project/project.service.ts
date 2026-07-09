@@ -12,6 +12,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import type { V1Pod } from '@kubernetes/client-node';
 import { eq, and, desc, asc, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { Queue } from 'bullmq';
 import crypto from 'crypto';
 import path from 'path';
@@ -172,11 +173,14 @@ export interface EnsureEnvironmentResult {
 const projectOrderBy = () =>
   [
     asc(sql`CASE WHEN ${projects.disabled} THEN 1 ELSE 0 END`),
-    desc(projectEnvironments.lastActiveAt),
+    desc(sql`COALESCE(${projects.lastPromptAt}, ${projects.createdAt})`),
     desc(projects.createdAt),
   ] as const;
 
 const effectiveStatus = sql<ProjectStatus>`CASE WHEN ${projects.disabled} THEN 'disabled' ELSE ${projectEnvironments.status} END`;
+
+const projectEnvAll = alias(projectEnvironments, 'project_env_all');
+const projectAppEnv = alias(projectApps, 'project_app_env');
 
 const projectSelectFields = {
   id: projects.id,
@@ -190,8 +194,6 @@ const projectSelectFields = {
   directory: projectEnvironments.directory,
   status: effectiveStatus.as('status'),
   podIp: projectEnvironments.podIp,
-  sessionId: projectEnvironments.sessionId,
-  platformVersion: projectEnvironments.platformVersion,
   authMode: projectEnvironments.authMode,
   timeoutIdle: projectSettings.timeoutIdle,
   appTimeoutIdle: projectSettings.appTimeoutIdle,
@@ -205,7 +207,14 @@ const projectSelectFields = {
   hasApp: sql<boolean>`${projectApps.projectEnvironmentId} is not null`.as('has_app'),
   appName: projectApps.name,
   appDescription: projectApps.description,
-  lastActiveAt: projectEnvironments.lastActiveAt,
+  environmentIds: sql<string[]>`(
+    SELECT COALESCE(array_agg(DISTINCT ${projectEnvAll.environmentId}), '{}')
+    FROM ${projectEnvironments} AS ${projectEnvAll}
+    INNER JOIN ${projectApps} AS ${projectAppEnv}
+      ON ${projectAppEnv.projectEnvironmentId} = ${projectEnvAll.id}
+    WHERE ${projectEnvAll.projectId} = ${projects.id}
+      AND ${projectEnvAll.environmentId} IS NOT NULL
+  )`.as('environment_ids'),
   createdAt: projects.createdAt,
   updatedAt: projects.updatedAt,
 };
@@ -1471,6 +1480,12 @@ export class ProjectService implements OnApplicationBootstrap {
     const env = await this.projectEnvironmentService.findByIdOrNull(envId);
     if (!env) return false;
     return this.handleProxyFailureForEnvironment(env);
+  }
+
+  async stampLastPromptByEnvId(envId: string): Promise<void> {
+    const env = await this.projectEnvironmentService.findByIdOrNull(envId);
+    if (!env) return;
+    await db.update(projects).set({ lastPromptAt: new Date() }).where(eq(projects.id, env.projectId));
   }
 
   private async handleProxyFailureForEnvironment(env: ProjectEnvironmentContext): Promise<boolean> {

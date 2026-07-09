@@ -125,6 +125,7 @@ export function usePublishJob(
         if (job.status === 'done' || job.status === 'failed') {
           qc.invalidateQueries({ queryKey: environmentKeys.forProject(pid) });
           qc.invalidateQueries({ queryKey: publishKeys.targets(pid) });
+          qc.invalidateQueries({ queryKey: projectKeys.all });
           source.close();
         }
       } catch {

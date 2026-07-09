@@ -3,10 +3,13 @@ import { toast } from 'solid-sonner';
 import { ENVIRONMENT_SLUG_MAX_LENGTH, ENVIRONMENT_SLUG_PATTERN, slugifyEnvironmentName } from '~/lib/app-url';
 import { useCreateEnvironment, useDeleteEnvironment, useEnvironments, type Environment } from '~/api/environments';
 import { Button } from '~/components/ui/button';
+import { ColorPicker } from '~/components/ui/color-picker';
 import ConfirmDialog from '~/components/ui/confirm-dialog';
 import Skeleton from '~/components/ui/skeleton';
 import { Plus } from '~/components/icons';
-import EnvironmentRow from './environment-row';
+import { EnvironmentRow } from './environment-row';
+
+const DEFAULT_CREATE_COLOR = '#F97316';
 
 export function TenantEnvironmentsSection(props: { active: boolean }) {
   const environments = useEnvironments({ enabled: () => props.active });
@@ -18,6 +21,8 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
   const [slug, setSlug] = createSignal('');
   const [slugEdited, setSlugEdited] = createSignal(false);
   const [description, setDescription] = createSignal('');
+  const [color, setColor] = createSignal(DEFAULT_CREATE_COLOR);
+  const [colorEdited, setColorEdited] = createSignal(false);
   const [pendingDelete, setPendingDelete] = createSignal<Environment | null>(null);
 
   const resetForm = () => {
@@ -25,6 +30,8 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
     setSlug('');
     setSlugEdited(false);
     setDescription('');
+    setColor(DEFAULT_CREATE_COLOR);
+    setColorEdited(false);
     setCreating(false);
   };
 
@@ -50,6 +57,7 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
         name: name().trim(),
         slug: slug(),
         description: description().trim() || undefined,
+        color: colorEdited() ? color() : undefined,
       });
       toast.success('Environment created');
       resetForm();
@@ -146,6 +154,19 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
               class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               placeholder="Description (optional)"
             />
+            <div class="space-y-1">
+              <span class="text-xs text-muted-foreground">Color</span>
+              <ColorPicker
+                value={color()}
+                onChange={(hex) => {
+                  setColorEdited(true);
+                  setColor(hex);
+                }}
+              />
+              <Show when={!colorEdited()}>
+                <p class="text-xs text-muted-foreground">A distinct color is assigned automatically; adjust it here if you like.</p>
+              </Show>
+            </div>
             <div class="flex justify-end gap-2">
               <Button size="sm" variant="outline" onClick={resetForm}>
                 Cancel

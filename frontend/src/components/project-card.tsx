@@ -3,6 +3,7 @@ import { isAgentWorking } from '~/api/agent-status';
 import type { Project } from '~/api/client';
 import { cn } from '~/lib/cn';
 import { projectDisplayTitle } from '~/lib/project-display';
+import { EnvironmentDots } from './project/environment-dots';
 import ProjectActionsMenu from './project-actions-menu';
 import Spinner from '~/components/ui/spinner';
 
@@ -81,8 +82,13 @@ export function ProjectCard(props: {
               </span>
             </div>
           </Show>
-          <Show when={isDisabled() && !editing()}>
-            <span class="block text-xs text-sidebar-muted-foreground mt-0.5">Disabled</span>
+          <Show when={!editing()}>
+            <div class="flex items-center gap-1.5 mt-0.5">
+              <Show when={isDisabled()}>
+                <span class="text-xs text-sidebar-muted-foreground">Disabled</span>
+              </Show>
+              <EnvironmentDots environmentIds={props.project.environmentIds} dimmed={isDisabled()} />
+            </div>
           </Show>
         </div>
 
