@@ -14,7 +14,7 @@ const CODEX_PROXY_PORT = 8455;
 const HOST_BRIDGE_BASE_URL = `http://host.minikube.internal:${CODEX_PROXY_PORT}`;
 const OPENAI_BASE_URL = 'https://api.openai.com';
 const OPENAI_MODELS_URL = 'https://api.openai.com/v1/models';
-const DEFAULT_MODEL_ID = 'gpt-5.5';
+const DEFAULT_MODEL_ID = 'gpt-5.6-sol';
 
 const SUBSCRIPTION_OVERLAY = `bifrost:
   providers:

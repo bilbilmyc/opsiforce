@@ -20,7 +20,7 @@ Most steps run unattended. The few that need you are the resource-sizing prompt 
 
 ## Choosing an LLM
 
-The app-builder agent needs a model to talk to, so one step asks how you want to provide it. There are two choices, and either way the agent's default model stays `openai/gpt-5.5` — only the upstream that serves it changes.
+The app-builder agent needs a model to talk to, so one step asks how you want to provide it. There are two choices, and either way the agent's default model stays `openai/gpt-5.6-sol` — only the upstream that serves it changes.
 
 - **ChatGPT / Codex subscription** (the default, recommended). This drives a ChatGPT subscription you already pay for, with no extra per-token API charges. You sign in once through a browser device-code login against OpenAI; the token is stored locally under your home directory and refreshed for you on later runs. The trade-off is that it rides an unofficial OpenAI endpoint that can change without notice — a deliberate, risk-accepted choice so you can try Opsiforce on credits you already have. The full story is in [Codex Proxy](gateways/codex-proxy.md) and [ADR-0018](adr/0018-standalone-llm-access-via-codex-proxy.md).
 - **Your own OpenAI API key.** Paste a key (or set `OPENAI_API_KEY` before running) and OpenAI bills your account per token. This path is always available and fully supported — it's the fallback when the subscription path breaks.

@@ -12,11 +12,11 @@ Agent Pod ──▶ Bifrost ──▶ host.minikube.internal:<port> ──▶ co
 
 ## Who talks to it
 
-Its only caller is the [LLM Gateway](llm-gateway.md). In the standalone stack Bifrost's OpenAI-compatible **custom providers** (`custom-openai-1/2/3`) point their `base_url` at the proxy over the host bridge (`host.minikube.internal`). Nothing in the product knows the proxy exists; to Bifrost it is just an OpenAI endpoint. That is the whole point — the agent's default model stays `openai/gpt-5.5`, and only which provider serves it changes.
+Its only caller is the [LLM Gateway](llm-gateway.md). In the standalone stack Bifrost's OpenAI-compatible **custom providers** (`custom-openai-1/2/3`) point their `base_url` at the proxy over the host bridge (`host.minikube.internal`). Nothing in the product knows the proxy exists; to Bifrost it is just an OpenAI endpoint. That is the whole point — the agent's default model stays `openai/gpt-5.6-sol`, and only which provider serves it changes.
 
 ## What it does
 
-- **`GET /v1/models`** returns the subscription's catalogue in OpenAI list shape, so the gateway (and the Quickstart's first-run model check) can see that `gpt-5.5` is available.
+- **`GET /v1/models`** returns the subscription's catalogue in OpenAI list shape, so the gateway (and the Quickstart's first-run model check) can see that `gpt-5.6-sol` is available.
 - **`POST /v1/responses`** is a near-transparent reverse proxy. It forwards the caller's request body untouched, swaps in the subscription's bearer token and `chatgpt-account-id`, and streams the Server-Sent-Events response straight back. The caller's own `authorization` header never reaches upstream and the real token never reaches the caller.
 - **`GET /healthz`** is a liveness check for the process orchestrator.
 

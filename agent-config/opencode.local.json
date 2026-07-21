@@ -31,8 +31,14 @@
       }
     },
     "openai": {
-      "whitelist": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
+      "whitelist": ["gpt-5.6-sol", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
       "models": {
+        "gpt-5.6-sol": {
+          "limit": { "context": 290400, "output": 32000 },
+          "options": {
+            "reasoningEffort": "high"
+          }
+        },
         "gpt-5.5": {
           "limit": { "context": 290400, "output": 32000 },
           "options": {
@@ -54,7 +60,7 @@
       }
     }
   },
-  "model": "openai/gpt-5.5",
+  "model": "openai/gpt-5.6-sol",
   "permission": {
     "read": "allow",
     "edit": "allow",
