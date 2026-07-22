@@ -69,7 +69,11 @@ export function AppSidebar() {
     return (workspaces.data ?? []).find((w) => w.type === 'private' && w.ownerId === uid);
   });
 
-  const plusDisabled = () => createInWorkspace.isPending || !privateWorkspace();
+  const projectCreateDisabled = () => createInWorkspace.isPending || !privateWorkspace();
+  const menuDisabled = () =>
+    projectCreateDisabled() &&
+    !hasPermission(Permission.importProject) &&
+    !hasPermission(Permission.manageWorkspaces);
 
   const handleCreateProject = (agentId: string) => {
     const ws = privateWorkspace();
@@ -157,7 +161,7 @@ export function AppSidebar() {
             </Show>
           </div>
           <CreateMenu
-            disabled={plusDisabled()}
+            disabled={projectCreateDisabled()}
             canCreateWorkspace={hasPermission(Permission.manageWorkspaces)}
             canImport={hasPermission(Permission.importProject)}
             agents={agents.data}
@@ -170,7 +174,7 @@ export function AppSidebar() {
                 variant="outline"
                 size="icon"
                 class="h-8 w-8 shrink-0"
-                disabled={plusDisabled()}
+                disabled={menuDisabled()}
                 title="Create"
               >
                 <Plus class="w-4 h-4" />
@@ -180,7 +184,7 @@ export function AppSidebar() {
         </div>
         <div class="hidden group-data-[collapsible=icon]/sidebar:flex justify-center pb-2">
           <CreateMenu
-            disabled={plusDisabled()}
+            disabled={projectCreateDisabled()}
             canCreateWorkspace={hasPermission(Permission.manageWorkspaces)}
             canImport={hasPermission(Permission.importProject)}
             agents={agents.data}
@@ -191,7 +195,7 @@ export function AppSidebar() {
               <button
                 {...triggerProps}
                 class="w-7 h-7 rounded-md flex items-center justify-center text-sidebar-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-                disabled={plusDisabled()}
+                disabled={menuDisabled()}
                 title="Create"
               >
                 <Plus class="w-4 h-4" />
