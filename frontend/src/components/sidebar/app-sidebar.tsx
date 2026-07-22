@@ -1,7 +1,7 @@
-import { For, Show, createMemo, createSignal, type JSX } from 'solid-js';
+import { Show, createMemo, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { useNavigate } from '@tanstack/solid-router';
-import { type Agent, type Project } from '~/api/client';
+import { type Project } from '~/api/client';
 import { useAgents } from '~/api/agents';
 import { usePermissions } from '~/api/permissions';
 import { useCurrentUser } from '~/api/user';
@@ -29,16 +29,15 @@ import {
   DropdownMenuSeparator,
 } from '~/components/ui/dropdown-menu';
 import { Button } from '~/components/ui/button';
-import { cn } from '~/lib/cn';
 import TenantSelector from '~/components/tenant-selector';
-import ProjectSidebar from '~/components/project-sidebar';
+import { ProjectSidebar } from './project-sidebar';
 import CreateWorkspaceDialog from '~/components/create-workspace-dialog';
+import { CreateMenu } from './create-menu';
+import { ProjectImportDialog } from '~/components/project/project-import-dialog';
 import {
-  Bot,
   Calendar,
   ChevronsUpDown,
   FolderKanban,
-  FolderPlus,
   LogOut,
   Plus,
   Search,
@@ -58,6 +57,7 @@ export function AppSidebar() {
 
   const [search, setSearch] = createSignal('');
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = createSignal(false);
+  const [importOpen, setImportOpen] = createSignal(false);
   let searchRef: HTMLInputElement | undefined;
 
   const canOpenSettings = () => !!firstPermittedSettingsTab(hasPermission);
@@ -156,12 +156,14 @@ export function AppSidebar() {
               </button>
             </Show>
           </div>
-          <TopPlusMenu
+          <CreateMenu
             disabled={plusDisabled()}
             canCreateWorkspace={hasPermission(Permission.manageWorkspaces)}
+            canImport={hasPermission(Permission.importProject)}
             agents={agents.data}
             onCreateProject={handleCreateProject}
             onOpenCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+            onOpenImport={() => setImportOpen(true)}
             trigger={(triggerProps) => (
               <Button
                 {...triggerProps}
@@ -177,12 +179,14 @@ export function AppSidebar() {
           />
         </div>
         <div class="hidden group-data-[collapsible=icon]/sidebar:flex justify-center pb-2">
-          <TopPlusMenu
+          <CreateMenu
             disabled={plusDisabled()}
             canCreateWorkspace={hasPermission(Permission.manageWorkspaces)}
+            canImport={hasPermission(Permission.importProject)}
             agents={agents.data}
             onCreateProject={handleCreateProject}
             onOpenCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+            onOpenImport={() => setImportOpen(true)}
             trigger={(triggerProps) => (
               <button
                 {...triggerProps}
@@ -276,85 +280,8 @@ export function AppSidebar() {
       </SidebarFooter>
 
       <CreateWorkspaceDialog open={createWorkspaceOpen()} onOpenChange={setCreateWorkspaceOpen} />
+      <ProjectImportDialog open={importOpen()} onOpenChange={setImportOpen} />
     </Sidebar>
   );
 }
 
-function TopPlusMenu(props: {
-  disabled: boolean;
-  canCreateWorkspace: boolean;
-  agents: Agent[] | undefined;
-  onCreateProject: (agentId: string) => void;
-  onOpenCreateWorkspace: () => void;
-  trigger: (triggerProps: Record<string, unknown>) => JSX.Element;
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger as={props.trigger} />
-      <DropdownMenuContent class="w-72">
-        <MenuDividerLabel class="mb-1 mt-1">Select an agent to build a project</MenuDividerLabel>
-        <Show
-          when={(props.agents ?? []).length > 0}
-          fallback={<div class="px-2 py-1.5 text-xs italic text-muted-foreground">No agents available</div>}
-        >
-          <For each={props.agents}>
-            {(agent) => (
-              <RichMenuItem
-                icon={<Bot class="w-4 h-4" />}
-                title={agent.displayName ?? agent.name}
-                description={agent.description ?? 'Start a new project with this agent.'}
-                disabled={props.disabled}
-                onSelect={() => props.onCreateProject(agent.id)}
-              />
-            )}
-          </For>
-        </Show>
-        <Show when={props.canCreateWorkspace}>
-          <MenuDividerLabel>OR</MenuDividerLabel>
-          <RichMenuItem
-            compact
-            icon={<FolderPlus class="w-3.5 h-3.5" />}
-            title="Create new workspace"
-            description="A shared space to group projects and manage access."
-            onSelect={props.onOpenCreateWorkspace}
-          />
-        </Show>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function MenuDividerLabel(props: { children: JSX.Element; class?: string }) {
-  return (
-    <div class={cn('-mx-1 my-1.5 flex items-center gap-2 text-xs font-medium text-muted-foreground', props.class)}>
-      <span class="h-px flex-1 bg-border" />
-      <span class="shrink-0">{props.children}</span>
-      <span class="h-px flex-1 bg-border" />
-    </div>
-  );
-}
-
-function RichMenuItem(props: {
-  icon: JSX.Element;
-  title: string;
-  description: string;
-  compact?: boolean;
-  disabled?: boolean;
-  onSelect: () => void;
-}) {
-  return (
-    <DropdownMenuItem
-      class={cn('items-start gap-2.5', props.compact ? 'py-1.5' : 'py-2')}
-      disabled={props.disabled}
-      onSelect={props.onSelect}
-    >
-      <span class="mt-0.5 shrink-0 text-muted-foreground">{props.icon}</span>
-      <span class="flex min-w-0 flex-col gap-0.5">
-        <span class={cn('font-medium leading-none text-foreground', props.compact ? 'text-xs' : 'text-sm')}>
-          {props.title}
-        </span>
-        <span class="text-xs leading-snug text-muted-foreground">{props.description}</span>
-      </span>
-    </DropdownMenuItem>
-  );
-}

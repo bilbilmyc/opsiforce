@@ -1,18 +1,17 @@
-import { For, Show } from 'solid-js';
+import { For, Show, type JSX } from 'solid-js';
 import { type Project } from '~/api/client';
 import { PUBLIC_ID } from '~/lib/sidebar-dnd';
-import { ChevronDown, ChevronRight, Globe, Plus } from '~/components/icons';
+import { ChevronDown, ChevronRight, Globe } from '~/components/icons';
 import SidebarDraggableProjectRow from './sidebar-draggable-project-row';
 import SidebarDropZone from './sidebar-drop-zone';
+import { SidebarCreateButton } from './sidebar-create-button';
 
-export default function SidebarPublicGroup(props: {
+export function SidebarPublicGroup(props: {
   expanded: boolean;
   projects: Project[];
   activeProjectId: string | undefined;
-  creating: boolean;
-  canCreate: boolean;
+  renderCreate?: (renderTrigger: (triggerProps: Record<string, unknown>) => JSX.Element) => JSX.Element;
   onToggleFold: () => void;
-  onCreate: () => void;
   onSelectProject: (id: string) => void;
   onRenameProject: (id: string, title: string) => void;
   onProjectSettings: (id: string) => void;
@@ -29,18 +28,8 @@ export default function SidebarPublicGroup(props: {
         </span>
         <Globe class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         <span class="flex-1 min-w-0 text-sm font-medium truncate text-muted-foreground">Public</span>
-        <Show when={props.canCreate}>
-          <button
-            class="opacity-0 group-hover/wsrow:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-1 rounded-sm hover:bg-accent"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onCreate();
-            }}
-            disabled={props.creating}
-            title="New public project"
-          >
-            <Plus class="w-3.5 h-3.5" />
-          </button>
+        <Show when={props.renderCreate}>
+          {(renderCreate) => <SidebarCreateButton title="New public project" renderCreate={renderCreate()} />}
         </Show>
       </div>
 

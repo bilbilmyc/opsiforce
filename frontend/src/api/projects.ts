@@ -137,7 +137,7 @@ export function useSyncProjectTitle() {
 export function useCreateUnassignedProject() {
   const qc = useQueryClient();
   return createMutation(() => ({
-    mutationFn: (dto: { title?: string; description?: string } | void) =>
+    mutationFn: (dto: { title?: string; description?: string; agentId?: string } | void) =>
       api.post<Project>('/projects', {
         timezone: detectTimezone(),
         ...dto,

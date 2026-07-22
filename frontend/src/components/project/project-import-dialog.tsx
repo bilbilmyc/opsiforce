@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog';
 import { Button } from '~/components/ui/button';
 import { LoaderCircle, Package, Upload } from '~/components/icons';
@@ -10,6 +10,7 @@ import { useJobDock } from '~/components/project/jobs/job-dock-context';
 export interface ProjectImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  defaultWorkspaceId?: string | null;
 }
 
 export function ProjectImportDialog(props: ProjectImportDialogProps) {
@@ -31,12 +32,24 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
 
   let workspaceInitialized = false;
   createEffect(() => {
+    if (props.defaultWorkspaceId !== undefined) return;
     const ws = privateWorkspace();
     if (!workspaceInitialized && ws) {
       workspaceInitialized = true;
       setWorkspaceId(ws.id);
     }
   });
+
+  createEffect(
+    on(
+      () => props.open,
+      (open) => {
+        if (open && props.defaultWorkspaceId !== undefined) {
+          setWorkspaceId(props.defaultWorkspaceId);
+        }
+      }
+    )
+  );
 
   const reset = () => {
     setFile(null);
@@ -59,7 +72,7 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
       const result = await startProjectImport({ file: chosen, workspaceId: workspaceId(), title: title() });
       jobDock.trackImport({
         projectId: result.projectId,
-        title: title().trim() || 'Imported project',
+        title: title().trim() || 'project',
         job: result.job,
       });
       close();

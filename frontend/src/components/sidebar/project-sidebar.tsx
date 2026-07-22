@@ -5,6 +5,7 @@ import { isSortable } from '@dnd-kit/solid/sortable';
 import { toast } from 'solid-sonner';
 import { type Project } from '~/api/client';
 import { usePermissions } from '~/api/permissions';
+import { useAgents } from '~/api/agents';
 import { useAgentStatusStream } from '~/api/agent-status';
 import { useCreateUnassignedProject, useProjects, useRenameProject } from '~/api/projects';
 import { PUBLIC_LABEL, useCreateProjectInWorkspace, useMoveProject, useWorkspaces } from '~/api/workspaces';
@@ -15,10 +16,12 @@ import { Permission } from '~/constants/permissions';
 import { FolderOpen } from '~/components/icons';
 import Spinner from '~/components/ui/spinner';
 import ConfirmDialog from '~/components/ui/confirm-dialog';
-import ProjectSettings from './project-settings';
-import WorkspaceSettings from './workspace-settings';
-import SidebarWorkspaceGroup from './sidebar-workspace-group';
-import SidebarPublicGroup from './sidebar-public-group';
+import ProjectSettings from '../project-settings';
+import WorkspaceSettings from '../workspace-settings';
+import { SidebarWorkspaceGroup } from './sidebar-workspace-group';
+import { SidebarPublicGroup } from './sidebar-public-group';
+import { CreateMenu } from './create-menu';
+import { ProjectImportDialog } from '~/components/project/project-import-dialog';
 
 const FOLDED_KEY = 'opsiforce:workspace:folded';
 const PUBLIC_FOLDED_KEY = 'opsiforce:workspace:public-folded';
@@ -34,11 +37,12 @@ interface PendingMove {
   projectTitle: string;
 }
 
-export default function ProjectSidebar(props: { search: string }) {
+export function ProjectSidebar(props: { search: string }) {
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
 
   const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces);
+  const canImport = () => hasPermission(Permission.importProject);
 
   const projectMatch = useMatch({ from: '/projects/$projectId', shouldThrow: false });
   const activeProjectId = () => projectMatch()?.params.projectId;
@@ -46,10 +50,12 @@ export default function ProjectSidebar(props: { search: string }) {
   const [settingsProjectId, setSettingsProjectId] = createSignal<string | null>(null);
   const [settingsWorkspaceId, setSettingsWorkspaceId] = createSignal<string | null>(null);
   const [pendingMove, setPendingMove] = createSignal<PendingMove | null>(null);
+  const [importTarget, setImportTarget] = createSignal<{ workspaceId: string | null } | null>(null);
 
   const projects = useProjects();
   useAgentStatusStream(() => projects.data);
   const workspaces = useWorkspaces();
+  const agents = useAgents();
   const updatePrefs = useUpdateWorkspacePreferences();
   const createInWs = useCreateProjectInWorkspace();
   const createUnassigned = useCreateUnassignedProject();
@@ -120,9 +126,9 @@ export default function ProjectSidebar(props: { search: string }) {
       search: { prompt: undefined },
     });
 
-  const handleCreateInWorkspace = async (workspaceId: string) => {
+  const handleCreateInWorkspace = async (workspaceId: string, agentId?: string) => {
     try {
-      const project = await createInWs.mutateAsync({ workspaceId });
+      const project = await createInWs.mutateAsync({ workspaceId, dto: agentId ? { agentId } : undefined });
       toast.success('Project created');
       navigateToProject(project.id);
     } catch {
@@ -130,8 +136,8 @@ export default function ProjectSidebar(props: { search: string }) {
     }
   };
 
-  const handleCreateUnassigned = () =>
-    createUnassigned.mutate(undefined, {
+  const handleCreateUnassigned = (agentId?: string) =>
+    createUnassigned.mutate(agentId ? { agentId } : undefined, {
       onSuccess: (project) => {
         toast.success('Project created');
         navigateToProject(project.id);
@@ -219,12 +225,20 @@ export default function ProjectSidebar(props: { search: string }) {
                   expanded={shouldShowExpanded(ws.id)}
                   projects={filterByQuery(groupedProjects().byWs.get(ws.id) ?? [])}
                   activeProjectId={activeProjectId()}
-                  creating={createInWs.isPending}
                   onToggleFold={() => toggleFold(ws.id)}
                   onOpenSettings={
                     ws.type !== 'private' && canManageWorkspaces() ? () => setSettingsWorkspaceId(ws.id) : undefined
                   }
-                  onCreate={() => handleCreateInWorkspace(ws.id)}
+                  renderCreate={(renderTrigger) => (
+                    <CreateMenu
+                      trigger={renderTrigger}
+                      agents={agents.data}
+                      disabled={createInWs.isPending}
+                      canImport={canImport()}
+                      onCreateProject={(agentId) => handleCreateInWorkspace(ws.id, agentId)}
+                      onOpenImport={() => setImportTarget({ workspaceId: ws.id })}
+                    />
+                  )}
                   onSelectProject={navigateToProject}
                   onRenameProject={(id, title) => renameProject.mutate({ id, title })}
                   onProjectSettings={(id) => setSettingsProjectId(id)}
@@ -239,10 +253,22 @@ export default function ProjectSidebar(props: { search: string }) {
               expanded={!isFolded(PUBLIC_ID)}
               projects={filterByQuery(groupedProjects().publicProjects)}
               activeProjectId={activeProjectId()}
-              creating={createUnassigned.isPending}
-              canCreate={canManageWorkspaces()}
               onToggleFold={() => toggleFold(PUBLIC_ID)}
-              onCreate={handleCreateUnassigned}
+              renderCreate={
+                canManageWorkspaces() || canImport()
+                  ? (renderTrigger) => (
+                      <CreateMenu
+                        trigger={renderTrigger}
+                        agents={agents.data}
+                        disabled={createUnassigned.isPending}
+                        canCreateProject={canManageWorkspaces()}
+                        canImport={canImport()}
+                        onCreateProject={(agentId) => handleCreateUnassigned(agentId)}
+                        onOpenImport={() => setImportTarget({ workspaceId: null })}
+                      />
+                    )
+                  : undefined
+              }
               onSelectProject={navigateToProject}
               onRenameProject={(id, title) => renameProject.mutate({ id, title })}
               onProjectSettings={(id) => setSettingsProjectId(id)}
@@ -308,6 +334,14 @@ export default function ProjectSidebar(props: { search: string }) {
         }
         confirmLabel="Move"
         onConfirm={confirmMove}
+      />
+
+      <ProjectImportDialog
+        open={!!importTarget()}
+        defaultWorkspaceId={importTarget()?.workspaceId ?? null}
+        onOpenChange={(open) => {
+          if (!open) setImportTarget(null);
+        }}
       />
     </>
   );

@@ -1,21 +1,21 @@
-import { For, Show } from 'solid-js';
+import { For, Show, type JSX } from 'solid-js';
 import { useSortable } from '@dnd-kit/solid/sortable';
 import { type Project, type Workspace } from '~/api/client';
 import { DndType } from '~/lib/sidebar-dnd';
 import SidebarDropZone from './sidebar-drop-zone';
-import { ChevronDown, ChevronRight, FolderKanban, GripVertical, Lock, Plus, Settings } from '~/components/icons';
+import { ChevronDown, ChevronRight, FolderKanban, GripVertical, Lock, Settings } from '~/components/icons';
 import SidebarDraggableProjectRow from './sidebar-draggable-project-row';
+import { SidebarCreateButton } from './sidebar-create-button';
 
-export default function SidebarWorkspaceGroup(props: {
+export function SidebarWorkspaceGroup(props: {
   workspace: Workspace;
   index: number;
   expanded: boolean;
   projects: Project[];
   activeProjectId: string | undefined;
-  creating: boolean;
   onToggleFold: () => void;
   onOpenSettings?: () => void;
-  onCreate: () => void;
+  renderCreate: (renderTrigger: (triggerProps: Record<string, unknown>) => JSX.Element) => JSX.Element;
   onSelectProject: (id: string) => void;
   onRenameProject: (id: string, title: string) => void;
   onProjectSettings: (id: string) => void;
@@ -72,17 +72,7 @@ export default function SidebarWorkspaceGroup(props: {
             <Settings class="w-3.5 h-3.5" />
           </button>
         </Show>
-        <button
-          class="opacity-0 group-hover/wsrow:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-1 rounded-sm hover:bg-accent"
-          onClick={(e) => {
-            e.stopPropagation();
-            props.onCreate();
-          }}
-          disabled={props.creating}
-          title="New project in this workspace"
-        >
-          <Plus class="w-3.5 h-3.5" />
-        </button>
+        <SidebarCreateButton title="New project in this workspace" renderCreate={props.renderCreate} />
       </div>
 
       <Show when={props.expanded}>
