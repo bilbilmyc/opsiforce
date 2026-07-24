@@ -30,8 +30,7 @@ export function useAgentStatusStream(projects: () => Project[] | undefined): voi
       try {
         const { projectId, agentStatus } = JSON.parse(event.data) as AgentStatusEvent;
         setAgentStatuses(projectId, agentStatus);
-      } catch {
-      }
+      } catch {}
     });
     onCleanup(() => events.close());
   });

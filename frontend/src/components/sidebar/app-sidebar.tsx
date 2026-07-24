@@ -34,17 +34,7 @@ import { ProjectSidebar } from './project-sidebar';
 import CreateWorkspaceDialog from '~/components/create-workspace-dialog';
 import { CreateMenu } from './create-menu';
 import { ProjectImportDialog } from '~/components/project/project-import-dialog';
-import {
-  Calendar,
-  ChevronsUpDown,
-  FolderKanban,
-  LogOut,
-  Plus,
-  Search,
-  Server,
-  Settings,
-  X,
-} from '~/components/icons';
+import { Calendar, ChevronsUpDown, FolderKanban, LogOut, Plus, Search, Server, Settings, X } from '~/components/icons';
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -71,9 +61,7 @@ export function AppSidebar() {
 
   const projectCreateDisabled = () => createInWorkspace.isPending || !privateWorkspace();
   const menuDisabled = () =>
-    projectCreateDisabled() &&
-    !hasPermission(Permission.importProject) &&
-    !hasPermission(Permission.manageWorkspaces);
+    projectCreateDisabled() && !hasPermission(Permission.importProject) && !hasPermission(Permission.manageWorkspaces);
 
   const handleCreateProject = (agentId: string) => {
     const ws = privateWorkspace();
@@ -288,4 +276,3 @@ export function AppSidebar() {
     </Sidebar>
   );
 }
-

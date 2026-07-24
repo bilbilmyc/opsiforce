@@ -186,6 +186,7 @@ const projectSelectFields = {
   id: projects.id,
   tenantId: projects.tenantId,
   workspaceId: projects.workspaceId,
+  folderId: projects.folderId,
   agentId: projects.agentId,
   title: projects.title,
   description: projects.description,
@@ -428,7 +429,8 @@ export class ProjectService implements OnApplicationBootstrap {
   async create(
     dto: CreateProjectDto | undefined,
     tenantId: string,
-    workspaceId: string | null = null
+    workspaceId: string | null = null,
+    folderId: string | null = null
   ): Promise<ProjectResponse> {
     const agentId = dto?.agentId ?? (await this.agentService.getDefaultAgentId());
     const timeouts = await this.defaultsService.getTenantTimeouts(tenantId);
@@ -437,6 +439,7 @@ export class ProjectService implements OnApplicationBootstrap {
       .claimPending(agentId, {
         tenantId,
         workspaceId,
+        folderId,
         title: dto?.title ?? null,
         description: dto?.description ?? null,
         timeoutIdle: timeouts.defaultTimeoutIdle,
@@ -454,13 +457,14 @@ export class ProjectService implements OnApplicationBootstrap {
       return project;
     }
 
-    return this.createDirect(dto, tenantId, workspaceId, agentId, timeouts);
+    return this.createDirect(dto, tenantId, workspaceId, folderId, agentId, timeouts);
   }
 
   private async createDirect(
     dto: CreateProjectDto | undefined,
     tenantId: string,
     workspaceId: string | null,
+    folderId: string | null,
     agentId: string,
     timeouts: { defaultTimeoutIdle: number; defaultAppTimeoutIdle: number }
   ): Promise<ProjectResponse> {
@@ -474,6 +478,7 @@ export class ProjectService implements OnApplicationBootstrap {
         id,
         tenantId,
         workspaceId,
+        folderId,
         agentId,
         title: dto?.title ?? null,
         description: dto?.description ?? null,

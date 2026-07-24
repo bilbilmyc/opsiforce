@@ -164,7 +164,9 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
                 }}
               />
               <Show when={!colorEdited()}>
-                <p class="text-xs text-muted-foreground">A distinct color is assigned automatically; adjust it here if you like.</p>
+                <p class="text-xs text-muted-foreground">
+                  A distinct color is assigned automatically; adjust it here if you like.
+                </p>
               </Show>
             </div>
             <div class="flex justify-end gap-2">

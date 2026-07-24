@@ -386,6 +386,13 @@
       "when": 1783520779825,
       "tag": "0054_add-environment-color",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1784871610281,
+      "tag": "0055_add-folders",
+      "breakpoints": true
     }
   ]
 }

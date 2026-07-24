@@ -106,6 +106,7 @@ export interface Project {
   id: string;
   tenantId: string;
   workspaceId: string | null;
+  folderId: string | null;
   agentId: string;
   title: string | null;
   description: string | null;
@@ -185,6 +186,15 @@ export interface Workspace {
   createdAt: string;
   updatedAt: string;
   memberCount: number;
+  projectCount: number;
+}
+
+export interface Folder {
+  id: string;
+  workspaceId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
   projectCount: number;
 }
 

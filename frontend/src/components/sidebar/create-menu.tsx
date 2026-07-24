@@ -6,7 +6,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '~/components/ui/dropdown-menu';
-import { Bot, FolderPlus, Package } from '~/components/icons';
+import { Boxes, Bot, FolderPlus, Package } from '~/components/icons';
+import { FOLDER_DESCRIPTION } from '~/components/folder-dialog';
 import { cn } from '~/lib/cn';
 
 export function CreateMenu(props: {
@@ -18,10 +19,11 @@ export function CreateMenu(props: {
   canImport?: boolean;
   onCreateProject: (agentId: string) => void;
   onOpenCreateWorkspace?: () => void;
+  onOpenCreateFolder?: () => void;
   onOpenImport?: () => void;
 }) {
   const canCreateProject = () => props.canCreateProject ?? true;
-  const hasSecondary = () => !!props.canCreateWorkspace || !!props.canImport;
+  const hasSecondary = () => !!props.canCreateWorkspace || !!props.onOpenCreateFolder || !!props.canImport;
 
   return (
     <DropdownMenu>
@@ -52,10 +54,19 @@ export function CreateMenu(props: {
         <Show when={props.canCreateWorkspace}>
           <RichMenuItem
             compact
-            icon={<FolderPlus class="w-3.5 h-3.5" />}
+            icon={<Boxes class="w-3.5 h-3.5" />}
             title="Create new workspace"
             description="A shared space to group projects and manage access."
             onSelect={() => props.onOpenCreateWorkspace?.()}
+          />
+        </Show>
+        <Show when={props.onOpenCreateFolder}>
+          <RichMenuItem
+            compact
+            icon={<FolderPlus class="w-3.5 h-3.5" />}
+            title="Create new folder"
+            description={FOLDER_DESCRIPTION}
+            onSelect={() => props.onOpenCreateFolder?.()}
           />
         </Show>
         <Show when={props.canImport}>

@@ -61,8 +61,7 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
           closed = true;
           events.close();
           return;
-        } catch {
-        }
+        } catch {}
       }
       setError(new Error('Project status stream disconnected'));
     });

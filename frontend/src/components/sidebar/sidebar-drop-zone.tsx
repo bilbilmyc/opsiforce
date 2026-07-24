@@ -1,6 +1,6 @@
 import { type JSX } from 'solid-js';
 import { useDroppable } from '@dnd-kit/solid';
-import { DndType, DROP_ZONE_PRIORITY, PUBLIC_ID } from '~/lib/sidebar-dnd';
+import { DndType, DROP_ZONE_PRIORITY, PUBLIC_ID, activeDragType } from '~/lib/sidebar-dnd';
 
 export default function SidebarDropZone(props: { workspaceId: string | null; children: JSX.Element }) {
   const droppable = useDroppable({
@@ -17,8 +17,11 @@ export default function SidebarDropZone(props: { workspaceId: string | null; chi
   return (
     <div
       ref={droppable.ref}
-      class="flex flex-col gap-0.5 pl-2 min-h-7 rounded-md transition-colors"
-      classList={{ 'bg-sidebar-accent/40': droppable.isDropTarget() }}
+      class="flex flex-col gap-0.5 pl-2 rounded-md transition-colors"
+      classList={{
+        'min-h-7': activeDragType() === DndType.Project,
+        'bg-sidebar-accent/40': droppable.isDropTarget(),
+      }}
     >
       {props.children}
     </div>

@@ -6,11 +6,17 @@ import { Perms } from '../permission/permission.constants';
 import { getGroupsHeader, hasPermission } from '../permission/permission.utils';
 import { CurrentUser, type UserContext } from '../user/user.decorator';
 import { UserService, type UserRecord } from '../user/user.service';
-import type { CreateProjectDto, ProjectResponse } from '../project/project.types';
+import type { ProjectResponse } from '../project/project.types';
 import { WorkspaceService } from './workspace.service';
 import type {
   AddWorkspaceMemberDto,
+  AssignProjectDto,
+  CreateFolderDto,
+  CreateProjectInWorkspaceDto,
   CreateWorkspaceDto,
+  FolderResponse,
+  MoveFolderDto,
+  RenameFolderDto,
   UpdateWorkspaceDto,
   WorkspaceResponse,
 } from './workspace.types';
@@ -129,6 +135,98 @@ export class WorkspaceController {
     await this.workspaceService.removeMember(id, userId, tenant.tenantId);
   }
 
+  @Get(':id/folders')
+  async listFolders(
+    @Param('id') id: string,
+    @Req() req: FastifyRequest,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext
+  ): Promise<FolderResponse[]> {
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId);
+    return this.workspaceService.listFolders({
+      workspaceId: id,
+      tenantId: tenant.tenantId,
+      userId: dbUser.id,
+      canManageWorkspaces: readPerms(req).canManageWorkspaces,
+    });
+  }
+
+  @Post(':id/folders')
+  async createFolder(
+    @Param('id') id: string,
+    @Body() dto: CreateFolderDto,
+    @Req() req: FastifyRequest,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext
+  ): Promise<FolderResponse> {
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId);
+    return this.workspaceService.createFolder({
+      workspaceId: id,
+      tenantId: tenant.tenantId,
+      userId: dbUser.id,
+      canManageWorkspaces: readPerms(req).canManageWorkspaces,
+      dto,
+    });
+  }
+
+  @Patch(':id/folders/:folderId')
+  async renameFolder(
+    @Param('id') id: string,
+    @Param('folderId') folderId: string,
+    @Body() dto: RenameFolderDto,
+    @Req() req: FastifyRequest,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext
+  ): Promise<FolderResponse> {
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId);
+    return this.workspaceService.renameFolder({
+      workspaceId: id,
+      folderId,
+      tenantId: tenant.tenantId,
+      userId: dbUser.id,
+      canManageWorkspaces: readPerms(req).canManageWorkspaces,
+      dto,
+    });
+  }
+
+  @Post(':id/folders/:folderId/move')
+  async moveFolder(
+    @Param('id') id: string,
+    @Param('folderId') folderId: string,
+    @Body() dto: MoveFolderDto,
+    @Req() req: FastifyRequest,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext
+  ): Promise<FolderResponse> {
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId);
+    return this.workspaceService.moveFolder({
+      workspaceId: id,
+      folderId,
+      toWorkspaceId: dto.toWorkspaceId,
+      tenantId: tenant.tenantId,
+      userId: dbUser.id,
+      ...readPerms(req),
+    });
+  }
+
+  @Delete(':id/folders/:folderId')
+  async deleteFolder(
+    @Param('id') id: string,
+    @Param('folderId') folderId: string,
+    @Req() req: FastifyRequest,
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext
+  ): Promise<void> {
+    const dbUser = await this.ensureDbUser(user, tenant.tenantId);
+    await this.workspaceService.deleteFolder({
+      workspaceId: id,
+      folderId,
+      tenantId: tenant.tenantId,
+      userId: dbUser.id,
+      canManageWorkspaces: readPerms(req).canManageWorkspaces,
+    });
+  }
+
   @Get(':id/projects')
   async listProjects(
     @Param('id') id: string,
@@ -148,7 +246,7 @@ export class WorkspaceController {
   @Post(':id/projects')
   async createProjectInWorkspace(
     @Param('id') id: string,
-    @Body() dto: CreateProjectDto | undefined,
+    @Body() dto: CreateProjectInWorkspaceDto | undefined,
     @Req() req: FastifyRequest,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext
@@ -160,6 +258,7 @@ export class WorkspaceController {
       userId: dbUser.id,
       canManageWorkspaces: readPerms(req).canManageWorkspaces,
       dto,
+      folderId: dto?.folderId ?? null,
     });
   }
 
@@ -167,6 +266,7 @@ export class WorkspaceController {
   async assignProject(
     @Param('id') id: string,
     @Param('projectId') projectId: string,
+    @Body() dto: AssignProjectDto | undefined,
     @Req() req: FastifyRequest,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext
@@ -175,6 +275,7 @@ export class WorkspaceController {
     return this.workspaceService.assignProject({
       workspaceId: id,
       projectId,
+      folderId: dto ? dto.folderId : undefined,
       tenantId: tenant.tenantId,
       userId: dbUser.id,
       ...readPerms(req),

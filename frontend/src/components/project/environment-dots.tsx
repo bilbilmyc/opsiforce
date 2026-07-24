@@ -17,8 +17,7 @@ export function EnvironmentDots(props: { environmentIds: string[]; dimmed?: bool
       .filter((env): env is Environment => env !== undefined)
       .toSorted(
         (a, b) =>
-          Number(b.isDefault) - Number(a.isDefault) ||
-          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          Number(b.isDefault) - Number(a.isDefault) || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
   });
 

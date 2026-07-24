@@ -70,6 +70,7 @@ export interface ProjectResponse {
   id: string;
   tenantId: string | null;
   workspaceId: string | null;
+  folderId: string | null;
   agentId: string;
   title: string | null;
   description: string | null;

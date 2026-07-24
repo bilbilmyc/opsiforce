@@ -1,13 +1,35 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { db } from '../../db';
-import { projects, users, userWorkspacePreferences, workspaceMembers, workspaces } from '../../db/schema';
+import {
+  FOLDERS_WORKSPACE_NAME_CI_UNIQUE,
+  folders,
+  projects,
+  users,
+  userWorkspacePreferences,
+  workspaceMembers,
+  workspaces,
+} from '../../db/schema';
 import { Perms } from '../permission/permission.constants';
 import { ProjectService } from '../project/project.service';
 import type { CreateProjectDto, ProjectResponse } from '../project/project.types';
 import type { UserRecord } from '../user/user.service';
-import type { CreateWorkspaceDto, UpdateWorkspaceDto, WorkspaceResponse } from './workspace.types';
+import type {
+  CreateFolderDto,
+  CreateWorkspaceDto,
+  FolderResponse,
+  RenameFolderDto,
+  UpdateWorkspaceDto,
+  WorkspaceAccessParams,
+  WorkspaceResponse,
+} from './workspace.types';
 
 const workspaceBaseFields = {
   id: workspaces.id,
@@ -74,12 +96,7 @@ export class WorkspaceService {
     return this.attachCounts(rows);
   }
 
-  async findOne(params: {
-    workspaceId: string;
-    userId: string;
-    tenantId: string;
-    canManageWorkspaces: boolean;
-  }): Promise<WorkspaceResponse> {
+  async findOne(params: WorkspaceAccessParams): Promise<WorkspaceResponse> {
     const { workspaceId, userId, tenantId, canManageWorkspaces } = params;
     const base = await this.findOneBase(workspaceId, tenantId);
     // Admin bypass applies only to shared workspaces. Private workspaces are
@@ -212,12 +229,7 @@ export class WorkspaceService {
     await db.delete(workspaces).where(and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId)));
   }
 
-  async listMembers(params: {
-    workspaceId: string;
-    tenantId: string;
-    userId: string;
-    canManageWorkspaces: boolean;
-  }): Promise<UserRecord[]> {
+  async listMembers(params: WorkspaceAccessParams): Promise<UserRecord[]> {
     await this.findOne(params);
     return db
       .select()
@@ -256,19 +268,148 @@ export class WorkspaceService {
     return rows.length > 0;
   }
 
-  async listProjects(params: {
-    workspaceId: string;
-    tenantId: string;
-    userId: string;
-    canManageWorkspaces: boolean;
-  }): Promise<ProjectResponse[]> {
+  async listProjects(params: WorkspaceAccessParams): Promise<ProjectResponse[]> {
     await this.findOne(params);
     return this.projectService.findAllInWorkspace(params.tenantId, params.workspaceId);
+  }
+
+  async listFolders(params: WorkspaceAccessParams): Promise<FolderResponse[]> {
+    await this.findOne(params);
+    return db
+      .select({
+        id: folders.id,
+        workspaceId: folders.workspaceId,
+        name: folders.name,
+        createdAt: folders.createdAt,
+        updatedAt: folders.updatedAt,
+        projectCount: sql<number>`count(${projects.id})::int`,
+      })
+      .from(folders)
+      .leftJoin(projects, eq(projects.folderId, folders.id))
+      .where(eq(folders.workspaceId, params.workspaceId))
+      .groupBy(folders.id)
+      .orderBy(asc(sql`lower(${folders.name})`));
+  }
+
+  async createFolder(params: WorkspaceAccessParams & { dto: CreateFolderDto }): Promise<FolderResponse> {
+    const name = requireFolderName(params.dto.name);
+    await this.findOne(params);
+
+    const id = crypto.randomUUID();
+    const [row] = await withFolderNameConflict(folderExistsHereMessage(name), () =>
+      db.insert(folders).values({ id, workspaceId: params.workspaceId, name }).returning()
+    );
+    return { ...row, projectCount: 0 };
+  }
+
+  async renameFolder(
+    params: WorkspaceAccessParams & { folderId: string; dto: RenameFolderDto }
+  ): Promise<FolderResponse> {
+    const name = requireFolderName(params.dto.name);
+    await this.findOne(params);
+
+    const [row] = await withFolderNameConflict(folderExistsHereMessage(name), () =>
+      db
+        .update(folders)
+        .set({ name, updatedAt: new Date() })
+        .where(and(eq(folders.id, params.folderId), eq(folders.workspaceId, params.workspaceId)))
+        .returning()
+    );
+    if (!row) throw new NotFoundException(`Folder ${params.folderId} not found`);
+
+    const [{ projectCount }] = await db
+      .select({ projectCount: sql<number>`count(*)::int` })
+      .from(projects)
+      .where(eq(projects.folderId, row.id));
+    return { ...row, projectCount };
+  }
+
+  async deleteFolder(params: WorkspaceAccessParams & { folderId: string }): Promise<void> {
+    await this.findOne(params);
+
+    const deleted = await db
+      .delete(folders)
+      .where(and(eq(folders.id, params.folderId), eq(folders.workspaceId, params.workspaceId)))
+      .returning({ id: folders.id });
+    if (deleted.length === 0) throw new NotFoundException(`Folder ${params.folderId} not found`);
+  }
+
+  async moveFolder(
+    params: WorkspaceAccessParams & {
+      folderId: string;
+      toWorkspaceId: string;
+      canMoveProjectsBetweenWorkspaces: boolean;
+    }
+  ): Promise<FolderResponse> {
+    const {
+      workspaceId,
+      folderId,
+      toWorkspaceId,
+      tenantId,
+      userId,
+      canManageWorkspaces,
+      canMoveProjectsBetweenWorkspaces,
+    } = params;
+
+    await this.findOne(params);
+
+    const [folder] = await db
+      .select()
+      .from(folders)
+      .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)));
+    if (!folder) throw new NotFoundException(`Folder ${folderId} not found`);
+
+    if (toWorkspaceId === workspaceId) {
+      return { ...folder, projectCount: await this.countFolderProjects(folder.id) };
+    }
+
+    const target = await this.findOneBase(toWorkspaceId, tenantId);
+    if (target.type === 'private') {
+      throw new ForbiddenException('A folder cannot be moved into a personal workspace');
+    }
+
+    await this.assertMoveAllowed({
+      target,
+      sourceWorkspaceId: workspaceId,
+      isCrossWorkspace: true,
+      userId,
+      canManageWorkspaces,
+      canMoveProjectsBetweenWorkspaces,
+    });
+
+    const now = new Date();
+    const [moved] = await withFolderNameConflict(
+      `A folder named "${folder.name}" already exists in the destination workspace`,
+      () =>
+        db.transaction(async (tx) => {
+          const rows = await tx
+            .update(folders)
+            .set({ workspaceId: toWorkspaceId, updatedAt: now })
+            .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)))
+            .returning();
+          await tx
+            .update(projects)
+            .set({ workspaceId: toWorkspaceId, updatedAt: now })
+            .where(and(eq(projects.folderId, folderId), eq(projects.workspaceId, workspaceId)));
+          return rows;
+        })
+    );
+
+    return { ...moved, projectCount: await this.countFolderProjects(moved.id) };
+  }
+
+  private async countFolderProjects(folderId: string): Promise<number> {
+    const [{ projectCount }] = await db
+      .select({ projectCount: sql<number>`count(*)::int` })
+      .from(projects)
+      .where(eq(projects.folderId, folderId));
+    return projectCount;
   }
 
   async assignProject(params: {
     workspaceId: string | null;
     projectId: string;
+    folderId?: string | null;
     tenantId: string;
     userId: string;
     canManageWorkspaces: boolean;
@@ -284,6 +425,8 @@ export class WorkspaceService {
       ? await this.projectService.findOne(projectId, tenantId)
       : await this.projectService.findOneForUser({ projectId, tenantId, userId });
 
+    const keepsWorkspace = workspaceId === project.workspaceId;
+
     if (workspaceId !== null) {
       const target = await this.findOneBase(workspaceId, tenantId);
 
@@ -291,28 +434,77 @@ export class WorkspaceService {
         throw new ForbiddenException("Public and workspace projects can't be made private");
       }
 
-      const sourceOwnedByCaller = await this.isOwnedByUser(project.workspaceId, userId);
-      const targetOwnedByCaller = target.ownerId === userId;
+      await this.assertMoveAllowed({
+        target,
+        sourceWorkspaceId: project.workspaceId,
+        isCrossWorkspace: !keepsWorkspace,
+        userId,
+        canManageWorkspaces,
+        canMoveProjectsBetweenWorkspaces,
+      });
+    }
 
-      const movePermWaived = sourceOwnedByCaller || targetOwnedByCaller;
-
-      if (!canManageWorkspaces && !movePermWaived && !canMoveProjectsBetweenWorkspaces) {
-        throw new ForbiddenException(`Missing permission: ${Perms.moveProjectsBetweenWorkspaces}`);
-      }
-
-      const targetVisible = targetOwnedByCaller || (canManageWorkspaces && target.type === 'shared');
-      if (!targetVisible && !(await this.isMember(workspaceId, userId))) {
-        throw new NotFoundException(`Workspace ${workspaceId} not found`);
+    let folderId: string | null;
+    if (params.folderId === undefined) {
+      folderId = keepsWorkspace ? project.folderId : null;
+    } else {
+      folderId = params.folderId;
+      if (folderId !== null) {
+        if (workspaceId === null) {
+          throw new BadRequestException('Public projects cannot be filed into a folder');
+        }
+        await this.assertFolderInWorkspace(folderId, workspaceId);
       }
     }
 
     const now = new Date();
     await db
       .update(projects)
-      .set({ workspaceId, updatedAt: now })
+      .set({ workspaceId, folderId, updatedAt: now })
       .where(and(eq(projects.id, project.id), eq(projects.tenantId, tenantId)));
 
-    return { ...project, workspaceId, updatedAt: now };
+    return { ...project, workspaceId, folderId, updatedAt: now };
+  }
+
+  private async assertFolderInWorkspace(folderId: string, workspaceId: string): Promise<void> {
+    const [folder] = await db
+      .select({ workspaceId: folders.workspaceId })
+      .from(folders)
+      .where(eq(folders.id, folderId));
+    if (!folder || folder.workspaceId !== workspaceId) {
+      throw new BadRequestException('Folder does not belong to this workspace');
+    }
+  }
+
+  private async assertMoveAllowed(params: {
+    target: WorkspaceBaseRow;
+    sourceWorkspaceId: string | null;
+    isCrossWorkspace: boolean;
+    userId: string;
+    canManageWorkspaces: boolean;
+    canMoveProjectsBetweenWorkspaces: boolean;
+  }): Promise<void> {
+    const {
+      target,
+      sourceWorkspaceId,
+      isCrossWorkspace,
+      userId,
+      canManageWorkspaces,
+      canMoveProjectsBetweenWorkspaces,
+    } = params;
+
+    const sourceOwnedByCaller = await this.isOwnedByUser(sourceWorkspaceId, userId);
+    const targetOwnedByCaller = target.ownerId === userId;
+    const movePermWaived = sourceOwnedByCaller || targetOwnedByCaller;
+
+    if (isCrossWorkspace && !canManageWorkspaces && !movePermWaived && !canMoveProjectsBetweenWorkspaces) {
+      throw new ForbiddenException(`Missing permission: ${Perms.moveProjectsBetweenWorkspaces}`);
+    }
+
+    const targetVisible = targetOwnedByCaller || (canManageWorkspaces && target.type === 'shared');
+    if (!targetVisible && !(await this.isMember(target.id, userId))) {
+      throw new NotFoundException(`Workspace ${target.id} not found`);
+    }
   }
 
   private async isOwnedByUser(workspaceId: string | null, userId: string): Promise<boolean> {
@@ -324,18 +516,14 @@ export class WorkspaceService {
     return row?.ownerId === userId;
   }
 
-  async createProjectInWorkspace(params: {
-    workspaceId: string;
-    tenantId: string;
-    userId: string;
-    canManageWorkspaces: boolean;
-    dto?: CreateProjectDto;
-  }): Promise<ProjectResponse> {
-    const { workspaceId, tenantId, userId, canManageWorkspaces, dto } = params;
-
-    await this.findOne({ workspaceId, userId, tenantId, canManageWorkspaces });
-
-    return this.projectService.create(dto, tenantId, workspaceId);
+  async createProjectInWorkspace(
+    params: WorkspaceAccessParams & { dto?: CreateProjectDto; folderId?: string | null }
+  ): Promise<ProjectResponse> {
+    await this.findOne(params);
+    if (params.folderId != null) {
+      await this.assertFolderInWorkspace(params.folderId, params.workspaceId);
+    }
+    return this.projectService.create(params.dto, params.tenantId, params.workspaceId, params.folderId ?? null);
   }
 
   private async attachCounts(rows: WorkspaceBaseRow[]): Promise<WorkspaceResponse[]> {
@@ -366,6 +554,40 @@ export class WorkspaceService {
       projectCount: projectCountByWs.get(r.id) ?? 0,
     }));
   }
+}
+
+function requireFolderName(raw: string | undefined): string {
+  const name = raw?.trim();
+  if (!name) throw new BadRequestException('name is required');
+  return name;
+}
+
+function folderExistsHereMessage(name: string): string {
+  return `A folder named "${name}" already exists in this workspace`;
+}
+
+async function withFolderNameConflict<T>(conflictMessage: string, write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (err) {
+    if (isFolderNameConflict(err)) {
+      throw new ConflictException(conflictMessage);
+    }
+    throw err;
+  }
+}
+
+function isFolderNameConflict(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  if (matchesFolderUniqueViolation(err)) return true;
+  return (
+    'cause' in err && typeof err.cause === 'object' && err.cause !== null && matchesFolderUniqueViolation(err.cause)
+  );
+}
+
+function matchesFolderUniqueViolation(err: object): boolean {
+  if (!('code' in err) || !('constraint_name' in err)) return false;
+  return err.code === '23505' && err.constraint_name === FOLDERS_WORKSPACE_NAME_CI_UNIQUE;
 }
 
 function applyUserOrder<T extends { id: string }>(rows: T[], order: string[]): T[] {

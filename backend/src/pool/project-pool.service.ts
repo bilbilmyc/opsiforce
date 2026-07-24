@@ -44,6 +44,7 @@ const POOL_PROVISION_READY_TIMEOUT_MS = 90 * 1000;
 export interface PoolClaim {
   tenantId: string;
   workspaceId: string | null;
+  folderId: string | null;
   title: string | null;
   description: string | null;
   timeoutIdle: number;
@@ -324,6 +325,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
         .set({
           tenantId: claim.tenantId,
           workspaceId: claim.workspaceId,
+          folderId: claim.folderId,
           title: claim.title,
           description: claim.description,
           lastPromptAt: null,
@@ -406,6 +408,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
         .set({
           tenantId: null,
           workspaceId: null,
+          folderId: null,
           title: null,
           description: null,
           updatedAt: new Date(),

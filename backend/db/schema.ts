@@ -145,12 +145,36 @@ export const workspaceMembers = pgTable(
   }),
 )
 
+export const FOLDERS_WORKSPACE_NAME_CI_UNIQUE = "folders_workspace_name_ci_unique"
+
+export const folders = pgTable(
+  "folders",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .references(() => workspaces.id, { onDelete: "cascade" })
+      .notNull(),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex(FOLDERS_WORKSPACE_NAME_CI_UNIQUE).on(
+      t.workspaceId,
+      sql`lower(${t.name})`,
+    ),
+  ],
+)
+
 export const projects = pgTable(
   "projects",
   {
     id: text("id").primaryKey(),
     tenantId: text("tenant_id").references(() => tenants.id),
     workspaceId: text("workspace_id").references(() => workspaces.id, {
+      onDelete: "set null",
+    }),
+    folderId: text("folder_id").references(() => folders.id, {
       onDelete: "set null",
     }),
     agentId: text("agent_id")

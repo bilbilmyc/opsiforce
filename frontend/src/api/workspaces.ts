@@ -1,7 +1,7 @@
 import { createMutation, useQueryClient } from '@tanstack/solid-query';
 import { createAppQuery } from '~/lib/create-app-query';
 import { toast } from 'solid-sonner';
-import { api, type Project, type User, type Workspace } from './client';
+import { ApiError, api, type Folder, type Project, type User, type Workspace } from './client';
 import { detectTimezone } from '~/lib/timezone';
 
 export const workspaceKeys = {
@@ -10,7 +10,16 @@ export const workspaceKeys = {
   detail: (id: string) => [...workspaceKeys.all, id] as const,
   members: (id: string) => [...workspaceKeys.all, id, 'members'] as const,
   projects: (id: string) => [...workspaceKeys.all, id, 'projects'] as const,
+  folders: (id: string) => [...workspaceKeys.all, id, 'folders'] as const,
 };
+
+type QueryClient = ReturnType<typeof useQueryClient>;
+
+function invalidateProjectPlacement(qc: QueryClient, workspaceId: string) {
+  qc.invalidateQueries({ queryKey: ['projects'] });
+  qc.invalidateQueries({ queryKey: workspaceKeys.projects(workspaceId) });
+  qc.invalidateQueries({ queryKey: workspaceKeys.folders(workspaceId) });
+}
 
 export function useWorkspaces(scope: 'member' | 'all' = 'member') {
   return createAppQuery(() => ({
@@ -40,6 +49,40 @@ export function useWorkspaceProjects(workspaceId: () => string | null) {
     queryKey: workspaceKeys.projects(workspaceId() ?? ''),
     queryFn: () => api.get<Project[]>(`/workspaces/${workspaceId()}/projects`),
     enabled: !!workspaceId(),
+  }));
+}
+
+export function useWorkspaceFolders(workspaceId: () => string) {
+  return createAppQuery(() => ({
+    queryKey: workspaceKeys.folders(workspaceId()),
+    queryFn: () => api.get<Folder[]>(`/workspaces/${workspaceId()}/folders`),
+  }));
+}
+
+export function useCreateFolder() {
+  const qc = useQueryClient();
+  return createMutation(() => ({
+    mutationFn: (params: { workspaceId: string; name: string }) =>
+      api.post<Folder>(`/workspaces/${params.workspaceId}/folders`, { name: params.name }),
+    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: workspaceKeys.folders(vars.workspaceId) }),
+  }));
+}
+
+export function useRenameFolder() {
+  const qc = useQueryClient();
+  return createMutation(() => ({
+    mutationFn: (params: { workspaceId: string; folderId: string; name: string }) =>
+      api.patch<Folder>(`/workspaces/${params.workspaceId}/folders/${params.folderId}`, { name: params.name }),
+    onSuccess: (_data, vars) => qc.invalidateQueries({ queryKey: workspaceKeys.folders(vars.workspaceId) }),
+  }));
+}
+
+export function useDeleteFolder() {
+  const qc = useQueryClient();
+  return createMutation(() => ({
+    mutationFn: (params: { workspaceId: string; folderId: string }) =>
+      api.delete<void>(`/workspaces/${params.workspaceId}/folders/${params.folderId}`),
+    onSuccess: (_data, vars) => invalidateProjectPlacement(qc, vars.workspaceId),
   }));
 }
 
@@ -105,18 +148,36 @@ export function useCreateProjectInWorkspace() {
   return createMutation(() => ({
     mutationFn: (params: {
       workspaceId: string;
+      folderId?: string | null;
       dto?: { title?: string; description?: string; agentId?: string; timezone?: string };
     }) =>
       api.post<Project>(`/workspaces/${params.workspaceId}/projects`, {
         timezone: detectTimezone(),
+        folderId: params.folderId ?? null,
         ...params.dto,
       }),
     onSuccess: (_data, vars) => {
-      qc.invalidateQueries({ queryKey: ['projects'] });
-      qc.invalidateQueries({ queryKey: workspaceKeys.projects(vars.workspaceId) });
+      invalidateProjectPlacement(qc, vars.workspaceId);
       qc.invalidateQueries({ queryKey: workspaceKeys.detail(vars.workspaceId) });
       qc.invalidateQueries({ queryKey: workspaceKeys.all });
     },
+  }));
+}
+
+function assignProjectRequest(workspaceId: string, projectId: string, folderId: string | null) {
+  return api.post<Project>(`/workspaces/${workspaceId}/projects/${projectId}`, { folderId });
+}
+
+export function useMoveProjectToFolder() {
+  const qc = useQueryClient();
+  return createMutation(() => ({
+    mutationFn: (params: { workspaceId: string; projectId: string; folderId: string | null }) =>
+      assignProjectRequest(params.workspaceId, params.projectId, params.folderId),
+    onSuccess: (_data, vars) => {
+      toast.success(vars.folderId ? 'Project moved into folder' : 'Project moved to workspace root');
+      invalidateProjectPlacement(qc, vars.workspaceId);
+    },
+    onError: () => toast.error('Failed to move project'),
   }));
 }
 
@@ -129,6 +190,7 @@ export interface MoveProjectVars {
   projectId: string;
   fromWorkspaceId: string | null;
   toWorkspaceId: string | null;
+  toFolderId?: string | null;
   fromName: string;
   toName: string;
 }
@@ -142,7 +204,7 @@ export function useMoveProject() {
         if (fromId === null) return;
         return api.delete<Project>(`/workspaces/${fromId}/projects/${params.projectId}`);
       }
-      return api.post<Project>(`/workspaces/${params.toWorkspaceId}/projects/${params.projectId}`);
+      return assignProjectRequest(params.toWorkspaceId, params.projectId, params.toFolderId ?? null);
     },
     onSuccess: (_data, vars) => {
       toast.success(`Project moved from ${vars.fromName} to ${vars.toName}`);
@@ -151,13 +213,48 @@ export function useMoveProject() {
       if (vars.fromWorkspaceId) {
         qc.invalidateQueries({ queryKey: workspaceKeys.projects(vars.fromWorkspaceId) });
         qc.invalidateQueries({ queryKey: workspaceKeys.detail(vars.fromWorkspaceId) });
+        qc.invalidateQueries({ queryKey: workspaceKeys.folders(vars.fromWorkspaceId) });
       }
       if (vars.toWorkspaceId) {
         qc.invalidateQueries({ queryKey: workspaceKeys.projects(vars.toWorkspaceId) });
         qc.invalidateQueries({ queryKey: workspaceKeys.detail(vars.toWorkspaceId) });
+        qc.invalidateQueries({ queryKey: workspaceKeys.folders(vars.toWorkspaceId) });
       }
     },
     onError: () => toast.error('Failed to move project'),
+  }));
+}
+
+function invalidateWorkspaceMove(qc: QueryClient, fromWorkspaceId: string, toWorkspaceId: string) {
+  qc.invalidateQueries({ queryKey: ['projects'] });
+  qc.invalidateQueries({ queryKey: workspaceKeys.all });
+  for (const id of [fromWorkspaceId, toWorkspaceId]) {
+    qc.invalidateQueries({ queryKey: workspaceKeys.projects(id) });
+    qc.invalidateQueries({ queryKey: workspaceKeys.detail(id) });
+    qc.invalidateQueries({ queryKey: workspaceKeys.folders(id) });
+  }
+}
+
+export interface MoveFolderVars {
+  folderId: string;
+  fromWorkspaceId: string;
+  toWorkspaceId: string;
+  fromName: string;
+  toName: string;
+}
+
+export function useMoveFolder() {
+  const qc = useQueryClient();
+  return createMutation(() => ({
+    mutationFn: (params: MoveFolderVars) =>
+      api.post<Folder>(`/workspaces/${params.fromWorkspaceId}/folders/${params.folderId}/move`, {
+        toWorkspaceId: params.toWorkspaceId,
+      }),
+    onSuccess: (_data, vars) => {
+      toast.success(`Folder moved from ${vars.fromName} to ${vars.toName}`);
+      invalidateWorkspaceMove(qc, vars.fromWorkspaceId, vars.toWorkspaceId);
+    },
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to move folder'),
   }));
 }
 
