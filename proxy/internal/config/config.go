@@ -48,7 +48,7 @@ func Load(modeArg string, portArg int) (Config, error) {
 		ReadyCacheTTL:              durationEnv("OPSIFORCE_PROXY_READY_CACHE_TTL", 5*time.Second),
 		NonReadyCacheTTL:           durationEnv("OPSIFORCE_PROXY_NON_READY_CACHE_TTL", time.Second),
 		ControlPlaneTimeout:        durationEnv("OPSIFORCE_PROXY_CONTROL_TIMEOUT", 10*time.Second),
-		WebsocketKeepAliveInterval: durationEnv("OPSIFORCE_PROXY_WS_KEEPALIVE_INTERVAL", time.Minute),
+		WebsocketKeepAliveInterval: positiveDurationEnv("OPSIFORCE_PROXY_WS_KEEPALIVE_INTERVAL", time.Minute),
 		CompressionMinBytes:        intEnv("OPSIFORCE_PROXY_COMPRESSION_MIN_BYTES", 1024),
 		RequestBufferLimit:         int64(intEnv("OPSIFORCE_PROXY_REQUEST_BUFFER_LIMIT_BYTES", 3*1024*1024)),
 		RequestLogBodyLimit:        intEnv("OPSIFORCE_PROXY_REQUEST_LOG_BODY_LIMIT_BYTES", 256*1024),
@@ -116,6 +116,18 @@ func durationEnv(name string, fallback time.Duration) time.Duration {
 
 	value, err := time.ParseDuration(raw)
 	if err != nil {
+		return fallback
+	}
+
+	return value
+}
+
+// positiveDurationEnv reads a duration that drives a ticker. "0s" and negative
+// durations parse cleanly but panic time.NewTicker, so they fall back to the
+// default instead of reaching it.
+func positiveDurationEnv(name string, fallback time.Duration) time.Duration {
+	value := durationEnv(name, fallback)
+	if value <= 0 {
 		return fallback
 	}
 
