@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { appCanonicalHost } from '../common/app-host';
-import { ProjectService, type EnsureEnvironmentResult } from '../project/project.service';
+import { ProjectService, type EnsureEnvironmentResult, type ProjectActivityKind } from '../project/project.service';
 import { RequestLogMode } from '../project/project.types';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
 import type { ProjectEnvironmentContext } from '../project-environment/project-environment.types';
@@ -23,7 +23,7 @@ import { ProxyService } from './proxy.service';
 
 type ProxySurface = 'agent' | 'app' | 'vscode' | 'db';
 
-interface EnsureProxyBody {
+interface ProxySurfaceBody {
   surface?: ProxySurface;
 }
 
@@ -63,16 +63,13 @@ export class ProxyController {
   @Post('projects/:environmentId/ensure')
   async ensureEnvironment(
     @Param('environmentId') environmentId: string,
-    @Body() body: EnsureProxyBody,
+    @Body() body: ProxySurfaceBody,
     @Headers('x-proxy-control-token') token: string | undefined,
     @Headers('x-forwarded-groups') groupsHeader: string | undefined
   ): Promise<EnsureProxyResponse> {
     this.assertToken(token);
 
-    const surface = body.surface;
-    if (!surface || !isProxySurface(surface)) {
-      throw new BadRequestException('Invalid proxy surface');
-    }
+    const surface = requireSurface(body);
 
     const env = await this.projectEnvironmentService.findByIdOrNull(environmentId);
     if (!env) throw new NotFoundException(`Project environment ${environmentId} not found`);
@@ -82,7 +79,7 @@ export class ProxyController {
       await this.assertProjectTenantAccess(env.tenantId, groupsHeader);
     }
 
-    const activity = surface === 'app' ? 'app' : 'agent';
+    const activity = activityForSurface(surface);
     let ensured = await this.projectService.ensureEnvironment(env, activity);
 
     if (surface === 'agent' && ensured.state === 'ready' && env.isDefault) {
@@ -107,6 +104,19 @@ export class ProxyController {
   ): Promise<{ restart: boolean }> {
     this.assertToken(token);
     return { restart: await this.projectService.handleProxyFailureByEnvId(environmentId) };
+  }
+
+  @Post('projects/:environmentId/activity')
+  async touchActivity(
+    @Param('environmentId') environmentId: string,
+    @Body() body: ProxySurfaceBody,
+    @Headers('x-proxy-control-token') token: string | undefined
+  ): Promise<void> {
+    this.assertToken(token);
+
+    const surface = requireSurface(body);
+
+    await this.projectService.touchEnvironmentActivity(environmentId, activityForSurface(surface));
   }
 
   @Post('projects/:environmentId/prompt')
@@ -179,6 +189,18 @@ function resolveUpstreamForSurface(
     case 'db':
       return proxyService.resolveDbUpstreamForProject(env);
   }
+}
+
+function requireSurface(body: ProxySurfaceBody): ProxySurface {
+  const surface = body.surface;
+  if (!surface || !isProxySurface(surface)) {
+    throw new BadRequestException('Invalid proxy surface');
+  }
+  return surface;
+}
+
+function activityForSurface(surface: ProxySurface): ProjectActivityKind {
+  return surface === 'app' ? 'app' : 'agent';
 }
 
 function isProxySurface(value: string): value is ProxySurface {

@@ -5,7 +5,7 @@ description: Create NestJS API endpoints with controllers, services, and modules
 
 # NestJS API Development
 
-The backend uses NestJS with Express adapter. All routes are prefixed with `/api` (set in `main.ts`).
+The backend uses NestJS with the Fastify adapter. All routes are prefixed with `/api` (set in `main.ts`). For real-time features (live updates, chat, server push) see the `websockets` skill.
 
 ## Module pattern — every feature needs 3 files
 

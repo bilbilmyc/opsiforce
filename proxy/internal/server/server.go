@@ -117,12 +117,13 @@ func (c *capturingReader) captured() string {
 }
 
 type Server struct {
-	cfg        config.Config
-	backend    *backend.Client
-	transport  *http.Transport
-	bufferPool *bufferpool.Pool
-	cache      *proxycache.Cache
-	logger     *requestlog.Logger
+	cfg         config.Config
+	backend     *backend.Client
+	transport   *http.Transport
+	bufferPool  *bufferpool.Pool
+	cache       *proxycache.Cache
+	logger      *requestlog.Logger
+	wsKeepAlive *upgradeKeepAlive
 }
 
 func New(
@@ -144,6 +145,11 @@ func New(
 		bufferPool: bufferpool.New(32 * 1024),
 		cache:      proxycache.New(),
 		logger:     requestLogger,
+		wsKeepAlive: newUpgradeKeepAlive(
+			backendClient.TouchActivity,
+			cfg.WebsocketKeepAliveInterval,
+			cfg.ControlPlaneTimeout,
+		),
 	}
 }
 
@@ -209,6 +215,11 @@ func (s *Server) handleAgent(w http.ResponseWriter, r *http.Request) {
 		s.stampPrompt(projectID)
 	}
 
+	if isUpgradeRequest(r) {
+		release := s.wsKeepAlive.acquire(projectID, backend.SurfaceAgent)
+		defer release()
+	}
+
 	s.serveReverseProxy(w, r, projectID, targetURL, reverseProxyOptions{stripUserIdentity: true})
 }
 
@@ -269,6 +280,8 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isUpgradeRequest(r) {
+		release := s.wsKeepAlive.acquire(projectID, backend.SurfaceApp)
+		defer release()
 		s.serveReverseProxy(w, r, projectID, targetURL, reverseProxyOptions{})
 		return
 	}
@@ -369,6 +382,11 @@ func (s *Server) handleSubdomain(w http.ResponseWriter, r *http.Request, surface
 	if err != nil {
 		s.sendFailureResponse(w, r.Context(), projectID)
 		return
+	}
+
+	if isUpgradeRequest(r) {
+		release := s.wsKeepAlive.acquire(projectID, surface)
+		defer release()
 	}
 
 	s.serveReverseProxy(w, r, projectID, targetURL, reverseProxyOptions{

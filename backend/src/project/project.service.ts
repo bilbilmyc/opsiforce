@@ -39,7 +39,7 @@ import { ProxyService } from '../proxy/proxy.service';
 import { ProjectPoolService } from '../pool/project-pool.service';
 import { TimeoutService } from '../timeout/timeout.service';
 import { BifrostService } from '../bifrost/bifrost.service';
-import { assertPositiveMs } from '../common/validation';
+import { assertIdleTimeoutMs } from '../common/validation';
 import { restoreEnvJsonBackup } from '../common/env-file';
 import { writeJsonAtomic } from '../common/fs';
 import { lockProjectGit, type DbExecutor } from '../common/locks';
@@ -163,7 +163,7 @@ import {
 import { ACTIVE_IMPORT_STATUSES, ProjectImportStatus } from './project-import.types';
 import { ACTIVE_PUBLISH_STATUSES } from '../publish/publish.types';
 
-type ProjectActivityKind = 'agent' | 'app';
+export type ProjectActivityKind = 'agent' | 'app';
 
 export interface EnsureEnvironmentResult {
   state: 'ready' | 'starting' | 'disabled' | 'failed';
@@ -981,9 +981,9 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (dto.title !== undefined) projectUpdates.title = dto.title;
     if (dto.description !== undefined) projectUpdates.description = dto.description;
-    if (dto.timeoutIdle !== undefined) settingsUpdates.timeoutIdle = assertPositiveMs(dto.timeoutIdle, 'timeoutIdle');
+    if (dto.timeoutIdle !== undefined) settingsUpdates.timeoutIdle = assertIdleTimeoutMs(dto.timeoutIdle, 'timeoutIdle');
     if (dto.appTimeoutIdle !== undefined)
-      settingsUpdates.appTimeoutIdle = assertPositiveMs(dto.appTimeoutIdle, 'appTimeoutIdle');
+      settingsUpdates.appTimeoutIdle = assertIdleTimeoutMs(dto.appTimeoutIdle, 'appTimeoutIdle');
     if (dto.timezone !== undefined) settingsUpdates.timezone = dto.timezone;
 
     await db.transaction(async (tx) => {
@@ -1434,11 +1434,7 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.touchEnvironmentActivity(projectId, 'agent');
   }
 
-  async touchAppActivity(projectId: string): Promise<void> {
-    await this.touchEnvironmentActivity(projectId, 'app');
-  }
-
-  private async touchEnvironmentActivity(envId: string, activity: ProjectActivityKind): Promise<void> {
+  async touchEnvironmentActivity(envId: string, activity: ProjectActivityKind): Promise<void> {
     if (activity === 'agent') await this.timeoutService.touch(envId);
     else await this.timeoutService.touchApp(envId);
     await this.projectEnvironmentService.touchActivity(envId);

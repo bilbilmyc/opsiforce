@@ -111,32 +111,44 @@ func (c *Client) Ensure(ctx context.Context, projectID string, surface Surface, 
 	return decoded, nil
 }
 
-func (c *Client) ReportFailure(ctx context.Context, projectID string) (bool, error) {
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		fmt.Sprintf("%s/api/internal/proxy/projects/%s/failure", c.baseURL, projectID),
-		http.NoBody,
-	)
+func (c *Client) postControl(ctx context.Context, path string, payload []byte) ([]byte, error) {
+	requestBody := io.Reader(http.NoBody)
+	if payload != nil {
+		requestBody = bytes.NewReader(payload)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+path, requestBody)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	req.Header.Set("x-proxy-control-token", c.token)
+	if payload != nil {
+		req.Header.Set("content-type", "application/json")
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	if resp.StatusCode >= 400 {
-		return false, &StatusError{StatusCode: resp.StatusCode, Body: body}
+		return nil, &StatusError{StatusCode: resp.StatusCode, Body: body}
+	}
+
+	return body, nil
+}
+
+func (c *Client) ReportFailure(ctx context.Context, projectID string) (bool, error) {
+	body, err := c.postControl(ctx, fmt.Sprintf("/api/internal/proxy/projects/%s/failure", projectID), nil)
+	if err != nil {
+		return false, err
 	}
 
 	var decoded struct {
@@ -149,37 +161,25 @@ func (c *Client) ReportFailure(ctx context.Context, projectID string) (bool, err
 	return decoded.Restart, nil
 }
 
+// TouchActivity refreshes the idle-timeout the given surface feeds, exactly as
+// an Ensure call for that surface would.
+func (c *Client) TouchActivity(ctx context.Context, environmentID string, surface Surface) error {
+	payload, err := json.Marshal(map[string]string{
+		"surface": string(surface),
+	})
+	if err != nil {
+		return err
+	}
+
+	_, err = c.postControl(ctx, fmt.Sprintf("/api/internal/proxy/projects/%s/activity", environmentID), payload)
+	return err
+}
+
 // StampPrompt records that a user sent a Prompt to the given project
 // environment, moving its Project to the top of the sidebar. It is a
 // best-effort control-plane signal: callers fire it and forget, never
 // blocking the proxied chat request on its outcome.
 func (c *Client) StampPrompt(ctx context.Context, environmentID string) error {
-	req, err := http.NewRequestWithContext(
-		ctx,
-		http.MethodPost,
-		fmt.Sprintf("%s/api/internal/proxy/projects/%s/prompt", c.baseURL, environmentID),
-		http.NoBody,
-	)
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("x-proxy-control-token", c.token)
-
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode >= 400 {
-		return &StatusError{StatusCode: resp.StatusCode, Body: body}
-	}
-
-	return nil
+	_, err := c.postControl(ctx, fmt.Sprintf("/api/internal/proxy/projects/%s/prompt", environmentID), nil)
+	return err
 }

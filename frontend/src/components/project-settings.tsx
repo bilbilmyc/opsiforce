@@ -22,7 +22,7 @@ import { TimeoutRow } from '~/components/ui/timeout-row';
 import { RequestLoggingControls } from '~/components/ui/request-logging-controls';
 import { ResourcesSelector } from '~/components/project/resources-selector';
 import Skeleton from '~/components/ui/skeleton';
-import { msToUnit, unitToMs } from '~/lib/duration-units';
+import { MIN_IDLE_TIMEOUT_LABEL, MIN_IDLE_TIMEOUT_MS, msToUnit, unitToMs } from '~/lib/duration-units';
 import { coresToMillicores, gibToMib, mibToGib, millicoresToCores, trimNumber } from '~/lib/pod-resources';
 import { type BudgetConfig } from '~/constants/budget';
 
@@ -207,10 +207,14 @@ export default function ProjectSettings(props: {
         const projectData = project.data;
         if (!projectData) throw new Error('Project not loaded');
 
-        await api.patch(`/projects/${props.projectId}`, {
-          timeoutIdle: unitToMs(agentValue(), agentUnit(), projectData.timeoutIdle),
-          appTimeoutIdle: unitToMs(appValue(), appUnit(), projectData.appTimeoutIdle),
-        });
+        const timeoutIdle = unitToMs(agentValue(), agentUnit(), projectData.timeoutIdle);
+        const appTimeoutIdle = unitToMs(appValue(), appUnit(), projectData.appTimeoutIdle);
+        if (timeoutIdle < MIN_IDLE_TIMEOUT_MS || appTimeoutIdle < MIN_IDLE_TIMEOUT_MS) {
+          toast.error(`Idle timeouts must be at least ${MIN_IDLE_TIMEOUT_LABEL}`);
+          return;
+        }
+
+        await api.patch(`/projects/${props.projectId}`, { timeoutIdle, appTimeoutIdle });
         await qc.invalidateQueries({ queryKey: ['projects', props.projectId] });
         toast.success('Timeouts updated');
       } else if (activeTab() === 'logging') {
@@ -356,7 +360,7 @@ export default function ProjectSettings(props: {
                 <div class="space-y-3">
                   <TimeoutRow
                     label="Agent Idle Timeout"
-                    description="How long the coding agent can be idle before pod suspends."
+                    description={`How long the coding agent can be idle before pod suspends. Minimum ${MIN_IDLE_TIMEOUT_LABEL}.`}
                     placeholder="30"
                     value={agentValue()}
                     unit={agentUnit()}
@@ -371,7 +375,7 @@ export default function ProjectSettings(props: {
                   />
                   <TimeoutRow
                     label="App Idle Timeout"
-                    description="How long the webapp preview stays alive without visitors."
+                    description={`How long the webapp preview stays alive without visitors. Minimum ${MIN_IDLE_TIMEOUT_LABEL}.`}
                     placeholder="7"
                     value={appValue()}
                     unit={appUnit()}

@@ -242,6 +242,7 @@ data/
 | `dnd-kit` | Drag and drop, kanban boards, reorderable lists |
 | `data-export` | CSV export, JSON download, print views, clipboard |
 | `virtual-list` | Large lists (100+ items), virtualized tables |
+| `websockets` | Real-time features — live updates, chat, notifications, presence, collaborative editing, server push |
 | `llm-api` | AI features — chat, text generation, structured output, streaming, reasoning effort, **audio transcription (speech-to-text)**, image analysis, **image generation** |
 
 ## Rules

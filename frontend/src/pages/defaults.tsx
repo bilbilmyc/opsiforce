@@ -11,7 +11,7 @@ import { Button } from '~/components/ui/button';
 import { SettingsSection } from '~/components/settings/settings-section';
 import { TimeoutRow } from '~/components/ui/timeout-row';
 import { BudgetRow } from '~/components/ui/budget-row';
-import { msToUnit, unitToMs } from '~/lib/duration-units';
+import { MIN_IDLE_TIMEOUT_LABEL, MIN_IDLE_TIMEOUT_MS, msToUnit, unitToMs } from '~/lib/duration-units';
 
 type Scope = 'global' | 'tenant';
 
@@ -98,12 +98,16 @@ function TimeoutsSection(props: { base: string; data: TimeoutDefaults; onSaved: 
   const [saving, setSaving] = createSignal(false);
 
   async function save() {
+    const defaultTimeoutIdle = unitToMs(agentValue(), agentUnit(), props.data.defaultTimeoutIdle);
+    const defaultAppTimeoutIdle = unitToMs(appValue(), appUnit(), props.data.defaultAppTimeoutIdle);
+    if (defaultTimeoutIdle < MIN_IDLE_TIMEOUT_MS || defaultAppTimeoutIdle < MIN_IDLE_TIMEOUT_MS) {
+      toast.error(`Idle timeouts must be at least ${MIN_IDLE_TIMEOUT_LABEL}`);
+      return;
+    }
+
     setSaving(true);
     try {
-      await api.patch(`${props.base}/timeouts`, {
-        defaultTimeoutIdle: unitToMs(agentValue(), agentUnit(), props.data.defaultTimeoutIdle),
-        defaultAppTimeoutIdle: unitToMs(appValue(), appUnit(), props.data.defaultAppTimeoutIdle),
-      });
+      await api.patch(`${props.base}/timeouts`, { defaultTimeoutIdle, defaultAppTimeoutIdle });
       await props.onSaved();
       setDirty(false);
       toast.success('Timeouts updated');
@@ -124,6 +128,7 @@ function TimeoutsSection(props: { base: string; data: TimeoutDefaults; onSaved: 
     >
       <TimeoutRow
         label="Agent Idle Timeout"
+        description={`Minimum ${MIN_IDLE_TIMEOUT_LABEL}.`}
         placeholder="30"
         value={agentValue()}
         unit={agentUnit()}
@@ -138,6 +143,7 @@ function TimeoutsSection(props: { base: string; data: TimeoutDefaults; onSaved: 
       />
       <TimeoutRow
         label="App Idle Timeout"
+        description={`Minimum ${MIN_IDLE_TIMEOUT_LABEL}.`}
         placeholder="7"
         value={appValue()}
         unit={appUnit()}
