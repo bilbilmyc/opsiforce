@@ -18,7 +18,10 @@ export default defineConfig({
     strictPort: true,
     host: "0.0.0.0",
     proxy: {
-      "/api": `http://127.0.0.1:${backendPort}`,
+      "/api": {
+        target: `http://127.0.0.1:${backendPort}`,
+        ws: true,
+      },
     },
   },
   preview: {
@@ -26,7 +29,10 @@ export default defineConfig({
     strictPort: true,
     host: "0.0.0.0",
     proxy: {
-      "/api": `http://127.0.0.1:${backendPort}`,
+      "/api": {
+        target: `http://127.0.0.1:${backendPort}`,
+        ws: true,
+      },
     },
   },
   build: {

@@ -163,7 +163,7 @@ import {
 import { ACTIVE_IMPORT_STATUSES, ProjectImportStatus } from './project-import.types';
 import { ACTIVE_PUBLISH_STATUSES } from '../publish/publish.types';
 
-type ProjectActivityKind = 'agent' | 'app';
+export type ProjectActivityKind = 'agent' | 'app';
 
 export interface EnsureEnvironmentResult {
   state: 'ready' | 'starting' | 'disabled' | 'failed';
@@ -1434,11 +1434,7 @@ export class ProjectService implements OnApplicationBootstrap {
     await this.touchEnvironmentActivity(projectId, 'agent');
   }
 
-  async touchAppActivity(projectId: string): Promise<void> {
-    await this.touchEnvironmentActivity(projectId, 'app');
-  }
-
-  private async touchEnvironmentActivity(envId: string, activity: ProjectActivityKind): Promise<void> {
+  async touchEnvironmentActivity(envId: string, activity: ProjectActivityKind): Promise<void> {
     if (activity === 'agent') await this.timeoutService.touch(envId);
     else await this.timeoutService.touchApp(envId);
     await this.projectEnvironmentService.touchActivity(envId);
