@@ -7,7 +7,7 @@ import {
   tenantTimeoutDefaults,
   tenantBudgetDefaults,
 } from '../../db/schema';
-import { assertPositiveMs } from '../common/validation';
+import { assertIdleTimeoutMs } from '../common/validation';
 import type {
   TimeoutDefaults,
   BudgetDefaults,
@@ -141,10 +141,10 @@ function pickBudgetFields(row: BudgetDefaults): BudgetDefaults {
 function cleanTimeoutPatch(patch: UpdateTimeoutDefaultsDto): Partial<TimeoutDefaults> {
   const updates: Partial<TimeoutDefaults> = {};
   if (patch.defaultTimeoutIdle !== undefined) {
-    updates.defaultTimeoutIdle = assertPositiveMs(patch.defaultTimeoutIdle, 'defaultTimeoutIdle');
+    updates.defaultTimeoutIdle = assertIdleTimeoutMs(patch.defaultTimeoutIdle, 'defaultTimeoutIdle');
   }
   if (patch.defaultAppTimeoutIdle !== undefined) {
-    updates.defaultAppTimeoutIdle = assertPositiveMs(patch.defaultAppTimeoutIdle, 'defaultAppTimeoutIdle');
+    updates.defaultAppTimeoutIdle = assertIdleTimeoutMs(patch.defaultAppTimeoutIdle, 'defaultAppTimeoutIdle');
   }
   return updates;
 }

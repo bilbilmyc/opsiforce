@@ -39,7 +39,7 @@ import { ProxyService } from '../proxy/proxy.service';
 import { ProjectPoolService } from '../pool/project-pool.service';
 import { TimeoutService } from '../timeout/timeout.service';
 import { BifrostService } from '../bifrost/bifrost.service';
-import { assertPositiveMs } from '../common/validation';
+import { assertIdleTimeoutMs } from '../common/validation';
 import { restoreEnvJsonBackup } from '../common/env-file';
 import { writeJsonAtomic } from '../common/fs';
 import { lockProjectGit, type DbExecutor } from '../common/locks';
@@ -981,9 +981,9 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (dto.title !== undefined) projectUpdates.title = dto.title;
     if (dto.description !== undefined) projectUpdates.description = dto.description;
-    if (dto.timeoutIdle !== undefined) settingsUpdates.timeoutIdle = assertPositiveMs(dto.timeoutIdle, 'timeoutIdle');
+    if (dto.timeoutIdle !== undefined) settingsUpdates.timeoutIdle = assertIdleTimeoutMs(dto.timeoutIdle, 'timeoutIdle');
     if (dto.appTimeoutIdle !== undefined)
-      settingsUpdates.appTimeoutIdle = assertPositiveMs(dto.appTimeoutIdle, 'appTimeoutIdle');
+      settingsUpdates.appTimeoutIdle = assertIdleTimeoutMs(dto.appTimeoutIdle, 'appTimeoutIdle');
     if (dto.timezone !== undefined) settingsUpdates.timezone = dto.timezone;
 
     await db.transaction(async (tx) => {
