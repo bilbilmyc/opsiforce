@@ -39,9 +39,15 @@ export function ProjectCard(props: {
     setEditing(false);
   }
 
+  function handleCardClick(e: MouseEvent & { currentTarget: HTMLElement; target: Element }) {
+    const retargetedFromPortal = !e.currentTarget.contains(e.target);
+    if (editing() || retargetedFromPortal) return;
+    props.onSelect();
+  }
+
   return (
     <div
-      onClick={() => !editing() && props.onSelect()}
+      onClick={handleCardClick}
       class={cn(
         'w-full text-left rounded-lg px-2.5 py-2 transition-all duration-150 group relative cursor-pointer',
         props.isActive ? 'bg-background shadow-sm ring-1 ring-black/[0.04]' : 'hover:bg-sidebar-accent/60'
