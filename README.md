@@ -1,4 +1,4 @@
-# Opsiforce
+# Opsiforce — Open-Source, Self-Hosted Lovable and Base44 Alternative
 
 Opsiforce is a self-hosted, multi-tenant **web platform** for building and running AI-generated apps inside your own infrastructure. You deploy it once to a **Kubernetes cluster** and your team uses it from the browser. It is a service you host and operate, not a desktop app that runs on each person's machine. Each user can create multiple projects, and every project is its own chat with an AI agent backed by an isolated Linux/Kubernetes workspace where the agent can write real code, run commands, install packages, edit files, inspect data, and serve the resulting app through the platform.
 
