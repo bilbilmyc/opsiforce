@@ -17,6 +17,9 @@ async function bootstrap() {
       parts: Number.MAX_SAFE_INTEGER,
     },
   });
+  fastify.addContentTypeParser('application/octet-stream', (_request, payload, done) => {
+    done(null, payload);
+  });
   await fastify.register(import('@fastify/compress'), {
     encodings: ['br', 'gzip', 'deflate'],
     threshold: 1024,

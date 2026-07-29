@@ -4,7 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
 import { BullBoardModule } from '@bull-board/nestjs';
 import { FastifyAdapter as BullBoardFastifyAdapter } from '@bull-board/fastify';
-import configuration from './config/configuration';
+import { configuration } from './config/configuration';
 import { PodModule } from './pod/pod.module';
 import { ProjectModule } from './project/project.module';
 import { TimeoutModule } from './timeout/timeout.module';

@@ -40,8 +40,8 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
 
   async function resolveSessionId(environmentId: string): Promise<string | undefined> {
     try {
-      const sessions = await api.get<OpenCodeSession[]>(`/proxy/${environmentId}/session`);
-      const roots = Array.isArray(sessions) ? sessions.filter((s) => !s.parentID) : [];
+      const sessions = await api.get<OpenCodeSession[]>(`/proxy/${environmentId}/session?roots=true`);
+      const roots = Array.isArray(sessions) ? sessions : [];
       if (roots.length === 0) return undefined;
       const remembered = options.rememberedSessionId();
       const pinned = remembered ? roots.find((s) => s.id === remembered) : undefined;

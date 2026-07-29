@@ -1,9 +1,9 @@
-import { BadRequestException, Controller, Get, Param, Post, Req, Res } from '@nestjs/common';
-import type { MultipartFile } from '@fastify/multipart';
+import { BadRequestException, Body, Controller, Get, HttpException, Param, Post, Req, Res } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { rm } from 'node:fs/promises';
 import { ProjectImportService } from './project-import.service';
-import { ProjectImportStatus, type ProjectImportJobResponse } from './project-import.types';
+import { ProjectImportUploadService } from './project-import-upload.service';
+import { ProjectImportStatus, type FinalizeImportDto, type ProjectImportJobResponse } from './project-import.types';
 import { ProjectService } from './project.service';
 import { ProjectEventsService } from './project-events.service';
 import { CurrentTenant, type TenantContext } from '../tenant/tenant.decorator';
@@ -13,20 +13,11 @@ import { RequirePermission } from '../permission/permission.guard';
 import { Perms } from '../permission/permission.constants';
 import { getGroupsHeader, hasPermission } from '../permission/permission.utils';
 
-interface MultipartField {
-  type: 'field';
-  fieldname: string;
-  value: string;
-}
-
-interface MultipartRequest extends FastifyRequest {
-  parts(): AsyncIterableIterator<MultipartFile | MultipartField>;
-}
-
 @Controller('projects')
 export class ProjectImportController {
   constructor(
     private readonly importService: ProjectImportService,
+    private readonly uploadService: ProjectImportUploadService,
     private readonly projectService: ProjectService,
     private readonly projectEventsService: ProjectEventsService,
     private readonly userService: UserService
@@ -34,37 +25,42 @@ export class ProjectImportController {
 
   @Post('import')
   @RequirePermission(Perms.importProject)
-  async start(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: UserContext, @Req() req: MultipartRequest) {
+  async start(
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
+    @Body() dto: FinalizeImportDto | undefined,
+    @Req() req: FastifyRequest
+  ) {
+    const uploadId = dto?.uploadId?.trim();
+    if (!uploadId) throw new BadRequestException('An "uploadId" from a chunked upload session is required');
+
+    const session = { tenantId: tenant.tenantId, uploadId };
+    const claimDir = await this.uploadService.claimSession(session);
     const filePath = this.importService.newUploadPath();
-    const fields = new Map<string, string>();
-    let received = false;
-
     try {
-      for await (const part of req.parts()) {
-        if (part.type === 'file') {
-          received = true;
-          await this.importService.streamUploadToStaging(part.file, filePath);
-        } else {
-          fields.set(part.fieldname, part.value);
-        }
-      }
+      await this.uploadService.assembleUpload({ claimDir, destPath: filePath });
 
-      if (!received) throw new BadRequestException('No file was uploaded');
-
-      const workspaceId = fields.get('workspaceId')?.trim() || null;
       const userId = await this.resolveUserId(user, tenant.tenantId);
       const canManageWorkspaces = hasPermission(getGroupsHeader(req), Perms.manageWorkspaces);
-      return await this.importService.startImport({
+      const result = await this.importService.startImport({
         tenantId: tenant.tenantId,
-        workspaceId,
+        workspaceId: dto?.workspaceId?.trim() || null,
         userId,
         canManageWorkspaces,
-        titleOverride: fields.get('title') ?? null,
-        timezone: fields.get('timezone')?.trim() || 'UTC',
+        titleOverride: dto?.title ?? null,
+        timezone: dto?.timezone?.trim() || 'UTC',
         uploadPath: filePath,
       });
+
+      await this.uploadService.deleteClaim(claimDir).catch(() => {});
+      return result;
     } catch (err) {
       await rm(filePath, { force: true }).catch(() => {});
+      if (err instanceof HttpException && err.getStatus() === 400) {
+        await this.uploadService.deleteClaim(claimDir).catch(() => {});
+      } else {
+        await this.uploadService.releaseClaim(session, claimDir);
+      }
       throw err;
     }
   }
