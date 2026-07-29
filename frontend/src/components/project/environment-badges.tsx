@@ -58,13 +58,13 @@ export function EnvironmentBadges(props: { environmentIds: string[]; dimmed?: bo
 
   return (
     <Show when={resolved().length > 0}>
-      <div class={cn('flex items-center gap-1 min-w-0', props.dimmed && 'opacity-50')}>
+      <div class={cn('flex items-center gap-0.5 min-w-0', props.dimmed && 'opacity-50')}>
         <For each={visible()}>
           {(env) => (
             <Tooltip>
               <TooltipTrigger
                 as="span"
-                class="inline-flex h-4 shrink-0 items-center rounded px-1 text-[10px] font-semibold uppercase leading-none tracking-wide ring-1 ring-inset ring-black/15"
+                class="inline-flex h-3.5 shrink-0 items-center rounded-sm px-[3px] text-[9px] font-semibold uppercase leading-none tracking-tight ring-1 ring-inset ring-black/15"
                 style={{ 'background-color': env.color, color: readableForeground(env.color) }}
                 aria-label={env.name}
               >
@@ -76,7 +76,7 @@ export function EnvironmentBadges(props: { environmentIds: string[]; dimmed?: bo
         </For>
         <Show when={overflow() > 0}>
           <Tooltip>
-            <TooltipTrigger as="span" class="text-[10px] leading-none text-sidebar-muted-foreground">
+            <TooltipTrigger as="span" class="text-[9px] leading-none text-sidebar-muted-foreground">
               +{overflow()}
             </TooltipTrigger>
             <TooltipContent>{overflowNames()}</TooltipContent>
