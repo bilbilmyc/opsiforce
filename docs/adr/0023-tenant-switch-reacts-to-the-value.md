@@ -1,0 +1,22 @@
+# A tenant switch is handled by reacting to the tenant value, not by the setter
+
+Status: accepted — implemented
+
+Switching tenant must leave every tenant-scoped view behind: cancel and reset the query cache, then navigate to `/`. That work now lives in a **single root-level effect on the tenant value** (`createTenantChangeHandler`, called once from `routes/__root.tsx`), not in the `setTenant` setter and not in the tenant selector's `onSelect`.
+
+The current tenant is one `localStorage` key (`tenant`) read by two kinds of consumer: reactive signals (`createTenantState`, one instance per call site, kept in sync by real and synthetic `storage` events — see `lib/persisted-signal.ts`) and direct `localStorage.getItem('tenant')` reads at request time (`api/client.ts`, and the SSE URL builders in `api/projects.ts` and `api/agent-status.ts`). A switch therefore arrives at a given tab through one of **two** paths: the local `setTenant` call, or a cross-tab `storage` event. Hanging the cleanup off the setter covers only the first, which is what produced the bug this ADR fixes: with two tabs open, switching tenant in tab B left tab A on `/projects/$projectId` of the *old* tenant, still streaming that project's status (the `EventSource` URL had `?tenant=<old>` baked in and its effect does not track the tenant), still talking to its pod, and still rendering its preview iframe — while the sidebar, refetched on window focus with the new tenant header, showed the new tenant's projects. Reacting to the value collapses both paths into one.
+
+The redirect is unconditional for any route other than `/`, not just `/projects/*`: `/schedules`, `/settings/*` and `/admin/*` are tenant-scoped too. Reset is sequenced *after* navigation settles so the outgoing page's observers do not refetch themselves under the new tenant on their way out. A transition out of the empty string is treated as initialization rather than a switch, so a cold load — or a load after `api/client.ts` clears the key on a 403 — does not bounce the user off a deep link before `TenantSelector` has seeded the first tenant.
+
+## Considered options
+
+- **Keep the cleanup in `setTenant` and duplicate it in the `storage` handler** in `persisted-signal.ts`. Rejected: `persisted-signal` is a generic persistence primitive shared with the sidebar and panel widths, and it has no business knowing about the router or the query client. It would also leave two copies of the same policy to drift.
+- **Remount the routed subtree on tenant change** — the sibling makara app's approach (`<Main key={tenant}>` in `starter-next-ts/src/layouts/dashboard/index.tsx`), which in Solid would be a keyed `<Show keyed when={tenant()}>` around `<Outlet />`. That is the right fix for an app that deliberately *stays* on the page after a switch; here the unconditional redirect already unmounts the route and tears down its `EventSource`s, opencode router and iframe, so the remount adds no coverage while discarding in-page state (active tab, visited tabs, panel widths) on every switch. Rejected as redundant.
+- **Let the backend errors drive it**: allow the stale page to refetch under the new tenant and rely on the resulting 404 and the existing `navigate({ to: '/' })` in `pages/project.tsx`. Rejected: it derives ordinary navigation from error responses, so an endpoint that answers `Forbidden` instead of `NotFound` for a cross-tenant id turns a tenant switch into `api/client.ts`'s destructive 403 branch — clear the stored tenant, hard-navigate to `/permission-denied`. The switch decision is local and should not need a round trip.
+
+## Consequences
+
+- `setTenant` is now a plain persisted write; `createTenantState` no longer needs the query client, so it is usable outside `QueryClientProvider`.
+- `TenantSelector` no longer navigates. Any future tenant-switch entry point gets the same behaviour for free — that is the point.
+- The blunt `queryClient.resetQueries()` is still load-bearing because query keys do not carry the tenant (`projectKeys.list()` is `['projects','list']`). Putting the tenant in the keys would make cross-tenant cache reuse structurally impossible and demote the reset to an optimization; not done here.
+- Jobs tracked by `JobDockHost` are unaffected: it is mounted above `<Outlet />`, so an import started under the previous tenant keeps streaming into the dock after a switch. Deliberate — the job is still running and its terminal state is still worth showing.

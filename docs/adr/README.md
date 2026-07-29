@@ -28,3 +28,4 @@ Format: Title / Status / Context + Decision / Considered options / Consequences.
 | [0020](0020-agent-status-pushed-and-resynced-not-heartbeated.md) | Agent Status is pushed from the pod and re-synced at boundaries — no heartbeat, no persistence | implemented (self-healing) → [agent-status.md](../agents/agent-status.md) |
 | [0021](0021-sidebar-orders-by-last-prompt.md) | The project sidebar orders by a new `last_prompt_at` (user sends only), not keep-alive `last_active_at` | implemented (migration 0053) |
 | [0022](0022-environment-identity-color.md) | Environment identity color: a stored registry attribute, distinct from status color | implemented (migration 0054); builds on [0001](0001-environment-vs-project-environment.md) |
+| [0023](0023-tenant-switch-reacts-to-the-value.md) | A tenant switch is handled by reacting to the tenant value, not by the setter | implemented; fixes stale cross-tab project views |
