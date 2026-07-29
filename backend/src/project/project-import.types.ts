@@ -55,6 +55,7 @@ export interface CreateImportUploadResult {
 export interface FinalizeImportDto {
   uploadId?: string;
   workspaceId?: string | null;
+  folderId?: string | null;
   title?: string | null;
   timezone?: string;
 }

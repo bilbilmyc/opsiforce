@@ -96,7 +96,10 @@ export function ProjectSidebar(props: { search: string }) {
   const [settingsWorkspaceId, setSettingsWorkspaceId] = createSignal<string | null>(null);
   const [pendingMove, setPendingMove] = createSignal<PendingMove | null>(null);
   const [pendingFolderMove, setPendingFolderMove] = createSignal<PendingFolderMove | null>(null);
-  const [importTarget, setImportTarget] = createSignal<{ workspaceId: string | null } | null>(null);
+  const [importTarget, setImportTarget] = createSignal<{
+    workspaceId: string | null;
+    folder?: { id: string; name: string };
+  } | null>(null);
 
   const projects = useProjects();
   useAgentStatusStream(() => projects.data);
@@ -340,12 +343,16 @@ export function ProjectSidebar(props: { search: string }) {
                       onOpenImport={() => setImportTarget({ workspaceId: ws.id })}
                     />
                   )}
-                  renderFolderCreate={(folderId) => (renderTrigger) => (
+                  renderFolderCreate={(folder) => (renderTrigger) => (
                     <CreateMenu
                       trigger={renderTrigger}
                       agents={agents.data}
                       disabled={createInWs.isPending}
-                      onCreateProject={(agentId) => handleCreateInWorkspace(ws.id, agentId, folderId)}
+                      canImport={canImport()}
+                      onCreateProject={(agentId) => handleCreateInWorkspace(ws.id, agentId, folder.id)}
+                      onOpenImport={() =>
+                        setImportTarget({ workspaceId: ws.id, folder: { id: folder.id, name: folder.name } })
+                      }
                     />
                   )}
                   onSelectProject={navigateToProject}
@@ -477,6 +484,7 @@ export function ProjectSidebar(props: { search: string }) {
       <ProjectImportDialog
         open={!!importTarget()}
         defaultWorkspaceId={importTarget()?.workspaceId ?? null}
+        defaultFolder={importTarget()?.folder ?? null}
         onOpenChange={(open) => {
           if (!open) setImportTarget(null);
         }}

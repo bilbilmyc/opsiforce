@@ -33,6 +33,7 @@ export function createImportUploadRunner(hooks: ImportUploadRunnerHooks): Import
         uploadId: input.uploadId,
         chunkSize: input.chunkSize,
         workspaceId: input.workspaceId,
+        folderId: input.folderId,
         title: input.title,
         startIndex: run.nextChunkIndex,
         signal: controller.signal,

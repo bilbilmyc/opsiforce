@@ -65,6 +65,7 @@ export interface StartImportUploadInput {
   chunkSize: number;
   title: string;
   workspaceId: string | null;
+  folderId: string | null;
 }
 
 export interface JobDockApi {

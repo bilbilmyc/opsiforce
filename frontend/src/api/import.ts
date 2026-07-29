@@ -32,6 +32,7 @@ export function createImportUploadSession(size: number): Promise<ImportUploadSes
 export interface FinalizeImportParams {
   uploadId: string;
   workspaceId: string | null;
+  folderId: string | null;
   title: string;
 }
 
@@ -39,6 +40,7 @@ export function finalizeProjectImport(params: FinalizeImportParams): Promise<Sta
   return api.post<StartImportResult>('/projects/import', {
     uploadId: params.uploadId,
     workspaceId: params.workspaceId,
+    folderId: params.folderId,
     title: params.title.trim() || null,
     timezone: detectTimezone(),
   });
@@ -111,6 +113,7 @@ export async function runImportUpload(run: ImportUploadRun): Promise<StartImport
     return await finalizeProjectImport({
       uploadId: run.uploadId,
       workspaceId: run.workspaceId,
+      folderId: run.folderId,
       title: run.title,
     });
   } catch (err) {

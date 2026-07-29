@@ -624,6 +624,7 @@ export class ProjectService implements OnApplicationBootstrap {
   async createImportedProject(params: {
     tenantId: string;
     workspaceId: string | null;
+    folderId: string | null;
     title: string | null;
     timezone: string;
     agentId: string;
@@ -633,8 +634,19 @@ export class ProjectService implements OnApplicationBootstrap {
     appDetails: ExportManifestAppDetails | null;
     schedules: ExportManifestSchedule[];
   }): Promise<ProjectResponse> {
-    const { tenantId, workspaceId, title, timezone, agentId, description, settings, resources, appDetails, schedules } =
-      params;
+    const {
+      tenantId,
+      workspaceId,
+      folderId,
+      title,
+      timezone,
+      agentId,
+      description,
+      settings,
+      resources,
+      appDetails,
+      schedules,
+    } = params;
     const id = crypto.randomUUID();
     const directory = `projects/${id}`;
     const platformVersion = this.configService.get<string>('platformVersion', '0.1.0');
@@ -648,6 +660,7 @@ export class ProjectService implements OnApplicationBootstrap {
         id,
         tenantId,
         workspaceId,
+        folderId,
         agentId,
         title,
         description,

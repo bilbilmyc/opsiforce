@@ -11,7 +11,7 @@ import { pipeline } from 'node:stream/promises';
 import { Readable } from 'node:stream';
 import yauzl from 'yauzl';
 import { db } from '../../db';
-import { projectTransferJobs, workspaceMembers, workspaces } from '../../db/schema';
+import { folders, projectTransferJobs, workspaceMembers, workspaces } from '../../db/schema';
 import { AgentService } from '../agent/agent.service';
 import { ProjectService } from './project.service';
 import { ProjectEventsService } from './project-events.service';
@@ -60,15 +60,18 @@ export class ProjectImportService {
   async startImport(params: {
     tenantId: string;
     workspaceId: string | null;
+    folderId: string | null;
     userId: string;
     canManageWorkspaces: boolean;
     titleOverride: string | null;
     timezone: string;
     uploadPath: string;
   }): Promise<StartImportResult> {
-    const { tenantId, workspaceId, userId, canManageWorkspaces, titleOverride, timezone, uploadPath } = params;
+    const { tenantId, workspaceId, folderId, userId, canManageWorkspaces, titleOverride, timezone, uploadPath } =
+      params;
 
     if (workspaceId) await this.assertWorkspaceAccessible(workspaceId, tenantId, userId, canManageWorkspaces);
+    const targetFolderId = workspaceId && folderId ? await this.resolveFolder(folderId, workspaceId) : null;
 
     const manifest = await this.readManifest(uploadPath);
     const { agentId, agentFallbackFrom } = await this.resolveAgent(manifest.agentName);
@@ -77,6 +80,7 @@ export class ProjectImportService {
     const project = await this.projectService.createImportedProject({
       tenantId,
       workspaceId,
+      folderId: targetFolderId,
       title,
       timezone,
       agentId,
@@ -138,6 +142,16 @@ export class ProjectImportService {
       .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId)))
       .limit(1);
     if (!member) throw new NotFoundException(`Workspace ${workspaceId} not found`);
+  }
+
+  private async resolveFolder(folderId: string, workspaceId: string): Promise<string> {
+    const [folder] = await db
+      .select({ id: folders.id })
+      .from(folders)
+      .where(and(eq(folders.id, folderId), eq(folders.workspaceId, workspaceId)))
+      .limit(1);
+    if (!folder) throw new NotFoundException(`Folder ${folderId} not found`);
+    return folder.id;
   }
 
   private async resolveAgent(agentName: string | null): Promise<{ agentId: string; agentFallbackFrom: string | null }> {
