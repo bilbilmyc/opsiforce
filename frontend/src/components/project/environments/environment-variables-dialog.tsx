@@ -88,7 +88,7 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
         if (!value) props.onOpenChange(false);
       }}
     >
-      <DialogContent class="flex max-h-[85vh] max-w-lg flex-col">
+      <DialogContent class="max-w-lg">
         <DialogTitle class="flex items-center gap-2">
           <SlidersHorizontal class="h-4 w-4 text-primary" />
           Environment variables — {environmentName()}
@@ -97,45 +97,47 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
           Configuration values the app reads when it starts. Changes take effect after the app restarts.
         </DialogDescription>
 
-        <div class="-mr-2 mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pr-2">
+        <div class="mt-4 space-y-4">
           <Show when={!query.isPending} fallback={<Skeleton class="h-24 w-full" />}>
             <div class="space-y-2">
-              <Show
-                when={drafts().length > 0}
-                fallback={
-                  <p class="rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                    No variables yet. Add one below.
-                  </p>
-                }
-              >
-                <Index each={drafts()}>
-                  {(draft, index) => (
-                    <div class="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={draft().key}
-                        onInput={(e) => setDraft(index, { key: e.currentTarget.value })}
-                        class="h-8 w-2/5 shrink-0 rounded-md border border-input bg-background px-2.5 py-1.5 font-mono text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        placeholder="KEY"
-                      />
-                      <input
-                        type="text"
-                        value={draft().value}
-                        onInput={(e) => setDraft(index, { value: e.currentTarget.value })}
-                        class="h-8 flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        placeholder="value"
-                      />
-                      <button
-                        class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
-                        aria-label="Remove variable"
-                        onClick={() => removeDraft(index)}
-                      >
-                        <Trash2 class="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </Index>
-              </Show>
+              <div class="-mr-2 max-h-[40vh] space-y-2 overflow-y-auto overflow-x-hidden pr-2">
+                <Show
+                  when={drafts().length > 0}
+                  fallback={
+                    <p class="rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                      No variables yet. Add one below.
+                    </p>
+                  }
+                >
+                  <Index each={drafts()}>
+                    {(draft, index) => (
+                      <div class="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={draft().key}
+                          onInput={(e) => setDraft(index, { key: e.currentTarget.value })}
+                          class="h-8 w-2/5 shrink-0 rounded-md border border-input bg-background px-2.5 py-1.5 font-mono text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          placeholder="KEY"
+                        />
+                        <input
+                          type="text"
+                          value={draft().value}
+                          onInput={(e) => setDraft(index, { value: e.currentTarget.value })}
+                          class="h-8 flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          placeholder="value"
+                        />
+                        <button
+                          class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                          aria-label="Remove variable"
+                          onClick={() => removeDraft(index)}
+                        >
+                          <Trash2 class="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </Index>
+                </Show>
+              </div>
               <Button size="sm" variant="outline" class="h-7 px-2.5" onClick={addDraft}>
                 <Plus class="h-3.5 w-3.5" />
                 Add variable
@@ -158,7 +160,7 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
           </Show>
         </div>
 
-        <div class="mt-5 flex shrink-0 justify-end gap-2">
+        <div class="mt-5 flex justify-end gap-2">
           <Button size="sm" variant="outline" onClick={() => props.onOpenChange(false)}>
             Cancel
           </Button>

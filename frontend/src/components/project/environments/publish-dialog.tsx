@@ -84,7 +84,7 @@ export default function PublishDialog(props: PublishDialogProps) {
         if (!open) close();
       }}
     >
-      <DialogContent class="flex max-h-[85vh] max-w-lg flex-col">
+      <DialogContent class="max-w-lg">
         <DialogTitle class="flex items-center gap-2">
           <Rocket class="h-4 w-4 text-primary" />
           {isFirstPublish() ? `Publish to ${targetName()}` : `Publish update to ${targetName()}`}
@@ -95,7 +95,7 @@ export default function PublishDialog(props: PublishDialogProps) {
             : `Publish your latest Development changes to the app running in ${targetName()}.`}
         </DialogDescription>
 
-        <div class="-mr-2 mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pr-2">
+        <div class="mt-4 space-y-4">
           <Show when={devAuthIsManual()}>
             <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
               Development uses manual OIDC auth, which the new environment inherits. After publishing, register the new
@@ -112,7 +112,7 @@ export default function PublishDialog(props: PublishDialogProps) {
                     <Show when={data().variables.length > 0}>
                       <div class="space-y-2">
                         <label class="block text-xs font-medium text-foreground">Environment variables</label>
-                        <div class="space-y-2">
+                        <div class="-mr-2 max-h-[40vh] space-y-2 overflow-y-auto overflow-x-hidden pr-2">
                           <For each={data().variables}>
                             {(variable) => (
                               <div class="flex items-center gap-2">
@@ -142,7 +142,7 @@ export default function PublishDialog(props: PublishDialogProps) {
                       <div class="space-y-2">
                         <label class="block text-xs font-medium text-foreground">Schedules</label>
                         <p class="text-xs text-muted-foreground">Choose which schedules run in this environment.</p>
-                        <div class="space-y-1">
+                        <div class="-mr-2 max-h-[30vh] space-y-1 overflow-y-auto overflow-x-hidden pr-2">
                           <For each={data().schedules}>
                             {(schedule) => (
                               <label class="flex cursor-pointer items-center gap-2.5 rounded-md border border-border px-2.5 py-2 transition-colors hover:bg-accent/50">
@@ -180,7 +180,7 @@ export default function PublishDialog(props: PublishDialogProps) {
           </Show>
         </div>
 
-        <div class="mt-5 flex shrink-0 justify-end gap-2">
+        <div class="mt-5 flex justify-end gap-2">
           <Button size="sm" variant="outline" onClick={close}>
             Cancel
           </Button>
