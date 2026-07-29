@@ -3,7 +3,7 @@ import { isAgentWorking } from '~/api/agent-status';
 import type { Project } from '~/api/client';
 import { cn } from '~/lib/cn';
 import { projectDisplayTitle } from '~/lib/project-display';
-import { EnvironmentDots } from './project/environment-dots';
+import { EnvironmentBadges } from './project/environment-badges';
 import ProjectActionsMenu from './project-actions-menu';
 import Spinner from '~/components/ui/spinner';
 
@@ -93,7 +93,7 @@ export function ProjectCard(props: {
               <Show when={isDisabled()}>
                 <span class="text-xs text-sidebar-muted-foreground">Disabled</span>
               </Show>
-              <EnvironmentDots environmentIds={props.project.environmentIds} dimmed={isDisabled()} />
+              <EnvironmentBadges environmentIds={props.project.environmentIds} dimmed={isDisabled()} />
             </div>
           </Show>
         </div>
