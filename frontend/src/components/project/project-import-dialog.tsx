@@ -4,7 +4,7 @@ import { Button } from '~/components/ui/button';
 import { LoaderCircle, Package, Upload } from '~/components/icons';
 import { useCurrentUser } from '~/api/user';
 import { PUBLIC_LABEL, useWorkspaces } from '~/api/workspaces';
-import { startProjectImport } from '~/api/import';
+import { createImportUploadSession } from '~/api/import';
 import { useJobDock } from '~/components/project/jobs/job-dock-context';
 
 export interface ProjectImportDialogProps {
@@ -21,7 +21,7 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
   const [file, setFile] = createSignal<File | null>(null);
   const [title, setTitle] = createSignal('');
   const [workspaceId, setWorkspaceId] = createSignal<string | null>(null);
-  const [uploading, setUploading] = createSignal(false);
+  const [starting, setStarting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
   const privateWorkspace = createMemo(() => {
@@ -54,7 +54,7 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
   const reset = () => {
     setFile(null);
     setTitle('');
-    setUploading(false);
+    setStarting(false);
     setError(null);
   };
 
@@ -66,19 +66,21 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
   const submit = async () => {
     const chosen = file();
     if (!chosen) return;
-    setUploading(true);
+    setStarting(true);
     setError(null);
     try {
-      const result = await startProjectImport({ file: chosen, workspaceId: workspaceId(), title: title() });
-      jobDock.trackImport({
-        projectId: result.projectId,
-        title: title().trim() || 'project',
-        job: result.job,
+      const session = await createImportUploadSession(chosen.size);
+      jobDock.startImportUpload({
+        file: chosen,
+        uploadId: session.uploadId,
+        chunkSize: session.chunkSize,
+        title: title(),
+        workspaceId: workspaceId(),
       });
       close();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start import');
-      setUploading(false);
+      setStarting(false);
     }
   };
 
@@ -86,11 +88,11 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
     <Dialog
       open={props.open}
       onOpenChange={(open) => {
-        if (open || uploading()) return;
+        if (open || starting()) return;
         close();
       }}
     >
-      <DialogContent class="max-w-lg" hideClose={uploading()}>
+      <DialogContent class="max-w-lg" hideClose={starting()}>
         <DialogTitle class="flex items-center gap-2">
           <Package class="h-4 w-4 text-primary" />
           Import project
@@ -101,11 +103,11 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
         </DialogDescription>
 
         <Show
-          when={!uploading()}
+          when={!starting()}
           fallback={
             <div class="mt-6 flex items-center gap-3 text-sm text-muted-foreground">
               <LoaderCircle class="h-4 w-4 animate-spin text-primary" />
-              Uploading export file…
+              Starting import…
             </div>
           }
         >
@@ -147,7 +149,7 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
           <div class="mt-2 text-xs text-destructive">{error()}</div>
         </Show>
 
-        <Show when={!uploading()}>
+        <Show when={!starting()}>
           <div class="mt-5 flex justify-end gap-2">
             <Button size="sm" variant="outline" onClick={close}>
               Cancel

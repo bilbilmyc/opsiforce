@@ -17,6 +17,7 @@ import { ProjectService } from './project.service';
 import { ProjectEventsService } from './project-events.service';
 import type { ExportManifest } from '../export/project-export.types';
 import {
+  importsRootPath,
   PROJECT_IMPORT_QUEUE,
   ProjectImportJobData,
   ProjectImportJobResponse,
@@ -45,7 +46,7 @@ export class ProjectImportService {
   }
 
   importsDir(): string {
-    return path.join(this.storageMountPath, 'imports');
+    return importsRootPath(this.storageMountPath);
   }
 
   newUploadPath(): string {
@@ -54,11 +55,6 @@ export class ProjectImportService {
 
   archivePath(importJobId: string): string {
     return path.join(this.importsDir(), `${importJobId}.zip`);
-  }
-
-  async streamUploadToStaging(source: Readable, filePath: string): Promise<void> {
-    await mkdir(this.importsDir(), { recursive: true });
-    await pipeline(source, createWriteStream(filePath));
   }
 
   async startImport(params: {
@@ -203,8 +199,9 @@ export class ProjectImportService {
   }
 
   private async readManifest(archivePath: string): Promise<ExportManifest> {
-    const zip = await openZip(archivePath);
+    let zip: yauzl.ZipFile | null = null;
     try {
+      zip = await openZip(archivePath);
       const buffer = await readEntryBuffer(zip, 'manifest.json');
       if (!buffer) throw new BadRequestException('The file is not a valid project export (missing manifest).');
       const manifest = JSON.parse(buffer.toString('utf8')) as ExportManifest;
@@ -216,7 +213,7 @@ export class ProjectImportService {
       if (err instanceof BadRequestException) throw err;
       throw new BadRequestException('The file is not a valid project export.');
     } finally {
-      zip.close();
+      zip?.close();
     }
   }
 
@@ -352,11 +349,19 @@ async function readEntryStream(zip: yauzl.ZipFile, entry: yauzl.Entry): Promise<
   return Buffer.concat(chunks);
 }
 
-async function readEntryBuffer(zip: yauzl.ZipFile, name: string): Promise<Buffer | null> {
-  const entries = await collectEntries(zip);
-  const match = entries.find((entry) => entry.fileName === name);
-  if (!match) return null;
-  return readEntryStream(zip, match);
+function readEntryBuffer(zip: yauzl.ZipFile, name: string): Promise<Buffer | null> {
+  return new Promise((resolve, reject) => {
+    zip.on('entry', (entry: yauzl.Entry) => {
+      if (entry.fileName !== name) {
+        zip.readEntry();
+        return;
+      }
+      readEntryStream(zip, entry).then(resolve, reject);
+    });
+    zip.on('end', () => resolve(null));
+    zip.on('error', reject);
+    zip.readEntry();
+  });
 }
 
 async function writeEntryToFile(zip: yauzl.ZipFile, entry: yauzl.Entry, target: string): Promise<void> {

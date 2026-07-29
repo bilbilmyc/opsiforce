@@ -1,17 +1,5 @@
-import { ApiError } from './client';
+import { api, ApiError, currentTenant, parseErrorMessage, TENANT_HEADER } from './client';
 import { detectTimezone } from '~/lib/timezone';
-
-async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
-  const text = await res.text().catch(() => '');
-  if (!text) return fallback;
-  try {
-    const parsed = JSON.parse(text) as { message?: string | string[] };
-    if (Array.isArray(parsed.message)) return parsed.message.join(', ');
-    return parsed.message ?? fallback;
-  } catch {
-    return text;
-  }
-}
 
 export type ImportJobStatus = 'queued' | 'unpacking' | 'starting' | 'completed' | 'failed';
 
@@ -32,31 +20,210 @@ export interface StartImportResult {
   job: ImportJob;
 }
 
-export async function startProjectImport(params: {
-  file: File;
+export interface ImportUploadSession {
+  uploadId: string;
+  chunkSize: number;
+}
+
+export function createImportUploadSession(size: number): Promise<ImportUploadSession> {
+  return api.post<ImportUploadSession>('/projects/import/uploads', { size });
+}
+
+export interface FinalizeImportParams {
+  uploadId: string;
   workspaceId: string | null;
   title: string;
-}): Promise<StartImportResult> {
-  const form = new FormData();
-  if (params.workspaceId) form.set('workspaceId', params.workspaceId);
-  if (params.title.trim()) form.set('title', params.title.trim());
-  form.set('timezone', detectTimezone());
-  form.set('file', params.file, params.file.name);
+}
 
-  const headers: Record<string, string> = {};
-  const tenant = localStorage.getItem('tenant');
-  if (tenant) headers['x-tenant-name'] = tenant;
+export function finalizeProjectImport(params: FinalizeImportParams): Promise<StartImportResult> {
+  return api.post<StartImportResult>('/projects/import', {
+    uploadId: params.uploadId,
+    workspaceId: params.workspaceId,
+    title: params.title.trim() || null,
+    timezone: detectTimezone(),
+  });
+}
 
-  const res = await fetch('/api/projects/import', { method: 'POST', body: form, headers });
-  if (!res.ok) {
-    throw new ApiError(res.status, await extractErrorMessage(res, `Import failed (${res.status})`));
+export function cancelImportUploadSession(uploadId: string): void {
+  void api.delete<void>(`/projects/import/uploads/${uploadId}`).catch(() => {});
+}
+
+export type ImportFailureKind = 'upload' | 'finalize-rejected' | 'finalize-transient';
+
+export interface ImportUploadFailure {
+  kind: ImportFailureKind;
+  message: string;
+  resumable: boolean;
+}
+
+export class ImportUploadError extends Error implements ImportUploadFailure {
+  constructor(
+    readonly kind: ImportFailureKind,
+    message: string,
+    readonly resumable: boolean
+  ) {
+    super(message);
   }
-  return res.json() as Promise<StartImportResult>;
+
+  toFailure(): ImportUploadFailure {
+    return { kind: this.kind, message: this.message, resumable: this.resumable };
+  }
+}
+
+const CHUNK_BACKOFF_MS = [1000, 3000, 5000, 10000, 15000, 20000];
+const MAX_CHUNK_ATTEMPTS = CHUNK_BACKOFF_MS.length + 1;
+
+export interface ImportUploadRun extends FinalizeImportParams {
+  file: File;
+  chunkSize: number;
+  startIndex: number;
+  signal: AbortSignal;
+  onProgress: (bytesSent: number) => void;
+  onChunkConfirmed: (nextIndex: number) => void;
+  onFinalizing: () => void;
+}
+
+export async function runImportUpload(run: ImportUploadRun): Promise<StartImportResult> {
+  const total = run.file.size;
+  const chunkCount = Math.ceil(total / run.chunkSize);
+  let sentBytes = Math.min(run.startIndex * run.chunkSize, total);
+  run.onProgress(sentBytes);
+
+  for (let index = run.startIndex; index < chunkCount; index += 1) {
+    const start = index * run.chunkSize;
+    const chunk = run.file.slice(start, Math.min(start + run.chunkSize, total));
+    const base = sentBytes;
+    await sendImportChunk({
+      uploadId: run.uploadId,
+      index,
+      chunk,
+      digest: await sha256Hex(chunk),
+      signal: run.signal,
+      onProgress: (loaded) => run.onProgress(Math.min(base + loaded, total)),
+    });
+    sentBytes = base + chunk.size;
+    run.onProgress(sentBytes);
+    run.onChunkConfirmed(index + 1);
+  }
+
+  run.onFinalizing();
+  try {
+    return await finalizeProjectImport({
+      uploadId: run.uploadId,
+      workspaceId: run.workspaceId,
+      title: run.title,
+    });
+  } catch (err) {
+    throw finalizeFailure(
+      err instanceof ApiError ? err : new ApiError(0, err instanceof Error ? err.message : 'The import failed.')
+    );
+  }
+}
+
+interface PutImportChunkParams {
+  uploadId: string;
+  index: number;
+  chunk: Blob;
+  digest: string;
+  signal: AbortSignal;
+  onProgress: (loaded: number) => void;
+}
+
+async function sendImportChunk(params: PutImportChunkParams): Promise<void> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await putImportChunk(params);
+      return;
+    } catch (err) {
+      if (params.signal.aborted) throw cancelled();
+      const failure = err instanceof ApiError ? err : new ApiError(0, 'The connection dropped during upload.');
+      const delay = chunkRetryDelay(failure.status, attempt);
+      if (delay === null) throw chunkRejection(failure);
+      if (attempt >= MAX_CHUNK_ATTEMPTS) throw new ImportUploadError('upload', 'Check your connection.', true);
+      await sleep(delay, params.signal);
+    }
+  }
+}
+
+function chunkRetryDelay(status: number, attempt: number): number | null {
+  if (status === 504 || status === 422) return 0;
+  if (status === 0 || status >= 500) return CHUNK_BACKOFF_MS[Math.min(attempt - 1, CHUNK_BACKOFF_MS.length - 1)];
+  return null;
+}
+
+function chunkRejection(err: ApiError): ImportUploadError {
+  const message =
+    err.status === 404 ? 'The upload session is no longer available. Start the import again.' : err.message;
+  return new ImportUploadError('upload', message, false);
+}
+
+function finalizeFailure(err: ApiError): ImportUploadError {
+  if (err.status === 404) {
+    return new ImportUploadError(
+      'finalize-rejected',
+      'The upload session is no longer available. Start the import again.',
+      false
+    );
+  }
+  const rejected = err.status === 400;
+  return new ImportUploadError(rejected ? 'finalize-rejected' : 'finalize-transient', err.message, !rejected);
+}
+
+function cancelled(): ImportUploadError {
+  return new ImportUploadError('upload', 'The upload was cancelled.', false);
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+  if (ms === 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(cancelled());
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+function putImportChunk(params: PutImportChunkParams): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (params.signal.aborted) {
+      reject(cancelled());
+      return;
+    }
+    const xhr = new XMLHttpRequest();
+    const onAbort = () => xhr.abort();
+    params.signal.addEventListener('abort', onAbort, { once: true });
+    xhr.addEventListener('loadend', () => params.signal.removeEventListener('abort', onAbort));
+    xhr.open('PUT', `/api/projects/import/uploads/${params.uploadId}/chunks/${params.index}`);
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.setRequestHeader('X-Chunk-Sha256', params.digest);
+    const tenant = currentTenant();
+    if (tenant) xhr.setRequestHeader(TENANT_HEADER, tenant);
+
+    xhr.upload.addEventListener('progress', (event) => params.onProgress(event.loaded));
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else reject(new ApiError(xhr.status, parseErrorMessage(xhr.responseText, `Chunk upload failed (${xhr.status})`)));
+    });
+    xhr.addEventListener('error', () => reject(new ApiError(0, 'The connection dropped during upload.')));
+    xhr.addEventListener('timeout', () => reject(new ApiError(0, 'The upload timed out.')));
+    xhr.addEventListener('abort', () => reject(new ApiError(0, 'The upload was cancelled.')));
+    xhr.send(params.chunk);
+  });
+}
+
+async function sha256Hex(chunk: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await chunk.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export function importEventsUrl(projectId: string): string {
   const params = new URLSearchParams();
-  const tenant = localStorage.getItem('tenant');
+  const tenant = currentTenant();
   if (tenant) params.set('tenant', tenant);
   const query = params.toString();
   return `/api/projects/${projectId}/import/job/stream${query ? `?${query}` : ''}`;

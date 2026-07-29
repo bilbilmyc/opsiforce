@@ -72,7 +72,7 @@ export function JobCard(props: JobCardProps) {
             <p class="mt-0.5 line-clamp-2 break-words text-xs text-muted-foreground">{display().error}</p>
           </Show>
 
-          <Show when={isDone() && actions().length > 0}>
+          <Show when={isTerminal() && actions().length > 0}>
             <div class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
               <For each={actions()}>
                 {(action) => (
@@ -110,10 +110,10 @@ export function JobCard(props: JobCardProps) {
           </Show>
         </div>
 
-        <Show when={isTerminal()}>
+        <Show when={isTerminal() || display().dismissWhileRunning}>
           <button
             class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label="Dismiss"
+            aria-label={display().dismissLabel ?? 'Dismiss'}
             onClick={(e) => {
               e.stopPropagation();
               props.onDismiss();

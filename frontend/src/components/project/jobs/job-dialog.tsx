@@ -20,6 +20,7 @@ export function JobDialog(props: JobDialogProps) {
   const isDone = () => display().phase === 'done';
   const isFailed = () => display().phase === 'failed';
   const isRunning = () => display().phase === 'running';
+  const dismissLabel = () => display().dismissLabel ?? (isDone() ? 'Done' : 'Close');
 
   const runAction = (action: JobActionDescriptor) => {
     if (action.href) window.open(action.href, '_blank', 'noopener,noreferrer');
@@ -68,15 +69,12 @@ export function JobDialog(props: JobDialogProps) {
               Minimize
             </Button>
           </Show>
-          <Show when={isFailed()}>
+          <Show when={!isRunning() || display().dismissWhileRunning}>
             <Button size="sm" variant="outline" onClick={() => props.onDismiss()}>
-              Close
+              {dismissLabel()}
             </Button>
           </Show>
-          <Show when={isDone()}>
-            <Button size="sm" variant="outline" onClick={() => props.onDismiss()}>
-              Done
-            </Button>
+          <Show when={!isRunning()}>
             <For each={actions()}>
               {(action) => (
                 <Button

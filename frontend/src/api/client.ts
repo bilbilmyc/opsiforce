@@ -9,10 +9,9 @@ export class ApiError extends Error {
   }
 }
 
-export async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
+export function parseErrorMessage(text: string, fallback: string): string {
+  if (!text) return fallback;
   try {
-    const text = await res.text();
-    if (!text) return fallback;
     const body: { message?: string | string[] } = JSON.parse(text);
     if (Array.isArray(body.message)) return body.message.join(', ');
     if (typeof body.message === 'string' && body.message.length > 0) return body.message;
@@ -20,6 +19,17 @@ export async function extractErrorMessage(res: Response, fallback: string): Prom
   } catch {
     return fallback;
   }
+}
+
+export async function extractErrorMessage(res: Response, fallback: string): Promise<string> {
+  const text = await res.text().catch(() => '');
+  return parseErrorMessage(text, fallback);
+}
+
+export const TENANT_HEADER = 'x-tenant-name';
+
+export function currentTenant(): string | null {
+  return localStorage.getItem('tenant');
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -30,9 +40,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers['Content-Type'] = 'application/json';
   }
 
-  const tenant = localStorage.getItem('tenant');
+  const tenant = currentTenant();
   if (tenant) {
-    headers['x-tenant-name'] = tenant;
+    headers[TENANT_HEADER] = tenant;
   }
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });

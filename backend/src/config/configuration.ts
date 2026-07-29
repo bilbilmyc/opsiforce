@@ -41,7 +41,7 @@ function resolveAgentContainerImage(): string {
   return `opsiforce-agent:${agentImageVersion}`;
 }
 
-export default () => {
+export const configuration = () => {
   return {
     databaseUrl: process.env.DATABASE_URL || 'postgresql://localhost:5432/opsiforce',
     redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
@@ -67,6 +67,7 @@ export default () => {
     proxyControlToken: process.env.PROXY_CONTROL_TOKEN || 'opsiforce-local-proxy-token',
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     storageMountPath: process.env.STORAGE_MOUNT_PATH || '/workspace-data',
+    importChunkSize: parseInt(process.env.IMPORT_CHUNK_SIZE || '8388608', 10),
     bifrostProxyUrl: process.env.BIFROST_PROXY_URL || '',
     bifrostPodProxyUrl: process.env.BIFROST_POD_PROXY_URL || process.env.BIFROST_PROXY_URL || '',
     bifrostAdminUsername: process.env.BIFROST_ADMIN_USERNAME || '',

@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import type { QueryClient } from '@tanstack/solid-query';
-import { Copy, Download, ExternalLink, Layers, Package, Rocket } from '~/components/icons';
+import { Copy, Download, ExternalLink, Layers, Package, Rocket, RotateCcw } from '~/components/icons';
 import { appPublicUrl } from '~/lib/app-url';
 import { environmentKeys } from '~/api/environments';
 import { publishEventsUrl, publishKeys, type PublishJob, type PublishJobStatus } from '~/api/publish';
@@ -13,6 +13,7 @@ import { DUPLICATE_STEPS, duplicateStepIndex } from '~/components/project/duplic
 import { EXPORT_STEPS, exportStepIndex } from '~/components/project/export-steps';
 import { IMPORT_STEPS, importStepIndex, type ImportPhase } from '~/components/project/import-steps';
 import type {
+  ImportUploadFailure,
   JobKind,
   TrackedDuplicate,
   TrackedExport,
@@ -38,6 +39,7 @@ export interface JobHost {
   qc: QueryClient;
   navigate: (projectId: string) => void;
   dismiss: (key: string) => void;
+  retry: (key: string) => void;
   projectView: (
     projectId: string
   ) => { onPublishDone?: (job: PublishJob) => void; viewEnvironment?: (id: string) => void } | undefined;
@@ -57,13 +59,16 @@ export interface JobDisplay {
   error: string | null;
   notice: string | null;
   accentPulse: boolean;
+  dismissLabel?: string;
+  dismissWhileRunning?: boolean;
 }
 
 export interface JobKindAdapter<E extends TrackedJob> {
   describe: (entry: E) => JobDisplay;
   actions: (entry: E, host: JobHost) => JobActionDescriptor[];
-  sseUrl: (entry: E) => string;
+  sseUrl: (entry: E) => string | null;
   onTerminal: (entry: E, host: JobHost) => void;
+  guardsUnload?: (entry: E) => boolean;
 }
 
 export function formatBytes(bytes: number): string {
@@ -262,57 +267,115 @@ const exportAdapter: JobKindAdapter<TrackedExport> = {
   onTerminal() {},
 };
 
+function importSteps(entry: TrackedImport): ProgressStep[] {
+  const job = entry.job;
+  const upload = entry.upload;
+  return IMPORT_STEPS.map((step) => {
+    if (step.key === 'uploading') {
+      return {
+        label: step.label,
+        detail:
+          upload.phase === 'uploading'
+            ? `${formatBytes(upload.bytesSent)} of ${formatBytes(upload.size)}`
+            : 'Assembling the export file',
+      };
+    }
+    if (step.key === 'unpacking' && job && job.bytesTotal > 0) {
+      return { label: step.label, detail: `${formatBytes(job.bytesProcessed)} of ${formatBytes(job.bytesTotal)}` };
+    }
+    return { label: step.label, detail: step.detail };
+  });
+}
+
+function importFailureTitle(failure: ImportUploadFailure): string {
+  return failure.kind === 'upload' ? 'Upload interrupted' : 'Import failed';
+}
+
+function importFailureMessage(failure: ImportUploadFailure): string {
+  return failure.kind === 'finalize-transient' ? `${failure.message} Your upload is safe.` : failure.message;
+}
+
+function importDismissLabel(entry: TrackedImport): string | undefined {
+  const failure = entry.upload.failure;
+  if (failure) return failure.kind === 'upload' ? 'Cancel' : 'Dismiss';
+  return entry.upload.phase === 'enqueued' ? undefined : 'Cancel upload';
+}
+
 const importAdapter: JobKindAdapter<TrackedImport> = {
   describe(entry) {
     const job = entry.job;
-    const phase: JobPhase = job.status === 'completed' ? 'done' : job.status === 'failed' ? 'failed' : 'running';
-    const runningIndex = importStepIndex(job.status);
+    const upload = entry.upload;
+    const failure = upload.failure;
+    const phase: JobPhase = failure
+      ? 'failed'
+      : !job
+        ? 'running'
+        : job.status === 'completed'
+          ? 'done'
+          : job.status === 'failed'
+            ? 'failed'
+            : 'running';
+    const runningIndex = job ? importStepIndex(job.status) : importStepIndex('uploading');
+    const stepShare = 100 / IMPORT_STEPS.length;
+    const uploadFraction = upload.size > 0 ? Math.min(upload.bytesSent / upload.size, 1) : 0;
+    const transferring = !job && upload.phase === 'uploading';
+    const title =
+      phase === 'done'
+        ? `${entry.title} imported`
+        : phase === 'failed'
+          ? failure
+            ? importFailureTitle(failure)
+            : 'Import failed'
+          : `Importing ${entry.title}`;
     return {
       phase,
       headerIcon: Package,
-      cardTitle:
-        phase === 'done'
-          ? `${entry.title} imported`
-          : phase === 'failed'
-            ? 'Import failed'
-            : `Importing ${entry.title}`,
-      dialogTitle:
-        phase === 'done'
-          ? `${entry.title} imported`
-          : phase === 'failed'
-            ? 'Import failed'
-            : `Importing ${entry.title}`,
-      dialogNote: 'Closing this keeps the import running; a progress card stays in the corner.',
-      steps: withByteDetail(IMPORT_STEPS, 'unpacking', job.bytesProcessed, job.bytesTotal),
+      cardTitle: title,
+      dialogTitle: title,
+      dialogNote: job
+        ? 'Closing this keeps the import running; a progress card stays in the corner.'
+        : 'Closing this keeps the upload running; a progress card stays in the corner. Reloading or closing the tab cancels it.',
+      steps: importSteps(entry),
       currentIndex: phase === 'failed' ? importStepIndex(entry.lastStep as ImportPhase) : runningIndex,
       totalSteps: IMPORT_STEPS.length,
-      stepLabel: runningStepLabel(IMPORT_STEPS, runningIndex),
-      progressPercent: ((runningIndex + 1) / IMPORT_STEPS.length) * 100,
-      error: job.error,
-      notice: job.agentFallbackFrom
+      stepLabel: transferring
+        ? `Uploading ${formatBytes(upload.bytesSent)} of ${formatBytes(upload.size)} · step 1 of ${IMPORT_STEPS.length}`
+        : runningStepLabel(IMPORT_STEPS, runningIndex),
+      progressPercent: transferring ? uploadFraction * stepShare : ((runningIndex + 1) / IMPORT_STEPS.length) * 100,
+      error: failure ? importFailureMessage(failure) : (job?.error ?? null),
+      notice: job?.agentFallbackFrom
         ? `The export's agent "${job.agentFallbackFrom}" isn't available here, so the default agent was used instead.`
         : null,
       accentPulse: false,
+      dismissLabel: importDismissLabel(entry),
+      dismissWhileRunning: !failure && upload.phase === 'uploading',
     };
   },
   actions(entry, host) {
-    if (entry.job.status !== 'completed') return [];
+    const failure = entry.upload.failure;
+    if (failure) {
+      if (!failure.resumable) return [];
+      return [{ label: 'Retry', icon: RotateCcw, variant: 'primary', onSelect: () => host.retry(entry.key) }];
+    }
+    const projectId = entry.projectId;
+    if (!projectId || entry.job?.status !== 'completed') return [];
     return [
       {
         label: 'Open project',
         icon: ExternalLink,
         variant: 'primary',
         onSelect: () => {
-          host.navigate(entry.projectId);
+          host.navigate(projectId);
           host.dismiss(entry.key);
         },
       },
     ];
   },
-  sseUrl: (entry) => importEventsUrl(entry.projectId),
+  sseUrl: (entry) => (entry.projectId ? importEventsUrl(entry.projectId) : null),
   onTerminal(entry, host) {
-    if (entry.job.status === 'completed') host.qc.invalidateQueries({ queryKey: ['projects'] });
+    if (entry.job?.status === 'completed') host.qc.invalidateQueries({ queryKey: ['projects'] });
   },
+  guardsUnload: (entry) => entry.upload.phase !== 'enqueued' && (entry.upload.failure?.resumable ?? true),
 };
 
 export function describeJob(entry: TrackedJob): JobDisplay {
@@ -341,7 +404,7 @@ export function jobActions(entry: TrackedJob, host: JobHost): JobActionDescripto
   }
 }
 
-export function jobSseUrl(entry: TrackedJob): string {
+export function jobSseUrl(entry: TrackedJob): string | null {
   switch (entry.kind) {
     case 'publish':
       return publishAdapter.sseUrl(entry);
@@ -351,6 +414,19 @@ export function jobSseUrl(entry: TrackedJob): string {
       return exportAdapter.sseUrl(entry);
     case 'import':
       return importAdapter.sseUrl(entry);
+  }
+}
+
+export function jobGuardsUnload(entry: TrackedJob): boolean {
+  switch (entry.kind) {
+    case 'publish':
+      return publishAdapter.guardsUnload?.(entry) ?? false;
+    case 'duplicate':
+      return duplicateAdapter.guardsUnload?.(entry) ?? false;
+    case 'export':
+      return exportAdapter.guardsUnload?.(entry) ?? false;
+    case 'import':
+      return importAdapter.guardsUnload?.(entry) ?? false;
   }
 }
 
