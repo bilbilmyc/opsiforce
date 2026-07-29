@@ -45,6 +45,7 @@ export class ProjectImportController {
       const result = await this.importService.startImport({
         tenantId: tenant.tenantId,
         workspaceId: dto?.workspaceId?.trim() || null,
+        folderId: dto?.folderId?.trim() || null,
         userId,
         canManageWorkspaces,
         titleOverride: dto?.title ?? null,

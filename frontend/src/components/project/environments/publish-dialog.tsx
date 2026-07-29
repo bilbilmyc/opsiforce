@@ -112,7 +112,7 @@ export default function PublishDialog(props: PublishDialogProps) {
                     <Show when={data().variables.length > 0}>
                       <div class="space-y-2">
                         <label class="block text-xs font-medium text-foreground">Environment variables</label>
-                        <div class="space-y-2">
+                        <div class="-mr-2 max-h-[40vh] space-y-2 overflow-y-auto overflow-x-hidden pr-2">
                           <For each={data().variables}>
                             {(variable) => (
                               <div class="flex items-center gap-2">
@@ -142,7 +142,7 @@ export default function PublishDialog(props: PublishDialogProps) {
                       <div class="space-y-2">
                         <label class="block text-xs font-medium text-foreground">Schedules</label>
                         <p class="text-xs text-muted-foreground">Choose which schedules run in this environment.</p>
-                        <div class="space-y-1">
+                        <div class="-mr-2 max-h-[30vh] space-y-1 overflow-y-auto overflow-x-hidden pr-2">
                           <For each={data().schedules}>
                             {(schedule) => (
                               <label class="flex cursor-pointer items-center gap-2.5 rounded-md border border-border px-2.5 py-2 transition-colors hover:bg-accent/50">

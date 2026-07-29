@@ -1,7 +1,7 @@
 import { For, Show, createMemo, type JSX } from 'solid-js';
 import { useSortable } from '@dnd-kit/solid/sortable';
 import { useDroppable } from '@dnd-kit/solid';
-import { type Project, type Workspace } from '~/api/client';
+import { type Folder, type Project, type Workspace } from '~/api/client';
 import { useWorkspaceFolders } from '~/api/workspaces';
 import { DndType, DROP_ZONE_PRIORITY, folderMoveTargetId } from '~/lib/sidebar-dnd';
 import SidebarDropZone from './sidebar-drop-zone';
@@ -23,7 +23,7 @@ export function SidebarWorkspaceGroup(props: {
   onOpenSettings?: () => void;
   renderCreate: (renderTrigger: (triggerProps: Record<string, unknown>) => JSX.Element) => JSX.Element;
   renderFolderCreate: (
-    folderId: string
+    folder: Folder
   ) => (renderTrigger: (triggerProps: Record<string, unknown>) => JSX.Element) => JSX.Element;
   onSelectProject: (id: string) => void;
   onRenameProject: (id: string, title: string) => void;
@@ -157,7 +157,7 @@ export function SidebarWorkspaceGroup(props: {
               projects={entry.projects}
               activeProjectId={props.activeProjectId}
               onToggleExpanded={() => props.onToggleFolder(entry.folder.id)}
-              renderCreate={props.renderFolderCreate(entry.folder.id)}
+              renderCreate={props.renderFolderCreate(entry.folder)}
               onSelectProject={props.onSelectProject}
               onRenameProject={props.onRenameProject}
               onProjectSettings={props.onProjectSettings}

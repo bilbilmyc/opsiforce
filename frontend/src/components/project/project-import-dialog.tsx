@@ -11,6 +11,7 @@ export interface ProjectImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultWorkspaceId?: string | null;
+  defaultFolder?: { id: string; name: string } | null;
 }
 
 export function ProjectImportDialog(props: ProjectImportDialogProps) {
@@ -51,6 +52,12 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
     )
   );
 
+  const folder = createMemo(() => {
+    const target = props.defaultFolder;
+    if (!target) return null;
+    return workspaceId() === (props.defaultWorkspaceId ?? null) ? target : null;
+  });
+
   const reset = () => {
     setFile(null);
     setTitle('');
@@ -76,6 +83,7 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
         chunkSize: session.chunkSize,
         title: title(),
         workspaceId: workspaceId(),
+        folderId: folder()?.id ?? null,
       });
       close();
     } catch (err) {
@@ -131,6 +139,18 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
                 <For each={workspaces.data ?? []}>{(ws) => <option value={ws.id}>{ws.name}</option>}</For>
                 <option value="">{PUBLIC_LABEL}</option>
               </select>
+              <Show when={props.defaultFolder}>
+                {(target) => (
+                  <p class="mt-1 text-xs text-muted-foreground">
+                    <Show
+                      when={folder()}
+                      fallback={`Imports into the workspace root — ${target().name} belongs to another workspace.`}
+                    >
+                      Imports into the {target().name} folder.
+                    </Show>
+                  </p>
+                )}
+              </Show>
             </div>
             <div>
               <label class="text-xs text-muted-foreground mb-1 block">Title (optional)</label>

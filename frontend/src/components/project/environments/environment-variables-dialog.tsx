@@ -100,42 +100,44 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
         <div class="-mr-2 mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pr-2">
           <Show when={!query.isPending} fallback={<Skeleton class="h-24 w-full" />}>
             <div class="space-y-2">
-              <Show
-                when={drafts().length > 0}
-                fallback={
-                  <p class="rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                    No variables yet. Add one below.
-                  </p>
-                }
-              >
-                <Index each={drafts()}>
-                  {(draft, index) => (
-                    <div class="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={draft().key}
-                        onInput={(e) => setDraft(index, { key: e.currentTarget.value })}
-                        class="h-8 w-2/5 shrink-0 rounded-md border border-input bg-background px-2.5 py-1.5 font-mono text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        placeholder="KEY"
-                      />
-                      <input
-                        type="text"
-                        value={draft().value}
-                        onInput={(e) => setDraft(index, { value: e.currentTarget.value })}
-                        class="h-8 flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        placeholder="value"
-                      />
-                      <button
-                        class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
-                        aria-label="Remove variable"
-                        onClick={() => removeDraft(index)}
-                      >
-                        <Trash2 class="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </Index>
-              </Show>
+              <div class="-mr-2 max-h-[40vh] space-y-2 overflow-y-auto overflow-x-hidden pr-2">
+                <Show
+                  when={drafts().length > 0}
+                  fallback={
+                    <p class="rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
+                      No variables yet. Add one below.
+                    </p>
+                  }
+                >
+                  <Index each={drafts()}>
+                    {(draft, index) => (
+                      <div class="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={draft().key}
+                          onInput={(e) => setDraft(index, { key: e.currentTarget.value })}
+                          class="h-8 w-2/5 shrink-0 rounded-md border border-input bg-background px-2.5 py-1.5 font-mono text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          placeholder="KEY"
+                        />
+                        <input
+                          type="text"
+                          value={draft().value}
+                          onInput={(e) => setDraft(index, { value: e.currentTarget.value })}
+                          class="h-8 flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          placeholder="value"
+                        />
+                        <button
+                          class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
+                          aria-label="Remove variable"
+                          onClick={() => removeDraft(index)}
+                        >
+                          <Trash2 class="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </Index>
+                </Show>
+              </div>
               <Button size="sm" variant="outline" class="h-7 px-2.5" onClick={addDraft}>
                 <Plus class="h-3.5 w-3.5" />
                 Add variable
