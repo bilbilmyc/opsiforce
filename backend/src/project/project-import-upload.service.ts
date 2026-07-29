@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
@@ -19,6 +20,7 @@ const UPLOAD_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 const PART_SUFFIX = '.part';
 const PART_NAME_PATTERN = /^\d+\.part$/;
+const CLAIM_SUFFIX = '.finalizing';
 const STAGING_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export interface UploadSessionRef {
@@ -26,7 +28,8 @@ export interface UploadSessionRef {
   uploadId: string;
 }
 
-export interface AssembleUploadParams extends UploadSessionRef {
+export interface AssembleUploadParams {
+  claimDir: string;
   destPath: string;
 }
 
@@ -56,8 +59,8 @@ export class ProjectImportUploadService {
     return path.join(this.stagingRoot(), ref.tenantId, ref.uploadId);
   }
 
-  partPath(ref: UploadSessionRef, index: number): string {
-    return path.join(this.stagingDir(ref), `${index}${PART_SUFFIX}`);
+  partPath(sessionDir: string, index: number): string {
+    return path.join(sessionDir, `${index}${PART_SUFFIX}`);
   }
 
   async createSession(tenantId: string, size: number | undefined): Promise<CreateImportUploadResult> {
@@ -99,25 +102,47 @@ export class ProjectImportUploadService {
       if (digest.digest('hex') !== expectedDigest) {
         throw new UnprocessableEntityException('Chunk checksum does not match X-Chunk-Sha256');
       }
-      await rename(tempPath, this.partPath(ref, index));
+      await rename(tempPath, this.partPath(stagingDir, index));
     } catch (err) {
       await unlink(tempPath).catch(() => {});
       throw err;
     }
   }
 
-  async assembleUpload(params: AssembleUploadParams): Promise<void> {
-    const ref = { tenantId: params.tenantId, uploadId: assertUploadId(params.uploadId) };
-    const stagingDir = this.stagingDir(ref);
-    await this.assertSessionExists(stagingDir);
+  async claimSession(ref: UploadSessionRef): Promise<string> {
+    const stagingDir = this.stagingDir({ tenantId: ref.tenantId, uploadId: assertUploadId(ref.uploadId) });
+    const claimDir = `${stagingDir}${CLAIM_SUFFIX}`;
+    try {
+      await rename(stagingDir, claimDir);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new NotFoundException('Upload session not found or already finalized');
+      }
+      if ((err as NodeJS.ErrnoException).code === 'ENOTEMPTY') {
+        throw new ConflictException('The upload session is already being finalized');
+      }
+      throw err;
+    }
+    return claimDir;
+  }
 
-    const partCount = await this.assertPartsComplete(stagingDir);
+  async releaseClaim(ref: UploadSessionRef, claimDir: string): Promise<void> {
+    const stagingDir = this.stagingDir({ tenantId: ref.tenantId, uploadId: assertUploadId(ref.uploadId) });
+    await rename(claimDir, stagingDir).catch(() => {});
+  }
+
+  async deleteClaim(claimDir: string): Promise<void> {
+    await rm(claimDir, { recursive: true, force: true });
+  }
+
+  async assembleUpload(params: AssembleUploadParams): Promise<void> {
+    const partCount = await this.assertPartsComplete(params.claimDir);
 
     await mkdir(path.dirname(params.destPath), { recursive: true });
     const destination = createWriteStream(params.destPath);
     try {
       for (let index = 0; index < partCount; index += 1) {
-        await pipeline(createReadStream(this.partPath(ref, index)), destination, { end: false });
+        await pipeline(createReadStream(this.partPath(params.claimDir, index)), destination, { end: false });
       }
       destination.end();
       await once(destination, 'finish');
@@ -144,7 +169,7 @@ export class ProjectImportUploadService {
       const tenantDir = path.join(root, tenant.name);
 
       for (const session of await readdir(tenantDir, { withFileTypes: true }).catch(() => [])) {
-        if (!session.isDirectory() || !UPLOAD_ID_PATTERN.test(session.name)) continue;
+        if (!session.isDirectory() || !isSessionDirName(session.name)) continue;
         const sessionDir = path.join(tenantDir, session.name);
         const stats = await stat(sessionDir).catch(() => null);
         if (!stats || stats.mtimeMs >= cutoff) continue;
@@ -208,6 +233,11 @@ function assertSize(size: number | undefined): void {
   if (typeof size !== 'number' || !Number.isSafeInteger(size) || size <= 0) {
     throw new BadRequestException('A positive integer "size" is required');
   }
+}
+
+function isSessionDirName(name: string): boolean {
+  const uploadId = name.endsWith(CLAIM_SUFFIX) ? name.slice(0, -CLAIM_SUFFIX.length) : name;
+  return UPLOAD_ID_PATTERN.test(uploadId);
 }
 
 function assertUploadId(uploadId: string): string {

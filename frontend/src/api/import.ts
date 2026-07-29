@@ -161,7 +161,7 @@ function finalizeFailure(err: ApiError): ImportUploadError {
   if (err.status === 404) {
     return new ImportUploadError(
       'finalize-rejected',
-      'The upload session is no longer available. Start the import again.',
+      'The upload session is no longer available. It may already have been imported — check your projects before starting over.',
       false
     );
   }

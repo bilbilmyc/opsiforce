@@ -35,10 +35,10 @@ export class ProjectImportController {
     if (!uploadId) throw new BadRequestException('An "uploadId" from a chunked upload session is required');
 
     const session = { tenantId: tenant.tenantId, uploadId };
-    const dropStaging = () => this.uploadService.deleteSession(session).catch(() => {});
+    const claimDir = await this.uploadService.claimSession(session);
     const filePath = this.importService.newUploadPath();
     try {
-      await this.uploadService.assembleUpload({ ...session, destPath: filePath });
+      await this.uploadService.assembleUpload({ claimDir, destPath: filePath });
 
       const userId = await this.resolveUserId(user, tenant.tenantId);
       const canManageWorkspaces = hasPermission(getGroupsHeader(req), Perms.manageWorkspaces);
@@ -52,11 +52,15 @@ export class ProjectImportController {
         uploadPath: filePath,
       });
 
-      await dropStaging();
+      await this.uploadService.deleteClaim(claimDir).catch(() => {});
       return result;
     } catch (err) {
       await rm(filePath, { force: true }).catch(() => {});
-      if (err instanceof HttpException && err.getStatus() === 400) await dropStaging();
+      if (err instanceof HttpException && err.getStatus() === 400) {
+        await this.uploadService.deleteClaim(claimDir).catch(() => {});
+      } else {
+        await this.uploadService.releaseClaim(session, claimDir);
+      }
       throw err;
     }
   }
