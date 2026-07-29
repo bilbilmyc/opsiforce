@@ -88,7 +88,7 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
         if (!value) props.onOpenChange(false);
       }}
     >
-      <DialogContent class="max-w-lg">
+      <DialogContent class="flex max-h-[85vh] max-w-lg flex-col">
         <DialogTitle class="flex items-center gap-2">
           <SlidersHorizontal class="h-4 w-4 text-primary" />
           Environment variables — {environmentName()}
@@ -97,7 +97,7 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
           Configuration values the app reads when it starts. Changes take effect after the app restarts.
         </DialogDescription>
 
-        <div class="mt-4 space-y-4">
+        <div class="-mr-2 mt-4 min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden pr-2">
           <Show when={!query.isPending} fallback={<Skeleton class="h-24 w-full" />}>
             <div class="space-y-2">
               <Show
@@ -158,7 +158,7 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
           </Show>
         </div>
 
-        <div class="mt-5 flex justify-end gap-2">
+        <div class="mt-5 flex shrink-0 justify-end gap-2">
           <Button size="sm" variant="outline" onClick={() => props.onOpenChange(false)}>
             Cancel
           </Button>
