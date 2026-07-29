@@ -11,6 +11,7 @@ import { useSidebar } from '~/components/ui/sidebar';
 import { Button } from '~/components/ui/button';
 import { Menu } from '~/components/icons';
 import { PRIVATE_ROOT_COMPONENTS } from '~/private-loader';
+import { createTenantChangeHandler } from '~/lib/tenant-state';
 import { Toaster } from 'solid-sonner';
 
 const queryClient = new QueryClient({
@@ -80,6 +81,8 @@ function AppContent() {
   const router = useRouter();
   const location = useLocation();
   const isPermissionDenied = () => location().pathname === '/permission-denied';
+
+  createTenantChangeHandler();
 
   return (
     <>
