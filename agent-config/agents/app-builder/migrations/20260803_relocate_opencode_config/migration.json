@@ -1,0 +1,15 @@
+{
+  "id": "20260803_relocate_opencode_config",
+  "requiresPodRecreate": true,
+  "operations": [
+    {
+      "type": "command",
+      "command": "node",
+      "args": [
+        "${MIGRATION_DIR}/migrate.mjs"
+      ],
+      "cwd": ".",
+      "timeoutSeconds": 60
+    }
+  ]
+}

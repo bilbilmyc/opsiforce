@@ -29,3 +29,4 @@ Format: Title / Status / Context + Decision / Considered options / Consequences.
 | [0021](0021-sidebar-orders-by-last-prompt.md) | The project sidebar orders by a new `last_prompt_at` (user sends only), not keep-alive `last_active_at` | implemented (migration 0053) |
 | [0022](0022-environment-identity-color.md) | Environment identity color: a stored registry attribute, distinct from status color | implemented (migration 0054); builds on [0001](0001-environment-vs-project-environment.md) |
 | [0023](0023-tenant-switch-reacts-to-the-value.md) | A tenant switch is handled by reacting to the tenant value, not by the setter | implemented; fixes stale cross-tab project views |
+| [0024](0024-agent-opencode-config-lives-in-the-workspace-opencode-dir.md) | The agent-owned OpenCode config lives in the workspace `.opencode` dir, at highest file precedence | → [agent-updates.md](../agents/agent-updates.md); makes the dispose-reload guarantee true for config |

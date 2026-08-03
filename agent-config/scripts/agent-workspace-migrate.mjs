@@ -13,7 +13,7 @@ const agentRoot = path.join(agentsRoot, agentName)
 const agentStateDir = path.join(workspace, ".opsiforce", "agents")
 const ledgerPath = path.join(agentStateDir, `${agentName}.json`)
 const summaryPath = path.join(agentStateDir, `${agentName}.summary.json`)
-const opencodeConfigPath = path.join(workspace, ".xdg", "config", "opencode", "opencode.json")
+const opencodeConfigPath = path.join(workspace, ".opencode", "opencode.json")
 
 const summary = {
   agentName,

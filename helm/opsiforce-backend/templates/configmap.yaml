@@ -22,7 +22,6 @@ data:
   CEPHFS_PVC_NAME: {{ .Values.config.cephfsPvcName | quote }}
   STORAGE_TYPE: {{ .Values.config.storageType | quote }}
   STORAGE_MOUNT_PATH: {{ .Values.config.storageMountPath | default "/workspace-data" | quote }}
-  AGENT_NAME: {{ .Values.config.agentName | quote }}
   AGENT_WORKSPACE_UPDATE_ON_STARTUP: {{ .Values.config.agentWorkspaceUpdateOnStartup | default "true" | quote }}
   AGENT_UPDATE_JOB_TIMEOUT_MS: {{ .Values.config.agentUpdateJobTimeoutMs | default "1800000" | quote }}
   {{- if .Values.config.agentNodeSelector }}

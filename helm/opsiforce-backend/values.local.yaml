@@ -33,7 +33,6 @@ config:
   storageType: "hostPath"
   storageMountPath: "/workspace-data"
   proxyControlToken: "opsiforce-local-proxy-token"
-  agentName: "app-builder"
   agentWorkspaceUpdateOnStartup: "true"
   agentUpdateJobTimeoutMs: "1800000"
   agentNodeSelector: ~

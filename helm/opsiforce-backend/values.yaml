@@ -30,7 +30,6 @@ config:
   storageType: "cephfs"
   storageMountPath: "/workspace-data"
   proxyControlToken: ""
-  agentName: "app-builder"
   agentWorkspaceUpdateOnStartup: "true"
   agentUpdateJobTimeoutMs: "1800000"
   agentNodeSelector: {}

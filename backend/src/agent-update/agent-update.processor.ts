@@ -6,7 +6,7 @@ import { and, desc, eq, notInArray } from 'drizzle-orm';
 import { readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { db } from '../../db';
-import { projectAgentUpdates, projectEnvironments, projects } from '../../db/schema';
+import { agents, projectAgentUpdates, projectEnvironments, projects } from '../../db/schema';
 import { ProjectService } from '../project/project.service';
 import { ProjectStatus } from '../project/project.types';
 import { AgentUpdateK8sService } from './agent-update.k8s.service';
@@ -47,10 +47,12 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
   }
 
   private async processSweep(): Promise<void> {
-    const agentName = this.agentUpdateService.agentName();
-    const targetVersion = this.agentUpdateService.agentTemplateVersion(agentName);
     const rows = await db
-      .select({ id: projectEnvironments.id, directory: projectEnvironments.directory })
+      .select({
+        id: projectEnvironments.id,
+        directory: projectEnvironments.directory,
+        agentId: projects.agentId,
+      })
       .from(projectEnvironments)
       .innerJoin(projects, eq(projects.id, projectEnvironments.projectId))
       .where(
@@ -59,13 +61,27 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
           notInArray(projectEnvironments.status, [ProjectStatus.Pending, ProjectStatus.Claiming])
         )
       );
-    const candidates: Array<{ id: string }> = [];
+    const agentRows = await db.select({ id: agents.id, name: agents.name }).from(agents);
+    const agentNamesById = new Map(agentRows.map((agent) => [agent.id, agent.name]));
+    const registryVersions = this.agentUpdateService.registryAgentVersions();
+    const candidatesByAgent = new Map<string, { targetVersion: string; candidates: Array<{ id: string }> }>();
     for (const row of rows) {
-      if (!(await this.workspaceAtTarget(row.directory, agentName, targetVersion))) {
-        candidates.push({ id: row.id });
+      const agentName = agentNamesById.get(row.agentId);
+      const targetVersion = agentName === undefined ? undefined : registryVersions.get(agentName);
+      if (agentName === undefined || targetVersion === undefined) {
+        this.logger.warn(
+          `Skipping project environment ${row.id}: agent ${agentName ?? row.agentId} is not in the merged agent registry`
+        );
+        continue;
       }
+      if (await this.workspaceAtTarget(row.directory, agentName, targetVersion)) continue;
+      const group = candidatesByAgent.get(agentName) ?? { targetVersion, candidates: [] };
+      group.candidates.push({ id: row.id });
+      candidatesByAgent.set(agentName, group);
     }
-    await this.agentUpdateService.enqueueProjectUpdates(candidates, agentName, targetVersion);
+    for (const [agentName, group] of candidatesByAgent) {
+      await this.agentUpdateService.enqueueProjectUpdates(group.candidates, agentName, group.targetVersion);
+    }
   }
 
   private async processReload(data: AgentReloadJobData): Promise<void> {
@@ -80,6 +96,7 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
   }
 
   private async processProject(data: AgentProjectJobData): Promise<void> {
+    const projectEnvironmentId = data.projectId;
     const project = await this.projectService.findOneById(data.projectId);
     if (project.status === ProjectStatus.Pending || project.status === ProjectStatus.Claiming) return;
     if (await this.workspaceAtTarget(project.directory, data.agentName, data.targetVersion)) return;
@@ -91,6 +108,7 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     await db.insert(projectAgentUpdates).values({
       id: updateId,
       projectId: project.id,
+      projectEnvironmentId,
       agentId,
       fromVersion,
       targetVersion: data.targetVersion,
@@ -239,7 +257,7 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     model?: string;
     agent?: Record<string, { model?: string; variant?: string } | undefined>;
   } | null> {
-    const configPath = path.join(this.storageMountPath, directory, '.xdg', 'config', 'opencode', 'opencode.json');
+    const configPath = path.join(this.storageMountPath, directory, '.opencode', 'opencode.json');
     try {
       return JSON.parse(await readFile(configPath, 'utf8')) as {
         model?: string;

@@ -63,7 +63,6 @@ export const configuration = () => {
     agentTolerations: parseJsonEnv<Array<Record<string, string>>>(process.env.AGENT_TOLERATIONS, []),
     agentAffinity: parseJsonEnv<Record<string, unknown>>(process.env.AGENT_AFFINITY, {}),
     imagePullSecrets: parseJsonEnv<Array<{ name: string }>>(process.env.IMAGE_PULL_SECRETS, []),
-    defaultAgentName: process.env.AGENT_NAME || 'app-builder',
     proxyControlToken: process.env.PROXY_CONTROL_TOKEN || 'opsiforce-local-proxy-token',
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     storageMountPath: process.env.STORAGE_MOUNT_PATH || '/workspace-data',
