@@ -116,14 +116,14 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
                           type="text"
                           value={draft().key}
                           onInput={(e) => setDraft(index, { key: e.currentTarget.value })}
-                          class="h-8 w-2/5 shrink-0 rounded-md border border-input bg-background px-2.5 py-1.5 font-mono text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          class="h-8 w-2/5 shrink-0 rounded-md border border-input bg-background px-3 py-1.5 font-mono text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           placeholder="KEY"
                         />
                         <input
                           type="text"
                           value={draft().value}
                           onInput={(e) => setDraft(index, { value: e.currentTarget.value })}
-                          class="h-8 flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          class="h-8 flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                           placeholder="value"
                         />
                         <button
@@ -138,7 +138,7 @@ export default function EnvironmentVariablesDialog(props: EnvironmentVariablesDi
                   </Index>
                 </Show>
               </div>
-              <Button size="sm" variant="outline" class="h-7 px-2.5" onClick={addDraft}>
+              <Button size="sm" variant="outline" onClick={addDraft}>
                 <Plus class="h-3.5 w-3.5" />
                 Add variable
               </Button>
