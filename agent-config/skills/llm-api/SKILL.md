@@ -12,7 +12,7 @@ A single OpenAI-compatible gateway is available via these environment variables 
 
 **Use `APP_LLM_API_KEY` / `APP_LLM_BASE_URL` for every gateway call** — in app code and in direct shell tasks alike. Do NOT use `OPENAI_API_KEY` / `OPENAI_BASE_URL`; those are the coding agent's own chat key.
 
-The endpoint is a gateway that routes to both OpenAI and Anthropic. You select the provider with the `provider/model` prefix in the `model` field (e.g. `openai/gpt-5.4-mini`, `anthropic/claude-sonnet-4-6`). One SDK, one key, both providers.
+The endpoint is a gateway that routes to both OpenAI and Anthropic. You select the provider with the `provider/model` prefix in the `model` field (e.g. `openai/gpt-5.4-mini`, `anthropic/claude-sonnet-5`). One SDK, one key, both providers.
 
 ## Setup (OpenAI SDK)
 
@@ -43,22 +43,22 @@ const llm = new OpenAI({
 
 Select a model with the `provider/model` prefix, then set [reasoning effort](#reasoning-effort-important) to match the task. Those two choices *together* decide quality — a capable model with no reasoning is just as weak as a cheap one. All chat models below are reasoning-capable and support vision.
 
-> ⚠️ **The #1 cause of a weak "AI agent" is a cheap model running with no reasoning** — e.g. `nano` at its default effort. That combination is fast and cheap and *consistently produces bad agents*. For anything that analyses, decides, or behaves agentically, use a **balanced model (`gpt-5.4-mini` / `claude-sonnet-4-6`) with `reasoning_effort: "medium"` or `"high"`.** Save the cheapest models for trivial, high-volume calls.
+> ⚠️ **The #1 cause of a weak "AI agent" is a cheap model running with no reasoning** — e.g. `nano` at its default effort. That combination is fast and cheap and *consistently produces bad agents*. For anything that analyses, decides, or behaves agentically, use a **balanced model (`gpt-5.4-mini` with `reasoning_effort: "medium"` or `"high"`, or `claude-sonnet-5`, which reasons adaptively on its own).** Save the cheapest models for trivial, high-volume calls.
 
 | When you need | OpenAI | Anthropic | Use for | Pair with effort |
 |------|--------|-----------|---------|------------------|
 | **Speed & low cost** | `openai/gpt-5.4-nano` | `anthropic/claude-haiku-4-5` | High-volume simple work: classification, tagging, extraction, routing | `"minimal"` / `"low"` |
-| **Balance — the default** | `openai/gpt-5.4-mini` | `anthropic/claude-sonnet-4-6` | Most in-app AI & backend jobs: analysis, judgement, generation, tool use, multi-step agents | `"medium"` / `"high"` |
-| **Maximum capability** | `openai/gpt-5.5` | `anthropic/claude-opus-4-8` | Hardest multi-step reasoning, long-horizon jobs, top-quality output | GPT-5.5: `"high"` · Opus 4.8: omit (see [Reasoning effort](#reasoning-effort-important)) |
+| **Balance — the default** | `openai/gpt-5.4-mini` | `anthropic/claude-sonnet-5` | Most in-app AI & backend jobs: analysis, judgement, generation, tool use, multi-step agents | GPT: `"medium"` / `"high"` · Sonnet 5: omit (see [Reasoning effort](#reasoning-effort-important)) |
+| **Maximum capability** | `openai/gpt-5.5` | `anthropic/claude-opus-5` | Hardest multi-step reasoning, long-horizon jobs, top-quality output | GPT-5.5: `"high"` · Opus 5: omit (see [Reasoning effort](#reasoning-effort-important)) |
 | **Audio** | `whisper-1` | — | Speech-to-text transcription | — |
 
 ### Choosing a model
 
-- **Default to the balanced models** (`openai/gpt-5.4-mini` or `anthropic/claude-sonnet-4-6`) for any job that reasons, decides, or uses tools. Claude Sonnet 4.6 lands near Opus-level quality on everyday tasks at roughly 40% lower cost and about 2× the speed; `gpt-5.4-mini` is the OpenAI equivalent. This is almost always the right starting point.
-- **Step up to the most capable models** (`openai/gpt-5.5` or `anthropic/claude-opus-4-8`) only when a balanced model at `"high"` effort still falls short — long-horizon planning, deep multi-step reasoning. They cost several times more, so don't reach for them by default.
+- **Default to the balanced models** (`openai/gpt-5.4-mini` or `anthropic/claude-sonnet-5`) for any job that reasons, decides, or uses tools. Claude Sonnet 5 lands near Opus-level quality on everyday tasks at well under half of Opus's price; `gpt-5.4-mini` is the OpenAI equivalent. This is almost always the right starting point.
+- **Step up to the most capable models** (`openai/gpt-5.5` or `anthropic/claude-opus-5`) only when a balanced model at full effort still falls short — long-horizon planning, deep multi-step reasoning. They cost several times more, so don't reach for them by default.
 - **Drop to the cheapest models** only for genuinely simple, high-volume calls — and still pair them with `"low"` effort, never none. Don't build a decision-making agent on them.
 - **Structured output (JSON schema)** — prefer OpenAI models; `response_format: { type: "json_schema" }` is native to OpenAI and most reliable through the gateway.
-- **Nuanced analysis / long-form writing** — Claude (Sonnet 4.6, or Opus 4.8 for the hardest tasks).
+- **Nuanced analysis / long-form writing** — Claude (Sonnet 5, or Opus 5 for the hardest tasks).
 - **Audio transcription** — `whisper-1` only. **Vision** — any chat model; pick the tier by how much the image task needs to *reason*, not just describe.
 
 ## Reasoning effort (IMPORTANT)
@@ -78,7 +78,7 @@ const response = await llm.chat.completions.create({
 const text = response.choices[0].message.content
 ```
 
-`reasoning_effort` works for GPT and for Claude **Sonnet/Haiku** through the gateway — for Claude it is translated into an extended-thinking budget automatically, so you use the same field regardless of provider. **The one exception is Claude Opus 4.8: omit `reasoning_effort` for it** — it reasons adaptively on its own, and setting the field errors on the gateway.
+`reasoning_effort` works for GPT and for Claude **Haiku** through the gateway — for Haiku it is translated into an extended-thinking budget automatically, so you use the same field regardless of provider. **The exceptions are Claude Sonnet 5 and Claude Opus 5: omit `reasoning_effort` for them** — they reason adaptively on their own, and setting the field errors on the gateway (these models rejected the translated thinking budget).
 
 ### How much effort?
 
@@ -364,9 +364,9 @@ const out = edited.data[0].b64_json!
 
 ## Guidelines
 
-- **Always set `reasoning_effort`** — `"low"` for extraction/classification, `"medium"` as the default, `"high"` for anything that needs real thinking. Omitting it gives shallow results. (Only exception: **Opus 4.8** — omit it; that model reasons adaptively and errors if you set it.) See [Reasoning effort](#reasoning-effort-important).
+- **Always set `reasoning_effort`** — `"low"` for extraction/classification, `"medium"` as the default, `"high"` for anything that needs real thinking. Omitting it gives shallow results. (Exceptions: **Claude Sonnet 5 and Opus 5** — omit it; those models reason adaptively and error if you set it.) See [Reasoning effort](#reasoning-effort-important).
 - **Use `max_completion_tokens`, never `max_tokens`** — see [Token limit](#token-limit--use-max_completion_tokens).
-- **Match the model to the task** — `gpt-5.4-nano` / `claude-haiku-4-5` for fast/cheap work; `gpt-5.4-mini` / `claude-sonnet-4-6` for quality; `gpt-5.5` / `claude-opus-4-8` for the hardest tasks.
+- **Match the model to the task** — `gpt-5.4-nano` / `claude-haiku-4-5` for fast/cheap work; `gpt-5.4-mini` / `claude-sonnet-5` for quality; `gpt-5.5` / `claude-opus-5` for the hardest tasks.
 - **Image generation returns base64** — `images.generate` / `images.edit` with `gpt-image-2` return `b64_json` (no URL); convert to a `Buffer` or data URL to store or serve.
 - **Transcription: gateway only** — never use browser speech APIs (`SpeechRecognition`, `webkitSpeechRecognition`) or a local speech model (`openai-whisper`, `faster-whisper`, `vosk`). Always go through the gateway's `whisper-1` (see [Audio Transcription](#audio-transcription)). In an app, record with `MediaRecorder` and transcribe server-side; as a direct task, use the shell recipe above.
 - **Backend only** — never expose `APP_LLM_API_KEY` to the frontend or client-side code.

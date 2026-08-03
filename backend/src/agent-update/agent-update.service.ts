@@ -11,7 +11,6 @@ import { readAgentConfig, type AgentModelSelection, type AgentRuntimeConfig } fr
 import {
   AGENT_WORKSPACE_UPDATE_QUEUE,
   AgentUpdateStatus,
-  DEFAULT_AGENT_NAME,
   type AgentProjectJobData,
   type AgentReloadJobData,
   type AgentSweepJobData,
@@ -36,7 +35,6 @@ export class AgentUpdateService implements OnApplicationBootstrap {
   private readonly logger = new Logger(AgentUpdateService.name);
   private readonly agentPort: number;
   private readonly agentConfig: AgentRuntimeConfig;
-  private readonly templateVersionCache = new Map<string, string>();
 
   constructor(
     @InjectQueue(AGENT_WORKSPACE_UPDATE_QUEUE)
@@ -77,27 +75,26 @@ export class AgentUpdateService implements OnApplicationBootstrap {
       .where(and(eq(projectAgentUpdates.status, AgentUpdateStatus.Running), lt(projectAgentUpdates.startedAt, cutoff)));
   }
 
-  agentName(): string {
-    return this.configService.get<string>('defaultAgentName', DEFAULT_AGENT_NAME);
+  registryAgentVersions(): ReadonlyMap<string, string> {
+    return this.agentConfig.versions;
   }
 
-  agentTemplateVersion(agentName: string = this.agentName()): string {
-    const cached = this.templateVersionCache.get(agentName);
-    if (cached !== undefined) return cached;
-    const resolved = this.agentConfig.versions.get(agentName) ?? 'unknown';
-    this.templateVersionCache.set(agentName, resolved);
-    return resolved;
-  }
-
-  agentModelSelection(agentName: string = this.agentName()): AgentModelSelection | undefined {
+  agentModelSelection(agentName: string): AgentModelSelection | undefined {
     return this.agentConfig.modelSelections.get(agentName);
   }
 
+  private registryStamp(): string {
+    return (
+      [...this.agentConfig.versions.entries()]
+        .toSorted(([a], [b]) => a.localeCompare(b))
+        .map(([agentName, version]) => `${agentName}@${version}`)
+        .join('--') || 'empty-registry'
+    );
+  }
+
   async enqueueProjectSweep(): Promise<void> {
-    const agentName = this.agentName();
-    const targetVersion = this.agentTemplateVersion(agentName);
     await this.queue.add('sweep', {} satisfies AgentSweepJobData, {
-      jobId: this.queueJobId('sweep', agentName, targetVersion, 'stable'),
+      jobId: this.queueJobId('sweep', this.registryStamp(), 'stable'),
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
       removeOnComplete: true,

@@ -1,5 +1,4 @@
 export const AGENT_WORKSPACE_UPDATE_QUEUE = 'agent-workspace-update';
-export const DEFAULT_AGENT_NAME = 'app-builder';
 
 export const AgentUpdateStatus = {
   Running: 'running',
