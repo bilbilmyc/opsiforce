@@ -26,27 +26,21 @@
       }
     },
     "openai": {
-      "whitelist": ["gpt-5.6-sol", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
+      "whitelist": ["gpt-5.6-sol", "gpt-5.5"],
       "models": {
         "gpt-5.6-sol": {
           "limit": { "context": 290400, "output": 32000 },
           "options": {
             "reasoningEffort": "high"
+          },
+          "variants": {
+            "low": { "reasoningEffort": "low" },
+            "medium": { "reasoningEffort": "medium" },
+            "high": { "reasoningEffort": "high" },
+            "xhigh": { "reasoningEffort": "xhigh" }
           }
         },
         "gpt-5.5": {
-          "limit": { "context": 290400, "output": 32000 },
-          "options": {
-            "reasoningEffort": "high"
-          }
-        },
-        "gpt-5.4": {
-          "limit": { "context": 290400, "output": 32000 },
-          "options": {
-            "reasoningEffort": "high"
-          }
-        },
-        "gpt-5.4-mini": {
           "limit": { "context": 290400, "output": 32000 },
           "options": {
             "reasoningEffort": "high"
