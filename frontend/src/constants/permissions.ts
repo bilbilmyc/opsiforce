@@ -24,4 +24,6 @@ export const Permission = {
   manageUsers: 'can_manage_users',
   manageSchedules: 'can_manage_schedules',
   viewPods: 'can_view_pods',
+  viewExternalServicesUsage: 'can_view_external_services_usage',
+  manageWhapiChannels: 'can_manage_whapi_channels',
 } as const;

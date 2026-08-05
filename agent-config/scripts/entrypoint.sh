@@ -9,6 +9,9 @@ export DB_VIEWER_SQL_TIME_LIMIT_MS="${DB_VIEWER_SQL_TIME_LIMIT_MS:-5000}"
 
 mkdir -p /workspace/app/data /workspace/data
 
+EXTERNAL_SERVICES_DB=/workspace/data/external-services.db
+[ -f "${EXTERNAL_SERVICES_DB}" ] || sqlite3 "${EXTERNAL_SERVICES_DB}" "VACUUM;"
+
 guard webapp /workspace/app/startup.sh &
 
 guard opencode opencode serve --port "${OPENCODE_PORT:-4096}" --hostname 0.0.0.0 &
@@ -25,6 +28,7 @@ guard vscode code-server \
 guard dbviewer datasette serve \
   /workspace/app/data/app.db \
   /workspace/data/database.db \
+  "${EXTERNAL_SERVICES_DB}" \
   --host 0.0.0.0 --port "${DB_VIEWER_PORT}" \
   --cors --create \
   --setting sql_time_limit_ms "${DB_VIEWER_SQL_TIME_LIMIT_MS}" \

@@ -16,7 +16,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { Queue } from 'bullmq';
 import crypto from 'crypto';
 import path from 'path';
-import { rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { db } from '../../db';
 import {
   projectSettings,
@@ -162,6 +162,16 @@ import {
 } from './project-duplicate.types';
 import { ACTIVE_IMPORT_STATUSES, ProjectImportStatus } from './project-import.types';
 import { ACTIVE_PUBLISH_STATUSES } from '../publish/publish.types';
+
+async function readAppMeta(filePath: string): Promise<Record<string, JsonValue>> {
+  try {
+    const parsed = JSON.parse(await readFile(filePath, 'utf8')) as JsonValue;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed;
+  } catch {
+    return {};
+  }
+}
 
 export type ProjectActivityKind = 'agent' | 'app';
 
@@ -994,7 +1004,8 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (dto.title !== undefined) projectUpdates.title = dto.title;
     if (dto.description !== undefined) projectUpdates.description = dto.description;
-    if (dto.timeoutIdle !== undefined) settingsUpdates.timeoutIdle = assertIdleTimeoutMs(dto.timeoutIdle, 'timeoutIdle');
+    if (dto.timeoutIdle !== undefined)
+      settingsUpdates.timeoutIdle = assertIdleTimeoutMs(dto.timeoutIdle, 'timeoutIdle');
     if (dto.appTimeoutIdle !== undefined)
       settingsUpdates.appTimeoutIdle = assertIdleTimeoutMs(dto.appTimeoutIdle, 'appTimeoutIdle');
     if (dto.timezone !== undefined) settingsUpdates.timezone = dto.timezone;
@@ -1360,8 +1371,9 @@ export class ProjectService implements OnApplicationBootstrap {
   ): Promise<void> {
     const storageMountPath = this.configService.getOrThrow<string>('storageMountPath');
     const target = path.join(storageMountPath, projectDirectory, 'app', 'app.meta.json');
-    const content: { name: string; description?: string } = { name: meta.name };
+    const content: Record<string, JsonValue> = { ...(await readAppMeta(target)), name: meta.name };
     if (meta.description !== null) content.description = meta.description;
+    else delete content.description;
     await writeJsonAtomic(target, content);
   }
 

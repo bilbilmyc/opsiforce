@@ -19,7 +19,7 @@ The endpoint is `@Public()` (it bypasses the tenant/OIDC guards, since pods call
 - **Surface & sender restriction** — agents can only invoke the operations a provider exposes (e.g. `sendEmail`), and the email provider forces `from` to the configured sender; agents can't spoof senders or manage the provider account.
 - **Lifecycle** — the token is created with the project, injected as `SERVICE_GATEWAY_API_KEY`, and revoked (status flipped, not deleted) on project deletion.
 
-The same per-project token and `{projectId, environmentId, tenantId}` resolution is reused by two other features rather than inventing new credentials: [Schedules](../projects/schedules.md) (the agent registers cron jobs over it) and [App Readiness](../projects/app-readiness.md) (the in-pod reporter pushes go-live/serving over it).
+The same per-project token and `{projectId, environmentId, tenantId}` resolution is reused by other features rather than inventing new credentials: [Schedules](../projects/schedules.md) (the agent registers cron jobs over it), [App Readiness](../projects/app-readiness.md) (the in-pod reporter pushes go-live/serving over it), and the external-services endpoints under `/api/gateway/external-services/…`, which are environment-scoped — they read the environment from the token and never from the request body.
 
 ## Gateway vs. Bifrost
 

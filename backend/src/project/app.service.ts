@@ -4,13 +4,16 @@ import { db } from '../../db';
 import { projectApps } from '../../db/schema';
 import type { ProjectAppMeta } from './project.types';
 
+interface StoredAppMeta {
+  name: string | null;
+  description: string | null;
+  externalServices: string[];
+}
+
 @Injectable()
 export class AppService {
   async get(projectEnvironmentId: string): Promise<ProjectAppMeta | null> {
-    const [row] = await db
-      .select({ name: projectApps.name, description: projectApps.description })
-      .from(projectApps)
-      .where(eq(projectApps.projectEnvironmentId, projectEnvironmentId));
+    const row = await this.stored(projectEnvironmentId);
     if (!row) return null;
     return { exists: true, name: row.name, description: row.description };
   }
@@ -18,10 +21,15 @@ export class AppService {
   async upsertProjectApp(
     projectEnvironmentId: string,
     projectId: string,
-    meta: { name: string | null; description: string | null }
+    meta: { name: string | null; description: string | null; externalServices: string[] }
   ): Promise<boolean> {
-    const existing = await this.get(projectEnvironmentId);
-    if (existing && existing.name === meta.name && existing.description === meta.description) {
+    const existing = await this.stored(projectEnvironmentId);
+    if (
+      existing &&
+      existing.name === meta.name &&
+      existing.description === meta.description &&
+      sameServices(existing.externalServices, meta.externalServices)
+    ) {
       return false;
     }
 
@@ -32,16 +40,34 @@ export class AppService {
         projectId,
         name: meta.name,
         description: meta.description,
+        externalServices: meta.externalServices,
       })
       .onConflictDoUpdate({
         target: projectApps.projectEnvironmentId,
         set: {
           name: meta.name,
           description: meta.description,
+          externalServices: meta.externalServices,
           updatedAt: new Date(),
         },
       });
 
     return true;
   }
+
+  private async stored(projectEnvironmentId: string): Promise<StoredAppMeta | null> {
+    const [row] = await db
+      .select({
+        name: projectApps.name,
+        description: projectApps.description,
+        externalServices: projectApps.externalServices,
+      })
+      .from(projectApps)
+      .where(eq(projectApps.projectEnvironmentId, projectEnvironmentId));
+    return row ?? null;
+  }
+}
+
+function sameServices(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((service, index) => service === b[index]);
 }

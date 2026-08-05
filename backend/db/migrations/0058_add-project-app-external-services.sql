@@ -1,0 +1,1 @@
+ALTER TABLE "project_app" ADD COLUMN "external_services" jsonb DEFAULT '[]'::jsonb NOT NULL;

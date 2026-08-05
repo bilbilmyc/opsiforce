@@ -48,11 +48,20 @@ data:
   {{- if .Values.config.mailgunDomain }}
   MAILGUN_DOMAIN: {{ .Values.config.mailgunDomain | quote }}
   {{- end }}
+  {{- if .Values.config.mailgunReceiveDomain }}
+  MAILGUN_RECEIVE_DOMAIN: {{ .Values.config.mailgunReceiveDomain | quote }}
+  {{- end }}
   {{- if .Values.config.mailgunUrl }}
   MAILGUN_URL: {{ .Values.config.mailgunUrl | quote }}
   {{- end }}
   {{- if .Values.config.mailgunSender }}
   MAILGUN_SENDER: {{ .Values.config.mailgunSender | quote }}
+  {{- end }}
+  {{- if .Values.config.whapiApiUrl }}
+  WHAPI_API_URL: {{ .Values.config.whapiApiUrl | quote }}
+  {{- end }}
+  {{- if .Values.config.externalServicesWebhookBaseUrl }}
+  EXTERNAL_SERVICES_WEBHOOK_BASE_URL: {{ .Values.config.externalServicesWebhookBaseUrl | quote }}
   {{- end }}
   {{- if .Values.config.appsHostname }}
   APPS_HOSTNAME: {{ .Values.config.appsHostname | quote }}

@@ -14,12 +14,13 @@ code-server runs with `--auth none`: the wildcard IngressRoute already passes th
 
 ## DB Viewer (Datasette)
 
-Datasette serves two SQLite databases with its own sidebar switcher:
+Datasette serves three SQLite databases with its own sidebar switcher:
 
 - **`app`** (`/workspace/app/data/app.db`) — the generated app's database, **writable** via the `datasette-write-ui` plugin.
 - **`database`** (`/workspace/data/database.db`) — the platform observability DB (HTTP request logs, process logs/events), **read-only**.
+- **`external-services`** (`/workspace/data/external-services.db`) — inbound messages from external services, written solely by the platform backend, **read-only**.
 
-Per-DB write permission is enforced by `agent-config/datasette-metadata.yml` (the `app` DB grants insert/update/delete; `database` grants only SELECT) — edit that file to change access. Datasette is stateless (no XDG persistence); startup seeds missing DB files with `VACUUM` because it refuses to open absent files. Gated by `can_view_db_tab`.
+Per-DB write permission is enforced by `agent-config/datasette-metadata.yml` (the `app` DB grants insert/update/delete; the other two grant only SELECT) — edit that file to change access. Datasette is stateless (no XDG persistence); it refuses to open absent files, so the entrypoint seeds `external-services.db` before launch and `--create` covers the rest. Gated by `can_view_db_tab`.
 
 **Known gap:** the per-tab permission gates only the *frontend*. A user with a valid platform session who guesses the environment id can reach `{envId}.db…` directly without `can_view_db_tab`. Closing it requires a project-aware authorization check on the runtime-proxy path.
 

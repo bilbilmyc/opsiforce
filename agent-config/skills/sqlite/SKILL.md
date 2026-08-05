@@ -1,6 +1,6 @@
 ---
 name: sqlite
-description: SQLite database via Node 24's built-in node:sqlite — migrations, DatabaseService API, full-text search (FTS5). Use for any data model change, schema work, or SQL query. Every data model change starts here with a migration file.
+description: SQLite database via Node 24's built-in node:sqlite — migrations, DatabaseService API, full-text search (FTS5), and the read-only platform databases (observability, inbound external-service messages). Use for any data model change, schema work, or SQL query. Every data model change starts here with a migration file.
 ---
 
 # SQLite
@@ -8,6 +8,35 @@ description: SQLite database via Node 24's built-in node:sqlite — migrations, 
 The app uses Node 24's built-in `node:sqlite` (`DatabaseSync`). Synchronous API, zero dependencies, no native compile step. Imported as `import { DatabaseSync } from "node:sqlite"`. Database file is at `data/app.db`.
 
 There is also a per-project platform-managed observability database at `/workspace/data/database.db` (tables: `app_requests`, `process_logs`, `process_events`). Do not create tables or write to it — always open with `sqlite3 -readonly /workspace/data/database.db "..."`. When debugging a failed request, crash, or error, Read references/observability-db.md — it has the platform DB schema and ready-to-run queries.
+
+## Inbound messages — `/workspace/data/external-services.db`
+
+A third platform-managed file holds inbound messages from external services (incoming email, WhatsApp). **The platform backend is the only writer** — agents, app code, and the DB viewer are read-only. Never create tables, write, or run migrations against it; open it with `sqlite3 -readonly` or `new DatabaseSync(path, { readOnly: true })`.
+
+One table per service, created lazily the first time a message arrives — until then the file is empty, which is normal. Every service table shares the same convention columns:
+
+| Column | Meaning |
+|---|---|
+| `id` | row id, the value the doorbell POST sends in `rowIds` |
+| `received_at` | when the platform stored the message |
+| `raw_payload` | the provider's original payload, as received |
+| `app_delivered_at` | when the app's doorbell handler ACKed — `NULL` means it never did |
+
+`app_delivered_at` is the "was the app rung?" signal. Delivery is a single fire-and-forget attempt with no retries, so `NULL` rows are the ones the app has not processed — either no handler was declared or the pod was cold when the message landed. Reading undelivered rows is how an app catches up, and it is the first thing to check when a message "never arrived":
+
+```bash
+sqlite3 -readonly -header -column /workspace/data/external-services.db \
+  "SELECT id, received_at, app_delivered_at FROM incoming_emails ORDER BY id DESC LIMIT 20;"
+```
+
+```typescript
+import { DatabaseSync } from "node:sqlite"
+
+const db = new DatabaseSync("/workspace/data/external-services.db", { readOnly: true })
+const pending = db.prepare("SELECT * FROM incoming_emails WHERE app_delivered_at IS NULL ORDER BY id").all()
+```
+
+Per-service table columns and the handler contract live in that service's own skill (`incoming-email`, `whatsapp`) — load it before wiring an app to a service.
 
 ## DatabaseService API
 

@@ -31,6 +31,7 @@ import { ProjectEnvironmentModule } from './project-environment/project-environm
 import { PublishModule } from './publish/publish.module';
 import { ProjectExportModule } from './export/project-export.module';
 import { AdminModule } from './admin/admin.module';
+import { ExternalServicesModule } from './external-services/external-services.module';
 
 function parseRedisUrl(url: string) {
   const parsed = new URL(url);
@@ -82,6 +83,7 @@ function parseRedisUrl(url: string) {
     PublishModule,
     ProjectExportModule,
     AdminModule,
+    ExternalServicesModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: TenantGuard }],

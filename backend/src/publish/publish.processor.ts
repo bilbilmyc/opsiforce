@@ -18,8 +18,10 @@ import { GatewayKeyService } from '../gateway/gateway-key.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { AppReadinessService } from '../project/app-readiness.service';
 import { PodStartupFailedError } from '../pod/pod.service';
+import { errorMessage } from '../common/error-message';
 import { writeJsonAtomic } from '../common/fs';
 import { clearEnvJsonBackup, writeEnvJsonBackup } from '../common/env-file';
+import { ExternalServicePublishService } from '../external-services/external-service-publish.service';
 
 const POD_READY_TIMEOUT_MS = 180 * 1000;
 const APP_READY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -39,7 +41,8 @@ export class PublishProcessor extends WorkerHost {
     private readonly gatewayKeyService: GatewayKeyService,
     private readonly scheduleService: ScheduleService,
     private readonly appReadiness: AppReadinessService,
-    private readonly projectEvents: ProjectEventsService
+    private readonly projectEvents: ProjectEventsService,
+    private readonly externalServicePublish: ExternalServicePublishService
   ) {
     super();
     this.storageMountPath = this.configService.getOrThrow<string>('storageMountPath');
@@ -104,6 +107,8 @@ export class PublishProcessor extends WorkerHost {
         );
       }
 
+      await this.carryInboundWiring(devEnv.id, data.projectEnvironmentId);
+
       phase = PublishStatus.Building;
       await this.setStatus(data.publishJobId, PublishStatus.Building);
       const podIp = await this.projectService.recreatePodForDeploy(data.projectEnvironmentId, POD_READY_TIMEOUT_MS);
@@ -167,6 +172,16 @@ export class PublishProcessor extends WorkerHost {
         error: userFacingPublishError(err, phase),
         completedAt: new Date(),
       });
+    }
+  }
+
+  private async carryInboundWiring(devEnvironmentId: string, prodEnvironmentId: string): Promise<void> {
+    try {
+      await this.externalServicePublish.carryInboundWiring(devEnvironmentId, prodEnvironmentId);
+    } catch (err) {
+      this.logger.warn(
+        `Carrying external-service wiring to ${prodEnvironmentId} failed, the published app may not receive inbound messages: ${errorMessage(err)}`
+      );
     }
   }
 

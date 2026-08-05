@@ -40,6 +40,11 @@
 - [Service Gateway](gateways/service-gateway.md) — per-project credential isolation for non-LLM external services
 - [Request Logging](gateways/request-logging.md) — per-project Off/Metadata/Full traffic logging ([ADR-0006](adr/0006-request-log-streaming-tee.md))
 
+**External services** (`external-services/`) — the inbound domain (Service Gateway above is the outbound seam)
+- [External Services](external-services/overview.md) — the template every inbound service plugs into: webhook front door, ingest pipeline, per-environment SQLite storage, metering, the app doorbell
+- [Incoming Email](external-services/incoming-email.md) — a receiving address per environment (Mailgun), lazily issued and agent-rotatable
+- [WhatsApp](external-services/whatsapp.md) — operator-connected channels per Organization, the chat allowlist, and onboarding a number
+
 **Organization admin** (`organization/`)
 - [Settings](organization/settings.md) — the configuration surface (rail of gated sections) ([ADR-0014](adr/0014-admin-section-and-operational-view-module.md))
 - [Admin](organization/admin.md) — the operational sibling (configure vs operate)
