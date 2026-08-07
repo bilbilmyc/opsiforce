@@ -95,9 +95,9 @@ bifrost:
       network_config:
         default_request_timeout_in_seconds: 1200
         max_retries: 2
-        retry_backoff_initial_ms: 500
-        retry_backoff_max_ms: 5000
-        stream_idle_timeout_in_seconds: 1200
+        retry_backoff_initial: 500
+        retry_backoff_max: 5000
+        stream_idle_timeout_in_seconds: 3600
     anthropic:
       keys:
         - name: anthropic-primary
@@ -107,9 +107,9 @@ bifrost:
       network_config:
         default_request_timeout_in_seconds: 1200
         max_retries: 2
-        retry_backoff_initial_ms: 500
-        retry_backoff_max_ms: 5000
-        stream_idle_timeout_in_seconds: 1200
+        retry_backoff_initial: 500
+        retry_backoff_max: 5000
+        stream_idle_timeout_in_seconds: 3600
     custom-openai-1:
       keys:
         - name: placeholder
@@ -128,9 +128,9 @@ bifrost:
         base_url: ""
         default_request_timeout_in_seconds: 1200
         max_retries: 2
-        retry_backoff_initial_ms: 500
-        retry_backoff_max_ms: 5000
-        stream_idle_timeout_in_seconds: 1200
+        retry_backoff_initial: 500
+        retry_backoff_max: 5000
+        stream_idle_timeout_in_seconds: 3600
       custom_provider_config:
         is_key_less: true
         base_provider_type: openai
@@ -163,9 +163,9 @@ bifrost:
         base_url: ""
         default_request_timeout_in_seconds: 1200
         max_retries: 2
-        retry_backoff_initial_ms: 500
-        retry_backoff_max_ms: 5000
-        stream_idle_timeout_in_seconds: 1200
+        retry_backoff_initial: 500
+        retry_backoff_max: 5000
+        stream_idle_timeout_in_seconds: 3600
       custom_provider_config:
         is_key_less: true
         base_provider_type: openai
@@ -198,9 +198,9 @@ bifrost:
         base_url: ""
         default_request_timeout_in_seconds: 1200
         max_retries: 2
-        retry_backoff_initial_ms: 500
-        retry_backoff_max_ms: 5000
-        stream_idle_timeout_in_seconds: 1200
+        retry_backoff_initial: 500
+        retry_backoff_max: 5000
+        stream_idle_timeout_in_seconds: 3600
       custom_provider_config:
         is_key_less: true
         base_provider_type: openai
