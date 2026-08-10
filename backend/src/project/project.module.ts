@@ -39,6 +39,7 @@ import { GitModule } from '../git/git.module';
 import { ProjectPoolModule } from '../pool/project-pool.module';
 import { EnvironmentModule } from '../environment/environment.module';
 import { ProjectEnvironmentModule } from '../project-environment/project-environment.module';
+import { ExternalServicesModule } from '../external-services';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { ProjectEnvironmentModule } from '../project-environment/project-environ
     ProjectPoolModule,
     EnvironmentModule,
     ProjectEnvironmentModule,
+    ExternalServicesModule,
     GitModule,
     AppReadinessModule,
     AgentStatusModule,

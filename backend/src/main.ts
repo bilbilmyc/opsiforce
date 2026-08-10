@@ -1,7 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { AppModule } from './app.module';
+import { webhookBodyLimitHook } from './external-services/http/webhook-body-limit.hook';
 import { requirePermissionHook } from './permission/permission.hook';
+
+const WEBHOOK_ROUTE_PREFIX = '/api/external-services/webhooks/';
+const WEBHOOK_JSON_BODY_LIMIT = 5 * 1024 * 1024;
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -28,6 +32,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   fastify.addHook('onRequest', requirePermissionHook('/api/admin/queues', 'can_view_queue_dashboard'));
+  fastify.addHook('preParsing', webhookBodyLimitHook(WEBHOOK_ROUTE_PREFIX, WEBHOOK_JSON_BODY_LIMIT));
 
   app.enableCors({
     origin: true,

@@ -4,13 +4,15 @@ import { db } from '../../db';
 import { projectApps } from '../../db/schema';
 import type { ProjectAppMeta } from './project.types';
 
+interface StoredAppMeta {
+  name: string | null;
+  description: string | null;
+}
+
 @Injectable()
 export class AppService {
   async get(projectEnvironmentId: string): Promise<ProjectAppMeta | null> {
-    const [row] = await db
-      .select({ name: projectApps.name, description: projectApps.description })
-      .from(projectApps)
-      .where(eq(projectApps.projectEnvironmentId, projectEnvironmentId));
+    const row = await this.stored(projectEnvironmentId);
     if (!row) return null;
     return { exists: true, name: row.name, description: row.description };
   }
@@ -20,7 +22,7 @@ export class AppService {
     projectId: string,
     meta: { name: string | null; description: string | null }
   ): Promise<boolean> {
-    const existing = await this.get(projectEnvironmentId);
+    const existing = await this.stored(projectEnvironmentId);
     if (existing && existing.name === meta.name && existing.description === meta.description) {
       return false;
     }
@@ -43,5 +45,16 @@ export class AppService {
       });
 
     return true;
+  }
+
+  private async stored(projectEnvironmentId: string): Promise<StoredAppMeta | null> {
+    const [row] = await db
+      .select({
+        name: projectApps.name,
+        description: projectApps.description,
+      })
+      .from(projectApps)
+      .where(eq(projectApps.projectEnvironmentId, projectEnvironmentId));
+    return row ?? null;
   }
 }

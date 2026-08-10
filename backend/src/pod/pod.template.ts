@@ -29,6 +29,7 @@ export interface PodTemplateOptions {
   bifrostBackendApiKey?: string;
   gatewayApiKey?: string;
   gatewayUrl?: string;
+  externalServicesUrl?: string;
   controlToken?: string;
   controlPort?: number;
 }
@@ -152,6 +153,10 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
                     value: options.gatewayApiKey,
                   },
                   { name: 'SERVICE_GATEWAY_URL', value: options.gatewayUrl },
+                  {
+                    name: 'EXTERNAL_SERVICES_URL',
+                    value: options.externalServicesUrl ?? '',
+                  },
                 ]
               : []),
           ],

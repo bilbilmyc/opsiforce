@@ -15,6 +15,7 @@ import { BifrostModule } from '../bifrost/bifrost.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { PodModule } from '../pod/pod.module';
 import { ScheduleModule } from '../schedule/schedule.module';
+import { ExternalServicesModule } from '../external-services';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { ScheduleModule } from '../schedule/schedule.module';
     GatewayModule,
     PodModule,
     forwardRef(() => ScheduleModule),
+    ExternalServicesModule,
   ],
   controllers: [PublishController],
   providers: [PublishService, PublishProcessor],

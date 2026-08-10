@@ -11,6 +11,7 @@ import { BifrostModule } from '../bifrost/bifrost.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { TimeoutModule } from '../timeout/timeout.module';
 import { EnvironmentModule } from '../environment/environment.module';
+import { ExternalServicesModule } from '../external-services';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { EnvironmentModule } from '../environment/environment.module';
     GatewayModule,
     TimeoutModule,
     EnvironmentModule,
+    ExternalServicesModule,
   ],
   providers: [ProjectPoolService, ProjectPoolProcessor, ProjectPoolTeardownProcessor],
   exports: [ProjectPoolService],

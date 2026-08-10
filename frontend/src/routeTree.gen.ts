@@ -23,6 +23,8 @@ import { Route as SettingsDefaultsRouteImport } from './routes/settings/defaults
 import { Route as SettingsBillingRouteImport } from './routes/settings/billing'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
 import { Route as AdminPodsRouteImport } from './routes/admin/pods'
+import { Route as AdminExternalServicesIndexRouteImport } from './routes/admin/external-services/index'
+import { Route as AdminExternalServicesUsageRouteImport } from './routes/admin/external-services/usage'
 
 const SchedulesRoute = SchedulesRouteImport.update({
   id: '/schedules',
@@ -94,6 +96,18 @@ const AdminPodsRoute = AdminPodsRouteImport.update({
   path: '/pods',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminExternalServicesIndexRoute =
+  AdminExternalServicesIndexRouteImport.update({
+    id: '/external-services/',
+    path: '/external-services/',
+    getParentRoute: () => AdminRouteRoute,
+  } as any)
+const AdminExternalServicesUsageRoute =
+  AdminExternalServicesUsageRouteImport.update({
+    id: '/external-services/usage',
+    path: '/external-services/usage',
+    getParentRoute: () => AdminRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -110,6 +124,8 @@ export interface FileRoutesByFullPath {
   '/settings/users': typeof SettingsUsersRoute
   '/settings/workspaces': typeof SettingsWorkspacesRoute
   '/settings/': typeof SettingsIndexRoute
+  '/admin/external-services/usage': typeof AdminExternalServicesUsageRoute
+  '/admin/external-services/': typeof AdminExternalServicesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -125,6 +141,8 @@ export interface FileRoutesByTo {
   '/settings/users': typeof SettingsUsersRoute
   '/settings/workspaces': typeof SettingsWorkspacesRoute
   '/settings': typeof SettingsIndexRoute
+  '/admin/external-services/usage': typeof AdminExternalServicesUsageRoute
+  '/admin/external-services': typeof AdminExternalServicesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -142,6 +160,8 @@ export interface FileRoutesById {
   '/settings/users': typeof SettingsUsersRoute
   '/settings/workspaces': typeof SettingsWorkspacesRoute
   '/settings/': typeof SettingsIndexRoute
+  '/admin/external-services/usage': typeof AdminExternalServicesUsageRoute
+  '/admin/external-services/': typeof AdminExternalServicesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -160,6 +180,8 @@ export interface FileRouteTypes {
     | '/settings/users'
     | '/settings/workspaces'
     | '/settings/'
+    | '/admin/external-services/usage'
+    | '/admin/external-services/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -175,6 +197,8 @@ export interface FileRouteTypes {
     | '/settings/users'
     | '/settings/workspaces'
     | '/settings'
+    | '/admin/external-services/usage'
+    | '/admin/external-services'
   id:
     | '__root__'
     | '/'
@@ -191,6 +215,8 @@ export interface FileRouteTypes {
     | '/settings/users'
     | '/settings/workspaces'
     | '/settings/'
+    | '/admin/external-services/usage'
+    | '/admin/external-services/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -302,15 +328,33 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AdminPodsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/external-services/': {
+      id: '/admin/external-services/'
+      path: '/external-services'
+      fullPath: '/admin/external-services/'
+      preLoaderRoute: typeof AdminExternalServicesIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/external-services/usage': {
+      id: '/admin/external-services/usage'
+      path: '/external-services/usage'
+      fullPath: '/admin/external-services/usage'
+      preLoaderRoute: typeof AdminExternalServicesUsageRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
   }
 }
 
 interface AdminRouteRouteChildren {
   AdminPodsRoute: typeof AdminPodsRoute
+  AdminExternalServicesUsageRoute: typeof AdminExternalServicesUsageRoute
+  AdminExternalServicesIndexRoute: typeof AdminExternalServicesIndexRoute
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminPodsRoute: AdminPodsRoute,
+  AdminExternalServicesUsageRoute: AdminExternalServicesUsageRoute,
+  AdminExternalServicesIndexRoute: AdminExternalServicesIndexRoute,
 }
 
 const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(

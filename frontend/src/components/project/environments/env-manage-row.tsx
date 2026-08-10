@@ -1,5 +1,6 @@
 import { Show } from 'solid-js';
 import {
+  Cable,
   Calendar,
   Check,
   EllipsisVertical,
@@ -34,9 +35,11 @@ export interface EnvManageRowProps {
   canPublish: boolean;
   canManageVariables: boolean;
   canSchedules: boolean;
+  canManageExternalServices: boolean;
   restarting: boolean;
   onAuth: () => void;
   onSchedules: () => void;
+  onExternalServices: () => void;
   onRestart: () => void;
   onDelete: () => void;
   onPublish: () => void;
@@ -115,6 +118,12 @@ export function EnvManageRow(props: EnvManageRowProps) {
               <DropdownMenuItem onSelect={() => props.onSchedules()}>
                 <Calendar class="h-3.5 w-3.5 text-muted-foreground" />
                 Schedules
+              </DropdownMenuItem>
+            </Show>
+            <Show when={props.canManageExternalServices}>
+              <DropdownMenuItem onSelect={() => props.onExternalServices()}>
+                <Cable class="h-3.5 w-3.5 text-muted-foreground" />
+                External services
               </DropdownMenuItem>
             </Show>
             <Show when={canRestartEnv()}>

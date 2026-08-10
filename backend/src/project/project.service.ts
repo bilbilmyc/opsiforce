@@ -48,6 +48,7 @@ import { GatewayKeyService } from '../gateway/gateway-key.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { AgentService } from '../agent/agent.service';
 import { EnvironmentService } from '../environment/environment.service';
+import { ExternalServiceProvisioningService } from '../external-services';
 import { GitService } from '../git/git.service';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
 import type { ProjectEnvironmentContext } from '../project-environment/project-environment.types';
@@ -248,6 +249,7 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly environmentService: EnvironmentService,
     private readonly gitService: GitService,
     private readonly projectEnvironmentService: ProjectEnvironmentService,
+    private readonly externalServiceProvisioning: ExternalServiceProvisioningService,
     private readonly proxyService: ProxyService,
     @InjectQueue(PROJECT_DUPLICATE_QUEUE)
     private readonly duplicateQueue: Queue<ProjectDuplicateJobData>
@@ -508,6 +510,7 @@ export class ProjectService implements OnApplicationBootstrap {
       });
     });
 
+    await this.externalServiceProvisioning.provisionEnvironment(id);
     await this.createBifrostResources(id, tenantId);
     await this.createGatewayKey(id, id, tenantId);
     this.spawnStartupWorker(id);
@@ -609,6 +612,7 @@ export class ProjectService implements OnApplicationBootstrap {
       });
     });
 
+    await this.externalServiceProvisioning.provisionEnvironment(id);
     await this.createBifrostResources(id, tenantId);
     await this.createGatewayKey(id, id, tenantId);
     await this.enqueueDuplicateJob({
@@ -722,6 +726,7 @@ export class ProjectService implements OnApplicationBootstrap {
       }
     });
 
+    await this.externalServiceProvisioning.provisionEnvironment(id);
     await this.createBifrostResources(id, tenantId);
     await this.createGatewayKey(id, id, tenantId);
 
@@ -994,7 +999,8 @@ export class ProjectService implements OnApplicationBootstrap {
 
     if (dto.title !== undefined) projectUpdates.title = dto.title;
     if (dto.description !== undefined) projectUpdates.description = dto.description;
-    if (dto.timeoutIdle !== undefined) settingsUpdates.timeoutIdle = assertIdleTimeoutMs(dto.timeoutIdle, 'timeoutIdle');
+    if (dto.timeoutIdle !== undefined)
+      settingsUpdates.timeoutIdle = assertIdleTimeoutMs(dto.timeoutIdle, 'timeoutIdle');
     if (dto.appTimeoutIdle !== undefined)
       settingsUpdates.appTimeoutIdle = assertIdleTimeoutMs(dto.appTimeoutIdle, 'appTimeoutIdle');
     if (dto.timezone !== undefined) settingsUpdates.timezone = dto.timezone;
@@ -1360,7 +1366,7 @@ export class ProjectService implements OnApplicationBootstrap {
   ): Promise<void> {
     const storageMountPath = this.configService.getOrThrow<string>('storageMountPath');
     const target = path.join(storageMountPath, projectDirectory, 'app', 'app.meta.json');
-    const content: { name: string; description?: string } = { name: meta.name };
+    const content: Record<string, JsonValue> = { name: meta.name };
     if (meta.description !== null) content.description = meta.description;
     await writeJsonAtomic(target, content);
   }
@@ -2171,6 +2177,7 @@ export class ProjectService implements OnApplicationBootstrap {
       agentName,
       gatewayApiKey: gatewayApiKey ?? undefined,
       gatewayUrl: this.configService.get<string>('gatewayUrl', ''),
+      externalServicesUrl: this.configService.get<string>('externalServicesUrl', ''),
       opsiforceEnv: env.isDefault ? undefined : 'production',
       environmentSlug: env.environmentSlug,
       resources: podResources,

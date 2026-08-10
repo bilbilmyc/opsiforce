@@ -1,8 +1,17 @@
 import { sql } from "drizzle-orm"
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue }
 import {
   pgTable,
   text,
   timestamp,
+  date,
   pgEnum,
   bigint,
   boolean,
@@ -478,6 +487,68 @@ export const gatewayAuditLogs = pgTable("gateway_audit_logs", {
   errorMessage: text("error_message"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
+
+export const externalServiceResource = pgTable(
+  "external_service_resource",
+  {
+    service: text("service").notNull(),
+    resourceKey: text("resource_key").notNull(),
+    value: jsonb("value").$type<JsonValue>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.service, table.resourceKey] })],
+)
+
+export const externalServiceConfig = pgTable(
+  "external_service_config",
+  {
+    service: text("service").notNull(),
+    projectEnvironmentId: text("project_environment_id")
+      .references(() => projectEnvironments.id, { onDelete: "cascade" })
+      .notNull(),
+    value: jsonb("value").$type<JsonValue>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.service, table.projectEnvironmentId] }),
+  ],
+)
+
+export const externalServiceUsage = pgTable(
+  "external_service_usage",
+  {
+    id: text("id").primaryKey(),
+    tenantId: tenantIdField,
+    projectId: text("project_id").references(() => projects.id, {
+      onDelete: "set null",
+    }),
+    projectEnvironmentId: text("project_environment_id").references(
+      () => projectEnvironments.id,
+      { onDelete: "set null" },
+    ),
+    service: text("service").notNull(),
+    month: date("month").notNull(),
+    count: bigint("count", { mode: "number" }).notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    unique("external_service_usage_bucket_unique").on(
+      table.tenantId,
+      table.projectId,
+      table.projectEnvironmentId,
+      table.service,
+      table.month,
+    ),
+    index("idx_external_service_usage_month").on(table.month),
+    index("idx_external_service_usage_tenant_month").on(
+      table.tenantId,
+      table.month,
+    ),
+  ],
+)
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),

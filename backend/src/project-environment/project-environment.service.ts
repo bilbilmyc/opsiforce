@@ -96,6 +96,16 @@ export class ProjectEnvironmentService {
     return this.select(eq(projectEnvironments.projectId, projectId));
   }
 
+  async listIdsByTenant(tenantId: string): Promise<string[]> {
+    const rows = await db
+      .select({ id: projectEnvironments.id })
+      .from(projectEnvironments)
+      .innerJoin(projects, eq(projects.id, projectEnvironments.projectId))
+      .where(eq(projects.tenantId, tenantId));
+
+    return rows.map((row) => row.id);
+  }
+
   listByStatus(status: ProjectStatus | ProjectStatus[]): Promise<ProjectEnvironmentContext[]> {
     const where = Array.isArray(status)
       ? inArray(projectEnvironments.status, status)

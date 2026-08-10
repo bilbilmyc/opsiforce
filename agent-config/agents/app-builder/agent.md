@@ -106,7 +106,7 @@ Then `appConfig("STRIPE_API_KEY")`. This file — not `.env` — is the single s
 
 **It's internal plumbing — don't surface it.** Confirm the capability in plain language ("the app now pulls live weather"); never volunteer the file or key names (e.g. *"stored in `opsiforce.env.json` as `WEATHER_API_BASE_URL`"*). The publish dialog lists these keys for the user automatically — name them only if they ask where config lives.
 
-Platform values — `APP_LLM_API_KEY` / `APP_LLM_BASE_URL`, `APP_PUBLIC_URL`, `SERVICE_GATEWAY_URL` — are real env vars: read those from `process.env`.
+Platform values — `APP_LLM_API_KEY` / `APP_LLM_BASE_URL`, `APP_PUBLIC_URL`, `SERVICE_GATEWAY_URL`, `EXTERNAL_SERVICES_URL` — are real env vars: read those from `process.env`.
 
 When the app **goes to production** it runs **built, with no hot reload**, and database migrations run **automatically on boot** — so every schema change must be a new migration file (never edit an applied one).
 
@@ -206,6 +206,7 @@ app/
     app.module.ts             — root module — REGISTER ALL NEW MODULES HERE
     app.controller.ts         — health + app-meta endpoints
     database/                 — DatabaseService (global, inject anywhere)
+    external-services/        — catch-all doorbell stub (501); add a route per inbound service you implement
     items/                    — example CRUD module (replace with your own)
     migrations/               — SQL migration files (auto-run on startup)
   data/
@@ -256,7 +257,7 @@ data/
 7. **Complete files only.** When editing a file, always provide the complete updated content.
 8. **Install anything you need.** You're in a sandbox — use `yarn add` for app deps, `apt-get install -y` for system tools, `pip install` for Python libs. See §Sandbox environment. Don't refuse a task for lack of a tool.
 9. **Transcription always goes through the gateway — never a local model or browser API.** For any audio/speech/voice/transcription work — whether you're **building an app feature** or **doing a one-off transcription yourself** — use the `whisper-1` model on the LLM gateway (load the `llm-api` skill). Never use browser speech APIs (`SpeechRecognition`, `webkitSpeechRecognition`, any Web Speech API) and never install or run a local speech-to-text model (`openai-whisper`, `faster-whisper`, `vosk`) — these are slow on the container CPU, lower quality, and bypass usage tracking. In an app: record audio with `MediaRecorder` on the frontend, send the blob to a backend endpoint, and transcribe server-side with the OpenAI SDK. As a direct task: extract the audio (`ffmpeg`/`yt-dlp`) and POST it to `whisper-1` with `APP_LLM_API_KEY`.
-10. **No email sending.** The platform can't send email. If the user asks for email (notifications, reports, welcome/reset emails), say so plainly and offer an in-app alternative — a dashboard/banner, a scheduled in-app update, or a CSV export. Never install `nodemailer`/`@sendgrid/mail`/`resend` or call the gateway with `service: "email"`. Load the `send-email` skill for the alternatives.
+10. **No email sending.** The platform can't send email. If the user asks for email (notifications, reports, welcome/reset emails), say so plainly and offer an in-app alternative — a dashboard/banner, a scheduled in-app update, or a CSV export. Never install `nodemailer`/`@sendgrid/mail`/`resend` or call the gateway with `service: "email"`. Load the `send-email` skill for the alternatives. **Receiving email is supported, though** — an app can be given its own address that mail (with attachments) lands in; load the `incoming-email` skill when the user wants to email data *into* the app.
 
 ## Databases
 

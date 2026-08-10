@@ -25,6 +25,7 @@ import { GatewayKeyService } from '../gateway/gateway-key.service';
 import { DefaultsService } from '../defaults/defaults.service';
 import { TimeoutService } from '../timeout/timeout.service';
 import { EnvironmentService } from '../environment/environment.service';
+import { ExternalServiceProvisioningService } from '../external-services';
 import { readAgentConfig, type AgentModelSelection } from '../agent/agent-config';
 import {
   PROJECT_POOL_QUEUE,
@@ -66,6 +67,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
   private readonly logger = new Logger(ProjectPoolService.name);
   private readonly platformVersion: string;
   private readonly gatewayUrl: string;
+  private readonly externalServicesUrl: string;
   private readonly storageMountPath: string;
   private readonly poolSizeOverride: number | null;
   private readonly agentTargetByName: Map<string, number>;
@@ -87,10 +89,12 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
     private readonly defaultsService: DefaultsService,
     private readonly timeoutService: TimeoutService,
     private readonly environmentService: EnvironmentService,
+    private readonly externalServiceProvisioning: ExternalServiceProvisioningService,
     private readonly configService: ConfigService
   ) {
     this.platformVersion = this.configService.get<string>('platformVersion', '0.1.0');
     this.gatewayUrl = this.configService.get<string>('gatewayUrl', '');
+    this.externalServicesUrl = this.configService.get<string>('externalServicesUrl', '');
     this.storageMountPath = this.configService.getOrThrow<string>('storageMountPath');
     this.poolSizeOverride = this.configService.get<number | null>('poolSizeOverride', null);
     const agentConfig = readAgentConfig();
@@ -528,6 +532,8 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       });
     });
 
+    await this.externalServiceProvisioning.provisionEnvironment(id);
+
     try {
       if (this.bifrostService.isEnabled()) {
         await this.bifrostService.createOrphanProjectResources({ projectId: id });
@@ -544,6 +550,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
         agentName,
         gatewayApiKey: gatewayApiKey ?? undefined,
         gatewayUrl: this.gatewayUrl,
+        externalServicesUrl: this.externalServicesUrl,
         controlToken: crypto.randomBytes(32).toString('hex'),
       });
 

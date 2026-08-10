@@ -20,6 +20,7 @@ import { AppReadinessService } from '../project/app-readiness.service';
 import { PodStartupFailedError } from '../pod/pod.service';
 import { writeJsonAtomic } from '../common/fs';
 import { clearEnvJsonBackup, writeEnvJsonBackup } from '../common/env-file';
+import { ExternalServicePublishService } from '../external-services';
 
 const POD_READY_TIMEOUT_MS = 180 * 1000;
 const APP_READY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -39,7 +40,8 @@ export class PublishProcessor extends WorkerHost {
     private readonly gatewayKeyService: GatewayKeyService,
     private readonly scheduleService: ScheduleService,
     private readonly appReadiness: AppReadinessService,
-    private readonly projectEvents: ProjectEventsService
+    private readonly projectEvents: ProjectEventsService,
+    private readonly externalServicePublish: ExternalServicePublishService
   ) {
     super();
     this.storageMountPath = this.configService.getOrThrow<string>('storageMountPath');
@@ -114,6 +116,8 @@ export class PublishProcessor extends WorkerHost {
       if (!appReady) {
         throw new Error('Production app did not become ready within the deploy window');
       }
+
+      await this.externalServicePublish.carryInboundWiring(devEnv.id, data.projectEnvironmentId);
 
       try {
         await this.reconcileSchedules(data.projectId, data.projectEnvironmentId, data.tenantId, data.scheduleIds);
@@ -301,6 +305,9 @@ function userFacingPublishError(err: unknown, phase: PublishStatus): string {
   }
   if (message.includes('did not become ready within the deploy window')) {
     return "The app started but didn't come online in time. Please try again.";
+  }
+  if (message.includes('Carrying external-service wiring failed')) {
+    return 'The app deployed, but copying its external-service wiring failed. Please publish again.';
   }
   if (message.includes('No active LLM virtual keys')) {
     return 'This environment is missing its LLM credentials. Please reconfigure it and try again.';

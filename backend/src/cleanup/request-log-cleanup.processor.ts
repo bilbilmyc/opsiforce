@@ -4,13 +4,20 @@ import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
 import { access } from 'fs/promises';
 import path from 'path';
-import { open } from 'sqlite';
-import sqlite3 from 'sqlite3';
+import type { Database } from 'sqlite';
 import { db } from '../../db';
 import { projectEnvironments } from '../../db/schema';
+import {
+  environmentDatabasePath,
+  openEnvironmentDatabase,
+  type SqlitePragmaProfile,
+} from '../common/environment-database';
 
 export const REQUEST_LOG_CLEANUP_QUEUE = 'request-log-cleanup';
 type LogTable = 'app_requests' | 'process_logs' | 'process_events';
+
+const REQUEST_LOG_DATABASE_FILE = 'database.db';
+const REQUEST_LOG_PRAGMAS: SqlitePragmaProfile = { busyTimeoutMs: 5000 };
 
 @Processor(REQUEST_LOG_CLEANUP_QUEUE)
 export class RequestLogCleanupProcessor extends WorkerHost {
@@ -35,7 +42,8 @@ export class RequestLogCleanupProcessor extends WorkerHost {
     let totalDeleted = 0;
 
     for (const row of rows) {
-      const dbPath = path.join(this.storageMountPath, row.directory, 'data', 'database.db');
+      const envDirectory = path.join(this.storageMountPath, row.directory);
+      const dbPath = environmentDatabasePath(envDirectory, REQUEST_LOG_DATABASE_FILE);
 
       const exists = await access(dbPath)
         .then(() => true)
@@ -46,7 +54,7 @@ export class RequestLogCleanupProcessor extends WorkerHost {
       }
 
       try {
-        totalDeleted += await this.cleanupDatabase(dbPath);
+        totalDeleted += await this.cleanupDatabase(envDirectory);
         scanned++;
       } catch (err) {
         this.logger.warn(
@@ -60,10 +68,9 @@ export class RequestLogCleanupProcessor extends WorkerHost {
     );
   }
 
-  private async cleanupDatabase(dbPath: string): Promise<number> {
-    const connection = await open({ filename: dbPath, driver: sqlite3.Database });
+  private async cleanupDatabase(envDirectory: string): Promise<number> {
+    const connection = await openEnvironmentDatabase(envDirectory, REQUEST_LOG_DATABASE_FILE, REQUEST_LOG_PRAGMAS);
     try {
-      await connection.exec('PRAGMA busy_timeout = 5000');
       let deleted = 0;
       deleted += await this.cleanupTable(connection, 'app_requests');
       deleted += await this.cleanupTable(connection, 'process_logs');
@@ -74,7 +81,7 @@ export class RequestLogCleanupProcessor extends WorkerHost {
     }
   }
 
-  private async cleanupTable(connection: Awaited<ReturnType<typeof open>>, table: LogTable): Promise<number> {
+  private async cleanupTable(connection: Database, table: LogTable): Promise<number> {
     const row = await connection.get<{ count: number }>(
       "SELECT COUNT(*) as count FROM sqlite_master WHERE type = 'table' AND name = ?",
       table
