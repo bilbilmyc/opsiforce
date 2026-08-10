@@ -1,19 +1,9 @@
-import { Body, Controller, Post } from "@nestjs/common"
-
-interface DoorbellNotification {
-  service: string
-  rowIds: number[]
-}
+import { Controller, NotImplementedException, Param, Post } from "@nestjs/common"
 
 @Controller("external-services")
 export class ExternalServicesController {
-  @Post("incoming-email")
-  incomingEmail(@Body() notification: DoorbellNotification): { received: true } {
-    return { received: true }
-  }
-
-  @Post("whatsapp")
-  whatsapp(@Body() notification: DoorbellNotification): { received: true } {
-    return { received: true }
+  @Post(":service")
+  notImplemented(@Param("service") service: string): never {
+    throw new NotImplementedException(`No handler implemented for external service "${service}"`)
   }
 }

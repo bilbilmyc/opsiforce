@@ -1,4 +1,12 @@
 import { sql } from "drizzle-orm"
+
+export type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValue[]
+  | { [key: string]: JsonValue }
 import {
   pgTable,
   text,
@@ -277,7 +285,6 @@ export const projectApps = pgTable(
       .notNull(),
     name: text("name"),
     description: text("description"),
-    externalServices: jsonb("external_services").$type<string[]>().notNull().default([]),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -481,14 +488,33 @@ export const gatewayAuditLogs = pgTable("gateway_audit_logs", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 })
 
-export const incomingEmailAddresses = pgTable("incoming_email_addresses", {
-  projectEnvironmentId: text("project_environment_id")
-    .primaryKey()
-    .references(() => projectEnvironments.id, { onDelete: "cascade" }),
-  address: text("address").notNull().unique(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-})
+export const externalServiceResource = pgTable(
+  "external_service_resource",
+  {
+    service: text("service").notNull(),
+    resourceKey: text("resource_key").notNull(),
+    value: jsonb("value").$type<JsonValue>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.service, table.resourceKey] })],
+)
+
+export const externalServiceConfig = pgTable(
+  "external_service_config",
+  {
+    service: text("service").notNull(),
+    projectEnvironmentId: text("project_environment_id")
+      .references(() => projectEnvironments.id, { onDelete: "cascade" })
+      .notNull(),
+    value: jsonb("value").$type<JsonValue>().notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.service, table.projectEnvironmentId] }),
+  ],
+)
 
 export const externalServiceUsage = pgTable(
   "external_service_usage",
@@ -521,54 +547,6 @@ export const externalServiceUsage = pgTable(
       table.tenantId,
       table.month,
     ),
-  ],
-)
-
-export const whapiChannels = pgTable(
-  "whapi_channels",
-  {
-    id: text("id").primaryKey(),
-    channelId: text("channel_id").notNull(),
-    tenantId: tenantIdField,
-    apiToken: text("api_token").notNull(),
-    webhookSecret: text("webhook_secret").notNull(),
-    label: text("label"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => [
-    unique("whapi_channels_channel_id_tenant_id_unique").on(
-      table.channelId,
-      table.tenantId,
-    ),
-    index("idx_whapi_channels_channel").on(table.channelId),
-    index("idx_whapi_channels_tenant").on(table.tenantId),
-  ],
-)
-
-export const whapiChatRoutes = pgTable(
-  "whapi_chat_routes",
-  {
-    id: text("id").primaryKey(),
-    whapiChannelId: text("whapi_channel_id")
-      .references(() => whapiChannels.id, { onDelete: "cascade" })
-      .notNull(),
-    chatId: text("chat_id").notNull(),
-    projectEnvironmentId: text("project_environment_id")
-      .references(() => projectEnvironments.id, { onDelete: "cascade" })
-      .notNull(),
-    chatName: text("chat_name"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
-    updatedAt: timestamp("updated_at").defaultNow().notNull(),
-  },
-  (table) => [
-    unique("whapi_chat_routes_channel_chat_environment_unique").on(
-      table.whapiChannelId,
-      table.chatId,
-      table.projectEnvironmentId,
-    ),
-    index("idx_whapi_chat_routes_chat").on(table.chatId),
-    index("idx_whapi_chat_routes_environment").on(table.projectEnvironmentId),
   ],
 )
 

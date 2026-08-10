@@ -16,7 +16,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { Queue } from 'bullmq';
 import crypto from 'crypto';
 import path from 'path';
-import { readFile, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { db } from '../../db';
 import {
   projectSettings,
@@ -48,6 +48,7 @@ import { GatewayKeyService } from '../gateway/gateway-key.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { AgentService } from '../agent/agent.service';
 import { EnvironmentService } from '../environment/environment.service';
+import { ExternalServiceProvisioningService } from '../external-services';
 import { GitService } from '../git/git.service';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
 import type { ProjectEnvironmentContext } from '../project-environment/project-environment.types';
@@ -163,16 +164,6 @@ import {
 import { ACTIVE_IMPORT_STATUSES, ProjectImportStatus } from './project-import.types';
 import { ACTIVE_PUBLISH_STATUSES } from '../publish/publish.types';
 
-async function readAppMeta(filePath: string): Promise<Record<string, JsonValue>> {
-  try {
-    const parsed = JSON.parse(await readFile(filePath, 'utf8')) as JsonValue;
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    return parsed;
-  } catch {
-    return {};
-  }
-}
-
 export type ProjectActivityKind = 'agent' | 'app';
 
 export interface EnsureEnvironmentResult {
@@ -258,6 +249,7 @@ export class ProjectService implements OnApplicationBootstrap {
     private readonly environmentService: EnvironmentService,
     private readonly gitService: GitService,
     private readonly projectEnvironmentService: ProjectEnvironmentService,
+    private readonly externalServiceProvisioning: ExternalServiceProvisioningService,
     private readonly proxyService: ProxyService,
     @InjectQueue(PROJECT_DUPLICATE_QUEUE)
     private readonly duplicateQueue: Queue<ProjectDuplicateJobData>
@@ -518,6 +510,7 @@ export class ProjectService implements OnApplicationBootstrap {
       });
     });
 
+    await this.externalServiceProvisioning.provisionEnvironment(id);
     await this.createBifrostResources(id, tenantId);
     await this.createGatewayKey(id, id, tenantId);
     this.spawnStartupWorker(id);
@@ -619,6 +612,7 @@ export class ProjectService implements OnApplicationBootstrap {
       });
     });
 
+    await this.externalServiceProvisioning.provisionEnvironment(id);
     await this.createBifrostResources(id, tenantId);
     await this.createGatewayKey(id, id, tenantId);
     await this.enqueueDuplicateJob({
@@ -732,6 +726,7 @@ export class ProjectService implements OnApplicationBootstrap {
       }
     });
 
+    await this.externalServiceProvisioning.provisionEnvironment(id);
     await this.createBifrostResources(id, tenantId);
     await this.createGatewayKey(id, id, tenantId);
 
@@ -1371,9 +1366,8 @@ export class ProjectService implements OnApplicationBootstrap {
   ): Promise<void> {
     const storageMountPath = this.configService.getOrThrow<string>('storageMountPath');
     const target = path.join(storageMountPath, projectDirectory, 'app', 'app.meta.json');
-    const content: Record<string, JsonValue> = { ...(await readAppMeta(target)), name: meta.name };
+    const content: Record<string, JsonValue> = { name: meta.name };
     if (meta.description !== null) content.description = meta.description;
-    else delete content.description;
     await writeJsonAtomic(target, content);
   }
 
@@ -2183,6 +2177,7 @@ export class ProjectService implements OnApplicationBootstrap {
       agentName,
       gatewayApiKey: gatewayApiKey ?? undefined,
       gatewayUrl: this.configService.get<string>('gatewayUrl', ''),
+      externalServicesUrl: this.configService.get<string>('externalServicesUrl', ''),
       opsiforceEnv: env.isDefault ? undefined : 'production',
       environmentSlug: env.environmentSlug,
       resources: podResources,

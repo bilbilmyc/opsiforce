@@ -33,6 +33,8 @@ auth:
       - can_manage_platform_defaults
       - can_manage_tenant_defaults
       - can_manage_external_integration
+      - can_manage_external_services
+      - can_view_external_services_usage
 
 keycloakMs:
   enabled: true

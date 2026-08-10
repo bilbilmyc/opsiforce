@@ -27,11 +27,10 @@ const (
 )
 
 type appState struct {
-	Serving          bool     `json:"serving"`
-	Live             bool     `json:"live"`
-	Name             *string  `json:"name,omitempty"`
-	Description      *string  `json:"description,omitempty"`
-	ExternalServices []string `json:"externalServices,omitempty"`
+	Serving     bool    `json:"serving"`
+	Live        bool    `json:"live"`
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
 }
 
 func (s appState) positive() bool {
@@ -42,20 +41,7 @@ func (s appState) equal(other appState) bool {
 	return s.Serving == other.Serving &&
 		s.Live == other.Live &&
 		ptrEqual(s.Name, other.Name) &&
-		ptrEqual(s.Description, other.Description) &&
-		sliceEqual(s.ExternalServices, other.ExternalServices)
-}
-
-func sliceEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+		ptrEqual(s.Description, other.Description)
 }
 
 func ptrEqual(a, b *string) bool {
@@ -157,16 +143,14 @@ func probeApp(client *http.Client, url string) appState {
 	state := appState{Serving: true}
 
 	var body struct {
-		Exists           bool     `json:"exists"`
-		Name             *string  `json:"name"`
-		Description      *string  `json:"description"`
-		ExternalServices []string `json:"externalServices"`
+		Exists      bool    `json:"exists"`
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&body); err == nil && body.Exists {
 		state.Live = true
 		state.Name = body.Name
 		state.Description = body.Description
-		state.ExternalServices = body.ExternalServices
 	}
 	return state
 }

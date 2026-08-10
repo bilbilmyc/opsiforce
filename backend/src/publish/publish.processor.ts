@@ -21,7 +21,7 @@ import { PodStartupFailedError } from '../pod/pod.service';
 import { errorMessage } from '../common/error-message';
 import { writeJsonAtomic } from '../common/fs';
 import { clearEnvJsonBackup, writeEnvJsonBackup } from '../common/env-file';
-import { ExternalServicePublishService } from '../external-services/external-service-publish.service';
+import { ExternalServicePublishService } from '../external-services';
 
 const POD_READY_TIMEOUT_MS = 180 * 1000;
 const APP_READY_TIMEOUT_MS = 10 * 60 * 1000;
@@ -107,8 +107,6 @@ export class PublishProcessor extends WorkerHost {
         );
       }
 
-      await this.carryInboundWiring(devEnv.id, data.projectEnvironmentId);
-
       phase = PublishStatus.Building;
       await this.setStatus(data.publishJobId, PublishStatus.Building);
       const podIp = await this.projectService.recreatePodForDeploy(data.projectEnvironmentId, POD_READY_TIMEOUT_MS);
@@ -119,6 +117,8 @@ export class PublishProcessor extends WorkerHost {
       if (!appReady) {
         throw new Error('Production app did not become ready within the deploy window');
       }
+
+      await this.carryInboundWiring(devEnv.id, data.projectEnvironmentId);
 
       try {
         await this.reconcileSchedules(data.projectId, data.projectEnvironmentId, data.tenantId, data.scheduleIds);

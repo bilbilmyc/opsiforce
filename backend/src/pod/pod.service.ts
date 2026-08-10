@@ -12,6 +12,7 @@ export interface TenantPodOptions {
   bifrostProxyUrl?: string;
   gatewayApiKey?: string;
   gatewayUrl?: string;
+  externalServicesUrl?: string;
   agentName?: string;
   opsiforceEnv?: string;
   environmentSlug?: string | null;

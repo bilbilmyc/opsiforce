@@ -26,5 +26,5 @@ export const Perms = {
   viewPods: 'can_view_pods',
   manageExternalIntegration: 'can_manage_external_integration',
   viewExternalServicesUsage: 'can_view_external_services_usage',
-  manageWhapiChannels: 'can_manage_whapi_channels',
+  manageExternalServices: 'can_manage_external_services',
 } as const;

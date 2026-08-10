@@ -45,11 +45,36 @@ docker_build(
     ],
 )
 
+def dotenv(path):
+    parsed = {}
+    for line in str(read_file(path, default='')).splitlines():
+        entry = line.strip()
+        if not entry or entry.startswith('#') or '=' not in entry:
+            continue
+        key, _, value = entry.partition('=')
+        parsed[key.strip()] = value.strip().strip('"').strip("'")
+    return parsed
+
+# Machine-specific values (tunnel host) and real provider secrets live in the
+# gitignored .env, never in the tracked values.local.yaml.
+BACKEND_ENV_OVERRIDES = {
+    'MAILGUN_RECEIVE_DOMAIN': 'config.mailgunReceiveDomain',
+    'MAILGUN_WEBHOOK_SIGNING_KEY': 'config.mailgunWebhookSigningKey',
+    'EXTERNAL_SERVICES_WEBHOOK_BASE_URL': 'config.externalServicesWebhookBaseUrl',
+}
+
+local_env = dotenv('../.env')
+backend_overrides = []
+for env_key, helm_key in BACKEND_ENV_OVERRIDES.items():
+    if local_env.get(env_key):
+        backend_overrides.append(helm_key + '=' + local_env[env_key])
+
 k8s_yaml(helm(
     '../helm/opsiforce-backend',
     name='opsiforce-backend',
     namespace='local',
     values=['../helm/opsiforce-backend/values.local.yaml'],
+    set=backend_overrides,
 ))
 
 k8s_resource(

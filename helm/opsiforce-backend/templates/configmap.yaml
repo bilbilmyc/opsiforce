@@ -45,6 +45,9 @@ data:
   {{- if .Values.config.gatewayUrl }}
   SERVICE_GATEWAY_URL: {{ .Values.config.gatewayUrl | quote }}
   {{- end }}
+  {{- if .Values.config.externalServicesUrl }}
+  EXTERNAL_SERVICES_URL: {{ .Values.config.externalServicesUrl | quote }}
+  {{- end }}
   {{- if .Values.config.mailgunDomain }}
   MAILGUN_DOMAIN: {{ .Values.config.mailgunDomain | quote }}
   {{- end }}

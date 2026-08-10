@@ -12,9 +12,7 @@ The agent template ships a backend route at `/api/app-meta` reading an `app.meta
 
 The agent's first-pass name (`my-internal-tool`) is often not the tenant-facing label, so name/description can be re-curated by humans. Editing is gated by `can_edit_app_details` and targets the **active** environment's App: Opsiforce writes that environment's `app.meta.json` atomically and mirrors the values into its row (both must succeed or it rolls back), then publishes an SSE event so any open pane updates. Curating a *published* environment is transient — its next publish recopies Development's `app.meta.json` over it. The platform's rule is **latest writer wins**: the agent may rewrite the file later (e.g. "rename the app to X"), and human edits aren't sticky beyond the next agent regeneration — though the agent is instructed to carry an existing name forward verbatim unless explicitly asked to rename, so curation survives routine updates by convention.
 
-## Capability declaration
-
-`app.meta.json` is also where an app declares what the platform should do *for* it: an `externalServices` array naming the inbound services it handles (`incoming-email`, `whatsapp`). It rides the same detection push as name/description and lands in the same `project_app` row, which is what the external-services webhook path reads before ringing an app's doorbell callback — undeclared apps still get their messages stored, they just aren't called. Because the file is shared between the agent (which declares) and the platform (which curates name/description), **both writers preserve keys they don't own**: the platform's edit path merges into the existing file rather than rewriting it, and the agent is instructed to leave foreign keys alone.
+`app.meta.json` holds name and description and nothing else, so the platform's write path can rewrite it outright rather than merging around keys it doesn't own. [External Services](../external-services/overview.md) briefly put a second writer in the file and has since taken it back out — an app no longer declares anything to receive inbound messages.
 
 ## Identity at runtime
 

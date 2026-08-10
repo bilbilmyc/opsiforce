@@ -63,3 +63,6 @@ export { default as Layers } from 'lucide-solid/icons/layers';
 export { default as Boxes } from 'lucide-solid/icons/boxes';
 export { default as Server } from 'lucide-solid/icons/server';
 export { default as ChartColumn } from 'lucide-solid/icons/chart-column';
+export { default as KeyRound } from 'lucide-solid/icons/key-round';
+export { default as Mail } from 'lucide-solid/icons/mail';
+export { default as Cable } from 'lucide-solid/icons/cable';

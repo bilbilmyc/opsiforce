@@ -31,7 +31,7 @@ import { ProjectEnvironmentModule } from './project-environment/project-environm
 import { PublishModule } from './publish/publish.module';
 import { ProjectExportModule } from './export/project-export.module';
 import { AdminModule } from './admin/admin.module';
-import { ExternalServicesModule } from './external-services/external-services.module';
+import { ExternalServicesModule } from './external-services';
 
 function parseRedisUrl(url: string) {
   const parsed = new URL(url);

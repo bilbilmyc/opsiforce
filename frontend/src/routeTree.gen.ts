@@ -8,161 +8,163 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root';
-import { Route as SchedulesRouteImport } from './routes/schedules';
-import { Route as PermissionDeniedRouteImport } from './routes/permission-denied';
-import { Route as SettingsRouteRouteImport } from './routes/settings/route';
-import { Route as AdminRouteRouteImport } from './routes/admin/route';
-import { Route as IndexRouteImport } from './routes/index';
-import { Route as SettingsIndexRouteImport } from './routes/settings/index';
-import { Route as SettingsWorkspacesRouteImport } from './routes/settings/workspaces';
-import { Route as SettingsUsersRouteImport } from './routes/settings/users';
-import { Route as SettingsIntegrationsRouteImport } from './routes/settings/integrations';
-import { Route as SettingsEnvironmentsRouteImport } from './routes/settings/environments';
-import { Route as SettingsDefaultsRouteImport } from './routes/settings/defaults';
-import { Route as SettingsBillingRouteImport } from './routes/settings/billing';
-import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId';
-import { Route as AdminWhatsappRouteImport } from './routes/admin/whatsapp';
-import { Route as AdminPodsRouteImport } from './routes/admin/pods';
-import { Route as AdminExternalServicesUsageRouteImport } from './routes/admin/external-services/usage';
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as SchedulesRouteImport } from './routes/schedules'
+import { Route as PermissionDeniedRouteImport } from './routes/permission-denied'
+import { Route as SettingsRouteRouteImport } from './routes/settings/route'
+import { Route as AdminRouteRouteImport } from './routes/admin/route'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as SettingsIndexRouteImport } from './routes/settings/index'
+import { Route as SettingsWorkspacesRouteImport } from './routes/settings/workspaces'
+import { Route as SettingsUsersRouteImport } from './routes/settings/users'
+import { Route as SettingsIntegrationsRouteImport } from './routes/settings/integrations'
+import { Route as SettingsEnvironmentsRouteImport } from './routes/settings/environments'
+import { Route as SettingsDefaultsRouteImport } from './routes/settings/defaults'
+import { Route as SettingsBillingRouteImport } from './routes/settings/billing'
+import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
+import { Route as AdminPodsRouteImport } from './routes/admin/pods'
+import { Route as AdminExternalServicesIndexRouteImport } from './routes/admin/external-services/index'
+import { Route as AdminExternalServicesUsageRouteImport } from './routes/admin/external-services/usage'
 
 const SchedulesRoute = SchedulesRouteImport.update({
   id: '/schedules',
   path: '/schedules',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const PermissionDeniedRoute = PermissionDeniedRouteImport.update({
   id: '/permission-denied',
   path: '/permission-denied',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const SettingsRouteRoute = SettingsRouteRouteImport.update({
   id: '/settings',
   path: '/settings',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AdminRouteRoute = AdminRouteRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const SettingsIndexRoute = SettingsIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => SettingsRouteRoute,
-} as any);
+} as any)
 const SettingsWorkspacesRoute = SettingsWorkspacesRouteImport.update({
   id: '/workspaces',
   path: '/workspaces',
   getParentRoute: () => SettingsRouteRoute,
-} as any);
+} as any)
 const SettingsUsersRoute = SettingsUsersRouteImport.update({
   id: '/users',
   path: '/users',
   getParentRoute: () => SettingsRouteRoute,
-} as any);
+} as any)
 const SettingsIntegrationsRoute = SettingsIntegrationsRouteImport.update({
   id: '/integrations',
   path: '/integrations',
   getParentRoute: () => SettingsRouteRoute,
-} as any);
+} as any)
 const SettingsEnvironmentsRoute = SettingsEnvironmentsRouteImport.update({
   id: '/environments',
   path: '/environments',
   getParentRoute: () => SettingsRouteRoute,
-} as any);
+} as any)
 const SettingsDefaultsRoute = SettingsDefaultsRouteImport.update({
   id: '/defaults',
   path: '/defaults',
   getParentRoute: () => SettingsRouteRoute,
-} as any);
+} as any)
 const SettingsBillingRoute = SettingsBillingRouteImport.update({
   id: '/billing',
   path: '/billing',
   getParentRoute: () => SettingsRouteRoute,
-} as any);
+} as any)
 const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   id: '/projects/$projectId',
   path: '/projects/$projectId',
   getParentRoute: () => rootRouteImport,
-} as any);
-const AdminWhatsappRoute = AdminWhatsappRouteImport.update({
-  id: '/whatsapp',
-  path: '/whatsapp',
-  getParentRoute: () => AdminRouteRoute,
-} as any);
+} as any)
 const AdminPodsRoute = AdminPodsRouteImport.update({
   id: '/pods',
   path: '/pods',
   getParentRoute: () => AdminRouteRoute,
-} as any);
-const AdminExternalServicesUsageRoute = AdminExternalServicesUsageRouteImport.update({
-  id: '/external-services/usage',
-  path: '/external-services/usage',
-  getParentRoute: () => AdminRouteRoute,
-} as any);
+} as any)
+const AdminExternalServicesIndexRoute =
+  AdminExternalServicesIndexRouteImport.update({
+    id: '/external-services/',
+    path: '/external-services/',
+    getParentRoute: () => AdminRouteRoute,
+  } as any)
+const AdminExternalServicesUsageRoute =
+  AdminExternalServicesUsageRouteImport.update({
+    id: '/external-services/usage',
+    path: '/external-services/usage',
+    getParentRoute: () => AdminRouteRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute;
-  '/admin': typeof AdminRouteRouteWithChildren;
-  '/settings': typeof SettingsRouteRouteWithChildren;
-  '/permission-denied': typeof PermissionDeniedRoute;
-  '/schedules': typeof SchedulesRoute;
-  '/admin/pods': typeof AdminPodsRoute;
-  '/admin/whatsapp': typeof AdminWhatsappRoute;
-  '/projects/$projectId': typeof ProjectsProjectIdRoute;
-  '/settings/billing': typeof SettingsBillingRoute;
-  '/settings/defaults': typeof SettingsDefaultsRoute;
-  '/settings/environments': typeof SettingsEnvironmentsRoute;
-  '/settings/integrations': typeof SettingsIntegrationsRoute;
-  '/settings/users': typeof SettingsUsersRoute;
-  '/settings/workspaces': typeof SettingsWorkspacesRoute;
-  '/settings/': typeof SettingsIndexRoute;
-  '/admin/external-services/usage': typeof AdminExternalServicesUsageRoute;
+  '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
+  '/settings': typeof SettingsRouteRouteWithChildren
+  '/permission-denied': typeof PermissionDeniedRoute
+  '/schedules': typeof SchedulesRoute
+  '/admin/pods': typeof AdminPodsRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/settings/billing': typeof SettingsBillingRoute
+  '/settings/defaults': typeof SettingsDefaultsRoute
+  '/settings/environments': typeof SettingsEnvironmentsRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/users': typeof SettingsUsersRoute
+  '/settings/workspaces': typeof SettingsWorkspacesRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/admin/external-services/usage': typeof AdminExternalServicesUsageRoute
+  '/admin/external-services/': typeof AdminExternalServicesIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute;
-  '/admin': typeof AdminRouteRouteWithChildren;
-  '/permission-denied': typeof PermissionDeniedRoute;
-  '/schedules': typeof SchedulesRoute;
-  '/admin/pods': typeof AdminPodsRoute;
-  '/admin/whatsapp': typeof AdminWhatsappRoute;
-  '/projects/$projectId': typeof ProjectsProjectIdRoute;
-  '/settings/billing': typeof SettingsBillingRoute;
-  '/settings/defaults': typeof SettingsDefaultsRoute;
-  '/settings/environments': typeof SettingsEnvironmentsRoute;
-  '/settings/integrations': typeof SettingsIntegrationsRoute;
-  '/settings/users': typeof SettingsUsersRoute;
-  '/settings/workspaces': typeof SettingsWorkspacesRoute;
-  '/settings': typeof SettingsIndexRoute;
-  '/admin/external-services/usage': typeof AdminExternalServicesUsageRoute;
+  '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
+  '/permission-denied': typeof PermissionDeniedRoute
+  '/schedules': typeof SchedulesRoute
+  '/admin/pods': typeof AdminPodsRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/settings/billing': typeof SettingsBillingRoute
+  '/settings/defaults': typeof SettingsDefaultsRoute
+  '/settings/environments': typeof SettingsEnvironmentsRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/users': typeof SettingsUsersRoute
+  '/settings/workspaces': typeof SettingsWorkspacesRoute
+  '/settings': typeof SettingsIndexRoute
+  '/admin/external-services/usage': typeof AdminExternalServicesUsageRoute
+  '/admin/external-services': typeof AdminExternalServicesIndexRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  '/': typeof IndexRoute;
-  '/admin': typeof AdminRouteRouteWithChildren;
-  '/settings': typeof SettingsRouteRouteWithChildren;
-  '/permission-denied': typeof PermissionDeniedRoute;
-  '/schedules': typeof SchedulesRoute;
-  '/admin/pods': typeof AdminPodsRoute;
-  '/admin/whatsapp': typeof AdminWhatsappRoute;
-  '/projects/$projectId': typeof ProjectsProjectIdRoute;
-  '/settings/billing': typeof SettingsBillingRoute;
-  '/settings/defaults': typeof SettingsDefaultsRoute;
-  '/settings/environments': typeof SettingsEnvironmentsRoute;
-  '/settings/integrations': typeof SettingsIntegrationsRoute;
-  '/settings/users': typeof SettingsUsersRoute;
-  '/settings/workspaces': typeof SettingsWorkspacesRoute;
-  '/settings/': typeof SettingsIndexRoute;
-  '/admin/external-services/usage': typeof AdminExternalServicesUsageRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/admin': typeof AdminRouteRouteWithChildren
+  '/settings': typeof SettingsRouteRouteWithChildren
+  '/permission-denied': typeof PermissionDeniedRoute
+  '/schedules': typeof SchedulesRoute
+  '/admin/pods': typeof AdminPodsRoute
+  '/projects/$projectId': typeof ProjectsProjectIdRoute
+  '/settings/billing': typeof SettingsBillingRoute
+  '/settings/defaults': typeof SettingsDefaultsRoute
+  '/settings/environments': typeof SettingsEnvironmentsRoute
+  '/settings/integrations': typeof SettingsIntegrationsRoute
+  '/settings/users': typeof SettingsUsersRoute
+  '/settings/workspaces': typeof SettingsWorkspacesRoute
+  '/settings/': typeof SettingsIndexRoute
+  '/admin/external-services/usage': typeof AdminExternalServicesUsageRoute
+  '/admin/external-services/': typeof AdminExternalServicesIndexRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
+  fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/admin'
@@ -170,7 +172,6 @@ export interface FileRouteTypes {
     | '/permission-denied'
     | '/schedules'
     | '/admin/pods'
-    | '/admin/whatsapp'
     | '/projects/$projectId'
     | '/settings/billing'
     | '/settings/defaults'
@@ -179,15 +180,15 @@ export interface FileRouteTypes {
     | '/settings/users'
     | '/settings/workspaces'
     | '/settings/'
-    | '/admin/external-services/usage';
-  fileRoutesByTo: FileRoutesByTo;
+    | '/admin/external-services/usage'
+    | '/admin/external-services/'
+  fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/admin'
     | '/permission-denied'
     | '/schedules'
     | '/admin/pods'
-    | '/admin/whatsapp'
     | '/projects/$projectId'
     | '/settings/billing'
     | '/settings/defaults'
@@ -196,7 +197,8 @@ export interface FileRouteTypes {
     | '/settings/users'
     | '/settings/workspaces'
     | '/settings'
-    | '/admin/external-services/usage';
+    | '/admin/external-services/usage'
+    | '/admin/external-services'
   id:
     | '__root__'
     | '/'
@@ -205,7 +207,6 @@ export interface FileRouteTypes {
     | '/permission-denied'
     | '/schedules'
     | '/admin/pods'
-    | '/admin/whatsapp'
     | '/projects/$projectId'
     | '/settings/billing'
     | '/settings/defaults'
@@ -214,157 +215,160 @@ export interface FileRouteTypes {
     | '/settings/users'
     | '/settings/workspaces'
     | '/settings/'
-    | '/admin/external-services/usage';
-  fileRoutesById: FileRoutesById;
+    | '/admin/external-services/usage'
+    | '/admin/external-services/'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  AdminRouteRoute: typeof AdminRouteRouteWithChildren;
-  SettingsRouteRoute: typeof SettingsRouteRouteWithChildren;
-  PermissionDeniedRoute: typeof PermissionDeniedRoute;
-  SchedulesRoute: typeof SchedulesRoute;
-  ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute;
+  IndexRoute: typeof IndexRoute
+  AdminRouteRoute: typeof AdminRouteRouteWithChildren
+  SettingsRouteRoute: typeof SettingsRouteRouteWithChildren
+  PermissionDeniedRoute: typeof PermissionDeniedRoute
+  SchedulesRoute: typeof SchedulesRoute
+  ProjectsProjectIdRoute: typeof ProjectsProjectIdRoute
 }
 
 declare module '@tanstack/solid-router' {
   interface FileRoutesByPath {
     '/schedules': {
-      id: '/schedules';
-      path: '/schedules';
-      fullPath: '/schedules';
-      preLoaderRoute: typeof SchedulesRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/schedules'
+      path: '/schedules'
+      fullPath: '/schedules'
+      preLoaderRoute: typeof SchedulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/permission-denied': {
-      id: '/permission-denied';
-      path: '/permission-denied';
-      fullPath: '/permission-denied';
-      preLoaderRoute: typeof PermissionDeniedRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/permission-denied'
+      path: '/permission-denied'
+      fullPath: '/permission-denied'
+      preLoaderRoute: typeof PermissionDeniedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings': {
-      id: '/settings';
-      path: '/settings';
-      fullPath: '/settings';
-      preLoaderRoute: typeof SettingsRouteRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
-      id: '/admin';
-      path: '/admin';
-      fullPath: '/admin';
-      preLoaderRoute: typeof AdminRouteRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
-      id: '/';
-      path: '/';
-      fullPath: '/';
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/settings/': {
-      id: '/settings/';
-      path: '/';
-      fullPath: '/settings/';
-      preLoaderRoute: typeof SettingsIndexRouteImport;
-      parentRoute: typeof SettingsRouteRoute;
-    };
+      id: '/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof SettingsIndexRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/settings/workspaces': {
-      id: '/settings/workspaces';
-      path: '/workspaces';
-      fullPath: '/settings/workspaces';
-      preLoaderRoute: typeof SettingsWorkspacesRouteImport;
-      parentRoute: typeof SettingsRouteRoute;
-    };
+      id: '/settings/workspaces'
+      path: '/workspaces'
+      fullPath: '/settings/workspaces'
+      preLoaderRoute: typeof SettingsWorkspacesRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/settings/users': {
-      id: '/settings/users';
-      path: '/users';
-      fullPath: '/settings/users';
-      preLoaderRoute: typeof SettingsUsersRouteImport;
-      parentRoute: typeof SettingsRouteRoute;
-    };
+      id: '/settings/users'
+      path: '/users'
+      fullPath: '/settings/users'
+      preLoaderRoute: typeof SettingsUsersRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/settings/integrations': {
-      id: '/settings/integrations';
-      path: '/integrations';
-      fullPath: '/settings/integrations';
-      preLoaderRoute: typeof SettingsIntegrationsRouteImport;
-      parentRoute: typeof SettingsRouteRoute;
-    };
+      id: '/settings/integrations'
+      path: '/integrations'
+      fullPath: '/settings/integrations'
+      preLoaderRoute: typeof SettingsIntegrationsRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/settings/environments': {
-      id: '/settings/environments';
-      path: '/environments';
-      fullPath: '/settings/environments';
-      preLoaderRoute: typeof SettingsEnvironmentsRouteImport;
-      parentRoute: typeof SettingsRouteRoute;
-    };
+      id: '/settings/environments'
+      path: '/environments'
+      fullPath: '/settings/environments'
+      preLoaderRoute: typeof SettingsEnvironmentsRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/settings/defaults': {
-      id: '/settings/defaults';
-      path: '/defaults';
-      fullPath: '/settings/defaults';
-      preLoaderRoute: typeof SettingsDefaultsRouteImport;
-      parentRoute: typeof SettingsRouteRoute;
-    };
+      id: '/settings/defaults'
+      path: '/defaults'
+      fullPath: '/settings/defaults'
+      preLoaderRoute: typeof SettingsDefaultsRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/settings/billing': {
-      id: '/settings/billing';
-      path: '/billing';
-      fullPath: '/settings/billing';
-      preLoaderRoute: typeof SettingsBillingRouteImport;
-      parentRoute: typeof SettingsRouteRoute;
-    };
+      id: '/settings/billing'
+      path: '/billing'
+      fullPath: '/settings/billing'
+      preLoaderRoute: typeof SettingsBillingRouteImport
+      parentRoute: typeof SettingsRouteRoute
+    }
     '/projects/$projectId': {
-      id: '/projects/$projectId';
-      path: '/projects/$projectId';
-      fullPath: '/projects/$projectId';
-      preLoaderRoute: typeof ProjectsProjectIdRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    '/admin/whatsapp': {
-      id: '/admin/whatsapp';
-      path: '/whatsapp';
-      fullPath: '/admin/whatsapp';
-      preLoaderRoute: typeof AdminWhatsappRouteImport;
-      parentRoute: typeof AdminRouteRoute;
-    };
+      id: '/projects/$projectId'
+      path: '/projects/$projectId'
+      fullPath: '/projects/$projectId'
+      preLoaderRoute: typeof ProjectsProjectIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/pods': {
-      id: '/admin/pods';
-      path: '/pods';
-      fullPath: '/admin/pods';
-      preLoaderRoute: typeof AdminPodsRouteImport;
-      parentRoute: typeof AdminRouteRoute;
-    };
+      id: '/admin/pods'
+      path: '/pods'
+      fullPath: '/admin/pods'
+      preLoaderRoute: typeof AdminPodsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/external-services/': {
+      id: '/admin/external-services/'
+      path: '/external-services'
+      fullPath: '/admin/external-services/'
+      preLoaderRoute: typeof AdminExternalServicesIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/external-services/usage': {
-      id: '/admin/external-services/usage';
-      path: '/external-services/usage';
-      fullPath: '/admin/external-services/usage';
-      preLoaderRoute: typeof AdminExternalServicesUsageRouteImport;
-      parentRoute: typeof AdminRouteRoute;
-    };
+      id: '/admin/external-services/usage'
+      path: '/external-services/usage'
+      fullPath: '/admin/external-services/usage'
+      preLoaderRoute: typeof AdminExternalServicesUsageRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
   }
 }
 
 interface AdminRouteRouteChildren {
-  AdminPodsRoute: typeof AdminPodsRoute;
-  AdminWhatsappRoute: typeof AdminWhatsappRoute;
-  AdminExternalServicesUsageRoute: typeof AdminExternalServicesUsageRoute;
+  AdminPodsRoute: typeof AdminPodsRoute
+  AdminExternalServicesUsageRoute: typeof AdminExternalServicesUsageRoute
+  AdminExternalServicesIndexRoute: typeof AdminExternalServicesIndexRoute
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminPodsRoute: AdminPodsRoute,
-  AdminWhatsappRoute: AdminWhatsappRoute,
   AdminExternalServicesUsageRoute: AdminExternalServicesUsageRoute,
-};
+  AdminExternalServicesIndexRoute: AdminExternalServicesIndexRoute,
+}
 
-const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(AdminRouteRouteChildren);
+const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
+  AdminRouteRouteChildren,
+)
 
 interface SettingsRouteRouteChildren {
-  SettingsBillingRoute: typeof SettingsBillingRoute;
-  SettingsDefaultsRoute: typeof SettingsDefaultsRoute;
-  SettingsEnvironmentsRoute: typeof SettingsEnvironmentsRoute;
-  SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute;
-  SettingsUsersRoute: typeof SettingsUsersRoute;
-  SettingsWorkspacesRoute: typeof SettingsWorkspacesRoute;
-  SettingsIndexRoute: typeof SettingsIndexRoute;
+  SettingsBillingRoute: typeof SettingsBillingRoute
+  SettingsDefaultsRoute: typeof SettingsDefaultsRoute
+  SettingsEnvironmentsRoute: typeof SettingsEnvironmentsRoute
+  SettingsIntegrationsRoute: typeof SettingsIntegrationsRoute
+  SettingsUsersRoute: typeof SettingsUsersRoute
+  SettingsWorkspacesRoute: typeof SettingsWorkspacesRoute
+  SettingsIndexRoute: typeof SettingsIndexRoute
 }
 
 const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
@@ -375,9 +379,11 @@ const SettingsRouteRouteChildren: SettingsRouteRouteChildren = {
   SettingsUsersRoute: SettingsUsersRoute,
   SettingsWorkspacesRoute: SettingsWorkspacesRoute,
   SettingsIndexRoute: SettingsIndexRoute,
-};
+}
 
-const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(SettingsRouteRouteChildren);
+const SettingsRouteRouteWithChildren = SettingsRouteRoute._addFileChildren(
+  SettingsRouteRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -386,5 +392,7 @@ const rootRouteChildren: RootRouteChildren = {
   PermissionDeniedRoute: PermissionDeniedRoute,
   SchedulesRoute: SchedulesRoute,
   ProjectsProjectIdRoute: ProjectsProjectIdRoute,
-};
-export const routeTree = rootRouteImport._addFileChildren(rootRouteChildren)._addFileTypes<FileRouteTypes>();
+}
+export const routeTree = rootRouteImport
+  ._addFileChildren(rootRouteChildren)
+  ._addFileTypes<FileRouteTypes>()

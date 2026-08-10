@@ -15,7 +15,7 @@ import { BifrostModule } from '../bifrost/bifrost.module';
 import { GatewayModule } from '../gateway/gateway.module';
 import { PodModule } from '../pod/pod.module';
 import { ScheduleModule } from '../schedule/schedule.module';
-import { ExternalServicesModule } from '../external-services/external-services.module';
+import { ExternalServicesModule } from '../external-services';
 
 @Module({
   imports: [

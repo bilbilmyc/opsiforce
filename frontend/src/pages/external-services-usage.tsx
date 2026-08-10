@@ -15,11 +15,6 @@ import { Building2, ChartColumn, ChevronRight, FolderKanban, Inbox, RefreshCw } 
 const COLUMN_COUNT = 3;
 const MONTH_OPTION_COUNT = 12;
 
-const SERVICE_LABELS: Record<string, string> = {
-  'incoming-email': 'Incoming email',
-  whatsapp: 'WhatsApp',
-};
-
 function currentMonth(): string {
   return new Date().toISOString().slice(0, 7);
 }
@@ -41,10 +36,6 @@ function formatMonth(month: string): string {
 
 function formatCount(count: number): string {
   return count.toLocaleString();
-}
-
-function serviceLabel(service: string): string {
-  return SERVICE_LABELS[service] ?? service;
 }
 
 function projectLabel(project: UsageProjectBreakdown): string {
@@ -203,7 +194,7 @@ function ServiceRow(props: { service: UsageServiceBreakdown; expanded: boolean; 
     <>
       <TableRow class="cursor-pointer" onClick={props.onToggle}>
         <TableCell class="pl-9">
-          <div class="font-medium text-sm">{serviceLabel(props.service.service)}</div>
+          <div class="font-medium text-sm">{props.service.displayName}</div>
           <span class="font-mono text-[11px] text-muted-foreground">{props.service.service}</span>
         </TableCell>
         <TableCell class="text-right text-sm tabular-nums">{formatCount(props.service.count)}</TableCell>

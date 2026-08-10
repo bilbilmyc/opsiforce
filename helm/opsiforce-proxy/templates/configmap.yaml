@@ -73,6 +73,9 @@ data:
           location /api/gateway {
             return 403;
           }
+          location /api/external-services/agent {
+            return 403;
+          }
           {{- if .Values.keycloakMs.enabled }}
           location /ms-api {
             set $keycloak_ms_api_backend {{ .Values.proxy.keycloakMsApiBackend }};

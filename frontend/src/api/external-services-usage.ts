@@ -19,6 +19,7 @@ export interface UsageProjectBreakdown {
 
 export interface UsageServiceBreakdown {
   service: string;
+  displayName: string;
   count: number;
   projects: UsageProjectBreakdown[];
 }
@@ -39,7 +40,7 @@ export interface UsageView {
 export function useExternalServicesUsage(month: () => string) {
   return createAppQuery(() => ({
     queryKey: ['external-services-usage', month()],
-    queryFn: () => api.get<UsageView>(`/admin/external-services/usage?month=${month()}`),
+    queryFn: () => api.get<UsageView>(`/external-services/admin/usage?month=${month()}`),
     reconcile: false,
   }));
 }

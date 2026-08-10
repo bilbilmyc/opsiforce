@@ -7,7 +7,6 @@ import type { ProjectAppMeta } from './project.types';
 interface StoredAppMeta {
   name: string | null;
   description: string | null;
-  externalServices: string[];
 }
 
 @Injectable()
@@ -21,15 +20,10 @@ export class AppService {
   async upsertProjectApp(
     projectEnvironmentId: string,
     projectId: string,
-    meta: { name: string | null; description: string | null; externalServices: string[] }
+    meta: { name: string | null; description: string | null }
   ): Promise<boolean> {
     const existing = await this.stored(projectEnvironmentId);
-    if (
-      existing &&
-      existing.name === meta.name &&
-      existing.description === meta.description &&
-      sameServices(existing.externalServices, meta.externalServices)
-    ) {
+    if (existing && existing.name === meta.name && existing.description === meta.description) {
       return false;
     }
 
@@ -40,14 +34,12 @@ export class AppService {
         projectId,
         name: meta.name,
         description: meta.description,
-        externalServices: meta.externalServices,
       })
       .onConflictDoUpdate({
         target: projectApps.projectEnvironmentId,
         set: {
           name: meta.name,
           description: meta.description,
-          externalServices: meta.externalServices,
           updatedAt: new Date(),
         },
       });
@@ -60,14 +52,9 @@ export class AppService {
       .select({
         name: projectApps.name,
         description: projectApps.description,
-        externalServices: projectApps.externalServices,
       })
       .from(projectApps)
       .where(eq(projectApps.projectEnvironmentId, projectEnvironmentId));
     return row ?? null;
   }
-}
-
-function sameServices(a: string[], b: string[]): boolean {
-  return a.length === b.length && a.every((service, index) => service === b[index]);
 }

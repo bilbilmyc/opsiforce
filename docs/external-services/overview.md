@@ -2,27 +2,54 @@
 
 > How the platform lets an app **receive** things from the outside world — email, WhatsApp messages, and whatever comes next. Read this first: it covers the shared template every inbound service plugs into, and the per-service docs assume it.
 
-Apps built on Opsiforce could always be *talked to* — through their UI or a schedule — but nothing could reach *in*. External Services is the inbound half: a third party posts to the platform, the platform works out which ProjectEnvironment the message belongs to, stores it durably where that environment's app and agent can read it, counts it for the Organization, and — if the app asked to be told — rings the app so it can react immediately.
+Apps built on Opsiforce could always be *talked to* — through their UI or a schedule — but nothing could reach *in*. External Services is the inbound half: a third party posts to the platform, the platform works out which ProjectEnvironment the message belongs to, stores it durably where that environment's app and agent can read it, counts it for the Organization, and rings the app so it can react immediately.
 
 **Naming.** *External Services* is the umbrella for the **inbound** domain (this doc). The [Service Gateway](../gateways/service-gateway.md) remains the **outbound** seam — the per-project credential broker agents call *out* through. They meet only in one place: the environment-scoped endpoints an agent uses to ask about its own inbound wiring ride the gateway's token, because it already resolves "which environment is calling".
 
 Two services ship today, and they exist as much to prove the template's generality as to be useful:
 
 - [Incoming email](incoming-email.md) — every environment can get its own random receiving address; mail to it (attachments included) lands in the environment's database.
-- [WhatsApp](whatsapp.md) — an operator connects a WhatsApp number per Organization and allowlists which chats feed which environments.
+- [WhatsApp](whatsapp.md) — an operator registers a WhatsApp number once for the platform and allowlists which chats feed which environments.
 
 ## The template
 
-Everything inbound lives in one backend module. A service is not a new subsystem; it is one **service definition** object registered by name — the same shape as the outbound gateway's provider registry. A definition declares its name, how to verify a request, how to pull routing keys out of a payload, how to turn a payload into rows, its SQLite table names and DDL migrations, the app callback path, its skill, what to do when a message routes nowhere, and optionally what publish should carry forward. The module supplies the rest: the HTTP front door, storage, metering, the callback, and the publish hook.
+Everything inbound lives in one backend module. A service is not a new subsystem; it is one **service definition** object registered by name — the same shape as the outbound gateway's provider registry. A definition declares its name and human label, how to verify a request, how to pull routing keys out of a payload, how to turn a payload into rows, what to do when a message routes nowhere, how to project an environment's inbound identity, any extra routes it wants, and optionally how to provision a newly created environment and what publish should carry forward. The module supplies the rest: the HTTP front door, storage, metering, the doorbell, and the publish hook.
 
-The front door is a single route family — `POST /api/webhooks/<service>` — public (providers have no platform session) and dispatched by the registry, so an unknown service name is a 404 and adding a service adds no controller. Signature verification deliberately needs **no raw-body capture**: Mailgun signs only two form fields, and Whapi doesn't sign at all (it echoes a secret header we chose), so parsed fields plus shared secrets are enough. Requests arrive as either parsed form fields or JSON, normalised into one shape (`headers`, `fields`, `files`, `json`) before a definition sees them.
+Registering a service is deliberately two edits and no more: **one definition file, and one line adding its class to the `DEFINITION_CLASSES` barrel**. The module derives its providers from that array mechanically, so there is no second list to keep in sync. Filesystem auto-discovery was rejected — it would fight the TypeScript project graph, dead-code analysis and Nest's dependency injection to save one greppable, type-checked line.
+
+## The route tree
+
+Every endpoint the domain owns lives under `/api/external-services/`, and the **first segment after the prefix is the audience, not the service**. That is what makes authentication a property of the mount rather than of each service:
+
+```
+/api/external-services/
+├── webhooks/:service     public — the real authentication is the definition's own verify step
+├── agent/:service/…      the Service Gateway bearer token; the platform resolves the environment from it
+│     └── identity        mounted by the platform for every service
+└── admin/:service/…      an operator session plus the external-services management permission
+      └── usage           the platform's own aggregate, reserved
+```
+
+Two thin **dispatch controllers** — one for `agent`, one for `admin` — declare their guard once at the class and then hand the remaining path to the addressed definition's route table, a plain list of `method` + `path` + handler entries. Handlers throw ordinary Nest exceptions and return JSON. The consequence worth stating plainly: **a definition cannot misconfigure security.** It never picks a mount, never picks a guard, and the worst thing a buggy route table can do is expose that service's own data to an audience that is already authenticated. Dynamic per-service modules would have handed each definition its own paths and guards and bought nothing in exchange — validation in this backend has always lived in services as plain TypeScript, never in decorator pipes.
+
+Because the audience segments are real path segments, a handful of names belong to the platform: the registry **refuses at startup** to register a definition called `usage`, `webhooks`, `agent`, `admin` or `services`. Failing on boot is the point — a name collision is a deployment mistake, not a runtime condition to negotiate.
+
+Signature verification on the webhook mount deliberately needs **no raw-body capture**: Mailgun signs only two form fields, and Whapi doesn't sign at all (it echoes a secret header we chose), so parsed fields plus shared secrets are enough. Requests arrive as either parsed form fields or JSON, normalised into one shape (`headers`, `fields`, `files`, `json`) before a definition sees them.
+
+## Discovery: asking a service who you are
+
+An agent building an app needs to know its environment's inbound identity — which address will reach it, which chats are wired to it. Rather than one bespoke endpoint per service, **every definition must implement `identity(environmentId)`**, and the platform mounts it at `GET agent/<service>/identity`. A definition cannot ship without one, so a skill can be written once against the pattern and a new service inherits the contract for free.
+
+Two rules keep it usable from a shell script. It **always answers 200** — an environment with nothing configured gets that service's own empty shape (`{"channels": []}`), never a 404, so a skill does one unconditional GET with no status branching. And **secrets never leave**: email projects `{address}`, WhatsApp projects its channels with their labels and allowlisted chats, and the API tokens and webhook secrets behind them stay in the backend.
+
+Discovery is a *read*. Mutations stay explicit and service-declared — rotating an email address is `POST agent/incoming-email/regenerate`, an email-owned route, because rotation is not universal and does not belong inside the call everyone makes on every boot.
 
 ## What happens when a message arrives
 
 The request path is deliberately synchronous and short — verify, route, store, meter, **200** — and the app callback is dispatched *after* the acknowledgement, as a single fire-and-forget attempt:
 
 ```
-provider ──POST /api/webhooks/<service>──▶ verify (signature / shared secret)
+provider ──POST /api/external-services/webhooks/<service>──▶ verify (signature / shared secret)
                                              │ fails ⇒ 406, nothing stored
                                              ▼
                                           routing keys ⇒ ProjectEnvironment(s)
@@ -51,19 +78,21 @@ Three properties follow from that shape and explain most of the behaviour below.
 
 ## Storage: one database per environment
 
-Each ProjectEnvironment gets `data/external-services.db` alongside its workspace — one file for all services, one typed table per service inside it. It is deliberately **not** the observability `database.db` (whose whole point is being disposable, and which the request logger already writes to) and **not** the app's own `app.db` (platform tables inside the app's migration story). The **backend is the sole writer**; the agent, the app, and the DB viewer read only. The environment entrypoint seeds the file so [Datasette](../runtime/pod-tools.md) can serve it as a third read-only database, and the `sqlite` agent skill documents it.
+Each ProjectEnvironment gets `data/external-services.db` alongside its workspace — one file for all services, and inside it one `messages` table and one `attachments` table shared by every service. It is deliberately **not** the observability `database.db` (whose whole point is being disposable, and which the request logger already writes to) and **not** the app's own `app.db` (platform tables inside the app's migration story). The **backend is the sole writer**; the agent, the app, and the DB viewer read only. The environment entrypoint seeds the file so [Datasette](../runtime/pod-tools.md) can serve it as a third read-only database, and the `sqlite` agent skill documents it.
 
-Schema is applied lazily: each definition carries a numbered list of DDL statements, the applied count per service is tracked in a `_schema_versions` table inside the file, and the first write applies whatever is missing. Migrations are applied-once-never-edited, exactly like the app template's. A brand-new environment therefore has an *empty* file until its first message — that is normal, not a fault.
+The schema belongs to the platform, not to the services: the store carries one ordered migration list, the applied version lives in the file's `PRAGMA user_version`, and the first write applies whatever is missing inside the same transaction as the insert. Migrations are applied-once-never-edited, exactly like the app template's, and future changes are additive-only so old and new files stay interreadable during the lazy rollout lag. A brand-new environment therefore has an *empty* file until its first message — that is normal, not a fault. **Adding a service adds no DDL at all**: a definition hands the store a typed message and the store owns every statement.
 
-Every service table shares four convention columns — `id`, `received_at`, `raw_payload`, `app_delivered_at` — and then whatever that service's messages actually have. Uniformity lives in the convention, not in a generic JSON blob table, so readers get real columns to query. Attachments and media are stored **inline as BLOBs** with `filename` / `content_type` / `size_bytes` beside the bytes, so a reader can inspect what arrived without pulling the payload; storing by reference was rejected because it breaks the single-transaction guarantee and invents orphan-file cleanup for every reader.
+A stored message carries the bookkeeping columns (`id`, `service`, `received_at`, `raw_payload`, `app_delivered_at`, the provider's message id), a small promoted set that means the same thing for every service — who it was routed to, who sent it, the text — and a `payload` JSON column holding everything service-specific. The promotion line is deliberate: the fields skills query constantly stay real columns, the long tail is reachable through `json_extract` without inventing a wide union table. Attachments and media alike are child rows with `filename` / `content_type` / `size_bytes` beside the bytes, so a reader can inspect what arrived without pulling the payload; storing by reference was rejected because it breaks the single-transaction guarantee and invents orphan-file cleanup for every reader. A media fetch that fails still leaves its row, with the bytes NULL — apps see that a photo existed and is unavailable rather than seeing nothing.
 
-Idempotency is the data itself: every table has a `UNIQUE` index on the provider's message id and inserts ignore conflicts. A replayed or redelivered POST therefore acknowledges 200, writes nothing, meters nothing, and rings no doorbell — no token cache, no TTLs, no extra infrastructure.
+Idempotency is the data itself: a `UNIQUE` index on service plus the provider's message id, and inserts ignore conflicts. A replayed or redelivered POST therefore acknowledges 200, writes nothing, meters nothing, and rings no doorbell — no token cache, no TTLs, no extra infrastructure.
 
 ## The doorbell
 
-The app callback is a **notification, not a delivery**: `POST /api/external-services/<service>` on the app with `{ service, rowIds }` and no message content. The app reads the rows from its read-only SQLite, which means the table schema is the entire data contract, and the live path exercises the same read code as catching up after downtime. Apps opt in by declaring the service in `app.meta.json`; that declaration rides the normal app-metadata push into the environment's App row ([Project Apps](../projects/project-apps.md), [ADR-0016](../adr/0016-app-details-are-per-environment.md)) and gates **only** the callback — storage and metering happen whether or not anyone declared anything.
+The app callback is a **notification, not a delivery**: `POST /api/external-services/<service>` on the app with `{ service, rowIds }` and no message content. The app reads the rows from its read-only SQLite, which means the table schema is the entire data contract, and the live path exercises the same read code as catching up after downtime. The URL is derived from the service name by convention, so a definition never declares a callback path.
 
-The call goes straight to the pod inside the cluster with a modest timeout, so it is unreachable from the internet and a cold or absent pod simply means the attempt is skipped. On 2xx the platform stamps `app_delivered_at`; on anything else — non-2xx, timeout, no pod, no declaration — the row keeps `app_delivered_at NULL`, and that null *is* the "never delivered" marker. There are no retries in v1 and a missed doorbell is not data loss: the row is already stored, apps catch up by selecting undelivered rows, and the null column is a visible debugging signal in Datasette. If missed callbacks ever start hurting, a queue and worker slot in behind the same seam without the webhook handler changing.
+**It fires unconditionally, for every stored batch.** There is no opt-in: "did the app want this?" is answered by the app's own HTTP response, not by a declaration the platform has to carry around. The template ships one catch-all route that answers **501** for any service, so an app that hasn't implemented a handler says so honestly and its rows stay visibly undelivered; implementing a service means adding a route for that service name, and a new service needs no template change at all. The earlier design — an `externalServices` array in `app.meta.json` pushed into the App row and checked before ringing — is gone, along with the failure mode that made it worth removing: a stub that acked 2xx marked rows delivered for an app that did nothing with them.
+
+The call goes straight to the pod inside the cluster with a modest timeout, so it is unreachable from the internet and a cold or absent pod simply means the attempt is skipped. On 2xx the platform stamps `app_delivered_at`; on anything else — non-2xx, timeout, no pod — the row keeps `app_delivered_at NULL`, and that null *is* the "never delivered" marker. There are no retries in v1 and a missed doorbell is not data loss: the row is already stored, apps catch up by selecting undelivered rows, and the null column is a visible debugging signal in Datasette. If missed callbacks ever start hurting, a queue and worker slot in behind the same seam without the webhook handler changing.
 
 Like [app readiness](../projects/app-readiness.md), the interesting signal is **pushed rather than polled** ([ADR-0015](../adr/0015-app-liveness-pushed-not-polled.md)) — with the difference that this push is explicitly best-effort, and the durable record lives in the environment's database rather than in the ring.
 
@@ -79,13 +108,14 @@ Operators read it under **Admin → Usage** (`/admin/external-services/usage`): 
 
 Inbound wiring belongs to a ProjectEnvironment, so it follows that environment:
 
-- **Publish** carries wiring to the published environment as part of the publish path ([ADR-0004](../adr/0004-git-based-incremental-publish.md)): the App's service declaration is copied first, then each service carries what it owns — email issues the published environment its *own* address, WhatsApp copies the chat routes so both Development and the published environment receive. A failure to carry one service's wiring is logged and does not fail the publish.
-- **Delete** cascades: the environment's address row and chat routes die with it, so nothing can deliver to a vanished environment. Metering buckets survive.
-- **Duplicate and import** copy nothing inbound. A duplicated environment is a new environment id, so it gets a fresh address on first request and no allowlisted chats — allowlisting is a deliberate act, not something to inherit silently. An export never carries an address.
+- **Creation** provisions: every seam that creates an environment — project create, duplicate, import, pool pre-warm, publish — calls one shared platform seam that offers the new environment to every definition declaring a provisioning hook. It runs after the environment row is committed (a hook may talk to a provider, which has no business inside a database transaction), and a failure is logged with the service and environment id and never fails the flow: on an unconfigured deployment the environment is simply born unprovisioned for that service.
+- **Publish** additionally carries wiring forward as part of the publish path ([ADR-0004](../adr/0004-git-based-incremental-publish.md)): each service carries what it owns — WhatsApp copies the chat routes so both Development and the published environment receive. Email carries nothing: its published environment was provisioned with its own address when it was created. The carry runs **only once the new app version has proven ready**, never before: a publish that fails readiness rolls the app version back but keeps its environment row, so an early carry would leave the rolled-back version receiving messages for chats that were only ever allowlisted for a version that never went live. A failure to carry after readiness is logged and does not fail the publish — the copy is an upsert, so the next publish heals it.
+- **Delete** cascades: the environment's per-service configuration documents die with it, so nothing can deliver to a vanished environment. The global resource rows — a WhatsApp channel and its credentials — are not environment-owned and survive. Metering buckets survive too.
+- **Duplicate and import** copy nothing inbound. A duplicated environment is a new environment id, so it is provisioned with a fresh address of its own and has no allowlisted chats — allowlisting is a deliberate act, not something to inherit silently. An export never carries an address.
 
 ## Adding a service
 
-Write one service definition and one agent skill. Verification, routing-key extraction and payload→row mapping are yours; the front door, the transaction, schema migration, deduplication, metering, the doorbell, the publish hook, Datasette exposure and the admin usage view come for free. If the new service needs operator-side state (credentials, allowlists) it also brings its own table and admin surface, as WhatsApp does — that is the part the template does not try to generalise.
+Write one service definition, add one line to the definitions barrel, and write one agent skill. Verification, routing-key extraction, payload→row mapping and the identity projection are yours; the three mounts and their guards, the transaction, deduplication, metering, the doorbell, the publish hook, Datasette exposure and the admin usage view come for free. Operator-side state and agent-side extras arrive as route-table entries on the same definition — no new controller, no new guard, no new permission.
 
 ## Future work
 
@@ -98,8 +128,8 @@ Write one service definition and one agent skill. Verification, routing-key extr
 
 - [Incoming email](incoming-email.md) and [WhatsApp](whatsapp.md) — the two shipped services, including operator setup.
 - [Service Gateway](../gateways/service-gateway.md) — the outbound seam, and the token the inbound agent-facing endpoints reuse.
-- [Project Apps](../projects/project-apps.md) — `app.meta.json`, and the capability declaration that gates the doorbell.
+- [Project Apps](../projects/project-apps.md) — `app.meta.json` and the app-details push the doorbell no longer depends on.
 - [Pod Tools](../runtime/pod-tools.md) — Datasette serving `external-services.db` read-only.
 - [Persistence](../runtime/persistence.md) — where the environment's data directory lives and what survives a pod swap.
-- [Permissions](../organization/permissions.md) — `can_view_external_services_usage`, `can_manage_whapi_channels`.
-- Code: `backend/src/external-services/` (front door, registry, ingest, store, doorbell, metering, publish hook, and the two definitions); `backend/src/common/environment-database.ts` (the shared per-environment SQLite writer, also used by the request-log cleanup processor); `incomingEmailAddresses`, `whapiChannels`, `whapiChatRoutes`, `externalServiceUsage`, `projectApps.externalServices` in `backend/db/schema.ts`; agent skills `agent-config/skills/{incoming-email,whatsapp,sqlite}/SKILL.md`; app-side handler stubs in the agent template's `app/backend/src/external-services/`.
+- [Permissions](../organization/permissions.md) — `can_view_external_services_usage`, `can_manage_external_services`.
+- Code: `backend/src/external-services/` (the four controllers — webhooks, agent dispatch, admin dispatch, usage — plus the registry, route matcher, ingest, stores, doorbell, metering, publish hook, and the two definitions); `backend/src/common/environment-database.ts` (the shared per-environment SQLite writer, also used by the request-log cleanup processor); `externalServiceResource`, `externalServiceConfig`, `externalServiceUsage` in `backend/db/schema.ts`; agent skills `agent-config/skills/{incoming-email,whatsapp,sqlite}/SKILL.md`; app-side handler stubs in the agent template's `app/backend/src/external-services/`.

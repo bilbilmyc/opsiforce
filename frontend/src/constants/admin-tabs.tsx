@@ -1,4 +1,4 @@
-import { Boxes, ChartColumn, MessageSquare } from '~/components/icons';
+import { Boxes, Cable, ChartColumn } from '~/components/icons';
 import { Permission } from '~/constants/permissions';
 import { firstPermittedRailTab, railTabForPath, type RailTab } from '~/constants/section-rail';
 
@@ -22,12 +22,12 @@ export const ADMIN_TABS: RailTab[] = [
     isPermitted: (has) => has(Permission.viewExternalServicesUsage),
   },
   {
-    to: '/admin/whatsapp',
-    label: 'WhatsApp',
-    description: 'Whapi channels per organization and the chats allowlisted to each environment.',
+    to: '/admin/external-services',
+    label: 'External services',
+    description: 'Platform-wide external-service resources, such as the registered WhatsApp channels.',
     group: 'Operations',
-    icon: MessageSquare,
-    isPermitted: (has) => has(Permission.manageWhapiChannels),
+    icon: Cable,
+    isPermitted: (has) => has(Permission.manageExternalServices),
   },
 ];
 

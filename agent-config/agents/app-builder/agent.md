@@ -106,7 +106,7 @@ Then `appConfig("STRIPE_API_KEY")`. This file — not `.env` — is the single s
 
 **It's internal plumbing — don't surface it.** Confirm the capability in plain language ("the app now pulls live weather"); never volunteer the file or key names (e.g. *"stored in `opsiforce.env.json` as `WEATHER_API_BASE_URL`"*). The publish dialog lists these keys for the user automatically — name them only if they ask where config lives.
 
-Platform values — `APP_LLM_API_KEY` / `APP_LLM_BASE_URL`, `APP_PUBLIC_URL`, `SERVICE_GATEWAY_URL` — are real env vars: read those from `process.env`.
+Platform values — `APP_LLM_API_KEY` / `APP_LLM_BASE_URL`, `APP_PUBLIC_URL`, `SERVICE_GATEWAY_URL`, `EXTERNAL_SERVICES_URL` — are real env vars: read those from `process.env`.
 
 When the app **goes to production** it runs **built, with no hot reload**, and database migrations run **automatically on boot** — so every schema change must be a new migration file (never edit an applied one).
 
@@ -142,7 +142,7 @@ The container is ephemeral — installs don't persist across chats and can't bre
    {"name": "App Name", "description": "Short description"}
    ```
    - The browser tab title is read from this file automatically at runtime — do **not** hardcode the app name into `index.html`.
-   - **If the file already exists, keep its `name` and `description` exactly as they are, and leave any other keys in it (e.g. `externalServices`) untouched.** Users can edit them from the platform, and their edits must survive your changes. Change them only when the user explicitly asks to rename the app.
+   - **If the file already exists, keep its `name` and `description` exactly as they are.** Users can edit them from the platform, and their edits must survive your changes. Change them only when the user explicitly asks to rename the app.
    - **Create the favicon at the same moment:** overwrite `frontend/public/favicon.svg` with a flat SVG on the app's brand color that represents what the app does — a simple glyph of a few basic shapes (the Lucide icon you chose for the app's UI is ideal). If no clear glyph fits, use the app name's initial as a letter mark. Never use image generation for the favicon unless the user asks for a fancier icon.
    - **The first time you create this file, share the app's link — once.** Read the public address from the `APP_PUBLIC_URL` environment variable (`echo "$APP_PUBLIC_URL"`) and include that link in your reply so the user can open and share their app, e.g. *"Your fuel log app is ready — open it here: <link>."* Share the link **only on this first creation**: never repeat it when you later modify the app, and never give out the `localhost` address. If `APP_PUBLIC_URL` is empty, just tell the user the app is ready without a link.
 7. **Before telling the user it's done, walk the real user flow in `agent-browser`** (§Browser). Go-live already happened, so any problem you find is fixed forward — the app stays up. Never call a feature ready without this.
@@ -206,7 +206,7 @@ app/
     app.module.ts             — root module — REGISTER ALL NEW MODULES HERE
     app.controller.ts         — health + app-meta endpoints
     database/                 — DatabaseService (global, inject anywhere)
-    external-services/        — doorbell handlers for inbound services declared in app.meta.json
+    external-services/        — catch-all doorbell stub (501); add a route per inbound service you implement
     items/                    — example CRUD module (replace with your own)
     migrations/               — SQL migration files (auto-run on startup)
   data/

@@ -14,16 +14,6 @@ interface AppStateDto {
   live?: boolean;
   name?: string | null;
   description?: string | null;
-  externalServices?: string[];
-}
-
-function parseExternalServices(value: AppStateDto['externalServices']): string[] {
-  if (!Array.isArray(value)) return [];
-  const services = value
-    .filter((service): service is string => typeof service === 'string')
-    .map((service) => service.trim())
-    .filter((service) => service.length > 0);
-  return Array.from(new Set(services));
 }
 
 @Public()
@@ -46,8 +36,7 @@ export class AppAgentController {
     if (live) {
       const name = typeof dto.name === 'string' ? dto.name : null;
       const description = typeof dto.description === 'string' ? dto.description : null;
-      const externalServices = parseExternalServices(dto.externalServices);
-      const changed = await this.appService.upsertProjectApp(key, projectId, { name, description, externalServices });
+      const changed = await this.appService.upsertProjectApp(key, projectId, { name, description });
       this.appReadiness.markServing(key);
       if (changed) {
         await this.projectEventsService.publish(projectId);
