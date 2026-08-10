@@ -8,6 +8,11 @@ export type WhatsappChannelResponse = {
   updatedAt: string;
 };
 
+export type WhatsappAvailableChannelResponse = {
+  channelId: string;
+  label: string | null;
+};
+
 export type WhatsappEnvironmentChannelResponse = {
   channelId: string;
   label: string | null;

@@ -41,7 +41,7 @@ Note the fan-out: one chat may feed several environments, and **publishing copie
 
 One step: implement the handler. The platform rings **every** app for **every** stored batch — there is nothing to declare and nothing to opt into.
 
-The app template ships a catch-all stub at `app/backend/src/external-services/external-services.controller.ts`, registered in `app.module.ts`, that answers **501 Not Implemented** for any service. Leave it in place and add a concrete route above it for the service you are implementing:
+The app template ships a catch-all stub at `app/backend/src/external-services/external-services.controller.ts`, registered in `app.module.ts`, that answers **501 Not Implemented** for any service. Leave it in place and add a concrete route above it for the service you are implementing (`DoorbellNotification` ships alongside it in `doorbell-notification.ts`):
 
 ```typescript
 @Post("whatsapp")

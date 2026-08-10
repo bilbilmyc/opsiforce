@@ -113,7 +113,12 @@ export class ExternalServicesAdminController {
       assertPlatformResourceAccess(groupsHeader);
     }
 
-    return matched.route.handler({ params: matched.params, body: jsonBodyOf(body), query: queryOf(query) });
+    return matched.route.handler({
+      tenantId: tenant.tenantId,
+      params: matched.params,
+      body: jsonBodyOf(body),
+      query: queryOf(query),
+    });
   }
 
   private async assertEnvironmentInTenant(projectEnvironmentId: string, tenantId: string): Promise<void> {

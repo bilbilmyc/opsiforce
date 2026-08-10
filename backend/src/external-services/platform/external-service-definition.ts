@@ -47,6 +47,7 @@ export interface AgentRouteContext {
 }
 
 export interface AdminRouteContext {
+  tenantId: string;
   params: Record<string, string>;
   body: JsonValue;
   query: Record<string, string>;

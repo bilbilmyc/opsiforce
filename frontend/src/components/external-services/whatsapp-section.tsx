@@ -1,13 +1,12 @@
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { Link } from '@tanstack/solid-router';
 import { toast } from 'solid-sonner';
 import {
   useAllowlistWhatsappChat,
+  useAvailableWhatsappChannels,
   useEnvironmentWhatsappChannels,
+  useEnvironmentWhatsappChats,
   useRemoveWhatsappChat,
-  useWhatsappChannels,
-  useWhatsappChats,
-  type WhatsappChannel,
+  type WhatsappAvailableChannel,
   type WhatsappChatOption,
 } from '~/api/whatsapp-channels';
 import { Button } from '~/components/ui/button';
@@ -19,7 +18,7 @@ import { LabeledTextField } from './labeled-text-field';
 
 const CHAT_ID_PATTERN = /^[^\s@]+@[^\s@]+$/;
 
-function channelLabel(channel: WhatsappChannel): string {
+function channelLabel(channel: WhatsappAvailableChannel): string {
   return channel.label?.trim() || channel.channelId;
 }
 
@@ -28,7 +27,7 @@ function chatLabel(chat: WhatsappChatOption): string {
 }
 
 export function WhatsappSection(props: EnvironmentSectionProps) {
-  const registered = useWhatsappChannels();
+  const registered = useAvailableWhatsappChannels(() => props.projectEnvironmentId);
   const wired = useEnvironmentWhatsappChannels(
     () => props.projectEnvironmentId,
     () => true
@@ -37,31 +36,37 @@ export function WhatsappSection(props: EnvironmentSectionProps) {
   const allowlist = useAllowlistWhatsappChat();
   const remove = useRemoveWhatsappChat();
 
-  const [channel, setChannel] = createSignal<WhatsappChannel | null>(null);
+  const [channel, setChannel] = createSignal<WhatsappAvailableChannel | null>(null);
   const [manual, setManual] = createSignal(false);
+  const [manualChannelId, setManualChannelId] = createSignal('');
   const [chatsRequested, setChatsRequested] = createSignal(false);
   const [selectedChat, setSelectedChat] = createSignal<WhatsappChatOption | null>(null);
   const [manualChatId, setManualChatId] = createSignal('');
   const [manualChatName, setManualChatName] = createSignal('');
 
-  const chats = useWhatsappChats(() => channel()?.channelId ?? null, chatsRequested);
-
   const channels = createMemo(() => registered.data ?? []);
   const wiredChannels = createMemo(() => wired.data ?? []);
+
+  const channelId = () => (manual() ? manualChannelId().trim() : (channel()?.channelId ?? ''));
+
+  const chats = useEnvironmentWhatsappChats(
+    () => props.projectEnvironmentId,
+    () => channel()?.channelId ?? null,
+    chatsRequested
+  );
 
   const chatId = () => (manual() ? manualChatId().trim() : (selectedChat()?.chatId ?? ''));
   const chatName = () => (manual() ? manualChatName().trim() || null : (selectedChat()?.name ?? null));
   const chatIdValid = () => CHAT_ID_PATTERN.test(chatId());
-  const canSubmit = () => chatIdValid() && channel() !== null;
+  const canSubmit = () => chatIdValid() && channelId() !== '';
 
   const submit = async () => {
-    const target = channel();
-    if (!target || !canSubmit()) return;
+    if (!canSubmit()) return;
 
     try {
       await allowlist.mutateAsync({
         projectEnvironmentId: props.projectEnvironmentId,
-        channelId: target.channelId,
+        channelId: channelId(),
         dto: { chatId: chatId(), chatName: chatName() },
       });
       toast.success('Chat allowlisted');
@@ -86,18 +91,14 @@ export function WhatsappSection(props: EnvironmentSectionProps) {
   return (
     <div class="space-y-3">
       <Show when={!registered.isPending && !wired.isPending} fallback={<Skeleton class="h-8 w-full" />}>
-        <Show
-          when={channels().length > 0}
-          fallback={
+        <>
+          <Show when={channels().length === 0}>
             <p class="text-xs text-muted-foreground">
-              No WhatsApp channels are registered on this platform yet.{' '}
-              <Link to="/admin/external-services" class="underline underline-offset-4">
-                Register one in the admin area
-              </Link>{' '}
-              first.
+              No WhatsApp channel is connected to this organization yet. Ask a platform operator to register one, then
+              enter its channel id manually below to wire it to this environment.
             </p>
-          }
-        >
+          </Show>
+
           <Show
             when={wiredChannels().length > 0}
             fallback={
@@ -160,33 +161,45 @@ export function WhatsappSection(props: EnvironmentSectionProps) {
               </button>
             </div>
 
-            <div class="space-y-1">
-              <span class="block text-xs text-muted-foreground">Channel</span>
-              <Select
-                options={channels()}
-                optionValue="channelId"
-                optionTextValue="channelId"
-                value={channel()}
-                onChange={(value) => {
-                  setChannel(value);
-                  setChatsRequested(false);
-                  setSelectedChat(null);
-                }}
-                itemComponent={(itemProps) => (
-                  <SelectItem item={itemProps.item}>{channelLabel(itemProps.item.rawValue)}</SelectItem>
-                )}
-              >
-                <SelectTrigger aria-label="Channel">
-                  <SelectValue<WhatsappChannel>>
-                    {(state) => {
-                      const selected = state.selectedOption();
-                      return <span>{selected ? channelLabel(selected) : 'Select a channel'}</span>;
+            <Show
+              when={manual()}
+              fallback={
+                <div class="space-y-1">
+                  <span class="block text-xs text-muted-foreground">Channel</span>
+                  <Select
+                    options={channels()}
+                    optionValue="channelId"
+                    optionTextValue="channelId"
+                    value={channel()}
+                    onChange={(value) => {
+                      setChannel(value);
+                      setChatsRequested(false);
+                      setSelectedChat(null);
                     }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent />
-              </Select>
-            </div>
+                    itemComponent={(itemProps) => (
+                      <SelectItem item={itemProps.item}>{channelLabel(itemProps.item.rawValue)}</SelectItem>
+                    )}
+                  >
+                    <SelectTrigger aria-label="Channel">
+                      <SelectValue<WhatsappAvailableChannel>>
+                        {(state) => {
+                          const selected = state.selectedOption();
+                          return <span>{selected ? channelLabel(selected) : 'Select a channel'}</span>;
+                        }}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent />
+                  </Select>
+                </div>
+              }
+            >
+              <LabeledTextField
+                label="Channel id"
+                value={manualChannelId()}
+                onInput={setManualChannelId}
+                placeholder="the id the operator gave you"
+              />
+            </Show>
 
             <Show
               when={manual()}
@@ -278,7 +291,7 @@ export function WhatsappSection(props: EnvironmentSectionProps) {
               </Button>
             </div>
           </div>
-        </Show>
+        </>
       </Show>
     </div>
   );

@@ -120,6 +120,22 @@ export class WhatsappDefinition implements ExternalServiceDefinition {
           this.channelService.listEnvironmentChannels(environmentIdParam(context)),
       },
       {
+        method: 'GET',
+        path: 'environments/:projectEnvironmentId/available-channels',
+        handler: (context: AdminRouteContext): Promise<JsonValue> =>
+          this.channelService.listAvailableChannels(context.tenantId),
+      },
+      {
+        method: 'GET',
+        path: 'environments/:projectEnvironmentId/channels/:channelId/chats',
+        handler: (context: AdminRouteContext): Promise<JsonValue> =>
+          this.channelService.listEnvironmentChats(
+            context.tenantId,
+            environmentIdParam(context),
+            channelIdParam(context)
+          ),
+      },
+      {
         method: 'POST',
         path: 'environments/:projectEnvironmentId/channels/:channelId/chats',
         handler: (context: AdminRouteContext): Promise<JsonValue> =>
