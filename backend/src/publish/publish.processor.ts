@@ -18,7 +18,6 @@ import { GatewayKeyService } from '../gateway/gateway-key.service';
 import { ScheduleService } from '../schedule/schedule.service';
 import { AppReadinessService } from '../project/app-readiness.service';
 import { PodStartupFailedError } from '../pod/pod.service';
-import { errorMessage } from '../common/error-message';
 import { writeJsonAtomic } from '../common/fs';
 import { clearEnvJsonBackup, writeEnvJsonBackup } from '../common/env-file';
 import { ExternalServicePublishService } from '../external-services';
@@ -118,7 +117,7 @@ export class PublishProcessor extends WorkerHost {
         throw new Error('Production app did not become ready within the deploy window');
       }
 
-      await this.carryInboundWiring(devEnv.id, data.projectEnvironmentId);
+      await this.externalServicePublish.carryInboundWiring(devEnv.id, data.projectEnvironmentId);
 
       try {
         await this.reconcileSchedules(data.projectId, data.projectEnvironmentId, data.tenantId, data.scheduleIds);
@@ -172,16 +171,6 @@ export class PublishProcessor extends WorkerHost {
         error: userFacingPublishError(err, phase),
         completedAt: new Date(),
       });
-    }
-  }
-
-  private async carryInboundWiring(devEnvironmentId: string, prodEnvironmentId: string): Promise<void> {
-    try {
-      await this.externalServicePublish.carryInboundWiring(devEnvironmentId, prodEnvironmentId);
-    } catch (err) {
-      this.logger.warn(
-        `Carrying external-service wiring to ${prodEnvironmentId} failed, the published app may not receive inbound messages: ${errorMessage(err)}`
-      );
     }
   }
 
@@ -316,6 +305,9 @@ function userFacingPublishError(err: unknown, phase: PublishStatus): string {
   }
   if (message.includes('did not become ready within the deploy window')) {
     return "The app started but didn't come online in time. Please try again.";
+  }
+  if (message.includes('Carrying external-service wiring failed')) {
+    return 'The app deployed, but copying its external-service wiring failed. Please publish again.';
   }
   if (message.includes('No active LLM virtual keys')) {
     return 'This environment is missing its LLM credentials. Please reconfigure it and try again.';
