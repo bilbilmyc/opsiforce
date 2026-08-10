@@ -112,6 +112,21 @@ export class ExternalServiceConfigStore {
     }));
   }
 
+  async createConfigIfAbsent(
+    service: string,
+    projectEnvironmentId: string,
+    value: JsonValue
+  ): Promise<JsonValue | null> {
+    await db
+      .insert(externalServiceConfig)
+      .values({ service, projectEnvironmentId, value })
+      .onConflictDoNothing({
+        target: [externalServiceConfig.service, externalServiceConfig.projectEnvironmentId],
+      });
+
+    return this.getConfig(service, projectEnvironmentId);
+  }
+
   async upsertConfig(service: string, projectEnvironmentId: string, value: JsonValue): Promise<void> {
     await db
       .insert(externalServiceConfig)

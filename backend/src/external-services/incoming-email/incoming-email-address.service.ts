@@ -46,10 +46,20 @@ export class IncomingEmailAddressService {
     const existing = await this.findAddress(projectEnvironmentId);
     if (existing) return existing;
 
-    const address = await this.allocateAddress();
-    await this.store.upsertConfig(INCOMING_EMAIL_SERVICE, projectEnvironmentId, { address });
-    this.logger.log(`Issued incoming-email address for environment ${projectEnvironmentId}`);
-    return address;
+    const candidate = await this.allocateAddress();
+    const persisted = addressOf(
+      await this.store.createConfigIfAbsent(INCOMING_EMAIL_SERVICE, projectEnvironmentId, { address: candidate })
+    );
+
+    if (!persisted) {
+      throw new ServiceUnavailableException('Could not persist an incoming-email address, please retry');
+    }
+
+    if (persisted === candidate) {
+      this.logger.log(`Issued incoming-email address for environment ${projectEnvironmentId}`);
+    }
+
+    return persisted;
   }
 
   async regenerateAddress(projectEnvironmentId: string): Promise<string> {
