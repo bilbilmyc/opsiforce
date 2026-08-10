@@ -1,13 +1,11 @@
 import type { WhatsappChannel } from '~/api/whatsapp-channels';
 import { Badge } from '~/components/ui/badge';
-import { Button } from '~/components/ui/button';
-import { KeyRound, Pencil, Plug, Trash2 } from '~/components/icons';
+import { KeyRound, Pencil, Trash2 } from '~/components/icons';
 import { WebhookStatusBadge } from './webhook-status-badge';
 
 export function ChannelCard(props: {
   channel: WhatsappChannel;
   onEdit: () => void;
-  onConfigureWebhook: () => void;
   onRotateSecret: () => void;
   onDelete: () => void;
 }) {
@@ -29,10 +27,6 @@ export function ChannelCard(props: {
         <WebhookStatusBadge channelId={props.channel.channelId} />
 
         <div class="ml-auto flex items-center gap-1.5">
-          <Button size="sm" variant="outline" onClick={() => props.onConfigureWebhook()}>
-            <Plug class="h-3.5 w-3.5" />
-            Reconfigure webhook
-          </Button>
           <button
             type="button"
             onClick={() => props.onRotateSecret()}

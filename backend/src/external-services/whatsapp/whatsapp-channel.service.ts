@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq } from 'drizzle-orm';
 import { errorMessage } from '../../common/error-message';
@@ -26,7 +19,6 @@ import {
 import { WhapiClient, type WhapiWebhookRegistration } from './whapi.client';
 import type {
   AllowlistWhatsappChatDto,
-  ConfigureWhatsappWebhookResult,
   CreateWhatsappChannelDto,
   UpdateWhatsappChannelDto,
   WhatsappAvailableChannelResponse,
@@ -37,7 +29,7 @@ import type {
   WhatsappWebhookStatusResponse,
 } from './whatsapp.types';
 import { timingSafeStringEqual } from '../platform/secret-crypto';
-import { WHATSAPP_SERVICE_NAME, WHATSAPP_WEBHOOK_PATH, WHATSAPP_WEBHOOK_SECRET_HEADER } from './whatsapp.constants';
+import { WHATSAPP_SERVICE_NAME, WHATSAPP_WEBHOOK_PATH } from './whatsapp.constants';
 
 const CHANNEL_ID_MAX_LENGTH = 120;
 const RECORD_ID_MAX_LENGTH = 120;
@@ -239,15 +231,6 @@ export class WhatsappChannelService {
     return this.whapiClient.listChats(resource.apiToken);
   }
 
-  async configureWebhook(channelId: string): Promise<ConfigureWhatsappWebhookResult> {
-    const resource = await this.findResource(channelId);
-    const webhookUrl = this.requireWebhookUrl();
-
-    await this.whapiClient.configureWebhook(resource.apiToken, webhookUrl, resource.webhookSecret);
-
-    return { webhookUrl, secretHeader: WHATSAPP_WEBHOOK_SECRET_HEADER };
-  }
-
   async webhookStatus(channelId: string): Promise<WhatsappWebhookStatusResponse> {
     const resource = await this.findResource(channelId);
     const expectedUrl = this.defaultWebhookUrl();
@@ -293,14 +276,6 @@ export class WhatsappChannelService {
         `Registered Whapi channel ${channelId} but could not configure its webhook: ${errorMessage(err)}`
       );
     }
-  }
-
-  private requireWebhookUrl(): string {
-    const url = this.defaultWebhookUrl();
-    if (!url) {
-      throw new ServiceUnavailableException('No webhook URL: set EXTERNAL_SERVICES_WEBHOOK_BASE_URL');
-    }
-    return url;
   }
 
   private defaultWebhookUrl(): string {

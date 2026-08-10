@@ -55,11 +55,6 @@ export interface UpdateWhatsappChannelDto {
   label?: string | null;
 }
 
-export interface ConfigureWhatsappWebhookResult {
-  webhookUrl: string;
-  secretHeader: string;
-}
-
 const BASE = `${EXTERNAL_SERVICES_ADMIN_BASE}/whatsapp`;
 
 export const whatsappKeys = {
@@ -181,15 +176,6 @@ export function useRotateWhatsappSecret() {
       qc.invalidateQueries({ queryKey: whatsappKeys.channels() });
       qc.invalidateQueries({ queryKey: whatsappKeys.webhookStatus(channelId) });
     },
-  }));
-}
-
-export function useConfigureWhatsappWebhook() {
-  const qc = useQueryClient();
-  return createMutation(() => ({
-    mutationFn: (channelId: string) =>
-      api.post<ConfigureWhatsappWebhookResult>(`${BASE}/channels/${encodeURIComponent(channelId)}/configure-webhook`),
-    onSuccess: (_result, channelId) => qc.invalidateQueries({ queryKey: whatsappKeys.webhookStatus(channelId) }),
   }));
 }
 

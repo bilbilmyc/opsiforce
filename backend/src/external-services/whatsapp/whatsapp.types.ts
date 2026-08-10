@@ -42,11 +42,6 @@ export type AllowlistWhatsappChatDto = {
   chatName?: string | null;
 };
 
-export type ConfigureWhatsappWebhookResult = {
-  webhookUrl: string;
-  secretHeader: string;
-};
-
 export type WhatsappWebhookState = 'in-sync' | 'stale-url' | 'stale-secret' | 'missing-event' | 'not-configured';
 
 export type WhatsappWebhookStatusResponse = {

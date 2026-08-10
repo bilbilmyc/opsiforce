@@ -1,7 +1,6 @@
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   useExternalServicesUsage,
-  type UsageOrganization,
   type UsageProjectBreakdown,
   type UsageServiceBreakdown,
 } from '~/api/external-services-usage';
@@ -10,7 +9,7 @@ import { Badge } from '~/components/ui/badge';
 import Skeleton from '~/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
-import { Building2, ChartColumn, ChevronRight, FolderKanban, Inbox, RefreshCw } from '~/components/icons';
+import { ChartColumn, ChevronRight, FolderKanban, Inbox, RefreshCw } from '~/components/icons';
 
 const COLUMN_COUNT = 3;
 const MONTH_OPTION_COUNT = 12;
@@ -47,17 +46,8 @@ export function ExternalServicesUsagePage() {
   const [month, setMonth] = createSignal(currentMonth());
   const usage = useExternalServicesUsage(month);
 
-  const organizations = createMemo(() => usage.data?.organizations ?? []);
-  const total = createMemo(() => organizations().reduce((sum, organization) => sum + organization.count, 0));
-
-  const [collapsed, setCollapsed] = createSignal<Set<string>>(new Set());
-  const toggleOrganization = (tenantId: string) =>
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(tenantId)) next.delete(tenantId);
-      else next.add(tenantId);
-      return next;
-    });
+  const services = createMemo(() => usage.data?.services ?? []);
+  const total = createMemo(() => services().reduce((sum, service) => sum + service.count, 0));
 
   const [expanded, setExpanded] = createSignal<Set<string>>(new Set());
   const toggleService = (key: string) =>
@@ -116,41 +106,28 @@ export function ExternalServicesUsagePage() {
         <ErrorState onRetry={() => usage.refetch()} />
       </Show>
 
-      <Show when={!usage.isPending && !usage.isError && organizations().length === 0}>
+      <Show when={!usage.isPending && !usage.isError && services().length === 0}>
         <EmptyState month={month()} />
       </Show>
 
-      <Show when={!usage.isPending && !usage.isError && organizations().length > 0}>
+      <Show when={!usage.isPending && !usage.isError && services().length > 0}>
         <div class="rounded-lg border border-border overflow-hidden bg-card">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead class="min-w-64">Organization / service</TableHead>
+                <TableHead class="min-w-64">Service</TableHead>
                 <TableHead class="w-32 text-right">Messages</TableHead>
                 <TableHead class="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              <For each={organizations()}>
-                {(organization) => (
-                  <>
-                    <OrganizationRow
-                      organization={organization}
-                      collapsed={collapsed().has(organization.tenantId)}
-                      onToggle={() => toggleOrganization(organization.tenantId)}
-                    />
-                    <Show when={!collapsed().has(organization.tenantId)}>
-                      <For each={organization.services}>
-                        {(service) => (
-                          <ServiceRow
-                            service={service}
-                            expanded={expanded().has(`${organization.tenantId}:${service.service}`)}
-                            onToggle={() => toggleService(`${organization.tenantId}:${service.service}`)}
-                          />
-                        )}
-                      </For>
-                    </Show>
-                  </>
+              <For each={services()}>
+                {(service) => (
+                  <ServiceRow
+                    service={service}
+                    expanded={expanded().has(service.service)}
+                    onToggle={() => toggleService(service.service)}
+                  />
                 )}
               </For>
             </TableBody>
@@ -161,39 +138,11 @@ export function ExternalServicesUsagePage() {
   );
 }
 
-function OrganizationRow(props: { organization: UsageOrganization; collapsed: boolean; onToggle: () => void }) {
-  return (
-    <TableRow class="border-b-0 hover:bg-transparent">
-      <TableCell colspan={COLUMN_COUNT} class="bg-muted/40 py-2">
-        <div class="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => props.onToggle()}
-            class="flex items-center gap-2 text-left min-w-0"
-            aria-expanded={!props.collapsed}
-          >
-            <ChevronRight
-              class={cn(
-                'w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform',
-                !props.collapsed && 'rotate-90'
-              )}
-            />
-            <Building2 class="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-            <span class="font-medium text-sm truncate">{props.organization.tenantDisplayName}</span>
-            <span class="font-mono text-[11px] text-muted-foreground truncate">{props.organization.tenantName}</span>
-          </button>
-          <span class="ml-auto text-sm font-medium tabular-nums shrink-0">{formatCount(props.organization.count)}</span>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
-}
-
 function ServiceRow(props: { service: UsageServiceBreakdown; expanded: boolean; onToggle: () => void }) {
   return (
     <>
       <TableRow class="cursor-pointer" onClick={props.onToggle}>
-        <TableCell class="pl-9">
+        <TableCell>
           <div class="font-medium text-sm">{props.service.displayName}</div>
           <span class="font-mono text-[11px] text-muted-foreground">{props.service.service}</span>
         </TableCell>
@@ -208,7 +157,7 @@ function ServiceRow(props: { service: UsageServiceBreakdown; expanded: boolean; 
       <Show when={props.expanded}>
         <TableRow class="hover:bg-transparent">
           <TableCell colspan={COLUMN_COUNT} class="bg-muted/30">
-            <div class="flex flex-col gap-3 py-1 pl-9">
+            <div class="flex flex-col gap-3 py-1 pl-4">
               <For each={props.service.projects}>{(project) => <ProjectBreakdown project={project} />}</For>
             </div>
           </TableCell>

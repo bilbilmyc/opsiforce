@@ -12,7 +12,6 @@ import Skeleton from '~/components/ui/skeleton';
 import { MessageSquare, Plus } from '~/components/icons';
 import { ChannelCard } from './channel-card';
 import { ChannelDialog } from './channel-dialog';
-import { ConfigureWebhookDialog } from './configure-webhook-dialog';
 
 export function WhatsappResourcesSection() {
   const channels = useWhatsappChannels();
@@ -21,7 +20,6 @@ export function WhatsappResourcesSection() {
 
   const [dialogOpen, setDialogOpen] = createSignal(false);
   const [editing, setEditing] = createSignal<WhatsappChannel | null>(null);
-  const [configuring, setConfiguring] = createSignal<WhatsappChannel | null>(null);
   const [pendingDelete, setPendingDelete] = createSignal<WhatsappChannel | null>(null);
   const [pendingRotate, setPendingRotate] = createSignal<WhatsappChannel | null>(null);
 
@@ -45,7 +43,7 @@ export function WhatsappResourcesSection() {
     const channel = pendingRotate();
     if (!channel) return;
     rotate.mutate(channel.channelId, {
-      onSuccess: () => toast.success('Webhook secret rotated — reconfigure the webhook to push it to Whapi'),
+      onSuccess: () => toast.success('Webhook secret rotated and pushed to Whapi'),
       onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to rotate the webhook secret'),
     });
   };
@@ -55,7 +53,8 @@ export function WhatsappResourcesSection() {
       <div class="flex items-center gap-2">
         <p class="text-xs text-muted-foreground">
           Whapi channels registered on this platform. Create and QR-link the channel in the Whapi dashboard first, then
-          register it here and configure its webhook. Chats are allowlisted per environment from the project page.
+          register it here — the webhook is configured automatically. Chats are allowlisted per environment from the
+          project page.
         </p>
         <Button size="sm" class="ml-auto shrink-0" onClick={openCreate}>
           <Plus class="h-3.5 w-3.5" />
@@ -86,7 +85,6 @@ export function WhatsappResourcesSection() {
                       setEditing(channel);
                       setDialogOpen(true);
                     }}
-                    onConfigureWebhook={() => setConfiguring(channel)}
                     onRotateSecret={() => setPendingRotate(channel)}
                     onDelete={() => setPendingDelete(channel)}
                   />
@@ -99,21 +97,13 @@ export function WhatsappResourcesSection() {
 
       <ChannelDialog open={dialogOpen()} onOpenChange={setDialogOpen} channel={editing()} />
 
-      <ConfigureWebhookDialog
-        open={configuring() !== null}
-        onOpenChange={(open) => {
-          if (!open) setConfiguring(null);
-        }}
-        channel={configuring()}
-      />
-
       <ConfirmDialog
         open={pendingRotate() !== null}
         onOpenChange={(open) => {
           if (!open) setPendingRotate(null);
         }}
         title="Rotate webhook secret"
-        description={`Whapi keeps sending the old secret until you reconfigure the webhook for ${pendingRotate()?.channelId ?? ''}. Callbacks are rejected in between.`}
+        description={`Generates a new secret for ${pendingRotate()?.channelId ?? ''} and pushes it to Whapi in the same step. If the push fails, the old secret stays active.`}
         confirmLabel="Rotate"
         variant="destructive"
         onConfirm={confirmRotate}

@@ -1,22 +1,19 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../../db';
-import { environments, externalServiceUsage, projectEnvironments, projects, tenants } from '../../../db/schema';
+import { environments, externalServiceUsage, projectEnvironments, projects } from '../../../db/schema';
 import { ExternalServiceRegistry } from '../platform/external-service-registry';
 import type {
   UsageBucketKey,
   UsageEnvironmentBreakdown,
-  UsageOrganization,
   UsageProjectBreakdown,
+  UsageServiceBreakdown,
   UsageView,
 } from './external-service-usage.types';
 
 const MONTH_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])$/;
 
 interface UsageQueryRow {
-  tenantId: string;
-  tenantName: string;
-  tenantDisplayName: string;
   service: string;
   projectId: string | null;
   projectTitle: string | null;
@@ -64,9 +61,6 @@ export class ExternalServiceUsageService {
 
     const rows = await db
       .select({
-        tenantId: externalServiceUsage.tenantId,
-        tenantName: tenants.name,
-        tenantDisplayName: tenants.displayName,
         service: externalServiceUsage.service,
         projectId: externalServiceUsage.projectId,
         projectTitle: projects.title,
@@ -76,7 +70,6 @@ export class ExternalServiceUsageService {
         count: externalServiceUsage.count,
       })
       .from(externalServiceUsage)
-      .innerJoin(tenants, eq(tenants.id, externalServiceUsage.tenantId))
       .leftJoin(projects, eq(projects.id, externalServiceUsage.projectId))
       .leftJoin(projectEnvironments, eq(projectEnvironments.id, externalServiceUsage.projectEnvironmentId))
       .leftJoin(environments, eq(environments.id, projectEnvironments.environmentId))
@@ -84,7 +77,7 @@ export class ExternalServiceUsageService {
         and(eq(externalServiceUsage.month, monthStart(requestedMonth)), eq(externalServiceUsage.tenantId, tenantId))
       );
 
-    return { month: requestedMonth, organizations: buildOrganizations(rows, (service) => this.displayNameOf(service)) };
+    return { month: requestedMonth, services: buildServices(rows, (service) => this.displayNameOf(service)) };
   }
 
   private displayNameOf(service: string): string {
@@ -92,23 +85,12 @@ export class ExternalServiceUsageService {
   }
 }
 
-function buildOrganizations(rows: UsageQueryRow[], displayNameOf: (service: string) => string): UsageOrganization[] {
-  const organizations: UsageOrganization[] = [];
+function buildServices(rows: UsageQueryRow[], displayNameOf: (service: string) => string): UsageServiceBreakdown[] {
+  const services: UsageServiceBreakdown[] = [];
 
   for (const row of rows) {
-    const organization = findOrCreate(
-      organizations,
-      (candidate) => candidate.tenantId === row.tenantId,
-      () => ({
-        tenantId: row.tenantId,
-        tenantName: row.tenantName,
-        tenantDisplayName: row.tenantDisplayName,
-        count: 0,
-        services: [],
-      })
-    );
     const service = findOrCreate(
-      organization.services,
+      services,
       (candidate) => candidate.service === row.service,
       () => ({ service: row.service, displayName: displayNameOf(row.service), count: 0, projects: [] })
     );
@@ -136,27 +118,23 @@ function buildOrganizations(rows: UsageQueryRow[], displayNameOf: (service: stri
       })
     );
 
-    organization.count += row.count;
     service.count += row.count;
     project.count += row.count;
     environment.count += row.count;
   }
 
-  return sortOrganizations(organizations);
+  return sortServices(services);
 }
 
-function sortOrganizations(organizations: UsageOrganization[]): UsageOrganization[] {
-  for (const organization of organizations) {
-    for (const service of organization.services) {
-      for (const project of service.projects) {
-        project.environments.sort(compareEnvironments);
-      }
-      service.projects.sort(compareProjects);
+function sortServices(services: UsageServiceBreakdown[]): UsageServiceBreakdown[] {
+  for (const service of services) {
+    for (const project of service.projects) {
+      project.environments.sort(compareEnvironments);
     }
-    organization.services.sort(byCountThen((a, b) => a.service.localeCompare(b.service)));
+    service.projects.sort(compareProjects);
   }
 
-  return organizations.toSorted(byCountThen((a, b) => a.tenantDisplayName.localeCompare(b.tenantDisplayName)));
+  return services.toSorted(byCountThen((a, b) => a.service.localeCompare(b.service)));
 }
 
 function compareProjects(a: UsageProjectBreakdown, b: UsageProjectBreakdown): number {

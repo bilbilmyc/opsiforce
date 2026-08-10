@@ -28,15 +28,7 @@ export interface UsageServiceBreakdown {
   projects: UsageProjectBreakdown[];
 }
 
-export interface UsageOrganization {
-  tenantId: string;
-  tenantName: string;
-  tenantDisplayName: string;
-  count: number;
-  services: UsageServiceBreakdown[];
-}
-
 export interface UsageView {
   month: string;
-  organizations: UsageOrganization[];
+  services: UsageServiceBreakdown[];
 }

@@ -94,12 +94,6 @@ export class WhatsappDefinition implements ExternalServiceDefinition {
           this.channelService.rotateWebhookSecret(channelIdParam(context)),
       },
       {
-        method: 'POST',
-        path: 'channels/:channelId/configure-webhook',
-        handler: (context: AdminRouteContext): Promise<JsonValue> =>
-          this.channelService.configureWebhook(channelIdParam(context)),
-      },
-      {
         method: 'GET',
         path: 'channels/:channelId/webhook-status',
         handler: (context: AdminRouteContext): Promise<JsonValue> =>
