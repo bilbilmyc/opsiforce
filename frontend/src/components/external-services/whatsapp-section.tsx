@@ -94,8 +94,8 @@ export function WhatsappSection(props: EnvironmentSectionProps) {
         <>
           <Show when={channels().length === 0}>
             <p class="text-xs text-muted-foreground">
-              No WhatsApp channel is connected to this organization yet. Ask a platform operator to register one, then
-              enter its channel id manually below to wire it to this environment.
+              No WhatsApp channel has been registered yet. Register one under Admin → External services, then pick it
+              here to wire it to this environment.
             </p>
           </Show>
 
@@ -197,7 +197,7 @@ export function WhatsappSection(props: EnvironmentSectionProps) {
                 label="Channel id"
                 value={manualChannelId()}
                 onInput={setManualChannelId}
-                placeholder="the id the operator gave you"
+                placeholder="paste the channel id you were given"
               />
             </Show>
 

@@ -26,5 +26,4 @@ export const Permission = {
   viewPods: 'can_view_pods',
   viewExternalServicesUsage: 'can_view_external_services_usage',
   manageExternalServices: 'can_manage_external_services',
-  manageExternalServiceResources: 'can_manage_external_service_resources',
 } as const;

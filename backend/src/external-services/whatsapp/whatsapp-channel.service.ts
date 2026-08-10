@@ -8,10 +8,10 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq } from 'drizzle-orm';
+import { errorMessage } from '../../common/error-message';
 import crypto from 'crypto';
 import { db } from '../../../db';
 import { projectEnvironments } from '../../../db/schema';
-import { ProjectEnvironmentService } from '../../project-environment/project-environment.service';
 import type { ExternalServiceDefinition } from '../platform/external-service-definition';
 import {
   ExternalServiceConfigStore,
@@ -58,18 +58,13 @@ export class WhatsappChannelService {
   constructor(
     private readonly configService: ConfigService,
     private readonly whapiClient: WhapiClient,
-    private readonly store: ExternalServiceConfigStore,
-    private readonly projectEnvironmentService: ProjectEnvironmentService
+    private readonly store: ExternalServiceConfigStore
   ) {}
 
-  async listAvailableChannels(tenantId: string): Promise<WhatsappAvailableChannelResponse[]> {
-    const channelIds = await this.tenantChannelIds(tenantId);
-    if (channelIds.size === 0) return [];
-
+  async listAvailableChannels(): Promise<WhatsappAvailableChannelResponse[]> {
     const resources = await this.store.listResources(WHATSAPP_SERVICE_NAME);
 
     return resources
-      .filter((record) => channelIds.has(record.resourceKey))
       .map((record) => ({
         channelId: record.resourceKey,
         label: parseChannelResource(record.value)?.label ?? null,
@@ -77,30 +72,10 @@ export class WhatsappChannelService {
       .toSorted((a, b) => (a.label ?? a.channelId).localeCompare(b.label ?? b.channelId));
   }
 
-  async listEnvironmentChats(
-    tenantId: string,
-    projectEnvironmentId: string,
-    channelId: string
-  ): Promise<WhatsappChatOption[]> {
+  async listEnvironmentChats(projectEnvironmentId: string, channelId: string): Promise<WhatsappChatOption[]> {
     await this.requireEnvironment(projectEnvironmentId);
 
-    const channelIds = await this.tenantChannelIds(tenantId);
-    if (!channelIds.has(channelId)) {
-      throw new NotFoundException(`WhatsApp channel ${channelId} is not available to this organization`);
-    }
-
     return this.listChats(channelId);
-  }
-
-  private async tenantChannelIds(tenantId: string): Promise<Set<string>> {
-    const tenantEnvironmentIds = new Set(await this.projectEnvironmentService.listIdsByTenant(tenantId));
-    const configs = await this.store.listConfigs(WHATSAPP_SERVICE_NAME);
-
-    return new Set(
-      configs
-        .filter((config) => tenantEnvironmentIds.has(config.projectEnvironmentId))
-        .flatMap((config) => parseEnvironmentConfig(config.value).channels.map((channel) => channel.channelId))
-    );
   }
 
   async listChannels(): Promise<WhatsappChannelResponse[]> {
@@ -138,6 +113,8 @@ export class WhatsappChannelService {
 
     this.logger.log(`Registered Whapi channel ${channelId}`);
 
+    await this.pushWebhookBestEffort(channelId, resource);
+
     const now = new Date();
     return this.toChannelResponse(channelId, resource, {
       referencedEnvironmentCount: 0,
@@ -158,6 +135,11 @@ export class WhatsappChannelService {
       webhookSecret: existing.webhookSecret,
       label: label === undefined ? existing.label : label,
     };
+
+    if (updated.apiToken !== existing.apiToken) {
+      await this.pushWebhook(updated);
+    }
+
     await this.store.upsertResource(WHATSAPP_SERVICE_NAME, channelId, updated);
 
     return this.savedChannelResponse(channelId, updated, record.createdAt);
@@ -174,6 +156,8 @@ export class WhatsappChannelService {
     const { record, resource: existing } = await this.findChannelRecord(channelId);
 
     const rotated: WhatsappChannelResource = { ...existing, webhookSecret: generateWebhookSecret() };
+
+    await this.pushWebhook(rotated);
     await this.store.upsertResource(WHATSAPP_SERVICE_NAME, channelId, rotated);
 
     this.logger.log(`Rotated the webhook secret of Whapi channel ${channelId}`);
@@ -293,6 +277,23 @@ export class WhatsappChannelService {
     }
     if (!matchingUrl.handlesIncomingMessages) return 'missing-event';
     return 'in-sync';
+  }
+
+  private async pushWebhook(resource: WhatsappChannelResource): Promise<void> {
+    const webhookUrl = this.defaultWebhookUrl();
+    if (!webhookUrl) return;
+
+    await this.whapiClient.configureWebhook(resource.apiToken, webhookUrl, resource.webhookSecret);
+  }
+
+  private async pushWebhookBestEffort(channelId: string, resource: WhatsappChannelResource): Promise<void> {
+    try {
+      await this.pushWebhook(resource);
+    } catch (err) {
+      this.logger.warn(
+        `Registered Whapi channel ${channelId} but could not configure its webhook: ${errorMessage(err)}`
+      );
+    }
   }
 
   private resolveWebhookUrl(requested: string | undefined): string {

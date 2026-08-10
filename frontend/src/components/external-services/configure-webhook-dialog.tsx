@@ -44,10 +44,11 @@ export function ConfigureWebhookDialog(props: {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent class="max-w-md">
         <DialogHeader>
-          <DialogTitle>Configure webhook</DialogTitle>
+          <DialogTitle>Reconfigure webhook</DialogTitle>
           <DialogDescription>
-            Pushes the callback URL, the secret header, and the <span class="font-mono">messages.post</span> event
-            filter to Whapi for this channel.
+            Registration already pushed these settings. Re-push the callback URL, the secret header, and the{' '}
+            <span class="font-mono">messages.post</span> event filter to Whapi to repair or re-point this channel; any
+            other webhook on it is left untouched.
           </DialogDescription>
         </DialogHeader>
 

@@ -58,8 +58,14 @@ export class WhapiClient {
   }
 
   async configureWebhook(apiToken: string, webhookUrl: string, webhookSecret: string): Promise<void> {
+    const settings = await this.request<WhapiSettings>(apiToken, 'GET', '/settings');
+    const foreign = (settings.webhooks ?? []).filter(
+      (webhook) => secretHeaderKey(webhook.headers) === null && webhook.url !== webhookUrl
+    );
+
     await this.request<object>(apiToken, 'PATCH', '/settings', {
       webhooks: [
+        ...foreign,
         {
           url: webhookUrl,
           mode: 'body',
@@ -68,7 +74,7 @@ export class WhapiClient {
         },
       ],
     });
-    this.logger.log(`Configured Whapi webhook at ${webhookUrl}`);
+    this.logger.log(`Configured Whapi webhook at ${webhookUrl}, preserving ${foreign.length} foreign webhook(s)`);
   }
 
   async listWebhooks(apiToken: string): Promise<WhapiWebhookRegistration[]> {
@@ -76,15 +82,12 @@ export class WhapiClient {
 
     return (settings.webhooks ?? []).flatMap((webhook) => {
       if (!webhook.url) return [];
-      const headers = webhook.headers ?? {};
-      const secretKey = Object.keys(headers).find(
-        (key) => key.toLowerCase() === WHATSAPP_WEBHOOK_SECRET_HEADER.toLowerCase()
-      );
+      const secretKey = secretHeaderKey(webhook.headers);
 
       return [
         {
           url: webhook.url,
-          secret: secretKey ? headers[secretKey] : null,
+          secret: secretKey ? (webhook.headers?.[secretKey] ?? null) : null,
           handlesIncomingMessages: (webhook.events ?? []).some(
             (event) => event.type === 'messages' && event.method === 'post'
           ),
@@ -207,6 +210,13 @@ export class WhapiClient {
   private baseUrl(): string {
     return this.configService.get<string>('whapiApiUrl', '').replace(/\/+$/, '');
   }
+}
+
+function secretHeaderKey(headers: Record<string, string> | undefined): string | null {
+  const key = Object.keys(headers ?? {}).find(
+    (candidate) => candidate.toLowerCase() === WHATSAPP_WEBHOOK_SECRET_HEADER.toLowerCase()
+  );
+  return key ?? null;
 }
 
 function chatKind(chatId: string): 'individual' | 'group' {

@@ -31,7 +31,7 @@ export function ChannelCard(props: {
         <div class="ml-auto flex items-center gap-1.5">
           <Button size="sm" variant="outline" onClick={() => props.onConfigureWebhook()}>
             <Plug class="h-3.5 w-3.5" />
-            Configure webhook
+            Reconfigure webhook
           </Button>
           <button
             type="button"
