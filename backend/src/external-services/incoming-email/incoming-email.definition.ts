@@ -17,6 +17,7 @@ import { INCOMING_EMAIL_SERVICE, IncomingEmailAddressService } from './incoming-
 import { timingSafeStringEqual } from '../platform/secret-crypto';
 
 const ATTACHMENT_FIELD_PREFIX = 'attachment-';
+const SIGNATURE_TOLERANCE_SECONDS = 300;
 
 @Injectable()
 export class IncomingEmailDefinition implements ExternalServiceDefinition {
@@ -66,6 +67,10 @@ export class IncomingEmailDefinition implements ExternalServiceDefinition {
     const { timestamp, token, signature } = request.fields;
     if (!timestamp || !token || !signature) {
       return { verified: false, reason: 'Missing Mailgun signature fields' };
+    }
+
+    if (!isWithinSignatureWindow(timestamp)) {
+      return { verified: false, reason: 'Mailgun signature timestamp is outside the accepted window' };
     }
 
     const expected = createHmac('sha256', signingKey)
@@ -121,6 +126,14 @@ export class IncomingEmailDefinition implements ExternalServiceDefinition {
       },
     ];
   }
+}
+
+function isWithinSignatureWindow(timestamp: string): boolean {
+  const signedAtSeconds = Number(timestamp);
+  if (!Number.isFinite(signedAtSeconds)) return false;
+
+  const ageSeconds = Math.abs(Date.now() / 1000 - signedAtSeconds);
+  return ageSeconds <= SIGNATURE_TOLERANCE_SECONDS;
 }
 
 function attachmentsOf(request: WebhookRequest): StoredAttachment[] {
