@@ -8,6 +8,8 @@ const REQUEST_TIMEOUT_MS = 15_000;
 const MEDIA_TIMEOUT_MS = 60_000;
 const PAGE_SIZE = 500;
 const MAX_PAGES = 10;
+const MAX_MEDIA_MB = 32;
+const MAX_MEDIA_BYTES = MAX_MEDIA_MB * 1024 * 1024;
 
 interface WhapiChatPage {
   chats?: Array<{ id?: string; name?: string | null; type?: string }>;
@@ -100,7 +102,7 @@ export class WhapiClient {
       throw new BadGatewayException(`Whapi GET /media/${mediaId} failed (${response.status}): ${detail.slice(0, 300)}`);
     }
 
-    return Buffer.from(await response.arrayBuffer());
+    return readBoundedBody(response, `Whapi media ${mediaId}`);
   }
 
   async fetchMediaLink(link: string): Promise<Buffer> {
@@ -119,7 +121,7 @@ export class WhapiClient {
       throw new BadGatewayException(`Whapi media link returned ${response.status}`);
     }
 
-    return Buffer.from(await response.arrayBuffer());
+    return readBoundedBody(response, 'Whapi media link');
   }
 
   private async collectChats(apiToken: string): Promise<WhatsappChatOption[]> {
@@ -209,4 +211,33 @@ export class WhapiClient {
 
 function chatKind(chatId: string): 'individual' | 'group' {
   return chatId.endsWith(WHATSAPP_GROUP_CHAT_SUFFIX) ? 'group' : 'individual';
+}
+
+async function readBoundedBody(response: Response, describe: string): Promise<Buffer> {
+  const declared = Number(response.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_MEDIA_BYTES) {
+    throw new BadGatewayException(`${describe} declares ${declared} bytes, over the ${MAX_MEDIA_MB} MB media limit`);
+  }
+
+  const body = response.body;
+  if (!body) return Buffer.alloc(0);
+
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    total += value.byteLength;
+    if (total > MAX_MEDIA_BYTES) {
+      await reader.cancel();
+      throw new BadGatewayException(`${describe} exceeds the ${MAX_MEDIA_MB} MB media limit`);
+    }
+
+    chunks.push(value);
+  }
+
+  return Buffer.concat(chunks);
 }
