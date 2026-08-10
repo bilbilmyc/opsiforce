@@ -27,7 +27,7 @@ export const ADMIN_TABS: RailTab[] = [
     description: 'Platform-wide external-service resources, such as the registered WhatsApp channels.',
     group: 'Operations',
     icon: Cable,
-    isPermitted: (has) => has(Permission.manageExternalServices),
+    isPermitted: (has) => has(Permission.manageExternalServiceResources),
   },
 ];
 

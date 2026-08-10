@@ -1,6 +1,19 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  ForbiddenException,
+  Get,
+  Headers,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Perms } from '../../permission/permission.constants';
 import { RequirePermission } from '../../permission/permission.guard';
+import { hasPermission } from '../../permission/permission.utils';
 import { ProjectEnvironmentService } from '../../project-environment/project-environment.service';
 import { CurrentTenant, type TenantContext } from '../../tenant/tenant.decorator';
 import {
@@ -38,46 +51,51 @@ export class ExternalServicesAdminController {
   @Get(':service/*')
   get(
     @CurrentTenant() tenant: TenantContext,
+    @Headers('x-forwarded-groups') groupsHeader: string | undefined,
     @Param() params: Record<string, string>,
     @Query() query: DispatchQuery,
     @Body() body: JsonValue | undefined
   ): Promise<JsonValue> {
-    return this.dispatch('GET', tenant, params, query, body);
+    return this.dispatch('GET', tenant, groupsHeader, params, query, body);
   }
 
   @Post(':service/*')
   post(
     @CurrentTenant() tenant: TenantContext,
+    @Headers('x-forwarded-groups') groupsHeader: string | undefined,
     @Param() params: Record<string, string>,
     @Query() query: DispatchQuery,
     @Body() body: JsonValue | undefined
   ): Promise<JsonValue> {
-    return this.dispatch('POST', tenant, params, query, body);
+    return this.dispatch('POST', tenant, groupsHeader, params, query, body);
   }
 
   @Patch(':service/*')
   patch(
     @CurrentTenant() tenant: TenantContext,
+    @Headers('x-forwarded-groups') groupsHeader: string | undefined,
     @Param() params: Record<string, string>,
     @Query() query: DispatchQuery,
     @Body() body: JsonValue | undefined
   ): Promise<JsonValue> {
-    return this.dispatch('PATCH', tenant, params, query, body);
+    return this.dispatch('PATCH', tenant, groupsHeader, params, query, body);
   }
 
   @Delete(':service/*')
   delete(
     @CurrentTenant() tenant: TenantContext,
+    @Headers('x-forwarded-groups') groupsHeader: string | undefined,
     @Param() params: Record<string, string>,
     @Query() query: DispatchQuery,
     @Body() body: JsonValue | undefined
   ): Promise<JsonValue> {
-    return this.dispatch('DELETE', tenant, params, query, body);
+    return this.dispatch('DELETE', tenant, groupsHeader, params, query, body);
   }
 
   private async dispatch(
     method: ServiceRouteMethod,
     tenant: TenantContext,
+    groupsHeader: string | undefined,
     params: Record<string, string>,
     query: DispatchQuery,
     body: JsonValue | undefined
@@ -88,17 +106,26 @@ export class ExternalServicesAdminController {
     const matched = matchServiceRoute(definition.routes?.admin ?? [], method, segments);
     if (!matched) throw routeNotFound(definition.serviceName, method, segments);
 
-    await this.assertEnvironmentInTenant(matched.params.projectEnvironmentId, tenant.tenantId);
+    const projectEnvironmentId = matched.params.projectEnvironmentId;
+    if (projectEnvironmentId) {
+      await this.assertEnvironmentInTenant(projectEnvironmentId, tenant.tenantId);
+    } else {
+      assertPlatformResourceAccess(groupsHeader);
+    }
 
     return matched.route.handler({ params: matched.params, body: jsonBodyOf(body), query: queryOf(query) });
   }
 
-  private async assertEnvironmentInTenant(projectEnvironmentId: string | undefined, tenantId: string): Promise<void> {
-    if (!projectEnvironmentId) return;
-
+  private async assertEnvironmentInTenant(projectEnvironmentId: string, tenantId: string): Promise<void> {
     const environment = await this.projectEnvironmentService.findByIdOrNull(projectEnvironmentId);
     if (!environment || environment.tenantId !== tenantId) {
       throw new NotFoundException(`Project environment ${projectEnvironmentId} not found`);
     }
+  }
+}
+
+function assertPlatformResourceAccess(groupsHeader: string | undefined): void {
+  if (!hasPermission(groupsHeader ?? '', Perms.manageExternalServiceResources)) {
+    throw new ForbiddenException(`Missing permission: ${Perms.manageExternalServiceResources}`);
   }
 }
