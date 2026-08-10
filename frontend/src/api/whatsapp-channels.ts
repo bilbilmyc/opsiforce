@@ -26,6 +26,11 @@ export interface WhatsappAllowedChat {
   chatName: string | null;
 }
 
+export interface WhatsappAvailableChannel {
+  channelId: string;
+  label: string | null;
+}
+
 export interface WhatsappEnvironmentChannel {
   channelId: string;
   label: string | null;
@@ -63,6 +68,10 @@ export const whatsappKeys = {
   chats: (channelId: string) => [...whatsappKeys.all, 'chats', channelId] as const,
   webhookStatus: (channelId: string) => [...whatsappKeys.all, 'webhook-status', channelId] as const,
   environment: (projectEnvironmentId: string) => [...whatsappKeys.all, 'environment', projectEnvironmentId] as const,
+  availableChannels: (projectEnvironmentId: string) =>
+    [...whatsappKeys.all, 'available-channels', projectEnvironmentId] as const,
+  environmentChats: (projectEnvironmentId: string, channelId: string) =>
+    [...whatsappKeys.all, 'environment-chats', projectEnvironmentId, channelId] as const,
 };
 
 export function useWhatsappChannels(options?: { enabled?: () => boolean }) {
@@ -84,11 +93,39 @@ export function useWhatsappChats(channelId: () => string | null, enabled: () => 
   }));
 }
 
+export function useAvailableWhatsappChannels(projectEnvironmentId: () => string) {
+  return createAppQuery(() => ({
+    queryKey: whatsappKeys.availableChannels(projectEnvironmentId()),
+    queryFn: () =>
+      api.get<WhatsappAvailableChannel[]>(
+        `${BASE}/environments/${encodeURIComponent(projectEnvironmentId())}/available-channels`
+      ),
+    enabled: projectEnvironmentId() !== '',
+    reconcile: 'channelId',
+  }));
+}
+
+export function useEnvironmentWhatsappChats(
+  projectEnvironmentId: () => string,
+  channelId: () => string | null,
+  enabled: () => boolean
+) {
+  return createAppQuery(() => ({
+    queryKey: whatsappKeys.environmentChats(projectEnvironmentId(), channelId() ?? 'none'),
+    queryFn: () =>
+      api.get<WhatsappChatOption[]>(
+        `${BASE}/environments/${encodeURIComponent(projectEnvironmentId())}/channels/${encodeURIComponent(channelId() ?? '')}/chats`
+      ),
+    enabled: channelId() !== null && enabled(),
+    reconcile: false,
+    retry: false,
+  }));
+}
+
 export function useWhatsappWebhookStatus(channelId: () => string) {
   return createAppQuery(() => ({
     queryKey: whatsappKeys.webhookStatus(channelId()),
-    queryFn: () =>
-      api.get<WhatsappWebhookStatus>(`${BASE}/channels/${encodeURIComponent(channelId())}/webhook-status`),
+    queryFn: () => api.get<WhatsappWebhookStatus>(`${BASE}/channels/${encodeURIComponent(channelId())}/webhook-status`),
     reconcile: false,
     retry: false,
   }));
@@ -119,7 +156,11 @@ export function useUpdateWhatsappChannel() {
   return createMutation(() => ({
     mutationFn: (params: { channelId: string; dto: UpdateWhatsappChannelDto }) =>
       api.patch<WhatsappChannel>(`${BASE}/channels/${encodeURIComponent(params.channelId)}`, params.dto),
-    onSuccess: () => qc.invalidateQueries({ queryKey: whatsappKeys.channels() }),
+    onSuccess: (_result, params) => {
+      qc.invalidateQueries({ queryKey: whatsappKeys.channels() });
+      qc.invalidateQueries({ queryKey: whatsappKeys.webhookStatus(params.channelId) });
+      qc.invalidateQueries({ queryKey: whatsappKeys.chats(params.channelId) });
+    },
   }));
 }
 
@@ -151,8 +192,7 @@ export function useConfigureWhatsappWebhook() {
         `${BASE}/channels/${encodeURIComponent(params.channelId)}/configure-webhook`,
         { webhookUrl: params.webhookUrl }
       ),
-    onSuccess: (_result, vars) =>
-      qc.invalidateQueries({ queryKey: whatsappKeys.webhookStatus(vars.channelId) }),
+    onSuccess: (_result, vars) => qc.invalidateQueries({ queryKey: whatsappKeys.webhookStatus(vars.channelId) }),
   }));
 }
 
@@ -170,6 +210,7 @@ export function useAllowlistWhatsappChat() {
       ),
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: whatsappKeys.environment(vars.projectEnvironmentId) });
+      qc.invalidateQueries({ queryKey: whatsappKeys.availableChannels(vars.projectEnvironmentId) });
       qc.invalidateQueries({ queryKey: whatsappKeys.channels() });
     },
   }));

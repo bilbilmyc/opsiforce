@@ -104,5 +104,6 @@ spec:
                 - --skip-auth-route=GET=^/ms-assets/.*$
                 {{- end }}
                 - --skip-auth-route=GET=^/manifest.webmanifest$
+                - --skip-auth-route=POST=^/api/external-services/webhooks/.*$
                 - --cookie-refresh=4m
           {{- end }}
