@@ -21,7 +21,7 @@ curl -s "$EXTERNAL_SERVICES_URL/incoming-email/identity" \
 # {"address":"k3p9x2mq7fd41abv@mail.example.com"}
 ```
 
-This is the same discovery call every external service answers — `GET $EXTERNAL_SERVICES_URL/<service>/identity` — and it **always returns 200**, so there is no status to branch on. The environment normally already has an address; the call creates one if it somehow doesn't, and returns the same one forever after. The key is environment-scoped, so this always returns *this* environment's address.
+This is the same discovery call every external service answers — `GET $EXTERNAL_SERVICES_URL/<service>/identity` — and for incoming email it has exactly two outcomes: **200 with the address**, or **503 when inbound email is not configured on this deployment**. On a 200 the environment normally already has an address; the call creates one if it somehow doesn't, and returns the same one forever after. The key is environment-scoped, so a 200 always returns *this* environment's address.
 
 - **Tell the user the address in chat** so they can start sending mail to it.
 - The address has exactly two homes: chat, and the endpoint above. Keep it out of app code, content, and config.
