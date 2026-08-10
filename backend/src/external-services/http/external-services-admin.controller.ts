@@ -1,6 +1,8 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { Perms } from '../../permission/permission.constants';
 import { RequirePermission } from '../../permission/permission.guard';
+import { ProjectEnvironmentService } from '../../project-environment/project-environment.service';
+import { CurrentTenant, type TenantContext } from '../../tenant/tenant.decorator';
 import {
   definitionOf,
   jsonBodyOf,
@@ -21,7 +23,10 @@ export interface ExternalServiceSummary {
 @Controller('external-services/admin')
 @RequirePermission(Perms.manageExternalServices)
 export class ExternalServicesAdminController {
-  constructor(private readonly registry: ExternalServiceRegistry) {}
+  constructor(
+    private readonly registry: ExternalServiceRegistry,
+    private readonly projectEnvironmentService: ProjectEnvironmentService
+  ) {}
 
   @Get('services')
   services(): ExternalServiceSummary[] {
@@ -32,42 +37,47 @@ export class ExternalServicesAdminController {
 
   @Get(':service/*')
   get(
+    @CurrentTenant() tenant: TenantContext,
     @Param() params: Record<string, string>,
     @Query() query: DispatchQuery,
     @Body() body: JsonValue | undefined
   ): Promise<JsonValue> {
-    return this.dispatch('GET', params, query, body);
+    return this.dispatch('GET', tenant, params, query, body);
   }
 
   @Post(':service/*')
   post(
+    @CurrentTenant() tenant: TenantContext,
     @Param() params: Record<string, string>,
     @Query() query: DispatchQuery,
     @Body() body: JsonValue | undefined
   ): Promise<JsonValue> {
-    return this.dispatch('POST', params, query, body);
+    return this.dispatch('POST', tenant, params, query, body);
   }
 
   @Patch(':service/*')
   patch(
+    @CurrentTenant() tenant: TenantContext,
     @Param() params: Record<string, string>,
     @Query() query: DispatchQuery,
     @Body() body: JsonValue | undefined
   ): Promise<JsonValue> {
-    return this.dispatch('PATCH', params, query, body);
+    return this.dispatch('PATCH', tenant, params, query, body);
   }
 
   @Delete(':service/*')
   delete(
+    @CurrentTenant() tenant: TenantContext,
     @Param() params: Record<string, string>,
     @Query() query: DispatchQuery,
     @Body() body: JsonValue | undefined
   ): Promise<JsonValue> {
-    return this.dispatch('DELETE', params, query, body);
+    return this.dispatch('DELETE', tenant, params, query, body);
   }
 
-  private dispatch(
+  private async dispatch(
     method: ServiceRouteMethod,
+    tenant: TenantContext,
     params: Record<string, string>,
     query: DispatchQuery,
     body: JsonValue | undefined
@@ -78,6 +88,17 @@ export class ExternalServicesAdminController {
     const matched = matchServiceRoute(definition.routes?.admin ?? [], method, segments);
     if (!matched) throw routeNotFound(definition.serviceName, method, segments);
 
+    await this.assertEnvironmentInTenant(matched.params.projectEnvironmentId, tenant.tenantId);
+
     return matched.route.handler({ params: matched.params, body: jsonBodyOf(body), query: queryOf(query) });
+  }
+
+  private async assertEnvironmentInTenant(projectEnvironmentId: string | undefined, tenantId: string): Promise<void> {
+    if (!projectEnvironmentId) return;
+
+    const environment = await this.projectEnvironmentService.findByIdOrNull(projectEnvironmentId);
+    if (!environment || environment.tenantId !== tenantId) {
+      throw new NotFoundException(`Project environment ${projectEnvironmentId} not found`);
+    }
   }
 }

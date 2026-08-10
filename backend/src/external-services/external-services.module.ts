@@ -1,6 +1,7 @@
 import { Module, type Type } from '@nestjs/common';
 import { GatewayModule } from '../gateway/gateway.module';
 import { GatewayAuthGuard } from '../gateway/gateway-auth.guard';
+import { ProjectEnvironmentModule } from '../project-environment/project-environment.module';
 import { ExternalServicesAdminController } from './http/external-services-admin.controller';
 import { ExternalServicesAgentController } from './http/external-services-agent.controller';
 import { WebhooksController } from './http/webhooks.controller';
@@ -26,7 +27,7 @@ const DEFINITION_CLASSES: ReadonlyArray<Type<ExternalServiceDefinition>> = [
 ];
 
 @Module({
-  imports: [GatewayModule],
+  imports: [GatewayModule, ProjectEnvironmentModule],
   controllers: [
     WebhooksController,
     ExternalServicesAgentController,
