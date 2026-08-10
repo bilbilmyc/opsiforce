@@ -104,8 +104,8 @@ export function ExternalServicesUsagePage() {
       </div>
 
       <p class="text-xs text-muted-foreground mb-5 ml-8">
-        Inbound external-service messages stored in {formatMonth(month())}, per organization and service. Counts survive
-        project and environment deletion.
+        Inbound external-service messages stored in {formatMonth(month())} for your organization, per service. Counts
+        survive project and environment deletion.
       </p>
 
       <Show when={usage.isPending}>

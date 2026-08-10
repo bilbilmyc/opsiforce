@@ -187,12 +187,9 @@ export function useRotateWhatsappSecret() {
 export function useConfigureWhatsappWebhook() {
   const qc = useQueryClient();
   return createMutation(() => ({
-    mutationFn: (params: { channelId: string; webhookUrl: string }) =>
-      api.post<ConfigureWhatsappWebhookResult>(
-        `${BASE}/channels/${encodeURIComponent(params.channelId)}/configure-webhook`,
-        { webhookUrl: params.webhookUrl }
-      ),
-    onSuccess: (_result, vars) => qc.invalidateQueries({ queryKey: whatsappKeys.webhookStatus(vars.channelId) }),
+    mutationFn: (channelId: string) =>
+      api.post<ConfigureWhatsappWebhookResult>(`${BASE}/channels/${encodeURIComponent(channelId)}/configure-webhook`),
+    onSuccess: (_result, channelId) => qc.invalidateQueries({ queryKey: whatsappKeys.webhookStatus(channelId) }),
   }));
 }
 

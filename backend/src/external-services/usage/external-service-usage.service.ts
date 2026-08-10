@@ -59,7 +59,7 @@ export class ExternalServiceUsageService {
       });
   }
 
-  async view(month: string | undefined, tenantId: string | undefined): Promise<UsageView> {
+  async view(month: string | undefined, tenantId: string): Promise<UsageView> {
     const requestedMonth = month ? parseMonth(month) : currentMonth();
 
     const rows = await db
@@ -81,10 +81,7 @@ export class ExternalServiceUsageService {
       .leftJoin(projectEnvironments, eq(projectEnvironments.id, externalServiceUsage.projectEnvironmentId))
       .leftJoin(environments, eq(environments.id, projectEnvironments.environmentId))
       .where(
-        and(
-          eq(externalServiceUsage.month, monthStart(requestedMonth)),
-          tenantId ? eq(externalServiceUsage.tenantId, tenantId) : undefined
-        )
+        and(eq(externalServiceUsage.month, monthStart(requestedMonth)), eq(externalServiceUsage.tenantId, tenantId))
       );
 
     return { month: requestedMonth, organizations: buildOrganizations(rows, (service) => this.displayNameOf(service)) };

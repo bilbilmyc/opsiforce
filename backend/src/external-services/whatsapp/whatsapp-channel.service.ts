@@ -26,7 +26,6 @@ import {
 import { WhapiClient, type WhapiWebhookRegistration } from './whapi.client';
 import type {
   AllowlistWhatsappChatDto,
-  ConfigureWhatsappWebhookDto,
   ConfigureWhatsappWebhookResult,
   CreateWhatsappChannelDto,
   UpdateWhatsappChannelDto,
@@ -240,9 +239,9 @@ export class WhatsappChannelService {
     return this.whapiClient.listChats(resource.apiToken);
   }
 
-  async configureWebhook(channelId: string, dto: ConfigureWhatsappWebhookDto): Promise<ConfigureWhatsappWebhookResult> {
+  async configureWebhook(channelId: string): Promise<ConfigureWhatsappWebhookResult> {
     const resource = await this.findResource(channelId);
-    const webhookUrl = this.resolveWebhookUrl(dto.webhookUrl);
+    const webhookUrl = this.requireWebhookUrl();
 
     await this.whapiClient.configureWebhook(resource.apiToken, webhookUrl, resource.webhookSecret);
 
@@ -296,15 +295,10 @@ export class WhatsappChannelService {
     }
   }
 
-  private resolveWebhookUrl(requested: string | undefined): string {
-    const url = (requested ?? this.defaultWebhookUrl()).trim();
+  private requireWebhookUrl(): string {
+    const url = this.defaultWebhookUrl();
     if (!url) {
-      throw new ServiceUnavailableException(
-        'No webhook URL: set EXTERNAL_SERVICES_WEBHOOK_BASE_URL or pass one explicitly'
-      );
-    }
-    if (!/^https?:\/\/\S+$/.test(url)) {
-      throw new BadRequestException(`Invalid webhook URL "${url}", expected an http(s) URL`);
+      throw new ServiceUnavailableException('No webhook URL: set EXTERNAL_SERVICES_WEBHOOK_BASE_URL');
     }
     return url;
   }

@@ -97,9 +97,7 @@ export class WhatsappDefinition implements ExternalServiceDefinition {
         method: 'POST',
         path: 'channels/:channelId/configure-webhook',
         handler: (context: AdminRouteContext): Promise<JsonValue> =>
-          this.channelService.configureWebhook(channelIdParam(context), {
-            webhookUrl: textField(context.body, 'webhookUrl'),
-          }),
+          this.channelService.configureWebhook(channelIdParam(context)),
       },
       {
         method: 'GET',

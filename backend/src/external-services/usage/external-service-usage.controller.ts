@@ -1,6 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { Perms } from '../../permission/permission.constants';
 import { RequirePermission } from '../../permission/permission.guard';
+import { CurrentTenant, type TenantContext } from '../../tenant/tenant.decorator';
 import { ExternalServiceUsageService } from './external-service-usage.service';
 import type { UsageView } from './external-service-usage.types';
 
@@ -10,7 +11,7 @@ export class ExternalServiceUsageController {
 
   @Get('usage')
   @RequirePermission(Perms.viewExternalServicesUsage)
-  usage(@Query('month') month?: string, @Query('tenantId') tenantId?: string): Promise<UsageView> {
-    return this.usageService.view(month, tenantId);
+  usage(@CurrentTenant() tenant: TenantContext, @Query('month') month?: string): Promise<UsageView> {
+    return this.usageService.view(month, tenant.tenantId);
   }
 }
