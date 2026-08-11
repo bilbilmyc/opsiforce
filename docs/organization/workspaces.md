@@ -30,7 +30,7 @@ Private workspaces are a per-tenant feature, controlled by `tenant_settings.priv
 When a tenant switches it **off**:
 
 - No private workspace is auto-provisioned on authentication (`ensurePrivateWorkspace` no-ops).
-- Existing private workspaces are **hidden, not deleted**: they disappear from every workspace listing, direct links 404, and their projects vanish from project listings — including for their owners. Nothing is mutated, so flipping the flag back restores everything exactly as it was, and users who first signed in while it was off get their Personal workspace on their next request.
+- Existing private workspaces are **hidden, not deleted**: they disappear from every workspace listing, direct links 404, and their projects vanish from project listings — including for their owners. Writes are closed too, not just reads: creating a project or folder in one, importing into one, or moving a project into one all 404, so no new work can accumulate somewhere invisible. Nothing is mutated, so flipping the flag back restores everything exactly as it was, and users who first signed in while it was off get their Personal workspace on their next request.
 - **Public becomes the default destination for new projects.** The sidebar create button, the home-page prompt box, and the import dialog all target Public instead of the private workspace, and `POST /projects` drops its `can_manage_workspaces` requirement for that tenant so every member can use them. This is the one place the permission table below bends: creating a tenant-wide project normally needs `can_manage_workspaces`, but a tenant with no per-user workspace has nowhere else for its members to start. *Moving* an existing project into Public still needs the permission.
 
 ## On deletes
