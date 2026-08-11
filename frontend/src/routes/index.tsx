@@ -1,9 +1,8 @@
 import { createFileRoute, useNavigate } from '@tanstack/solid-router';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { type Project } from '~/api/client';
-import { useCurrentUser } from '~/api/user';
-import { useCreateProjectInWorkspace, useWorkspaces } from '~/api/workspaces';
+import { useCreateDefaultProject } from '~/api/default-project-target';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
 import { EXAMPLES, type Example } from '~/data/examples';
@@ -39,20 +38,12 @@ function ExampleCard(props: { example: Example; onClick: () => void }) {
 
 function HomePage() {
   const navigate = useNavigate();
-  const currentUser = useCurrentUser();
-  const workspaces = useWorkspaces();
-  const createInWorkspace = useCreateProjectInWorkspace();
+  const createDefaultProject = useCreateDefaultProject();
   const { hasPermission } = usePermissions();
   const canImport = () => hasPermission(Permission.importProject);
   const [prompt, setPrompt] = createSignal('');
   const [focused, setFocused] = createSignal(false);
   const [importOpen, setImportOpen] = createSignal(false);
-
-  const privateWorkspace = createMemo(() => {
-    const uid = currentUser.data?.id;
-    if (!uid) return undefined;
-    return (workspaces.data ?? []).find((w) => w.type === 'private' && w.ownerId === uid);
-  });
 
   const goToProject = (project: Project) => {
     const text = prompt().trim();
@@ -63,25 +54,17 @@ function HomePage() {
     });
   };
 
-  const isSubmitting = () => createInWorkspace.isPending;
+  const isSubmitting = () => createDefaultProject.isPending();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (isSubmitting()) return;
-    const ws = privateWorkspace();
-    if (!ws) {
-      toast.error("Your private workspace isn't ready yet");
-      return;
+    try {
+      const project = await createDefaultProject.createProject();
+      toast.success('Project created');
+      goToProject(project);
+    } catch {
+      toast.error('Failed to create project');
     }
-    createInWorkspace.mutate(
-      { workspaceId: ws.id },
-      {
-        onSuccess: (project) => {
-          toast.success('Project created');
-          goToProject(project);
-        },
-        onError: () => toast.error('Failed to create project'),
-      }
-    );
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
@@ -141,7 +124,7 @@ function HomePage() {
                 </span>
                 <button
                   onClick={handleSubmit}
-                  disabled={isSubmitting() || !privateWorkspace()}
+                  disabled={isSubmitting() || !createDefaultProject.hasDestination()}
                   class={cn(
                     'flex items-center gap-1.5 h-7 px-3 rounded-lg text-xs font-medium',
                     'bg-foreground text-background',

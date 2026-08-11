@@ -98,6 +98,7 @@ export const tenantSettings = pgTable("tenant_settings", {
     .primaryKey()
     .references(() => tenants.id, { onDelete: "cascade" }),
   externalTenantName: text("external_tenant_name").notNull().unique(),
+  privateWorkspaceEnabled: boolean("private_workspace_enabled").notNull().default(true),
 })
 
 export const agents = pgTable("agents", {

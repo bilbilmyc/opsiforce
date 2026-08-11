@@ -1,0 +1,29 @@
+# Private workspaces are a per-tenant toggle that hides, not deletes
+
+Status: accepted — implemented
+
+Some tenants don't want the private-workspace concept at all: every user automatically owning an invisible "Personal" workspace fragments their project inventory and doesn't fit organizations where all work is supposed to be shared. The feature is now controlled per tenant by `tenant_settings.private_workspace_enabled` (default `true`, so every existing tenant keeps the behaviour it has), read by `GET /tenants/config` and flipped via `PATCH /tenants/config` under `can_manage_workspaces` from `/settings/workspaces`.
+
+The load-bearing decision is what "off" means for the private workspaces that already exist — migration `0023` backfilled one per (user, tenant), so every tenant has them. **Off means hidden, not deleted.** `ensurePrivateWorkspace` no-ops, workspace listings and `findOne` exclude `type = 'private'`, and project listings exclude projects sitting in a private workspace (via a correlated `NOT EXISTS` against `tenant_settings`, so the check needs no extra round trip). No rows are touched. Flipping the flag back restores every workspace and project exactly as it was, and users who first authenticated while the flag was off are caught up by the same self-healing `ensurePrivateWorkspace` call on their next request.
+
+With the private workspace gone, the surfaces that used it as the default project target (sidebar create button, home-page prompt box, import dialog) target **Public** instead — `useDefaultProjectTarget` returns `null` for the workspace id, and the callers switch from `POST /workspaces/:id/projects` to `POST /projects`. This restores what the home page did before private workspaces existed, when it called `useCreateUnassignedProject` directly.
+
+That carries a permission change, and it is the deliberate part of this decision. `POST /projects` has always required `can_manage_workspaces`, because a Public project is visible to the whole tenant. A tenant with private workspaces disabled has no per-user place to create in, so leaving the gate up would mean ordinary members cannot create a project at all — the exact gap the private-workspace feature was built to close. The gate is therefore **conditional**: it still applies when the tenant has private workspaces enabled, and lifts when it doesn't (`ProjectController.assertCanCreatePublicProject`). Only *creation* is affected; moving an existing project into Public still needs the permission, so the "widening the audience is a privileged act" rule survives for every pre-existing project.
+
+## Considered options
+
+- **A global deploy-time flag** (env config, like `bifrost.isEnabled()`). Rejected: the ask is per tenant; one instance hosts tenants with opposite preferences.
+- **A `tenant_feature_flags` table or the global→tenant two-tier Defaults pattern.** Rejected as premature: this is one boolean with no global default to inherit; `tenant_settings` already exists, has exactly one row per tenant created in the tenant-creation transaction, and reads as "enabled" when the column is missing. A second flag can still motivate a generalization later.
+- **Exposing the flag through the existing `/tenant-settings` surface.** Rejected: that controller lives in the private overlay and is gated by `can_manage_external_integration`; every user needs to *read* this flag to know where "New project" lands, so it belongs on the public tenant surface (`/tenants/config`).
+- **Deleting (or migrating away) private workspaces when the flag is turned off**, e.g. dropping their projects into Public like a user delete does. Rejected: destructive and surprising — an admin toggling the setting to try it out would irreversibly publish everyone's personal projects. Hiding is reversible and leaks nothing.
+- **Leaving existing private workspaces visible read-only and only stopping provisioning.** Rejected: the tenant asked for the concept to be off; a half-present state (some users with Personal, new users without) is harder to explain than a clean hide, and the restore-on-re-enable property covers the "we changed our minds" case.
+- **Falling back to the user's first shared workspace instead of Public.** Rejected: it needs no permission change, but it picks a destination arbitrarily (whichever workspace happens to sort first), it silently drops work into a group the author may not have meant, and it dead-ends entirely for a member of no shared workspace. Public is the one destination that always exists and is unambiguous.
+- **Falling back to Public but keeping the permission gate**, so only `can_manage_workspaces` holders can create. Rejected: it fails for exactly the population it is meant to serve — a user without the permission also tends to be the user without a shared workspace, so the create button would be permanently dead for ordinary members.
+
+## Consequences
+
+- A disabled tenant's private-workspace projects are invisible even to their owners. That data is dark until the flag is re-enabled; the settings toggle copy says so.
+- In a disabled tenant, any member can create a project the whole tenant can see, and there is no private staging area to draft in first. That is the intended reading of the switch — "work here is shared by default" — but it is a real reduction in per-user privacy and should be presented that way to admins, not buried.
+- `findAllForAdmin` no longer returns the admin's own private workspace when disabled, so `/settings/workspaces` shows only shared workspaces — consistent with the sidebar.
+- Every workspace listing now costs one extra `tenant_settings` read (or a correlated subquery on project listings). All are single-row index hits on the tenant PK.
+- The invariant in [workspaces.md](../organization/workspaces.md) — "exactly one private workspace per (user, tenant)" — is now conditional on the tenant flag; the doc's Per-tenant toggle section is normative for the disabled state.

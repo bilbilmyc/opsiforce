@@ -9,6 +9,7 @@ import { usePermissions } from '~/api/permissions';
 import { useAgents } from '~/api/agents';
 import { useAgentStatusStream } from '~/api/agent-status';
 import { useCreateUnassignedProject, useProjects, useRenameProject } from '~/api/projects';
+import { usePrivateWorkspacesDisabled } from '~/api/default-project-target';
 import {
   PUBLIC_LABEL,
   useCreateProjectInWorkspace,
@@ -86,8 +87,11 @@ export function ProjectSidebar(props: { search: string }) {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
 
+  const privateWorkspacesDisabled = usePrivateWorkspacesDisabled();
+
   const canManageWorkspaces = () => hasPermission(Permission.manageWorkspaces);
   const canImport = () => hasPermission(Permission.importProject);
+  const canCreateInPublic = () => canManageWorkspaces() || privateWorkspacesDisabled();
 
   const projectMatch = useMatch({ from: '/projects/$projectId', shouldThrow: false });
   const activeProjectId = () => projectMatch()?.params.projectId;
@@ -371,13 +375,13 @@ export function ProjectSidebar(props: { search: string }) {
               activeProjectId={activeProjectId()}
               onToggleFold={() => toggleFold(PUBLIC_ID)}
               renderCreate={
-                canManageWorkspaces() || canImport()
+                canCreateInPublic() || canImport()
                   ? (renderTrigger) => (
                       <CreateMenu
                         trigger={renderTrigger}
                         agents={agents.data}
                         disabled={createUnassigned.isPending}
-                        canCreateProject={canManageWorkspaces()}
+                        canCreateProject={canCreateInPublic()}
                         canImport={canImport()}
                         onCreateProject={(agentId) => handleCreateUnassigned(agentId)}
                         onOpenImport={() => setImportTarget({ workspaceId: null })}

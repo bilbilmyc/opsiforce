@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, inArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne, or, sql } from 'drizzle-orm';
 import crypto from 'crypto';
 import { db } from '../../db';
 import {
@@ -19,6 +19,7 @@ import {
 } from '../../db/schema';
 import { Perms } from '../permission/permission.constants';
 import { ProjectService } from '../project/project.service';
+import { TenantService } from '../tenant/tenant.service';
 import type { CreateProjectDto, ProjectResponse } from '../project/project.types';
 import type { UserRecord } from '../user/user.service';
 import type {
@@ -48,7 +49,10 @@ const PRIVATE_WORKSPACE_NAME = 'Personal';
 
 @Injectable()
 export class WorkspaceService {
-  constructor(private readonly projectService: ProjectService) {}
+  constructor(
+    private readonly projectService: ProjectService,
+    private readonly tenantService: TenantService
+  ) {}
 
   /**
    * Returns workspaces the user is a member of (sidebar view). No admin
@@ -58,6 +62,7 @@ export class WorkspaceService {
    */
   async findAll(params: { userId: string; tenantId: string }): Promise<WorkspaceResponse[]> {
     const { userId, tenantId } = params;
+    const privateEnabled = await this.tenantService.isPrivateWorkspaceEnabled(tenantId);
 
     const [rows, pref] = await Promise.all([
       db
@@ -67,7 +72,7 @@ export class WorkspaceService {
           workspaceMembers,
           and(eq(workspaceMembers.workspaceId, workspaces.id), eq(workspaceMembers.userId, userId))
         )
-        .where(eq(workspaces.tenantId, tenantId))
+        .where(and(eq(workspaces.tenantId, tenantId), privateEnabled ? undefined : ne(workspaces.type, 'private')))
         .orderBy(asc(workspaces.createdAt)),
       db
         .select({ order: userWorkspacePreferences.workspaceOrder })
@@ -86,11 +91,15 @@ export class WorkspaceService {
    * workspaces are intentionally invisible to admins.
    */
   async findAllForAdmin(tenantId: string, adminUserId: string): Promise<WorkspaceResponse[]> {
+    const privateEnabled = await this.tenantService.isPrivateWorkspaceEnabled(tenantId);
     const rows = await db
       .select(workspaceBaseFields)
       .from(workspaces)
       .where(
-        and(eq(workspaces.tenantId, tenantId), or(eq(workspaces.type, 'shared'), eq(workspaces.ownerId, adminUserId)))
+        and(
+          eq(workspaces.tenantId, tenantId),
+          or(eq(workspaces.type, 'shared'), privateEnabled ? eq(workspaces.ownerId, adminUserId) : undefined)
+        )
       )
       .orderBy(asc(workspaces.createdAt));
     return this.attachCounts(rows);
@@ -99,6 +108,9 @@ export class WorkspaceService {
   async findOne(params: WorkspaceAccessParams): Promise<WorkspaceResponse> {
     const { workspaceId, userId, tenantId, canManageWorkspaces } = params;
     const base = await this.findOneBase(workspaceId, tenantId);
+    if (base.type === 'private' && !(await this.tenantService.isPrivateWorkspaceEnabled(tenantId))) {
+      throw new NotFoundException(`Workspace ${workspaceId} not found`);
+    }
     // Admin bypass applies only to shared workspaces. Private workspaces are
     // visible exclusively to their owner; admins do not get a back door.
     const adminBypass = canManageWorkspaces && base.type === 'shared';
@@ -159,6 +171,8 @@ export class WorkspaceService {
    * one row will ever exist for the pair, even under concurrent requests.
    */
   async ensurePrivateWorkspace(userId: string, tenantId: string): Promise<void> {
+    if (!(await this.tenantService.isPrivateWorkspaceEnabled(tenantId))) return;
+
     const id = crypto.randomUUID();
 
     await db.transaction(async (tx) => {

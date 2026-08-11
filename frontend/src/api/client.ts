@@ -184,6 +184,10 @@ export interface UpdateProjectAuthDto {
   bypassAuthPaths?: string[];
 }
 
+export interface TenantConfig {
+  privateWorkspaceEnabled: boolean;
+}
+
 export type WorkspaceType = 'private' | 'shared';
 
 export interface Workspace {

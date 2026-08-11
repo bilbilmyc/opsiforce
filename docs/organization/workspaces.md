@@ -4,7 +4,7 @@
 
 Opsiforce used to be flat: every project in a tenant was visible to everyone with access to it. Workspaces segment projects so a single tenant can house separate customers or internal groups. There are three kinds of grouping:
 
-- **Private workspace** — exactly one per (user, tenant), created automatically on first authentication. Owned by the user, invisible to everyone else, and immutable (can't be renamed, deleted, or have members added). The system maintains it.
+- **Private workspace** — exactly one per (user, tenant), created automatically on first authentication. Owned by the user, invisible to everyone else, and immutable (can't be renamed, deleted, or have members added). The system maintains it. Can be switched off per tenant — see [Per-tenant toggle](#per-tenant-toggle).
 - **Shared workspace** — what "workspace" meant before this feature. Created by holders of `can_manage_workspaces` (the creator is auto-added as a member); has an explicit member list; only members see it.
 - **Public** — projects with no workspace (`workspace_id IS NULL`), visible to everyone in the tenant. (This is the surface previously labelled "Unassigned" — same data, clearer name.)
 
@@ -18,10 +18,20 @@ The **one** exception is the management surface `/settings/workspaces`, gated by
 
 Workspace behaviour turns on two permissions (their Keycloak→backend flow is in [Permissions](permissions.md); the *semantics* live here):
 
-- **`can_manage_workspaces`** — an action permission: create/rename/delete shared workspaces, manage members, create projects in Public, and move projects *into* Public. It grants management access via `/settings/workspaces`; it does **not** grant sidebar visibility into workspaces you aren't a member of.
+- **`can_manage_workspaces`** — an action permission: create/rename/delete shared workspaces, manage members, create projects in Public, and move projects *into* Public. It grants management access via `/settings/workspaces`; it does **not** grant sidebar visibility into workspaces you aren't a member of. Creating in Public is the single conditional entry here — see [Per-tenant toggle](#per-tenant-toggle).
 - **`can_move_projects_between_workspaces`** — move a project between two shared workspaces you belong to, or pull a Public project into one. Not a visibility elevator.
 
 Moving into or out of *your own* private workspace needs no permission. Moving *into* Public (widening the audience) needs `can_manage_workspaces`. Moving into another user's private workspace is impossible — that workspace doesn't exist from your point of view, so the drop 404s. Permission-less moves leave the row draggable but the drop is rejected server-side with a surfaced error.
+
+## Per-tenant toggle
+
+Private workspaces are a per-tenant feature, controlled by `tenant_settings.private_workspace_enabled` (default **on**, so existing tenants keep the historical behaviour). Holders of `can_manage_workspaces` flip it from `/settings/workspaces` (`GET`/`PATCH /tenants/config`).
+
+When a tenant switches it **off**:
+
+- No private workspace is auto-provisioned on authentication (`ensurePrivateWorkspace` no-ops).
+- Existing private workspaces are **hidden, not deleted**: they disappear from every workspace listing, direct links 404, and their projects vanish from project listings — including for their owners. Nothing is mutated, so flipping the flag back restores everything exactly as it was, and users who first signed in while it was off get their Personal workspace on their next request.
+- **Public becomes the default destination for new projects.** The sidebar create button, the home-page prompt box, and the import dialog all target Public instead of the private workspace, and `POST /projects` drops its `can_manage_workspaces` requirement for that tenant so every member can use them. This is the one place the permission table below bends: creating a tenant-wide project normally needs `can_manage_workspaces`, but a tenant with no per-user workspace has nowhere else for its members to start. *Moving* an existing project into Public still needs the permission.
 
 ## On deletes
 

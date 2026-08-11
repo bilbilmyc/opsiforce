@@ -26,10 +26,12 @@ import {
   UpdateProjectPodClassDto,
 } from './project.types';
 import { CurrentTenant, type TenantContext } from '../tenant/tenant.decorator';
+import { TenantService } from '../tenant/tenant.service';
 import { CurrentUser, type UserContext } from '../user/user.decorator';
 import { UserService } from '../user/user.service';
 import { RequirePermission } from '../permission/permission.guard';
 import { Perms } from '../permission/permission.constants';
+import { getGroupsHeader, hasPermission } from '../permission/permission.utils';
 import { ProjectEventsService } from './project-events.service';
 import { EnvironmentVariablesService } from '../project-environment/environment-variables.service';
 import type { UpdateEnvironmentVariablesDto } from '../project-environment/environment-variables.types';
@@ -39,14 +41,26 @@ export class ProjectController {
   constructor(
     private readonly projectService: ProjectService,
     private readonly userService: UserService,
+    private readonly tenantService: TenantService,
     private readonly projectEventsService: ProjectEventsService,
     private readonly environmentVariablesService: EnvironmentVariablesService
   ) {}
 
   @Post()
-  @RequirePermission(Perms.manageWorkspaces)
-  create(@Body() dto: CreateProjectDto | undefined, @CurrentTenant() tenant: TenantContext) {
+  async create(
+    @Body() dto: CreateProjectDto | undefined,
+    @CurrentTenant() tenant: TenantContext,
+    @Req() req: FastifyRequest
+  ) {
+    await this.assertCanCreatePublicProject(tenant.tenantId, req);
     return this.projectService.create(dto, tenant.tenantId);
+  }
+
+  private async assertCanCreatePublicProject(tenantId: string, req: FastifyRequest): Promise<void> {
+    if (hasPermission(getGroupsHeader(req), Perms.manageWorkspaces)) return;
+    if (await this.tenantService.isPrivateWorkspaceEnabled(tenantId)) {
+      throw new ForbiddenException(`Missing permission: ${Perms.manageWorkspaces}`);
+    }
   }
 
   @Get()
