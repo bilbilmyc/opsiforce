@@ -65,7 +65,7 @@ export class ProjectController {
 
   @Get()
   async findAll(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: UserContext) {
-    const dbUserId = await this.resolveUserId(user, tenant.tenantId);
+    const dbUserId = await this.userService.resolveUserId(user, tenant.tenantId);
     return this.projectService.findAllForUser({
       tenantId: tenant.tenantId,
       userId: dbUserId,
@@ -80,7 +80,7 @@ export class ProjectController {
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply
   ) {
-    const dbUserId = await this.resolveUserId(user, tenant.tenantId);
+    const dbUserId = await this.userService.resolveUserId(user, tenant.tenantId);
     const loadStatus = () =>
       this.projectService.getState({
         projectId: id,
@@ -137,7 +137,7 @@ export class ProjectController {
 
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentTenant() tenant: TenantContext, @CurrentUser() user: UserContext) {
-    const dbUserId = await this.resolveUserId(user, tenant.tenantId);
+    const dbUserId = await this.userService.resolveUserId(user, tenant.tenantId);
     return this.projectService.findOneForUser({
       projectId: id,
       tenantId: tenant.tenantId,
@@ -404,23 +404,11 @@ export class ProjectController {
   }
 
   private async gate(projectId: string, tenant: TenantContext, user: UserContext): Promise<void> {
-    const dbUserId = await this.resolveUserId(user, tenant.tenantId);
+    const dbUserId = await this.userService.resolveUserId(user, tenant.tenantId);
     await this.projectService.findOneForUser({
       projectId,
       tenantId: tenant.tenantId,
       userId: dbUserId,
     });
-  }
-
-  private async resolveUserId(user: UserContext, tenantId: string): Promise<string> {
-    const row = await this.userService.getOrCreateUser(
-      {
-        keycloakId: user.userId,
-        email: user.email ?? undefined,
-        displayName: user.displayName ?? undefined,
-      },
-      tenantId
-    );
-    return row.id;
   }
 }

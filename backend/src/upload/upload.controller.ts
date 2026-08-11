@@ -5,6 +5,8 @@ import { UploadService } from './upload.service';
 import { ProjectService } from '../project/project.service';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
 import { CurrentTenant, type TenantContext } from '../tenant/tenant.decorator';
+import { CurrentUser, type UserContext } from '../user/user.decorator';
+import { UserService } from '../user/user.service';
 
 interface MultipartRequest extends FastifyRequest {
   parts(): AsyncIterableIterator<MultipartFile | { type: 'field' }>;
@@ -19,7 +21,8 @@ export class UploadController {
   constructor(
     private readonly uploadService: UploadService,
     private readonly projectService: ProjectService,
-    private readonly projectEnvironmentService: ProjectEnvironmentService
+    private readonly projectEnvironmentService: ProjectEnvironmentService,
+    private readonly userService: UserService
   ) {}
 
   @Post(':projectId/upload')
@@ -27,10 +30,12 @@ export class UploadController {
     @Param('projectId') projectId: string,
     @Query('environmentId') environmentId: string | undefined,
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext,
     @Req() req: MultipartRequest,
     @Res() reply: FastifyReply
   ) {
-    const project = await this.projectService.findOne(projectId, tenant.tenantId);
+    const userId = await this.userService.resolveUserId(user, tenant.tenantId);
+    const project = await this.projectService.findOneForUser({ projectId, tenantId: tenant.tenantId, userId });
 
     const env = await this.projectEnvironmentService.findRequestedForProject(projectId, environmentId);
     const directory = env?.directory ?? project.directory;

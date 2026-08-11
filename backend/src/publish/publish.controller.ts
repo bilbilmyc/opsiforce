@@ -117,19 +117,7 @@ export class PublishController {
   }
 
   private async gate(projectId: string, tenantId: string, user: UserContext): Promise<void> {
-    const userId = await this.resolveUserId(user, tenantId);
+    const userId = await this.userService.resolveUserId(user, tenantId);
     await this.projectService.findOneForUser({ projectId, tenantId, userId });
-  }
-
-  private async resolveUserId(user: UserContext, tenantId: string): Promise<string> {
-    const row = await this.userService.getOrCreateUser(
-      {
-        keycloakId: user.userId,
-        email: user.email ?? undefined,
-        displayName: user.displayName ?? undefined,
-      },
-      tenantId
-    );
-    return row.id;
   }
 }

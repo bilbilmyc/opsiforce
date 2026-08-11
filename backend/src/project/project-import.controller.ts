@@ -40,7 +40,7 @@ export class ProjectImportController {
     try {
       await this.uploadService.assembleUpload({ claimDir, destPath: filePath });
 
-      const userId = await this.resolveUserId(user, tenant.tenantId);
+      const userId = await this.userService.resolveUserId(user, tenant.tenantId);
       const canManageWorkspaces = hasPermission(getGroupsHeader(req), Perms.manageWorkspaces);
       const result = await this.importService.startImport({
         tenantId: tenant.tenantId,
@@ -141,19 +141,7 @@ export class ProjectImportController {
   }
 
   private async gate(projectId: string, tenantId: string, user: UserContext): Promise<void> {
-    const userId = await this.resolveUserId(user, tenantId);
+    const userId = await this.userService.resolveUserId(user, tenantId);
     await this.projectService.findOneForUser({ projectId, tenantId, userId });
-  }
-
-  private async resolveUserId(user: UserContext, tenantId: string): Promise<string> {
-    const row = await this.userService.getOrCreateUser(
-      {
-        keycloakId: user.userId,
-        email: user.email ?? undefined,
-        displayName: user.displayName ?? undefined,
-      },
-      tenantId
-    );
-    return row.id;
   }
 }
