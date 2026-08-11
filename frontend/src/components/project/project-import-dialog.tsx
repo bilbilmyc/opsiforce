@@ -29,7 +29,14 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
   createEffect(() => {
     if (props.defaultWorkspaceId !== undefined) return;
     const target = defaultTarget();
-    if (workspaceInitialized || target.kind === 'unknown') return;
+    if (target.kind === 'unknown') return;
+
+    const selectable = workspaces.data;
+    const selected = workspaceId();
+    const selectionStillOffered =
+      workspaceInitialized && (selected === null || !selectable || selectable.some((w) => w.id === selected));
+    if (selectionStillOffered) return;
+
     workspaceInitialized = true;
     setWorkspaceId(target.kind === 'public' ? null : target.workspaceId);
   });
