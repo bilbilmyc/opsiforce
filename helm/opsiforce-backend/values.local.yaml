@@ -1,4 +1,5 @@
 replicaCount: 1
+terminationGracePeriodSeconds: 45
 
 fullnameOverride: opsiforce-backend
 npmMigrationJob: false
