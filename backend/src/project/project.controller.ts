@@ -26,10 +26,12 @@ import {
   UpdateProjectPodClassDto,
 } from './project.types';
 import { CurrentTenant, type TenantContext } from '../tenant/tenant.decorator';
+import { TenantService } from '../tenant/tenant.service';
 import { CurrentUser, type UserContext } from '../user/user.decorator';
 import { UserService } from '../user/user.service';
 import { RequirePermission } from '../permission/permission.guard';
 import { Perms } from '../permission/permission.constants';
+import { getGroupsHeader, hasPermission } from '../permission/permission.utils';
 import { ProjectEventsService } from './project-events.service';
 import { EnvironmentVariablesService } from '../project-environment/environment-variables.service';
 import type { UpdateEnvironmentVariablesDto } from '../project-environment/environment-variables.types';
@@ -39,19 +41,31 @@ export class ProjectController {
   constructor(
     private readonly projectService: ProjectService,
     private readonly userService: UserService,
+    private readonly tenantService: TenantService,
     private readonly projectEventsService: ProjectEventsService,
     private readonly environmentVariablesService: EnvironmentVariablesService
   ) {}
 
   @Post()
-  @RequirePermission(Perms.manageWorkspaces)
-  create(@Body() dto: CreateProjectDto | undefined, @CurrentTenant() tenant: TenantContext) {
+  async create(
+    @Body() dto: CreateProjectDto | undefined,
+    @CurrentTenant() tenant: TenantContext,
+    @Req() req: FastifyRequest
+  ) {
+    await this.assertCanCreatePublicProject(tenant.tenantId, req);
     return this.projectService.create(dto, tenant.tenantId);
+  }
+
+  private async assertCanCreatePublicProject(tenantId: string, req: FastifyRequest): Promise<void> {
+    if (hasPermission(getGroupsHeader(req), Perms.manageWorkspaces)) return;
+    if (await this.tenantService.isPrivateWorkspaceEnabled(tenantId)) {
+      throw new ForbiddenException(`Missing permission: ${Perms.manageWorkspaces}`);
+    }
   }
 
   @Get()
   async findAll(@CurrentTenant() tenant: TenantContext, @CurrentUser() user: UserContext) {
-    const dbUserId = await this.resolveUserId(user, tenant.tenantId);
+    const dbUserId = await this.userService.resolveUserId(user, tenant.tenantId);
     return this.projectService.findAllForUser({
       tenantId: tenant.tenantId,
       userId: dbUserId,
@@ -66,7 +80,7 @@ export class ProjectController {
     @Req() req: FastifyRequest,
     @Res() reply: FastifyReply
   ) {
-    const dbUserId = await this.resolveUserId(user, tenant.tenantId);
+    const dbUserId = await this.userService.resolveUserId(user, tenant.tenantId);
     const loadStatus = () =>
       this.projectService.getState({
         projectId: id,
@@ -123,7 +137,7 @@ export class ProjectController {
 
   @Get(':id')
   async findOne(@Param('id') id: string, @CurrentTenant() tenant: TenantContext, @CurrentUser() user: UserContext) {
-    const dbUserId = await this.resolveUserId(user, tenant.tenantId);
+    const dbUserId = await this.userService.resolveUserId(user, tenant.tenantId);
     return this.projectService.findOneForUser({
       projectId: id,
       tenantId: tenant.tenantId,
@@ -390,23 +404,11 @@ export class ProjectController {
   }
 
   private async gate(projectId: string, tenant: TenantContext, user: UserContext): Promise<void> {
-    const dbUserId = await this.resolveUserId(user, tenant.tenantId);
+    const dbUserId = await this.userService.resolveUserId(user, tenant.tenantId);
     await this.projectService.findOneForUser({
       projectId,
       tenantId: tenant.tenantId,
       userId: dbUserId,
     });
-  }
-
-  private async resolveUserId(user: UserContext, tenantId: string): Promise<string> {
-    const row = await this.userService.getOrCreateUser(
-      {
-        keycloakId: user.userId,
-        email: user.email ?? undefined,
-        displayName: user.displayName ?? undefined,
-      },
-      tenantId
-    );
-    return row.id;
   }
 }

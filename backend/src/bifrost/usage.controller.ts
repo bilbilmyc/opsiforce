@@ -2,7 +2,10 @@ import { Controller, Get, Put, Param, Body, BadRequestException } from '@nestjs/
 import { BifrostService } from './bifrost.service';
 import { CurrentTenant, type TenantContext } from '../tenant/tenant.decorator';
 import { ProjectService } from '../project/project.service';
+import type { ProjectResponse } from '../project/project.types';
 import { TenantService } from '../tenant/tenant.service';
+import { CurrentUser, type UserContext } from '../user/user.decorator';
+import { UserService } from '../user/user.service';
 import type {
   KeyType,
   BifrostBudget,
@@ -36,15 +39,26 @@ export class UsageController {
   constructor(
     private readonly bifrostService: BifrostService,
     private readonly projectService: ProjectService,
-    private readonly tenantService: TenantService
+    private readonly tenantService: TenantService,
+    private readonly userService: UserService
   ) {}
+
+  private async requireVisibleProject(
+    projectId: string,
+    tenant: TenantContext,
+    user: UserContext
+  ): Promise<ProjectResponse> {
+    const userId = await this.userService.resolveUserId(user, tenant.tenantId);
+    return this.projectService.findOneForUser({ projectId, tenantId: tenant.tenantId, userId });
+  }
 
   @Get('projects/:id/budgets')
   async getProjectBudgets(
     @Param('id') id: string,
-    @CurrentTenant() tenant: TenantContext
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext
   ): Promise<ProjectBudgetEntry[]> {
-    await this.projectService.findOne(id, tenant.tenantId);
+    await this.requireVisibleProject(id, tenant, user);
     if (!this.bifrostService.isEnabled()) return [];
     return toKeyBudgetEntries(await this.bifrostService.getProjectKeyBudgets(id));
   }
@@ -53,9 +67,10 @@ export class UsageController {
   async updateProjectKeyBudget(
     @Param('id') id: string,
     @Body() body: UpdateBudgetRequest,
-    @CurrentTenant() tenant: TenantContext
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext
   ): Promise<ProjectBudgetEntry[]> {
-    await this.projectService.findOne(id, tenant.tenantId);
+    await this.requireVisibleProject(id, tenant, user);
     if (!this.bifrostService.isEnabled()) {
       throw new BadRequestException('Bifrost is not enabled');
     }
@@ -75,9 +90,10 @@ export class UsageController {
   @Get('projects/:id/budget')
   async getProjectBudget(
     @Param('id') id: string,
-    @CurrentTenant() tenant: TenantContext
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext
   ): Promise<ProjectBudgetResponse> {
-    const project = await this.projectService.findOne(id, tenant.tenantId);
+    const project = await this.requireVisibleProject(id, tenant, user);
     if (!this.bifrostService.isEnabled() || !project.bifrostProjectId) {
       return { maxBudget: null, budgetDuration: null, currentUsage: 0 };
     }
@@ -88,9 +104,10 @@ export class UsageController {
   async updateProjectBudgetLimit(
     @Param('id') id: string,
     @Body() body: UpdateProjectBudgetRequest,
-    @CurrentTenant() tenant: TenantContext
+    @CurrentTenant() tenant: TenantContext,
+    @CurrentUser() user: UserContext
   ): Promise<ProjectBudgetResponse & { warning?: string }> {
-    const project = await this.projectService.findOne(id, tenant.tenantId);
+    const project = await this.requireVisibleProject(id, tenant, user);
     if (!this.bifrostService.isEnabled()) {
       throw new BadRequestException('Bifrost is not enabled');
     }

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 import { db } from '../../db';
@@ -6,6 +6,8 @@ import { tenantSettings, tenants } from '../../db/schema';
 import { BifrostService } from '../bifrost/bifrost.service';
 import { DefaultsService } from '../defaults/defaults.service';
 import { EnvironmentService } from '../environment/environment.service';
+import type { TenantContext } from './tenant.decorator';
+import type { TenantConfigResponse, UpdateTenantConfigDto } from './tenant.types';
 
 export const OPSIFORCE_TENANT_GROUP_PREFIX = 'role:opsiforce_tenant_name_';
 
@@ -86,6 +88,39 @@ export class TenantService {
   async getTenantById(id: string) {
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id));
     return tenant ?? null;
+  }
+
+  async getTenantConfig(tenantId: string): Promise<TenantConfigResponse> {
+    return { privateWorkspaceEnabled: await this.isPrivateWorkspaceEnabled(tenantId) };
+  }
+
+  async isPrivateWorkspaceEnabled(tenantId: string): Promise<boolean> {
+    const [row] = await db
+      .select({ privateWorkspaceEnabled: tenantSettings.privateWorkspaceEnabled })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId));
+    return row?.privateWorkspaceEnabled ?? true;
+  }
+
+  async updateTenantConfig(
+    tenant: TenantContext,
+    dto: UpdateTenantConfigDto | undefined
+  ): Promise<TenantConfigResponse> {
+    if (typeof dto?.privateWorkspaceEnabled !== 'boolean') {
+      throw new BadRequestException('privateWorkspaceEnabled must be a boolean');
+    }
+    await db
+      .insert(tenantSettings)
+      .values({
+        tenantId: tenant.tenantId,
+        externalTenantName: tenant.tenantName,
+        privateWorkspaceEnabled: dto.privateWorkspaceEnabled,
+      })
+      .onConflictDoUpdate({
+        target: tenantSettings.tenantId,
+        set: { privateWorkspaceEnabled: dto.privateWorkspaceEnabled },
+      });
+    return this.getTenantConfig(tenant.tenantId);
   }
 
   async getTenantByExternalName(externalTenantName: string) {

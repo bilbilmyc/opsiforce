@@ -1,0 +1,1 @@
+ALTER TABLE "tenant_settings" ADD COLUMN "private_workspace_enabled" boolean DEFAULT true NOT NULL;

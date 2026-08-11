@@ -1,11 +1,10 @@
-import { Show, createMemo, createSignal } from 'solid-js';
+import { Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { useNavigate } from '@tanstack/solid-router';
-import { type Project } from '~/api/client';
 import { useAgents } from '~/api/agents';
 import { usePermissions } from '~/api/permissions';
 import { useCurrentUser } from '~/api/user';
-import { useCreateProjectInWorkspace, useWorkspaces } from '~/api/workspaces';
+import { useCreateDefaultProject } from '~/api/default-project-target';
 import { Permission } from '~/constants/permissions';
 import { firstPermittedSettingsTab } from '~/constants/settings-tabs';
 import { firstPermittedAdminTab } from '~/constants/admin-tabs';
@@ -41,9 +40,8 @@ export function AppSidebar() {
   const { toggleSidebar } = useSidebar();
   const { hasPermission } = usePermissions();
   const currentUser = useCurrentUser();
-  const workspaces = useWorkspaces();
   const agents = useAgents();
-  const createInWorkspace = useCreateProjectInWorkspace();
+  const createDefaultProject = useCreateDefaultProject();
 
   const [search, setSearch] = createSignal('');
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = createSignal(false);
@@ -53,36 +51,22 @@ export function AppSidebar() {
   const canOpenSettings = () => !!firstPermittedSettingsTab(hasPermission);
   const canOpenAdmin = () => !!firstPermittedAdminTab(hasPermission);
 
-  const privateWorkspace = createMemo(() => {
-    const uid = currentUser.data?.id;
-    if (!uid) return undefined;
-    return (workspaces.data ?? []).find((w) => w.type === 'private' && w.ownerId === uid);
-  });
-
-  const projectCreateDisabled = () => createInWorkspace.isPending || !privateWorkspace();
+  const projectCreateDisabled = () => createDefaultProject.isPending() || !createDefaultProject.hasDestination();
   const menuDisabled = () =>
     projectCreateDisabled() && !hasPermission(Permission.importProject) && !hasPermission(Permission.manageWorkspaces);
 
-  const handleCreateProject = (agentId: string) => {
-    const ws = privateWorkspace();
-    if (!ws) {
-      toast.error("Your private workspace isn't ready yet");
-      return;
+  const handleCreateProject = async (agentId: string) => {
+    try {
+      const project = await createDefaultProject.createProject({ agentId });
+      toast.success('Project created');
+      navigate({
+        to: '/projects/$projectId',
+        params: { projectId: project.id },
+        search: { prompt: undefined },
+      });
+    } catch {
+      toast.error('Failed to create project');
     }
-    createInWorkspace.mutate(
-      { workspaceId: ws.id, dto: { agentId } },
-      {
-        onSuccess: (project: Project) => {
-          toast.success('Project created');
-          navigate({
-            to: '/projects/$projectId',
-            params: { projectId: project.id },
-            search: { prompt: undefined },
-          });
-        },
-        onError: () => toast.error('Failed to create project'),
-      }
-    );
   };
 
   const userName = () => currentUser.data?.displayName ?? '';

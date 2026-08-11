@@ -11,7 +11,7 @@ import {
 import { InjectQueue } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
 import type { V1Pod } from '@kubernetes/client-node';
-import { eq, and, desc, asc, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { eq, and, desc, asc, inArray, isNull, notExists, or, sql, type SQL } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { Queue } from 'bullmq';
 import crypto from 'crypto';
@@ -826,9 +826,26 @@ export class ProjectService implements OnApplicationBootstrap {
       memberJoin: and(eq(workspaceMembers.workspaceId, projects.workspaceId), eq(workspaceMembers.userId, userId))!,
       where: and(
         eq(projects.tenantId, tenantId),
-        or(isNull(projects.workspaceId), sql`${workspaceMembers.workspaceId} is not null`)
+        or(isNull(projects.workspaceId), sql`${workspaceMembers.workspaceId} is not null`),
+        this.notInDisabledPrivateWorkspace()
       )!,
     };
+  }
+
+  private notInDisabledPrivateWorkspace(): SQL {
+    return notExists(
+      db
+        .select({ one: sql`1` })
+        .from(workspaces)
+        .innerJoin(tenantSettings, eq(tenantSettings.tenantId, workspaces.tenantId))
+        .where(
+          and(
+            eq(workspaces.id, projects.workspaceId),
+            eq(workspaces.type, 'private'),
+            eq(tenantSettings.privateWorkspaceEnabled, false)
+          )
+        )
+    );
   }
 
   async findAllInWorkspace(tenantId: string, workspaceId: string): Promise<ProjectResponse[]> {
@@ -875,14 +892,20 @@ export class ProjectService implements OnApplicationBootstrap {
     if (!workspaceId) return;
 
     const [ws] = await db
-      .select({ type: workspaces.type, ownerId: workspaces.ownerId })
+      .select({
+        type: workspaces.type,
+        ownerId: workspaces.ownerId,
+        privateWorkspaceEnabled: tenantSettings.privateWorkspaceEnabled,
+      })
       .from(workspaces)
+      .leftJoin(tenantSettings, eq(tenantSettings.tenantId, workspaces.tenantId))
       .where(eq(workspaces.id, workspaceId));
 
     if (!ws) return;
 
     if (ws.type === 'private') {
-      if (ws.ownerId !== userId) {
+      const privateWorkspacesEnabled = ws.privateWorkspaceEnabled ?? true;
+      if (ws.ownerId !== userId || !privateWorkspacesEnabled) {
         throw new NotFoundException(`Project ${projectId} not found`);
       }
       return;

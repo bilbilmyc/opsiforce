@@ -13,6 +13,7 @@ import yauzl from 'yauzl';
 import { db } from '../../db';
 import { folders, projectTransferJobs, workspaceMembers, workspaces } from '../../db/schema';
 import { AgentService } from '../agent/agent.service';
+import { TenantService } from '../tenant/tenant.service';
 import { ProjectService } from './project.service';
 import { ProjectEventsService } from './project-events.service';
 import type { ExportManifest } from '../export/project-export.types';
@@ -39,6 +40,7 @@ export class ProjectImportService {
     private readonly projectService: ProjectService,
     private readonly projectEventsService: ProjectEventsService,
     private readonly agentService: AgentService,
+    private readonly tenantService: TenantService,
     @InjectQueue(PROJECT_IMPORT_QUEUE)
     private readonly queue: Queue<ProjectImportJobData>
   ) {
@@ -132,6 +134,10 @@ export class ProjectImportService {
       .where(and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId)))
       .limit(1);
     if (!workspace) throw new NotFoundException(`Workspace ${workspaceId} not found`);
+
+    if (workspace.type === 'private' && !(await this.tenantService.isPrivateWorkspaceEnabled(tenantId))) {
+      throw new NotFoundException(`Workspace ${workspaceId} not found`);
+    }
 
     const adminBypass = canManageWorkspaces && workspace.type === 'shared';
     if (adminBypass) return;

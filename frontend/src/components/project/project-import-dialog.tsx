@@ -2,8 +2,8 @@ import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog';
 import { Button } from '~/components/ui/button';
 import { LoaderCircle, Package, Upload } from '~/components/icons';
-import { useCurrentUser } from '~/api/user';
 import { PUBLIC_LABEL, useWorkspaces } from '~/api/workspaces';
+import { useDefaultProjectTarget } from '~/api/default-project-target';
 import { createImportUploadSession } from '~/api/import';
 import { useJobDock } from '~/components/project/jobs/job-dock-context';
 
@@ -15,8 +15,8 @@ export interface ProjectImportDialogProps {
 }
 
 export function ProjectImportDialog(props: ProjectImportDialogProps) {
-  const currentUser = useCurrentUser();
   const workspaces = useWorkspaces();
+  const defaultTarget = useDefaultProjectTarget();
   const jobDock = useJobDock();
 
   const [file, setFile] = createSignal<File | null>(null);
@@ -25,20 +25,20 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
   const [starting, setStarting] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
-  const privateWorkspace = createMemo(() => {
-    const uid = currentUser.data?.id;
-    if (!uid) return undefined;
-    return (workspaces.data ?? []).find((w) => w.type === 'private' && w.ownerId === uid);
-  });
-
   let workspaceInitialized = false;
   createEffect(() => {
     if (props.defaultWorkspaceId !== undefined) return;
-    const ws = privateWorkspace();
-    if (!workspaceInitialized && ws) {
-      workspaceInitialized = true;
-      setWorkspaceId(ws.id);
-    }
+    const target = defaultTarget();
+    if (target.kind === 'unknown') return;
+
+    const selectable = workspaces.data;
+    const selected = workspaceId();
+    const selectionStillOffered =
+      workspaceInitialized && (selected === null || !selectable || selectable.some((w) => w.id === selected));
+    if (selectionStillOffered) return;
+
+    workspaceInitialized = true;
+    setWorkspaceId(target.kind === 'public' ? null : target.workspaceId);
   });
 
   createEffect(

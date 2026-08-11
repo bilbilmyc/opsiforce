@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { db } from '../../db';
 import { users, userTenants, userWorkspacePreferences } from '../../db/schema';
 import { WorkspaceService } from '../workspace/workspace.service';
+import type { UserContext } from './user.decorator';
 
 export interface UserIdentity {
   keycloakId: string;
@@ -99,6 +100,18 @@ export class UserService {
 
     if (created) this.logger.log(`Created user ${user.email ?? user.keycloakId}`);
     return user;
+  }
+
+  async resolveUserId(user: UserContext, tenantId: string): Promise<string> {
+    const record = await this.getOrCreateUser(
+      {
+        keycloakId: user.userId,
+        email: user.email ?? undefined,
+        displayName: user.displayName ?? undefined,
+      },
+      tenantId
+    );
+    return record.id;
   }
 
   private async ensureUserTenant(userId: string, tenantId: string): Promise<void> {

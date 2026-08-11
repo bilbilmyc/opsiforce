@@ -1,16 +1,30 @@
 import { For, Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { useCreateWorkspace, useWorkspaces } from '~/api/workspaces';
+import { useTenantConfig, useUpdateTenantConfig } from '~/api/tenant-config';
 import { Button } from '~/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog';
 import Spinner from '~/components/ui/spinner';
+import { Switch, SwitchControl, SwitchThumb } from '~/components/ui/switch';
 import { SettingsSection } from '~/components/settings/settings-section';
 import WorkspaceSettings from '~/components/workspace-settings';
-import { FolderKanban, Plus, Settings, AppWindow, Users } from '~/components/icons';
+import { FolderKanban, Lock, Plus, Settings, AppWindow, Users } from '~/components/icons';
 
 export function WorkspacesPage() {
   const workspaces = useWorkspaces('all');
   const createWorkspace = useCreateWorkspace();
+  const tenantConfig = useTenantConfig();
+  const updateTenantConfig = useUpdateTenantConfig();
+
+  const handleTogglePrivateWorkspaces = (enabled: boolean) => {
+    updateTenantConfig.mutate(
+      { privateWorkspaceEnabled: enabled },
+      {
+        onSuccess: () => toast.success(enabled ? 'Personal workspaces enabled' : 'Personal workspaces disabled'),
+        onError: () => toast.error('Failed to update setting'),
+      }
+    );
+  };
 
   const [openSettingsId, setOpenSettingsId] = createSignal<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = createSignal(false);
@@ -52,6 +66,31 @@ export function WorkspacesPage() {
           </Button>
         }
       >
+        <div class="rounded-xl border border-border bg-card p-4 mb-4 flex items-center gap-3">
+          <Lock class="w-4 h-4 text-muted-foreground shrink-0" />
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium">Personal workspaces</div>
+            <div class="text-xs text-muted-foreground">
+              Give every member a private Personal workspace of their own. When off, existing personal workspaces and
+              their projects are hidden, and anyone can create new projects in Public — where the whole organization
+              sees them.
+            </div>
+          </div>
+          <Show when={tenantConfig.data} fallback={<Spinner size="sm" />}>
+            {(config) => (
+              <Switch
+                checked={config().privateWorkspaceEnabled}
+                onChange={handleTogglePrivateWorkspaces}
+                disabled={updateTenantConfig.isPending}
+              >
+                <SwitchControl>
+                  <SwitchThumb />
+                </SwitchControl>
+              </Switch>
+            )}
+          </Show>
+        </div>
+
         <Show
           when={workspaces.data}
           fallback={
