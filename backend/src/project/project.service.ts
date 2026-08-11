@@ -904,7 +904,8 @@ export class ProjectService implements OnApplicationBootstrap {
     if (!ws) return;
 
     if (ws.type === 'private') {
-      if (ws.ownerId !== userId || ws.privateWorkspaceEnabled === false) {
+      const privateWorkspacesEnabled = ws.privateWorkspaceEnabled ?? true;
+      if (ws.ownerId !== userId || !privateWorkspacesEnabled) {
         throw new NotFoundException(`Project ${projectId} not found`);
       }
       return;
