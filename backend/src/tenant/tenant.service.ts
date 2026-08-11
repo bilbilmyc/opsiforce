@@ -102,8 +102,11 @@ export class TenantService {
     return row?.privateWorkspaceEnabled ?? true;
   }
 
-  async updateTenantConfig(tenant: TenantContext, dto: UpdateTenantConfigDto): Promise<TenantConfigResponse> {
-    if (typeof dto.privateWorkspaceEnabled !== 'boolean') {
+  async updateTenantConfig(
+    tenant: TenantContext,
+    dto: UpdateTenantConfigDto | undefined
+  ): Promise<TenantConfigResponse> {
+    if (typeof dto?.privateWorkspaceEnabled !== 'boolean') {
       throw new BadRequestException('privateWorkspaceEnabled must be a boolean');
     }
     await db

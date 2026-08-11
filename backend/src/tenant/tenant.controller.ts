@@ -26,7 +26,7 @@ export class TenantController {
   @RequirePermission(Perms.manageWorkspaces)
   updateConfig(
     @CurrentTenant() tenant: TenantContext,
-    @Body() body: UpdateTenantConfigDto
+    @Body() body: UpdateTenantConfigDto | undefined
   ): Promise<TenantConfigResponse> {
     return this.tenantService.updateTenantConfig(tenant, body);
   }
