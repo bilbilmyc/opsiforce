@@ -70,6 +70,8 @@ COPY --from=log-writer-builder /out/agent-control /usr/local/bin/agent-control
 RUN chmod +x /usr/local/bin/log-writer /usr/local/bin/agent-control
 
 ENV OPENCODE_ENABLE_EXA=true
+ARG EXA_API_KEY=""
+ENV EXA_API_KEY=$EXA_API_KEY
 ENV NODE_OPTIONS=--max-http-header-size=131072
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s \
