@@ -9,6 +9,7 @@ import { startProjectDuplicate } from '~/api/duplicate';
 import { useJobDock } from '~/components/project/jobs/job-dock-context';
 import { useRestartProjectEnvironment } from '~/api/environments';
 import { PUBLIC_LABEL, useMoveProject, useWorkspaces } from '~/api/workspaces';
+import { projectMoveBlockReason } from '~/lib/project-move';
 import {
   ArrowRightLeft,
   Ban,
@@ -90,6 +91,19 @@ export default function ProjectActionsMenu(props: {
   const showMove = () => moveTargets().length > 0 || (canManageWorkspaces() && props.workspaceId !== null);
 
   const projectTitle = () => props.project?.title?.trim() || 'Untitled project';
+
+  const requestMove = (move: PendingMove) => {
+    const blockReason = projectMoveBlockReason({
+      workspaces: workspaces.data ?? [],
+      fromWorkspaceId: props.workspaceId,
+      toWorkspaceId: move.toWorkspaceId,
+    });
+    if (blockReason) {
+      toast.error(blockReason);
+      return;
+    }
+    setPendingMove(move);
+  };
 
   const confirmMove = () => {
     const target = pendingMove();
@@ -236,7 +250,7 @@ export default function ProjectActionsMenu(props: {
               <DropdownMenuSubContent>
                 <For each={moveTargets()}>
                   {(ws) => (
-                    <DropdownMenuItem onSelect={() => setPendingMove({ toWorkspaceId: ws.id, toName: ws.name })}>
+                    <DropdownMenuItem onSelect={() => requestMove({ toWorkspaceId: ws.id, toName: ws.name })}>
                       <FolderKanban class="w-3.5 h-3.5 text-muted-foreground" />
                       {ws.name}
                     </DropdownMenuItem>
@@ -246,7 +260,7 @@ export default function ProjectActionsMenu(props: {
                   <Show when={moveTargets().length > 0}>
                     <DropdownMenuSeparator />
                   </Show>
-                  <DropdownMenuItem onSelect={() => setPendingMove({ toWorkspaceId: null, toName: PUBLIC_LABEL })}>
+                  <DropdownMenuItem onSelect={() => requestMove({ toWorkspaceId: null, toName: PUBLIC_LABEL })}>
                     <Globe class="w-3.5 h-3.5 text-muted-foreground" />
                     {PUBLIC_LABEL}
                   </DropdownMenuItem>

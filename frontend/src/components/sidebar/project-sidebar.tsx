@@ -21,6 +21,7 @@ import {
 } from '~/api/workspaces';
 import { useUpdateWorkspacePreferences } from '~/api/users';
 import { createPersistedSignal } from '~/lib/persisted-signal';
+import { projectMoveBlockReason } from '~/lib/project-move';
 import {
   DndType,
   type FolderDragData,
@@ -209,8 +210,6 @@ export function ProjectSidebar(props: { search: string }) {
     reorderWorkspacesByIndex(initialIndex, index);
   };
 
-  const privateWorkspaceId = createMemo(() => (workspaces.data ?? []).find((w) => w.type === 'private')?.id);
-
   const handleProjectMove = (projectId: string, initialGroup: string | undefined, group: string | undefined) => {
     if (!group || initialGroup === group) return;
     const from = parseGroupId(initialGroup ?? PUBLIC_ID);
@@ -224,9 +223,13 @@ export function ProjectSidebar(props: { search: string }) {
       return;
     }
 
-    const priv = privateWorkspaceId();
-    if (priv && to.workspaceId === priv) {
-      toast.error("Public and workspace projects can't be made private");
+    const blockReason = projectMoveBlockReason({
+      workspaces: workspaces.data ?? [],
+      fromWorkspaceId: from.workspaceId,
+      toWorkspaceId: to.workspaceId,
+    });
+    if (blockReason) {
+      toast.error(blockReason);
       return;
     }
     setPendingMove({
