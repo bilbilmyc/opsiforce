@@ -207,6 +207,7 @@ export const environments = pgTable(
     tenantId: tenantIdField,
     name: text("name").notNull(),
     slug: text("slug").notNull(),
+    shortName: text("short_name"),
     description: text("description"),
     color: text("color").default("#3B82F6").notNull(),
     isDefault: boolean("is_default").notNull().default(false),
