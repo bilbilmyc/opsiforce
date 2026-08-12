@@ -6,10 +6,12 @@ import { environments, projectEnvironments } from '../../db/schema';
 import {
   CreateEnvironmentDto,
   DEVELOPMENT_ENVIRONMENT_NAME,
+  DEVELOPMENT_ENVIRONMENT_SHORT_NAME,
   DEVELOPMENT_ENVIRONMENT_SLUG,
   EnvironmentResponse,
   EnvironmentRow,
   PRODUCTION_ENVIRONMENT_NAME,
+  PRODUCTION_ENVIRONMENT_SHORT_NAME,
   PRODUCTION_ENVIRONMENT_SLUG,
   UpdateEnvironmentDto,
 } from './environment.types';
@@ -21,6 +23,7 @@ const NAME_MAX_LENGTH = 60;
 const DESCRIPTION_MAX_LENGTH = 500;
 const SLUG_MAX_LENGTH = 26;
 const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+const SHORT_NAME_PATTERN = /^[A-Za-z0-9]{2,5}$/;
 const COLOR_PATTERN = /^#[0-9A-Fa-f]{6}$/;
 
 const DEVELOPMENT_ENVIRONMENT_COLOR = '#3B82F6';
@@ -78,6 +81,7 @@ export class EnvironmentService {
         tenantId,
         name: DEVELOPMENT_ENVIRONMENT_NAME,
         slug: DEVELOPMENT_ENVIRONMENT_SLUG,
+        shortName: DEVELOPMENT_ENVIRONMENT_SHORT_NAME,
         description: 'Default working environment',
         color: DEVELOPMENT_ENVIRONMENT_COLOR,
         isDefault: true,
@@ -107,6 +111,7 @@ export class EnvironmentService {
         tenantId,
         name: PRODUCTION_ENVIRONMENT_NAME,
         slug: PRODUCTION_ENVIRONMENT_SLUG,
+        shortName: PRODUCTION_ENVIRONMENT_SHORT_NAME,
         description: 'Live environment for published apps',
         color: PRODUCTION_ENVIRONMENT_COLOR,
         isDefault: false,
@@ -127,6 +132,7 @@ export class EnvironmentService {
   async create(tenantId: string, dto: CreateEnvironmentDto): Promise<EnvironmentResponse> {
     const name = this.validateName(dto.name);
     const slug = dto.slug !== undefined ? this.validateSlug(dto.slug) : slugifyEnvironmentName(name);
+    const shortName = this.validateShortName(dto.shortName);
     const description = this.validateDescription(dto.description);
 
     this.assertNameNotReserved(name);
@@ -142,7 +148,7 @@ export class EnvironmentService {
 
     const [created] = await db
       .insert(environments)
-      .values({ id: crypto.randomUUID(), tenantId, name, slug, description, color, isDefault: false })
+      .values({ id: crypto.randomUUID(), tenantId, name, slug, shortName, description, color, isDefault: false })
       .returning();
     return toResponse(created);
   }
@@ -161,6 +167,7 @@ export class EnvironmentService {
       patch.name = name;
     }
     if (dto.description !== undefined) patch.description = this.validateDescription(dto.description);
+    if (dto.shortName !== undefined) patch.shortName = this.validateShortName(dto.shortName);
     if (dto.color !== undefined) patch.color = this.validateColor(dto.color);
 
     if (Object.keys(patch).length === 0) return toResponse(current);
@@ -230,6 +237,17 @@ export class EnvironmentService {
     return trimmed;
   }
 
+  private validateShortName(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    if (typeof value !== 'string') throw new BadRequestException("'shortName' must be a string or null");
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return null;
+    if (!SHORT_NAME_PATTERN.test(trimmed)) {
+      throw new BadRequestException("'shortName' must be 2-5 letters or digits");
+    }
+    return trimmed;
+  }
+
   private validateColor(value: unknown): string {
     if (typeof value !== 'string') throw new BadRequestException("'color' must be a string");
     const trimmed = value.trim();
@@ -274,6 +292,7 @@ function toResponse(row: EnvironmentRow): EnvironmentResponse {
     id: row.id,
     name: row.name,
     slug: row.slug,
+    shortName: row.shortName,
     description: row.description,
     color: row.color,
     isDefault: row.isDefault,

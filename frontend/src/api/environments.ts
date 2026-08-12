@@ -17,6 +17,7 @@ export interface Environment {
   id: string;
   name: string;
   slug: string;
+  shortName: string | null;
   description: string | null;
   color: string;
   isDefault: boolean;
@@ -45,12 +46,14 @@ export interface ProjectEnvironment {
 export interface CreateEnvironmentDto {
   name: string;
   slug: string;
+  shortName?: string | null;
   description?: string;
   color?: string;
 }
 
 export interface UpdateEnvironmentDto {
   name?: string;
+  shortName?: string | null;
   description?: string;
   color?: string;
 }

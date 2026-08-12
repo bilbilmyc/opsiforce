@@ -1,6 +1,8 @@
 import { For, Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { ENVIRONMENT_SLUG_MAX_LENGTH, ENVIRONMENT_SLUG_PATTERN, slugifyEnvironmentName } from '~/lib/app-url';
+import { deriveEnvironmentShortName, isEnvironmentShortNameValid } from '~/lib/environment-label';
+import { BadgeLabelInput } from './badge-label-input';
 import { useCreateEnvironment, useDeleteEnvironment, useEnvironments, type Environment } from '~/api/environments';
 import { Button } from '~/components/ui/button';
 import { ColorPicker } from '~/components/ui/color-picker';
@@ -20,6 +22,7 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
   const [name, setName] = createSignal('');
   const [slug, setSlug] = createSignal('');
   const [slugEdited, setSlugEdited] = createSignal(false);
+  const [shortName, setShortName] = createSignal('');
   const [description, setDescription] = createSignal('');
   const [color, setColor] = createSignal(DEFAULT_CREATE_COLOR);
   const [colorEdited, setColorEdited] = createSignal(false);
@@ -29,6 +32,7 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
     setName('');
     setSlug('');
     setSlugEdited(false);
+    setShortName('');
     setDescription('');
     setColor(DEFAULT_CREATE_COLOR);
     setColorEdited(false);
@@ -48,7 +52,7 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
     if (slugTaken()) return `'${slug()}' is already used by another environment`;
     return null;
   };
-  const canSubmit = () => name().trim().length > 0 && slugError() === null;
+  const canSubmit = () => name().trim().length > 0 && slugError() === null && isEnvironmentShortNameValid(shortName());
 
   const submitCreate = async () => {
     if (!canSubmit()) return;
@@ -56,6 +60,7 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
       await create.mutateAsync({
         name: name().trim(),
         slug: slug(),
+        shortName: shortName().trim() || undefined,
         description: description().trim() || undefined,
         color: colorEdited() ? color() : undefined,
       });
@@ -147,6 +152,22 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
                 The slug becomes part of every app URL in this environment and cannot be changed later.
               </p>
             </div>
+            <BadgeLabelInput
+              value={shortName()}
+              onInput={setShortName}
+              onEnter={submitCreate}
+              placeholder="Badge label (optional)"
+              hint={
+                <p class="text-xs text-muted-foreground">
+                  Shown on project cards
+                  <Show when={!shortName().trim() && slug()}>
+                    {' '}
+                    — defaults to <span class="font-mono">{deriveEnvironmentShortName(slug())}</span>
+                  </Show>
+                  .
+                </p>
+              }
+            />
             <input
               type="text"
               value={description()}

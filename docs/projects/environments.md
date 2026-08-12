@@ -8,7 +8,7 @@ A project used to be one running thing: one pod, one URL, one working copy. It i
 
 Keeping these separate is the whole point:
 
-- An **Environment** is a tenant-scoped registry row (name, description, immutable URL slug). It is the *set of publish targets* offered to every project in the tenant. Each tenant has two **protected** environments — Development and Production — that can't be renamed or deleted; admins add others. Renaming a custom environment renames it for every project, because projects reference the registry by id.
+- An **Environment** is a tenant-scoped registry row (name, description, immutable URL slug). It is the *set of publish targets* offered to every project in the tenant. Each tenant has two **protected** environments — Development and Production — that can't be renamed or deleted; admins add others. Renaming a custom environment renames it for every project, because projects reference the registry by id. Each environment also carries a display identity — a color and an optional **badge label** (2–5 characters, e.g. `PROD`, `STG`) — rendered as tinted badges on the sidebar's project cards; when no label is configured, one is derived from the slug. Both are freely editable, even on protected environments, because they are pure display and never appear in URLs.
 - A **ProjectEnvironment** is a per-project instance bound to one Environment. It owns the runtime state: workspace directory, pod, status, pod IP, auth mode, schedules, and service-gateway key. It does **not** own LLM keys — those are project-scoped and shared across environments.
 
 ```

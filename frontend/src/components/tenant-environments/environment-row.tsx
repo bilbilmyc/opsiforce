@@ -4,6 +4,9 @@ import { Lock, Pencil, Trash2, X } from '~/components/icons';
 import { Button } from '~/components/ui/button';
 import { ColorPicker } from '~/components/ui/color-picker';
 import { useUpdateEnvironment, type Environment, type UpdateEnvironmentDto } from '~/api/environments';
+import { EnvironmentBadge } from '~/components/environment-badge';
+import { isEnvironmentShortNameValid } from '~/lib/environment-label';
+import { BadgeLabelInput } from './badge-label-input';
 
 export interface EnvironmentRowProps {
   environment: Environment;
@@ -14,13 +17,17 @@ export function EnvironmentRow(props: EnvironmentRowProps) {
   const update = useUpdateEnvironment();
   const [editing, setEditing] = createSignal(false);
   const [name, setName] = createSignal('');
+  const [shortName, setShortName] = createSignal('');
   const [description, setDescription] = createSignal('');
   const [color, setColor] = createSignal('');
 
   const isLocked = () => props.environment.isProtected;
 
+  const shortNameValid = () => isEnvironmentShortNameValid(shortName());
+
   const startEdit = () => {
     setName(props.environment.name);
+    setShortName(props.environment.shortName ?? '');
     setDescription(props.environment.description ?? '');
     setColor(props.environment.color);
     setEditing(true);
@@ -29,8 +36,9 @@ export function EnvironmentRow(props: EnvironmentRowProps) {
   const save = async () => {
     const trimmed = name().trim();
     if (!isLocked() && !trimmed) return;
+    if (!shortNameValid()) return;
     try {
-      const dto: UpdateEnvironmentDto = { color: color() };
+      const dto: UpdateEnvironmentDto = { color: color(), shortName: shortName().trim() || null };
       if (!isLocked()) {
         dto.name = trimmed;
         dto.description = description().trim();
@@ -62,6 +70,9 @@ export function EnvironmentRow(props: EnvironmentRowProps) {
                   title="URL slug — appears in every app URL of this environment"
                 >
                   {props.environment.slug}
+                </span>
+                <span class="inline-flex items-center" title="Badge shown on project cards">
+                  <EnvironmentBadge environment={props.environment} class="h-5 px-1.5 text-[10px]" />
                 </span>
                 <Show when={isLocked()}>
                   <span class="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -115,7 +126,8 @@ export function EnvironmentRow(props: EnvironmentRowProps) {
             when={!isLocked()}
             fallback={
               <p class="text-xs text-muted-foreground">
-                {props.environment.name} is protected — its name and slug are locked, but you can change its color.
+                {props.environment.name} is protected — its name and slug are locked, but you can change its badge
+                label and color.
               </p>
             }
           >
@@ -139,6 +151,20 @@ export function EnvironmentRow(props: EnvironmentRowProps) {
             />
           </Show>
           <div class="space-y-1">
+            <span class="text-xs text-muted-foreground">Badge label</span>
+            <BadgeLabelInput
+              value={shortName()}
+              onInput={setShortName}
+              onEnter={save}
+              placeholder="e.g. PROD"
+              hint={
+                <p class="text-xs text-muted-foreground">
+                  Shown on project cards. Leave empty to derive it from the slug.
+                </p>
+              }
+            />
+          </div>
+          <div class="space-y-1">
             <span class="text-xs text-muted-foreground">Color</span>
             <ColorPicker value={color()} onChange={setColor} />
           </div>
@@ -146,7 +172,12 @@ export function EnvironmentRow(props: EnvironmentRowProps) {
             <Button size="sm" variant="outline" onClick={() => setEditing(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={save} loading={update.isPending} disabled={!isLocked() && !name().trim()}>
+            <Button
+              size="sm"
+              onClick={save}
+              loading={update.isPending}
+              disabled={(!isLocked() && !name().trim()) || !shortNameValid()}
+            >
               Save
             </Button>
           </div>

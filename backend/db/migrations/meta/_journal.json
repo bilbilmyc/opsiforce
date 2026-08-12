@@ -407,6 +407,13 @@
       "when": 1786437680459,
       "tag": "0057_add-private-workspace-tenant-flag",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1786524556138,
+      "tag": "0058_add-environment-short-name",
+      "breakpoints": true
     }
   ]
 }
