@@ -6,11 +6,11 @@ import path from "path";
 import fs from "fs";
 
 const OC = (pkg: string) =>
-  path.resolve(__dirname, "opencode/packages", pkg, "src");
+  path.resolve(import.meta.dirname, "opencode/packages", pkg, "src");
 const OC_APP_SRC = OC("app");
 const OC_UI_SRC = OC("ui");
 const OC_UTIL_SRC = OC("util");
-const OC_SDK_SRC = path.resolve(__dirname, "opencode/packages/sdk/js/src");
+const OC_SDK_SRC = path.resolve(import.meta.dirname, "opencode/packages/sdk/js/src");
 
 function opencodeResolver(): Plugin {
   const uiExportMap: Array<{ pattern: string; target: string }> = [
@@ -41,7 +41,7 @@ function opencodeResolver(): Plugin {
   ];
 
   function resolveUiImport(subpath: string): string | null {
-    const uiRoot = path.resolve(__dirname, "opencode/packages/ui");
+    const uiRoot = path.resolve(import.meta.dirname, "opencode/packages/ui");
 
     for (const { pattern, target } of uiExportMap) {
       if (pattern === "*") continue;
@@ -137,13 +137,13 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@/": OC_APP_SRC + "/",
-      "~/": path.resolve(__dirname, "src") + "/",
+      "~/": path.resolve(import.meta.dirname, "src") + "/",
       "@opencode-ai/ui/styles/tailwind": path.resolve(
-        __dirname,
+        import.meta.dirname,
         "opencode/packages/ui/src/styles/tailwind/index.css",
       ),
       "@opencode-ai/ui/styles": path.resolve(
-        __dirname,
+        import.meta.dirname,
         "opencode/packages/ui/src/styles/index.css",
       ),
     },
@@ -164,6 +164,7 @@ export default defineConfig(({ mode }) => ({
       "/ms-assets": {
         target: process.env.VITE_USER_MS_URL || "http://localhost:4112",
         changeOrigin: true,
+        ws: true,
       },
     },
   },
