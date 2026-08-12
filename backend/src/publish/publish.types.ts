@@ -52,6 +52,8 @@ export interface PublishTarget {
 export interface PublishFormVariable {
   key: string;
   value: string;
+  devValue: string;
+  isNew: boolean;
 }
 
 export interface PublishFormScheduleOption {

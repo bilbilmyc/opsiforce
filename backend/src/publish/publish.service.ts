@@ -123,10 +123,15 @@ export class PublishService implements OnApplicationBootstrap {
     const devVars = await this.readEnvFile(devEnv.directory);
     const prodVars = instance ? await this.readEnvFile(instance.directory) : {};
 
-    const variables = Object.keys(devVars).map((key) => ({
-      key,
-      value: instance && key in prodVars ? prodVars[key] : devVars[key],
-    }));
+    const variables = Object.keys(devVars).map((key) => {
+      const existsInTarget = !!instance && key in prodVars;
+      return {
+        key,
+        value: existsInTarget ? prodVars[key] : devVars[key],
+        devValue: devVars[key],
+        isNew: !existsInTarget,
+      };
+    });
 
     const devSchedules = await db
       .select({ id: projectSchedules.id, name: projectSchedules.name })
