@@ -1,6 +1,6 @@
 ---
 name: llm-api
-description: Call the LLM gateway (APP_LLM_API_KEY) for AI capabilities — chat/text completions, structured output, streaming, vision (image analysis), image generation, and audio/video transcription. Routes to OpenAI (GPT) and Anthropic (Claude) through Bifrost via one OpenAI-compatible key, with reasoning-effort control. Use whenever a task needs AI — adding a feature to an app being built, or doing a one-off job directly with no app. This is the only sanctioned path for transcription; a local speech model or browser speech API must not be used.
+description: Call the LLM gateway (APP_LLM_API_KEY) for AI capabilities — chat/text completions, structured output, streaming, vision (image analysis), image generation, text-to-speech (voice audio), and audio/video transcription. Routes to OpenAI (GPT) and Anthropic (Claude) through Bifrost via one OpenAI-compatible key, with reasoning-effort control. Use whenever a task needs AI — adding a feature to an app being built, or doing a one-off job directly with no app. This is the only sanctioned path for transcription and speech generation; a local speech model or browser speech API must not be used.
 ---
 
 # AI API Integration
@@ -12,7 +12,7 @@ A single OpenAI-compatible gateway is available via these environment variables 
 
 **Use `APP_LLM_API_KEY` / `APP_LLM_BASE_URL` for every gateway call** — in app code and in direct shell tasks alike. Do NOT use `OPENAI_API_KEY` / `OPENAI_BASE_URL`; those are the coding agent's own chat key.
 
-The endpoint is a gateway that routes to both OpenAI and Anthropic. You select the provider with the `provider/model` prefix in the `model` field (e.g. `openai/gpt-5.4-mini`, `anthropic/claude-sonnet-5`). One SDK, one key, both providers.
+The endpoint is a gateway that routes to both OpenAI and Anthropic. You select the provider with the `provider/model` prefix in the `model` field (e.g. `openai/gpt-5.6-sol`, `anthropic/claude-sonnet-5`). One SDK, one key, both providers. **Always include the prefix** — a prefixed model routes deterministically to that provider, while an unprefixed name makes the gateway search its catalog across all configured providers and may resolve somewhere you didn't intend.
 
 ## Setup (OpenAI SDK)
 
@@ -39,27 +39,35 @@ const llm = new OpenAI({
 - **Vercel AI SDK (`ai` + `@ai-sdk/openai-compatible`)** — only worth adding if you need provider-agnostic structured output (`generateObject`) or multi-step agent orchestration (`generateText` with `stopWhen`, the `Agent` abstraction). The gateway already unifies providers at the wire level, so the AI SDK's main selling point adds little here. Don't reach for it for ordinary completions/streaming.
 - **`@anthropic-ai/sdk`, LangChain** — not needed. Claude is reachable through the `openai` SDK via the gateway; LangChain is overkill for app-level AI features.
 
-## Available Models
+## Picking a Model
 
-Select a model with the `provider/model` prefix, then set [reasoning effort](#reasoning-effort-important) to match the task. Those two choices *together* decide quality — a capable model with no reasoning is just as weak as a cheap one. All chat models below are reasoning-capable and support vision.
+Pick by **role**, not by memorized name — providers ship new versions constantly, and the role conventions below outlive any single release. Resolve the role to a current model id, then set [reasoning effort](#reasoning-effort-important) to match the task. Those two choices *together* decide quality — a capable model with no reasoning is just as weak as a cheap one. All chat models in both providers' current families are reasoning-capable and support vision.
 
-> ⚠️ **The #1 cause of a weak "AI agent" is a cheap model running with no reasoning** — e.g. `nano` at its default effort. That combination is fast and cheap and *consistently produces bad agents*. For anything that analyses, decides, or behaves agentically, use a **balanced model (`gpt-5.4-mini` with `reasoning_effort: "medium"` or `"high"`, or `claude-sonnet-5`, which reasons adaptively on its own).** Save the cheapest models for trivial, high-volume calls.
+> ⚠️ **The #1 cause of a weak "AI agent" is a cheap model running with no reasoning** — a cheap-role model at its default effort is fast and cheap and *consistently produces bad agents*. Anything that analyses, decides, or behaves agentically gets the **frontier role** (the default) with real reasoning effort. Save the cheap role for trivial, high-volume calls.
 
-| When you need | OpenAI | Anthropic | Use for | Pair with effort |
-|------|--------|-----------|---------|------------------|
-| **Speed & low cost** | `openai/gpt-5.4-nano` | `anthropic/claude-haiku-4-5` | High-volume simple work: classification, tagging, extraction, routing | `"minimal"` / `"low"` |
-| **Balance — the default** | `openai/gpt-5.4-mini` | `anthropic/claude-sonnet-5` | Most in-app AI & backend jobs: analysis, judgement, generation, tool use, multi-step agents | GPT: `"medium"` / `"high"` · Sonnet 5: omit (see [Reasoning effort](#reasoning-effort-important)) |
-| **Maximum capability** | `openai/gpt-5.5` | `anthropic/claude-opus-5` | Hardest multi-step reasoning, long-horizon jobs, top-quality output | GPT-5.5: `"high"` · Opus 5: omit (see [Reasoning effort](#reasoning-effort-important)) |
-| **Audio** | `whisper-1` | — | Speech-to-text transcription | — |
+| Role | How to recognize the id | Snapshot (verified 2026-08) |
+|------|-------------------------|------------------------------|
+| **Frontier — the default** | Highest-versioned OpenAI flagship (`-sol` variant), or newest Claude Opus | `openai/gpt-5.6-sol` · `anthropic/claude-opus-5` |
+| **Balanced** | `-terra` / `-mini` variant of the newest family, or newest Claude Sonnet | `openai/gpt-5.6-terra` · `anthropic/claude-sonnet-5` |
+| **Cheap & fast** | `-luna` / `-nano` variant, or newest Claude Haiku | `openai/gpt-5.6-luna` · `anthropic/claude-haiku-4-5` |
+| **Speech-to-text** | `whisper-*` | `openai/whisper-1` |
+| **Text-to-speech** | `*-tts` | `openai/gpt-4o-mini-tts` |
+| **Image generation** | `gpt-image-*` | `openai/gpt-image-2` |
 
-### Choosing a model
+Use the snapshot ids for day-to-day work. **Resolve fresh ids** when the gateway rejects a name, the user asks for the latest models, or the snapshot date looks stale:
 
-- **Default to the balanced models** (`openai/gpt-5.4-mini` or `anthropic/claude-sonnet-5`) for any job that reasons, decides, or uses tools. Claude Sonnet 5 lands near Opus-level quality on everyday tasks at well under half of Opus's price; `gpt-5.4-mini` is the OpenAI equivalent. This is almost always the right starting point.
-- **Step up to the most capable models** (`openai/gpt-5.5` or `anthropic/claude-opus-5`) only when a balanced model at full effort still falls short — long-horizon planning, deep multi-step reasoning. They cost several times more, so don't reach for them by default.
-- **Drop to the cheapest models** only for genuinely simple, high-volume calls — and still pair them with `"low"` effort, never none. Don't build a decision-making agent on them.
+```bash
+curl -s "$APP_LLM_BASE_URL/models" -H "Authorization: Bearer $APP_LLM_API_KEY"
+```
+
+lists every model id the gateway currently routes; the official model pages — [OpenAI models](https://developers.openai.com/api/docs/models) and [Anthropic models](https://docs.claude.com/en/docs/about-claude/models/overview) — show what's newest per provider and which role it plays. Map the id to a role by the naming conventions above, then call the gateway with the exact id plus `provider/` prefix. One verified model name per call — never a retry ladder over guessed names.
+
+### Choosing within a role
+
+- **Default to the frontier role** for AI features and agents. **Step down to balanced** when volume, latency, or cost outweighs peak quality — balanced runs at roughly 40% of frontier price. **Cheap** is for genuinely simple, high-volume calls only, always with `"low"` effort, never none.
 - **Structured output (JSON schema)** — prefer OpenAI models; `response_format: { type: "json_schema" }` is native to OpenAI and most reliable through the gateway.
-- **Nuanced analysis / long-form writing** — Claude (Sonnet 5, or Opus 5 for the hardest tasks).
-- **Audio transcription** — `whisper-1` only. **Vision** — any chat model; pick the tier by how much the image task needs to *reason*, not just describe.
+- **Nuanced analysis / long-form writing** — Claude (Sonnet, or Opus for the hardest tasks).
+- **Speech** — OpenAI only (Anthropic has no speech models): `openai/whisper-1` to transcribe, `openai/gpt-4o-mini-tts` to speak. **Vision** — any chat model; pick the role by how much the image task needs to *reason*, not just describe.
 
 ## Reasoning effort (IMPORTANT)
 
@@ -67,28 +75,28 @@ These are **reasoning models**. Left unconfigured they spend little or no effort
 
 ```typescript
 const response = await llm.chat.completions.create({
-  model: "openai/gpt-5.4-mini",
+  model: "openai/gpt-5.6-sol",
   messages: [
     { role: "system", content: "You are a financial analyst." },
     { role: "user", content: prompt },
   ],
-  reasoning_effort: "high",        // "minimal" | "low" | "medium" | "high"
+  reasoning_effort: "high",        // "low" | "medium" | "high" — newest OpenAI models also accept "xhigh" | "max"
   max_completion_tokens: 8000,
 })
 const text = response.choices[0].message.content
 ```
 
-`reasoning_effort` works for GPT and for Claude **Haiku** through the gateway — for Haiku it is translated into an extended-thinking budget automatically, so you use the same field regardless of provider. **The exceptions are Claude Sonnet 5 and Claude Opus 5: omit `reasoning_effort` for them** — they reason adaptively on their own, and setting the field errors on the gateway (these models rejected the translated thinking budget).
+`reasoning_effort` works for GPT and for Claude **Haiku** through the gateway — for Haiku it is translated into an extended-thinking budget automatically, so you use the same field regardless of provider. **The exceptions are the current Claude Sonnet and Opus generations (Sonnet 5, Opus 5): omit `reasoning_effort` for them** — they reason adaptively on their own, and setting the field errors on the gateway (these models rejected the translated thinking budget).
 
 ### How much effort?
 
 | Task | `reasoning_effort` | Why |
 |------|-------------------|-----|
-| Classification, tagging, extraction, formatting, simple lookups | `"low"` (or `"minimal"`) | Pattern work; reasoning adds latency and cost without improving the result |
+| Classification, tagging, extraction, formatting, simple lookups | `"low"` | Pattern work; reasoning adds latency and cost without improving the result |
 | Summarization, rewriting, Q&A, most everyday generation | `"medium"` | Balanced default |
 | Multi-step logic, data analysis, planning, drafting decisions, tool-using agents, anything a backend job decides or acts on unattended | `"high"` | Quality scales with reasoning — this is what separates a useful agent from one that's confidently wrong |
 
-When in doubt, **start at `"medium"` and raise to `"high"`** if the output is shallow or makes mistakes. Higher effort = better quality but more latency (the model thinks before the first token appears) and more cost (reasoning tokens are billed).
+When in doubt, **start at `"medium"` and raise to `"high"`** if the output is shallow or makes mistakes. The newest OpenAI models accept `"xhigh"` and `"max"` above `"high"` — reserve those for the very hardest unattended jobs. Higher effort = better quality but more latency (the model thinks before the first token appears) and more cost (reasoning tokens are billed).
 
 ### Token limit — use `max_completion_tokens`
 
@@ -102,7 +110,7 @@ Pass `reasoning_effort` on its own — don't also send a manual `reasoning: {...
 
 ```typescript
 const response = await llm.chat.completions.create({
-  model: "openai/gpt-5.4-mini",
+  model: "openai/gpt-5.6-sol",
   messages: [{ role: "user", content: prompt }],
   reasoning_effort: "medium",
   max_completion_tokens: 2000,
@@ -118,7 +126,7 @@ Return typed JSON using `response_format`:
 
 ```typescript
 const response = await llm.chat.completions.create({
-  model: "openai/gpt-5.4-nano",
+  model: "openai/gpt-5.6-luna",
   messages: [
     {
       role: "system",
@@ -139,7 +147,7 @@ For stricter control, use a JSON schema:
 
 ```typescript
 const response = await llm.chat.completions.create({
-  model: "openai/gpt-5.4-mini",
+  model: "openai/gpt-5.6-sol",
   messages: [{ role: "user", content: "Analyze this product review: ..." }],
   reasoning_effort: "medium",
   max_completion_tokens: 2000,
@@ -173,7 +181,7 @@ Stream responses to the frontend using Server-Sent Events:
 ```typescript
 // API route handler
 const stream = await llm.chat.completions.create({
-  model: "openai/gpt-5.4-mini",
+  model: "openai/gpt-5.6-sol",
   messages: [{ role: "user", content: prompt }],
   reasoning_effort: "medium",
   max_completion_tokens: 2000,
@@ -207,7 +215,7 @@ async function chat(userMessage: string): Promise<string> {
   messages.push({ role: "user", content: userMessage })
 
   const response = await llm.chat.completions.create({
-    model: "openai/gpt-5.4-mini",
+    model: "openai/gpt-5.6-sol",
     messages,
     reasoning_effort: "medium",
     max_completion_tokens: 2000,
@@ -225,7 +233,7 @@ Analyze images by passing `image_url` content parts:
 
 ```typescript
 const response = await llm.chat.completions.create({
-  model: "openai/gpt-5.4-mini",
+  model: "openai/gpt-5.6-sol",
   messages: [
     {
       role: "user",
@@ -251,7 +259,7 @@ const base64 = buffer.toString("base64")
 const dataUrl = `data:${mimetype};base64,${base64}`
 
 const response = await llm.chat.completions.create({
-  model: "openai/gpt-5.4-mini",
+  model: "openai/gpt-5.6-sol",
   messages: [
     {
       role: "user",
@@ -280,28 +288,19 @@ import { createReadStream } from "fs"
 
 const transcription = await llm.audio.transcriptions.create({
   file: createReadStream("audio.mp3"),
-  model: "whisper-1",
+  model: "openai/whisper-1",
 })
 const text = transcription.text
 ```
 
-From an uploaded file buffer:
+From an uploaded file buffer, with the optional tuning parameters:
 
 ```typescript
 import { toFile } from "openai"
 
 const transcription = await llm.audio.transcriptions.create({
   file: await toFile(buffer, "audio.webm"),
-  model: "whisper-1",
-})
-```
-
-With options:
-
-```typescript
-const transcription = await llm.audio.transcriptions.create({
-  file: await toFile(buffer, "audio.mp3"),
-  model: "whisper-1",
+  model: "openai/whisper-1",
   language: "en",
   response_format: "verbose_json",
   prompt: "Technical meeting about Kubernetes deployments",
@@ -318,10 +317,41 @@ When asked to transcribe a video/podcast/audio (not build an app), skip app code
 yt-dlp -x --audio-format mp3 -o audio.mp3 "<url>"   # or, for a local file: ffmpeg -i input.mp4 -vn audio.mp3
 curl -s "$APP_LLM_BASE_URL/audio/transcriptions" \
   -H "Authorization: Bearer $APP_LLM_API_KEY" \
-  -F model=whisper-1 -F response_format=text -F file=@audio.mp3
+  -F model=openai/whisper-1 -F response_format=text -F file=@audio.mp3
 ```
 
 Whisper accepts up to 25 MB per request — split longer media with `ffmpeg` (`-f segment -segment_time 900`) and join the text.
+
+### Text to Speech
+
+Generate spoken audio from text with `openai/gpt-4o-mini-tts` via `audio.speech.create`. It is the only TTS model to use — `tts-1`/`tts-1-hd` are legacy models that ignore `instructions`.
+
+```typescript
+const response = await llm.audio.speech.create({
+  model: "openai/gpt-4o-mini-tts",
+  voice: "marin",
+  input: text,
+  instructions: "Speak warmly and clearly, with natural pacing and gentle pauses at punctuation.",
+  response_format: "mp3",
+})
+const audio = Buffer.from(await response.arrayBuffer())
+```
+
+- **Voices**: `alloy`, `ash`, `ballad`, `coral`, `echo`, `fable`, `marin`, `cedar`, `nova`, `onyx`, `sage`, `shimmer`, `verse`. `marin` and `cedar` give the best quality — default to one of them unless the user picks a voice.
+- **`instructions`** steers *how* the text is spoken — accent, emotion, pacing, tone, whispering. For non-English text, name the language and ask for native pronunciation (e.g. "Read this Ukrainian text with accurate Ukrainian pronunciation"). It cannot change *what* is spoken; the model reads `input` verbatim.
+- **`response_format`**: `"mp3"` (default) for stored/downloaded audio; `"wav"` or `"pcm"` when streaming playback needs the lowest latency.
+- Reasoning settings (`reasoning_effort`, `max_completion_tokens`) do not apply.
+- Keep TTS calls server-side and return the audio (or a URL to it) to the client.
+
+#### Direct task — speak a text yourself, no app
+
+```bash
+curl -s "$APP_LLM_BASE_URL/audio/speech" \
+  -H "Authorization: Bearer $APP_LLM_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"openai/gpt-4o-mini-tts","voice":"marin","input":"Hello there","instructions":"Speak warmly."}' \
+  -o speech.mp3
+```
 
 ### Image Generation
 
@@ -364,10 +394,9 @@ const out = edited.data[0].b64_json!
 
 ## Guidelines
 
-- **Always set `reasoning_effort`** — `"low"` for extraction/classification, `"medium"` as the default, `"high"` for anything that needs real thinking. Omitting it gives shallow results. (Exceptions: **Claude Sonnet 5 and Opus 5** — omit it; those models reason adaptively and error if you set it.) See [Reasoning effort](#reasoning-effort-important).
+- **Always set `reasoning_effort`**, scaled to the task (omit it for Claude Sonnet / Opus) — see [Reasoning effort](#reasoning-effort-important).
 - **Use `max_completion_tokens`, never `max_tokens`** — see [Token limit](#token-limit--use-max_completion_tokens).
-- **Match the model to the task** — `gpt-5.4-nano` / `claude-haiku-4-5` for fast/cheap work; `gpt-5.4-mini` / `claude-sonnet-5` for quality; `gpt-5.5` / `claude-opus-5` for the hardest tasks.
-- **Image generation returns base64** — `images.generate` / `images.edit` with `gpt-image-2` return `b64_json` (no URL); convert to a `Buffer` or data URL to store or serve.
-- **Transcription: gateway only** — never use browser speech APIs (`SpeechRecognition`, `webkitSpeechRecognition`) or a local speech model (`openai-whisper`, `faster-whisper`, `vosk`). Always go through the gateway's `whisper-1` (see [Audio Transcription](#audio-transcription)). In an app, record with `MediaRecorder` and transcribe server-side; as a direct task, use the shell recipe above.
+- **All speech goes through the gateway** — never browser speech APIs (`SpeechRecognition`, `speechSynthesis`) or local speech models (`openai-whisper`, `faster-whisper`, `vosk`). In an app, record with `MediaRecorder` and process server-side; as a direct task, use the shell recipes above.
+- **Verify unknown model names** — see [Picking a Model](#picking-a-model).
 - **Backend only** — never expose `APP_LLM_API_KEY` to the frontend or client-side code.
 - **For streaming responses to the frontend, use Server-Sent Events (SSE).**
