@@ -2,8 +2,10 @@
 // Backport of the upstream fix for the 48-bit message-ID wrap of 2026-08-14T11:19:55Z, after which
 // newly created IDs sort before ~2 years of prior history.
 // Upstream: anomalyco/opencode PR #41001 (first released in v1.18.15).
-// Changed here: order the message store by (time.created, id) via messageKey/compareMessages instead of id alone;
-//   remove-by-id switched to a linear scan because the array is no longer id-ordered.
+// Changed here: order the message store by (time.created, id) via messageKey/compareMessages instead of id alone.
+//   messageKey decides POSITION only; identity (dedupe/remove) still matches on id, because an optimistic
+//   message carries the client clock while the server's copy of it carries the server clock, so their
+//   composite keys differ and a key-based lookup would insert a duplicate.
 import { batch, createMemo } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { Binary } from "@opencode-ai/util/binary"
@@ -102,9 +104,11 @@ export function mergeOptimisticPage(page: MessagePage, items: OptimisticItem[]) 
   const confirmed: string[] = []
 
   for (const item of items) {
-    const result = Binary.search(session, messageKey(item.message), messageKey)
-    const found = result.found
-    if (!found) session.splice(result.index, 0, item.message)
+    const found = session.some((message) => message.id === item.message.id)
+    if (!found) {
+      const result = Binary.search(session, messageKey(item.message), messageKey)
+      session.splice(result.index, 0, item.message)
+    }
 
     const current = part.get(item.message.id)
     if (found && hasParts(current, item.parts)) {
