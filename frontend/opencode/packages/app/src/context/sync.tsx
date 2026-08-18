@@ -1,3 +1,9 @@
+// OPSIFORCE LOCAL PATCH - do not drop when re-vendoring opencode (tree is upstream 1.3.2).
+// Backport of the upstream fix for the 48-bit message-ID wrap of 2026-08-14T11:19:55Z, after which
+// newly created IDs sort before ~2 years of prior history.
+// Upstream: anomalyco/opencode PR #41001 (first released in v1.18.15).
+// Changed here: order the message store by (time.created, id) via messageKey/compareMessages instead of id alone;
+//   remove-by-id switched to a linear scan because the array is no longer id-ordered.
 import { batch, createMemo } from "solid-js"
 import { createStore, produce, reconcile } from "solid-js/store"
 import { Binary } from "@opencode-ai/util/binary"
@@ -12,6 +18,7 @@ import {
 import { useGlobalSync } from "./global-sync"
 import { useSDK } from "./sdk"
 import type { Message, Part } from "@opencode-ai/sdk/v2/client"
+import { compareMessages, messageKey } from "@/utils/session-message"
 import { SESSION_CACHE_LIMIT, dropSessionCaches, pickSessionCacheEvictions } from "./global-sync/session-cache"
 
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
@@ -95,7 +102,7 @@ export function mergeOptimisticPage(page: MessagePage, items: OptimisticItem[]) 
   const confirmed: string[] = []
 
   for (const item of items) {
-    const result = Binary.search(session, item.message.id, (message) => message.id)
+    const result = Binary.search(session, messageKey(item.message), messageKey)
     const found = result.found
     if (!found) session.splice(result.index, 0, item.message)
 
@@ -120,7 +127,7 @@ export function mergeOptimisticPage(page: MessagePage, items: OptimisticItem[]) 
 export function applyOptimisticAdd(draft: OptimisticStore, input: OptimisticAddInput) {
   const messages = draft.message[input.sessionID]
   if (messages) {
-    const result = Binary.search(messages, input.message.id, (m) => m.id)
+    const result = Binary.search(messages, messageKey(input.message), messageKey)
     messages.splice(result.index, 0, input.message)
   } else {
     draft.message[input.sessionID] = [input.message]
@@ -131,8 +138,8 @@ export function applyOptimisticAdd(draft: OptimisticStore, input: OptimisticAddI
 export function applyOptimisticRemove(draft: OptimisticStore, input: OptimisticRemoveInput) {
   const messages = draft.message[input.sessionID]
   if (messages) {
-    const result = Binary.search(messages, input.messageID, (m) => m.id)
-    if (result.found) messages.splice(result.index, 1)
+    const index = messages.findIndex((message) => message.id === input.messageID)
+    if (index >= 0) messages.splice(index, 1)
   }
   delete draft.part[input.messageID]
 }
@@ -140,7 +147,7 @@ export function applyOptimisticRemove(draft: OptimisticStore, input: OptimisticR
 function setOptimisticAdd(setStore: (...args: unknown[]) => void, input: OptimisticAddInput) {
   setStore("message", input.sessionID, (messages: Message[] | undefined) => {
     if (!messages) return [input.message]
-    const result = Binary.search(messages, input.message.id, (m) => m.id)
+    const result = Binary.search(messages, messageKey(input.message), messageKey)
     const next = [...messages]
     next.splice(result.index, 0, input.message)
     return next
@@ -151,10 +158,10 @@ function setOptimisticAdd(setStore: (...args: unknown[]) => void, input: Optimis
 function setOptimisticRemove(setStore: (...args: unknown[]) => void, input: OptimisticRemoveInput) {
   setStore("message", input.sessionID, (messages: Message[] | undefined) => {
     if (!messages) return messages
-    const result = Binary.search(messages, input.messageID, (m) => m.id)
-    if (!result.found) return messages
+    const index = messages.findIndex((message) => message.id === input.messageID)
+    if (index < 0) return messages
     const next = [...messages]
-    next.splice(result.index, 1)
+    next.splice(index, 1)
     return next
   })
   setStore("part", (part: Record<string, Part[] | undefined>) => {
@@ -300,7 +307,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
         input.client.session.messages({ sessionID: input.sessionID, limit: input.limit, before: input.before }),
       )
       const items = (messages.data ?? []).filter((x) => !!x?.info?.id)
-      const session = items.map((x) => x.info).sort((a, b) => cmp(a.id, b.id))
+      const session = items.map((x) => x.info).sort(compareMessages)
       const part = items.map((message) => ({ id: message.info.id, part: sortParts(message.parts) }))
       const cursor = messages.response.headers.get("x-next-cursor") ?? undefined
       return {
@@ -335,7 +342,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           }
           const [store] = globalSync.child(input.directory, { bootstrap: false })
           const cached = input.mode === "prepend" ? (store.message[input.sessionID] ?? []) : []
-          const message = input.mode === "prepend" ? merge(cached, next.session) : next.session
+          const message = input.mode === "prepend" ? merge(cached, next.session).sort(compareMessages) : next.session
           batch(() => {
             input.setStore("message", input.sessionID, reconcile(message, { key: "id" }))
             for (const p of next.part) {
