@@ -70,6 +70,15 @@ data:
             access_log off;
             return 200 'ok';
           }
+          # opencode's client probes <serverUrl>/global/health to pick its protocol, but
+          # builds that as an absolute path — which discards our /api/proxy/<envId> prefix
+          # and lands here. Answering it keeps protocol detection on v1; without this it
+          # falls through to its v2 default and the session list and event stream fail.
+          location = /global/health {
+            access_log off;
+            default_type application/json;
+            return 200 '{"healthy":true}';
+          }
           location /api/gateway {
             return 403;
           }

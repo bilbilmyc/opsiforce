@@ -1,14 +1,12 @@
 import type { Component } from 'solid-js';
 import { MemoryRouter, createMemoryHistory, type BaseRouterProps } from '@solidjs/router';
 import { type Platform } from '@opencode-ai/app/context/platform';
-import { base64Encode } from '@opencode-ai/util/encode';
+import { base64Encode } from '@opencode-ai/core/util/encode';
 
 export const platform: Platform = {
   platform: 'web',
   version: '0.1.0',
-  openLink: (url: string) => window.open(url, '_blank'),
-  back: () => window.history.back(),
-  forward: () => window.history.forward(),
+  openExternal: (url: string) => window.open(url, '_blank'),
   restart: async () => window.location.reload(),
   notify: async () => {},
 };
