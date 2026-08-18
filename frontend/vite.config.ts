@@ -5,121 +5,106 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import fs from "fs";
 
-const OC = (pkg: string) =>
-  path.resolve(import.meta.dirname, "opencode/packages", pkg, "src");
-const OC_APP_SRC = OC("app");
-const OC_UI_SRC = OC("ui");
-const OC_UTIL_SRC = OC("util");
-const OC_SDK_SRC = path.resolve(import.meta.dirname, "opencode/packages/sdk/js/src");
+const OC_PACKAGES_ROOT = path.resolve(import.meta.dirname, "opencode/packages");
 
-function opencodeResolver(): Plugin {
-  const uiExportMap: Array<{ pattern: string; target: string }> = [
-    { pattern: "context/*", target: "src/context/*.tsx" },
-    { pattern: "context", target: "src/context/index.ts" },
-    { pattern: "hooks", target: "src/hooks/index.ts" },
-    { pattern: "pierre/*", target: "src/pierre/*.ts" },
-    { pattern: "pierre", target: "src/pierre/index.ts" },
-    { pattern: "styles", target: "src/styles/index.css" },
-    { pattern: "styles/tailwind", target: "src/styles/tailwind/index.css" },
-    { pattern: "theme", target: "src/theme/index.ts" },
-    { pattern: "theme/*", target: "src/theme/*.ts" },
-    { pattern: "theme/context", target: "src/theme/context.tsx" },
-    {
-      pattern: "icons/provider",
-      target: "src/components/provider-icons/types.ts",
-    },
-    {
-      pattern: "icons/file-type",
-      target: "src/components/file-icons/types.ts",
-    },
-    { pattern: "icons/app", target: "src/components/app-icons/types.ts" },
-    { pattern: "font-loader", target: "src/font-loader.ts" },
-    { pattern: "fonts/*", target: "src/assets/fonts/*" },
-    { pattern: "audio/*", target: "src/assets/audio/*" },
-    { pattern: "i18n/*", target: "src/i18n/*.ts" },
-    { pattern: "*", target: "src/components/*.tsx" },
-  ];
+// Every vendored opencode package ships an `exports` map in its package.json.
+// Honouring it directly keeps this resolver correct across upgrades — the previous
+// hand-copied table drifted the moment upstream moved a file.
+const OC_PACKAGE_DIRS: Record<string, string> = {
+  app: "app",
+  ui: "ui",
+  core: "core",
+  schema: "schema",
+  "session-ui": "session-ui",
+  llm: "llm",
+  plugin: "plugin",
+  "effect-drizzle-sqlite": "effect-drizzle-sqlite",
+  sdk: "sdk/js",
+};
 
-  function resolveUiImport(subpath: string): string | null {
-    const uiRoot = path.resolve(import.meta.dirname, "opencode/packages/ui");
+const exportsCache = new Map<string, Record<string, unknown> | null>();
 
-    for (const { pattern, target } of uiExportMap) {
-      if (pattern === "*") continue;
-
-      if (pattern.includes("*")) {
-        const prefix = pattern.replace("*", "");
-        if (subpath.startsWith(prefix)) {
-          const rest = subpath.slice(prefix.length);
-          const resolved = path.join(uiRoot, target.replace("*", rest));
-          if (fs.existsSync(resolved)) return resolved;
-        }
-      } else if (subpath === pattern) {
-        const resolved = path.join(uiRoot, target);
-        if (fs.existsSync(resolved)) return resolved;
+function packageExports(pkgDir: string): Record<string, unknown> | null {
+  if (!exportsCache.has(pkgDir)) {
+    const manifest = path.join(OC_PACKAGES_ROOT, pkgDir, "package.json");
+    let parsed: Record<string, unknown> | null = null;
+    if (fs.existsSync(manifest)) {
+      try {
+        parsed = (JSON.parse(fs.readFileSync(manifest, "utf8")).exports ?? null) as Record<string, unknown> | null;
+      } catch {
+        parsed = null;
       }
     }
+    exportsCache.set(pkgDir, parsed);
+  }
+  return exportsCache.get(pkgDir) ?? null;
+}
 
-    const catchAll = path.join(uiRoot, "src/components", subpath + ".tsx");
-    if (fs.existsSync(catchAll)) return catchAll;
+/** Pick a file target out of an exports entry, which may be a string or a conditions object. */
+function exportTarget(entry: unknown): string | null {
+  if (typeof entry === "string") return entry;
+  if (entry && typeof entry === "object") {
+    const conditions = entry as Record<string, unknown>;
+    for (const key of ["solid", "import", "module", "default", "types"]) {
+      const resolved = exportTarget(conditions[key]);
+      if (resolved) return resolved;
+    }
+  }
+  return null;
+}
 
-    const catchAllTs = path.join(uiRoot, "src/components", subpath + ".ts");
-    if (fs.existsSync(catchAllTs)) return catchAllTs;
+function resolveFromExports(pkgDir: string, subpath: string): string | null {
+  const map = packageExports(pkgDir);
+  if (!map) return null;
+  const key = subpath ? `./${subpath}` : ".";
+  const root = path.join(OC_PACKAGES_ROOT, pkgDir);
 
-    const catchAllIndex = path.join(
-      uiRoot,
-      "src/components",
-      subpath,
-      "index.tsx",
-    );
-    if (fs.existsSync(catchAllIndex)) return catchAllIndex;
-
-    return null;
+  const exact = exportTarget(map[key]);
+  if (exact) {
+    const resolved = path.join(root, exact);
+    if (fs.existsSync(resolved)) return resolved;
   }
 
+  // Wildcard patterns, longest prefix first so "./context/*" beats "./*".
+  const wildcards = Object.keys(map)
+    .filter((candidate) => candidate.includes("*"))
+    .sort((a, b) => b.length - a.length);
+  for (const pattern of wildcards) {
+    const [prefix, suffix = ""] = pattern.split("*");
+    if (!key.startsWith(prefix) || !key.endsWith(suffix)) continue;
+    const rest = key.slice(prefix.length, key.length - suffix.length);
+    const target = exportTarget(map[pattern]);
+    if (!target) continue;
+    const resolved = path.join(root, target.replace("*", rest));
+    if (fs.existsSync(resolved)) return resolved;
+  }
+  return null;
+}
+
+/** Fallback for imports an exports map does not cover: probe <pkg>/src/<subpath>. */
+function resolveFromSource(pkgDir: string, subpath: string): string | null {
+  const root = path.join(OC_PACKAGES_ROOT, pkgDir, "src");
+  const target = subpath || "index";
+  for (const suffix of [".ts", ".tsx", "/index.ts", "/index.tsx", ""]) {
+    const candidate = path.join(root, target + suffix);
+    if (suffix === "" && !/\.[a-z]+$/.test(target)) continue;
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return null;
+}
+
+function opencodeResolver(): Plugin {
   return {
     name: "opencode-resolver",
     enforce: "pre",
     resolveId(source) {
-      if (source.startsWith("@opencode-ai/ui/")) {
-        const subpath = source.slice("@opencode-ai/ui/".length);
-        const resolved = resolveUiImport(subpath);
-        if (resolved) return resolved;
-      }
-
-      if (source.startsWith("@opencode-ai/util/")) {
-        const subpath = source.slice("@opencode-ai/util/".length);
-        const tsFile = path.join(OC_UTIL_SRC, subpath + ".ts");
-        if (fs.existsSync(tsFile)) return tsFile;
-        const tsxFile = path.join(OC_UTIL_SRC, subpath + ".tsx");
-        if (fs.existsSync(tsxFile)) return tsxFile;
-        const indexFile = path.join(OC_UTIL_SRC, subpath, "index.ts");
-        if (fs.existsSync(indexFile)) return indexFile;
-      }
-
-      if (source === "@opencode-ai/sdk") {
-        return path.join(OC_SDK_SRC, "index.ts");
-      }
-      if (source.startsWith("@opencode-ai/sdk/")) {
-        const subpath = source.slice("@opencode-ai/sdk/".length);
-        const tsFile = path.join(OC_SDK_SRC, subpath + ".ts");
-        if (fs.existsSync(tsFile)) return tsFile;
-        const indexFile = path.join(OC_SDK_SRC, subpath, "index.ts");
-        if (fs.existsSync(indexFile)) return indexFile;
-      }
-
-      if (source.startsWith("@opencode-ai/app/")) {
-        const subpath = source.slice("@opencode-ai/app/".length);
-        const tsxFile = path.join(OC_APP_SRC, subpath + ".tsx");
-        if (fs.existsSync(tsxFile)) return tsxFile;
-        const tsFile = path.join(OC_APP_SRC, subpath + ".ts");
-        if (fs.existsSync(tsFile)) return tsFile;
-        const indexFile = path.join(OC_APP_SRC, subpath, "index.ts");
-        if (fs.existsSync(indexFile)) return indexFile;
-        const indexTsxFile = path.join(OC_APP_SRC, subpath, "index.tsx");
-        if (fs.existsSync(indexTsxFile)) return indexTsxFile;
-      }
-
-      return null;
+      if (!source.startsWith("@opencode-ai/")) return null;
+      const rest = source.slice("@opencode-ai/".length);
+      const [name, ...segments] = rest.split("/");
+      const pkgDir = OC_PACKAGE_DIRS[name];
+      if (!pkgDir) return null;
+      const subpath = segments.join("/");
+      return resolveFromExports(pkgDir, subpath) ?? resolveFromSource(pkgDir, subpath);
     },
   };
 }
@@ -135,18 +120,33 @@ export default defineConfig(({ mode }) => ({
     tailwindcss(),
   ],
   resolve: {
-    alias: {
-      "@/": OC_APP_SRC + "/",
-      "~/": path.resolve(import.meta.dirname, "src") + "/",
-      "@opencode-ai/ui/styles/tailwind": path.resolve(
-        import.meta.dirname,
-        "opencode/packages/ui/src/styles/tailwind/index.css",
-      ),
-      "@opencode-ai/ui/styles": path.resolve(
-        import.meta.dirname,
-        "opencode/packages/ui/src/styles/index.css",
-      ),
-    },
+    // Array form so CSS entry points can be matched by pattern. Tailwind resolves
+    // `@import` itself rather than going through the plugin above, so the
+    // stylesheet patterns from each package's exports map are mirrored here.
+    alias: [
+      { find: "@/", replacement: path.join(OC_PACKAGES_ROOT, "app/src") + "/" },
+      { find: "~/", replacement: path.resolve(import.meta.dirname, "src") + "/" },
+      {
+        find: /^@opencode-ai\/ui\/v2\/styles\/(.*)$/,
+        replacement: path.join(OC_PACKAGES_ROOT, "ui/src/v2/styles/$1"),
+      },
+      {
+        find: /^@opencode-ai\/ui\/v2\/(.*\.css)$/,
+        replacement: path.join(OC_PACKAGES_ROOT, "ui/src/v2/components/$1"),
+      },
+      {
+        find: "@opencode-ai/ui/styles/tailwind",
+        replacement: path.join(OC_PACKAGES_ROOT, "ui/src/styles/tailwind/index.css"),
+      },
+      {
+        find: "@opencode-ai/ui/styles",
+        replacement: path.join(OC_PACKAGES_ROOT, "ui/src/styles/index.css"),
+      },
+      {
+        find: "@opencode-ai/session-ui/styles",
+        replacement: path.join(OC_PACKAGES_ROOT, "session-ui/src/styles/index.css"),
+      },
+    ],
   },
   server: {
     port: 8084,
@@ -170,6 +170,10 @@ export default defineConfig(({ mode }) => ({
   },
   worker: {
     format: "es",
+    // Workers bundle in a separate environment that does not inherit the top-level
+    // plugins, so the resolver is registered again here — session-ui's markdown and
+    // pierre workers import @opencode-ai/* directly.
+    plugins: () => [opencodeResolver()],
   },
   build: {
     target: "esnext",

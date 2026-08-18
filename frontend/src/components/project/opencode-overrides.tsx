@@ -21,6 +21,11 @@ export default function OpencodeOverrides() {
 
     settings.general.setShellToolPartsExpanded(false);
     settings.general.setEditToolPartsExpanded(false);
+    // Suppress upstream's onboarding noise in the embedded chat: the release-notes
+    // dialog (highlights.tsx gates on releaseNotes) and the "Introducing Tabs"
+    // corner toast (help-button.tsx gates on shouldDisplayTabsToast).
+    settings.general.setReleaseNotes(false);
+    settings.general.dismissTabsToast();
   });
 
   return null;

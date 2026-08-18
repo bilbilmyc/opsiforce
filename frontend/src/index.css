@@ -1,4 +1,11 @@
-@import 'tailwindcss';
+/* Tailwind auto-detection would scan the whole vendored opencode tree (32 packages,
+   ~3200 files) including desktop, tui, e2e and specs — none of which we compile, and
+   some of which its parser rejects outright. Scope it to what we actually ship. */
+@import 'tailwindcss' source(none);
+@source '.';
+@source '../opencode/packages/app/src';
+@source '../opencode/packages/ui/src';
+@source '../opencode/packages/session-ui/src';
 @import 'tw-animate-css';
 
 @theme {
@@ -135,7 +142,11 @@ body {
 .oc-chat-only button[aria-label='More options'],
 .oc-chat-only [data-action='prompt-attach'],
 .oc-chat-only div[data-session-title] h1,
-.oc-chat-only .flex-col.md\:flex-row > .h-auto:has([role='tablist']) {
+.oc-chat-only .flex-col.md\:flex-row > .h-auto:has([role='tablist']),
+.oc-chat-only header[data-slot='titlebar-v2'],
+/* empty-session screen: upstream's wordmark and the project picker below the composer */
+.oc-chat-only [data-component='session-new-design'] svg[viewBox='0 0 720 129'],
+.oc-chat-only [data-action='prompt-project'] {
   display: none !important;
 }
 
