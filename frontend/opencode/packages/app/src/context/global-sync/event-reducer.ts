@@ -1,3 +1,8 @@
+// OPSIFORCE LOCAL PATCH - do not drop when re-vendoring opencode (tree is upstream 1.3.2).
+// Backport of the upstream fix for the 48-bit message-ID wrap of 2026-08-14T11:19:55Z, after which
+// newly created IDs sort before ~2 years of prior history.
+// Upstream: anomalyco/opencode PR #41001 (first released in v1.18.15).
+// Changed here: insert live message.updated events by (time.created, id); message.removed uses a linear scan.
 import { Binary } from "@opencode-ai/util/binary"
 import { produce, reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type {
@@ -14,6 +19,7 @@ import type {
 import type { State, VcsCache } from "./types"
 import { trimSessions } from "./session-trim"
 import { dropSessionCaches } from "./session-cache"
+import { messageKey } from "@/utils/session-message"
 
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 
@@ -183,7 +189,7 @@ export function applyDirectoryEvent(input: {
         input.setStore("message", info.sessionID, [info])
         break
       }
-      const result = Binary.search(messages, info.id, (m) => m.id)
+      const result = Binary.search(messages, messageKey(info), messageKey)
       if (result.found) {
         input.setStore("message", info.sessionID, result.index, reconcile(info))
         break
@@ -203,8 +209,8 @@ export function applyDirectoryEvent(input: {
         produce((draft) => {
           const messages = draft.message[props.sessionID]
           if (messages) {
-            const result = Binary.search(messages, props.messageID, (m) => m.id)
-            if (result.found) messages.splice(result.index, 1)
+            const index = messages.findIndex((m) => m.id === props.messageID)
+            if (index >= 0) messages.splice(index, 1)
           }
           delete draft.part[props.messageID]
         }),
