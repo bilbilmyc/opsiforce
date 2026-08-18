@@ -4,7 +4,9 @@
 // Upstream: anomalyco/opencode PR #41001 (first released in v1.18.15).
 // Changed here: position live message.updated events by (time.created, id), but match an existing message
 //   by id first - the optimistic copy carries the client clock and the server's carries its own, so a
-//   key-based lookup would miss it and render the message twice. message.removed matches on id too.
+//   key-based lookup would miss it and render the message twice. When the matched message's key changed
+//   (client clock -> server clock) it is removed and reinserted at its correct position, so the array
+//   stays sorted for later Binary.search inserts. message.removed matches on id too.
 import { Binary } from "@opencode-ai/util/binary"
 import { produce, reconcile, type SetStoreFunction, type Store } from "solid-js/store"
 import type {
@@ -193,7 +195,18 @@ export function applyDirectoryEvent(input: {
       }
       const existing = messages.findIndex((m) => m.id === info.id)
       if (existing >= 0) {
-        input.setStore("message", info.sessionID, existing, reconcile(info))
+        if (messageKey(messages[existing]) === messageKey(info)) {
+          input.setStore("message", info.sessionID, existing, reconcile(info))
+          break
+        }
+        input.setStore(
+          "message",
+          info.sessionID,
+          produce((draft) => {
+            draft.splice(existing, 1)
+            draft.splice(Binary.search(draft, messageKey(info), messageKey).index, 0, info)
+          }),
+        )
         break
       }
       const result = Binary.search(messages, messageKey(info), messageKey)
