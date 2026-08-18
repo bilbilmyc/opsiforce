@@ -142,7 +142,8 @@ body {
 .oc-chat-only button[aria-label='More options'],
 .oc-chat-only [data-action='prompt-attach'],
 .oc-chat-only div[data-session-title] h1,
-.oc-chat-only .flex-col.md\:flex-row > .h-auto:has([role='tablist']) {
+.oc-chat-only .flex-col.md\:flex-row > .h-auto:has([role='tablist']),
+.oc-chat-only header[data-slot='titlebar-v2'] {
   display: none !important;
 }
 
