@@ -84,3 +84,9 @@ data:
   {{- if .Values.config.managedTenantRolePrefix }}
   MANAGED_TENANT_ROLE_PREFIX: {{ .Values.config.managedTenantRolePrefix | quote }}
   {{- end }}
+  {{- if .Values.config.ssoGroupMap }}
+  SSO_GROUP_MAP: {{ .Values.config.ssoGroupMap | quote }}
+  {{- end }}
+  {{- if .Values.config.defaultTenantName }}
+  DEFAULT_TENANT_NAME: {{ .Values.config.defaultTenantName | quote }}
+  {{- end }}

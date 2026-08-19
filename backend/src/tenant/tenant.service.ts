@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import crypto from 'crypto';
 import { db } from '../../db';
+import { getDefaultTenantName, mapGroupsToTenants } from '../permission/sso-group-map';
 import { tenantSettings, tenants } from '../../db/schema';
 import { BifrostService } from '../bifrost/bifrost.service';
 import { DefaultsService } from '../defaults/defaults.service';
@@ -27,6 +28,14 @@ export class TenantService {
       .map((g) => g.trim())
       .filter((g) => g.startsWith(prefix))
       .map((g) => g.slice(prefix.length));
+  }
+
+  resolveAccessibleTenantNames(groupsHeader: string | undefined): string[] {
+    const header = groupsHeader ?? '';
+    const defaultTenantName = getDefaultTenantName();
+    const groupTenants =
+      mapGroupsToTenants(header) ?? this.parseGroupsByPrefix(header, OPSIFORCE_TENANT_GROUP_PREFIX);
+    return defaultTenantName ? [...new Set([defaultTenantName, ...groupTenants])] : groupTenants;
   }
 
   private async ensureBifrostCustomer(tenant: typeof tenants.$inferSelect) {

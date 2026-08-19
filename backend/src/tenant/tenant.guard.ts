@@ -1,7 +1,7 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { FastifyRequest } from 'fastify';
-import { OPSIFORCE_TENANT_GROUP_PREFIX, TenantService } from './tenant.service';
+import { TenantService } from './tenant.service';
 import { IS_PUBLIC_KEY, type TenantContext } from './tenant.decorator';
 
 @Injectable()
@@ -19,10 +19,8 @@ export class TenantGuard implements CanActivate {
     if (isPublic) return true;
 
     const request = context.switchToHttp().getRequest<FastifyRequest & { tenantContext: TenantContext }>();
-    const groupsHeader = request.headers['x-forwarded-groups'] as string | undefined;
-    if (!groupsHeader) throw new ForbiddenException('No tenant groups found');
-
-    const tenantNames = this.tenantService.parseGroupsByPrefix(groupsHeader, OPSIFORCE_TENANT_GROUP_PREFIX);
+    const groupsHeader = (request.headers['x-forwarded-groups'] as string | undefined) ?? '';
+    const tenantNames = this.tenantService.resolveAccessibleTenantNames(groupsHeader);
     if (tenantNames.length === 0) throw new ForbiddenException('No opsiforce tenants assigned');
 
     const query = request.query as { tenant?: string } | undefined;

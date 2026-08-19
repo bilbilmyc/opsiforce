@@ -57,6 +57,8 @@ config:
   managedOidcClientSecret: ""
   managedOidcIssuerUrl: ""
   managedTenantRolePrefix: ""
+  ssoGroupMap: ""
+  defaultTenantName: ""
   agentAffinity:
     nodeAffinity:
       requiredDuringSchedulingIgnoredDuringExecution:
