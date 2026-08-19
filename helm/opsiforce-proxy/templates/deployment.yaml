@@ -32,6 +32,11 @@ spec:
                 items:
                   - key: nginx.conf.template
                     path: nginx.conf.template
+            {{- if .Values.oauth2Proxy.credentialsSecret }}
+            - name: auth-credentials
+              secret:
+                secretName: {{ .Values.oauth2Proxy.credentialsSecret }}
+            {{- end }}
           containers:
           - name: {{ .Chart.Name }}
             image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
@@ -78,7 +83,7 @@ spec:
             resources:
               {{- toYaml .Values.resources | nindent 18 }}
             args:
-                - --provider=keycloak-oidc
+                - --provider={{ .Values.oauth2Proxy.provider | default "keycloak-oidc" }}
                 - --http-address=0.0.0.0:4180
                 - --upstream="http://localhost:{{ .Values.service.port }}/"
                 - --client-id={{ .Values.oauth2Proxy.clientId }}
@@ -89,11 +94,13 @@ spec:
                 - --redis-connection-url={{ .Values.oauth2Proxy.redisPath }}
                 - --skip-provider-button=true
                 - --email-domain=*
-                - --oidc-email-claim=preferred_username
+                - --oidc-email-claim={{ .Values.oauth2Proxy.emailClaim | default "preferred_username" }}
                 - --pass-access-token=true
                 - --client-secret={{ .Values.oauth2Proxy.clientSecret }}
                 - --oidc-issuer-url={{ .Values.oauth2Proxy.issuerUrl }}
+                {{- if .Values.oauth2Proxy.logoutUrl }}
                 - --backend-logout-url={{ .Values.oauth2Proxy.logoutUrl }}
+                {{- end }}
                 - --cookie-secure=false
                 - --skip-jwt-bearer-tokens=true
                 - --cookie-csrf-per-request=true
@@ -106,4 +113,13 @@ spec:
                 - --skip-auth-route=GET=^/manifest.webmanifest$
                 - --skip-auth-route=POST=^/api/external-services/webhooks/.*$
                 - --cookie-refresh=4m
+                {{- range .Values.oauth2Proxy.extraArgs }}
+                - {{ . | quote }}
+                {{- end }}
+            {{- if .Values.oauth2Proxy.credentialsSecret }}
+            volumeMounts:
+              - name: auth-credentials
+                mountPath: /secrets
+                readOnly: true
+            {{- end }}
           {{- end }}

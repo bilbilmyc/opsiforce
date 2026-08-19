@@ -53,6 +53,8 @@ proxy:
 
 oauth2Proxy:
   image:
+  provider: keycloak-oidc
+  emailClaim: preferred_username
   clientId:
   cookieSecret:
   cookieDomain:
@@ -62,6 +64,8 @@ oauth2Proxy:
   logoutUrl:
   redirectUrl:
   redisPath:
+  extraArgs: []
+  credentialsSecret: ""
 
 imagePullSecrets:
   - name: ghcr-pull-secret

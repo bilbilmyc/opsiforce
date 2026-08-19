@@ -3,7 +3,7 @@ import { FastifyRequest } from 'fastify';
 import { Perms } from '../permission/permission.constants';
 import { RequirePermission } from '../permission/permission.guard';
 import { CurrentTenant, type TenantContext } from './tenant.decorator';
-import { OPSIFORCE_TENANT_GROUP_PREFIX, TenantService } from './tenant.service';
+import { TenantService } from './tenant.service';
 import type { TenantConfigResponse, UpdateTenantConfigDto } from './tenant.types';
 
 @Controller('tenants')
@@ -13,7 +13,7 @@ export class TenantController {
   @Get()
   async findAll(@Req() req: FastifyRequest) {
     const groupsHeader = (req.headers['x-forwarded-groups'] as string) ?? '';
-    const tenantNames = this.tenantService.parseGroupsByPrefix(groupsHeader, OPSIFORCE_TENANT_GROUP_PREFIX);
+    const tenantNames = this.tenantService.resolveAccessibleTenantNames(groupsHeader);
     return this.tenantService.getOrCreateTenants(tenantNames);
   }
 

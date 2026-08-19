@@ -1,7 +1,11 @@
+import { mapGroupsToPermissions } from './sso-group-map';
+
 const ROLE_PREFIX = 'role:opsiforce_';
 const TENANT_PREFIX = 'role:opsiforce_tenant_name_';
 
 export function parsePermissions(groupsHeader: string): string[] {
+  const mapped = mapGroupsToPermissions(groupsHeader);
+  if (mapped) return mapped;
   return groupsHeader
     .split(',')
     .map((g) => g.trim())

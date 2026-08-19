@@ -16,7 +16,7 @@ import { ProjectService, type EnsureEnvironmentResult, type ProjectActivityKind 
 import { RequestLogMode } from '../project/project.types';
 import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
 import type { ProjectEnvironmentContext } from '../project-environment/project-environment.types';
-import { OPSIFORCE_TENANT_GROUP_PREFIX, TenantService } from '../tenant/tenant.service';
+import { TenantService } from '../tenant/tenant.service';
 import { Public } from '../tenant/tenant.decorator';
 import { AgentUpdateService } from '../agent-update/agent-update.service';
 import { ProxyService } from './proxy.service';
@@ -156,9 +156,7 @@ export class ProxyController {
   }
 
   private async assertProjectTenantAccess(tenantId: string, groupsHeader: string | undefined): Promise<void> {
-    if (!groupsHeader) throw new ForbiddenException('No tenant groups found');
-
-    const tenantNames = this.tenantService.parseGroupsByPrefix(groupsHeader, OPSIFORCE_TENANT_GROUP_PREFIX);
+    const tenantNames = this.tenantService.resolveAccessibleTenantNames(groupsHeader);
     if (tenantNames.length === 0) throw new ForbiddenException('No opsiforce tenants assigned');
 
     const tenant = await this.tenantService.getTenantById(tenantId);

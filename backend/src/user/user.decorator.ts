@@ -12,10 +12,10 @@ export interface UserContext {
 export const CurrentUser = createParamDecorator((_data: unknown, ctx: ExecutionContext): UserContext => {
   const request = ctx.switchToHttp().getRequest<FastifyRequest>();
   const userId = getUserIdHeader(request);
-  const username = getUsernameHeader(request);
-  if (!userId || !username) {
+  if (!userId) {
     throw new UnauthorizedException('No authenticated user');
   }
+  const username = getUsernameHeader(request) ?? getEmailHeader(request) ?? userId;
   return {
     userId,
     username,
