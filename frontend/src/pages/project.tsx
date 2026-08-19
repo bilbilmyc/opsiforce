@@ -140,6 +140,7 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
                     projectId={props.projectId}
                     environmentId={activeEnvironmentId()}
                     router={router()}
+                    sessionId={connection.sessionId()}
                     currentTitle={statusQuery.data?.title ?? null}
                     onPreviewReload={() => reloadPreview()}
                   />
