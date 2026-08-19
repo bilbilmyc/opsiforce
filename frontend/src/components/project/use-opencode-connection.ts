@@ -19,7 +19,6 @@ export interface OpenCodeConnectionOptions {
 
 export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
   const [router, setRouter] = createSignal<Component<BaseRouterProps> | null>(null);
-  const [sessionId, setSessionId] = createSignal<string | undefined>(undefined);
   const syncProjectTitle = useSyncProjectTitle();
 
   let connecting = false;
@@ -81,15 +80,13 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
     }
     const existingSessionId = await resolveSessionId(environmentId);
     if (!isActiveEnv()) return;
-    const resolvedSessionId = existingSessionId ?? (await startFromInitialPrompt(environmentId));
+    const sessionId = existingSessionId ?? (await startFromInitialPrompt(environmentId));
     if (!isActiveEnv()) return;
-    setSessionId(resolvedSessionId);
-    setRouter(() => createDirectoryRouter(directory, resolvedSessionId));
+    setRouter(() => createDirectoryRouter(directory, sessionId));
   }
 
   function reset() {
     setRouter(null);
-    setSessionId(undefined);
     connecting = false;
   }
 
@@ -122,5 +119,5 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
     prevStatus = status;
   });
 
-  return { router, sessionId, reset };
+  return { router, reset };
 }
