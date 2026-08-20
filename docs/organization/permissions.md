@@ -26,6 +26,12 @@ This is the load-bearing rule. `GET /api/permissions` powers **UI gating only** 
 
 **A route with no `@RequirePermission` is open to any authenticated member** — the guard allows when it finds no metadata. So frontend-only gating hides the UI while leaving the endpoint reachable. That is exactly how the Schedules admin endpoints were callable by everyone until a class-level guard was added. When you gate a feature, gate the endpoint too.
 
+## Platform-scope permissions
+
+Almost every route is organization-scoped: the global `TenantGuard` requires membership in the requested organization and stamps `request.tenantContext`, which services filter by. A handful of Admin views span *all* organizations, and for those "the current organization" is meaningless. Such a route is marked `@PlatformScope()` — the guard still demands `x-forwarded-groups` (it remains an authenticated-human route) but resolves no organization and stamps no context, so `@CurrentTenant()` must not be used on it. Membership in any organization is deliberately not required, so a pure-operator account works. Holding the route's `@RequirePermission` is the only gate. See [ADR-0027](../adr/0027-platform-scope-routes-opt-out-of-tenant-resolution.md).
+
+The `platform_` segment in the permission name marks this scope (`can_manage_platform_defaults`, `can_view_platform_storage`). Platform-scope permissions get their own standalone Keycloak group and stay out of `OPSIFORCE_ADMIN_GROUP_PERMISSIONS`, so the default admin bundle never grants cross-organization visibility.
+
 ## Adding a permission
 
 1. **Pulumi** — add the role to `OPSIFORCE_ALL_PERMISSIONS` (and the admin group if appropriate) and create a group via `createGroupWithRoles()`.

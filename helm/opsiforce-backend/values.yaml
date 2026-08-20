@@ -29,6 +29,7 @@ config:
   cephfsPvcName: "opsiforce-cephfs"
   storageType: "cephfs"
   storageMountPath: "/workspace-data"
+  storageClaimSize: "200Gi"
   proxyControlToken: ""
   agentWorkspaceUpdateOnStartup: "true"
   agentUpdateJobTimeoutMs: "1800000"

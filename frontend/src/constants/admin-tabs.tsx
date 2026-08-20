@@ -1,4 +1,4 @@
-import { Boxes, Cable, ChartColumn } from '~/components/icons';
+import { Boxes, Cable, ChartColumn, Database } from '~/components/icons';
 import { Permission } from '~/constants/permissions';
 import { firstPermittedRailTab, railTabForPath, type RailTab } from '~/constants/section-rail';
 
@@ -28,6 +28,14 @@ export const ADMIN_TABS: RailTab[] = [
     group: 'Operations',
     icon: Cable,
     isPermitted: (has) => has(Permission.manageExternalServices),
+  },
+  {
+    to: '/admin/storage',
+    label: 'Storage',
+    description: 'Disk usage on the shared storage volume, across all organizations.',
+    group: 'Operations',
+    icon: Database,
+    isPermitted: (has) => has(Permission.viewPlatformStorage),
   },
 ];
 

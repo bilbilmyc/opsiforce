@@ -23,6 +23,7 @@ import { Route as SettingsDefaultsRouteImport } from './routes/settings/defaults
 import { Route as SettingsBillingRouteImport } from './routes/settings/billing'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
 import { Route as AdminPodsRouteImport } from './routes/admin/pods'
+import { Route as AdminStorageRouteImport } from './routes/admin/storage'
 import { Route as AdminExternalServicesIndexRouteImport } from './routes/admin/external-services/index'
 import { Route as AdminExternalServicesUsageRouteImport } from './routes/admin/external-services/usage'
 
@@ -96,6 +97,11 @@ const AdminPodsRoute = AdminPodsRouteImport.update({
   path: '/pods',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminStorageRoute = AdminStorageRouteImport.update({
+  id: '/storage',
+  path: '/storage',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminExternalServicesIndexRoute =
   AdminExternalServicesIndexRouteImport.update({
     id: '/external-services/',
@@ -116,6 +122,7 @@ export interface FileRoutesByFullPath {
   '/permission-denied': typeof PermissionDeniedRoute
   '/schedules': typeof SchedulesRoute
   '/admin/pods': typeof AdminPodsRoute
+  '/admin/storage': typeof AdminStorageRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/settings/billing': typeof SettingsBillingRoute
   '/settings/defaults': typeof SettingsDefaultsRoute
@@ -133,6 +140,7 @@ export interface FileRoutesByTo {
   '/permission-denied': typeof PermissionDeniedRoute
   '/schedules': typeof SchedulesRoute
   '/admin/pods': typeof AdminPodsRoute
+  '/admin/storage': typeof AdminStorageRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/settings/billing': typeof SettingsBillingRoute
   '/settings/defaults': typeof SettingsDefaultsRoute
@@ -152,6 +160,7 @@ export interface FileRoutesById {
   '/permission-denied': typeof PermissionDeniedRoute
   '/schedules': typeof SchedulesRoute
   '/admin/pods': typeof AdminPodsRoute
+  '/admin/storage': typeof AdminStorageRoute
   '/projects/$projectId': typeof ProjectsProjectIdRoute
   '/settings/billing': typeof SettingsBillingRoute
   '/settings/defaults': typeof SettingsDefaultsRoute
@@ -172,6 +181,7 @@ export interface FileRouteTypes {
     | '/permission-denied'
     | '/schedules'
     | '/admin/pods'
+    | '/admin/storage'
     | '/projects/$projectId'
     | '/settings/billing'
     | '/settings/defaults'
@@ -189,6 +199,7 @@ export interface FileRouteTypes {
     | '/permission-denied'
     | '/schedules'
     | '/admin/pods'
+    | '/admin/storage'
     | '/projects/$projectId'
     | '/settings/billing'
     | '/settings/defaults'
@@ -207,6 +218,7 @@ export interface FileRouteTypes {
     | '/permission-denied'
     | '/schedules'
     | '/admin/pods'
+    | '/admin/storage'
     | '/projects/$projectId'
     | '/settings/billing'
     | '/settings/defaults'
@@ -328,6 +340,13 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof AdminPodsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/storage': {
+      id: '/admin/storage'
+      path: '/storage'
+      fullPath: '/admin/storage'
+      preLoaderRoute: typeof AdminStorageRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/external-services/': {
       id: '/admin/external-services/'
       path: '/external-services'
@@ -347,12 +366,14 @@ declare module '@tanstack/solid-router' {
 
 interface AdminRouteRouteChildren {
   AdminPodsRoute: typeof AdminPodsRoute
+  AdminStorageRoute: typeof AdminStorageRoute
   AdminExternalServicesUsageRoute: typeof AdminExternalServicesUsageRoute
   AdminExternalServicesIndexRoute: typeof AdminExternalServicesIndexRoute
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminPodsRoute: AdminPodsRoute,
+  AdminStorageRoute: AdminStorageRoute,
   AdminExternalServicesUsageRoute: AdminExternalServicesUsageRoute,
   AdminExternalServicesIndexRoute: AdminExternalServicesIndexRoute,
 }

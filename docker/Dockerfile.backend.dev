@@ -2,7 +2,7 @@ FROM node:24.18.0-alpine
 
 ARG PKG_PREFIX=
 
-RUN apk add --no-cache python3 make g++ git
+RUN apk add --no-cache python3 make g++ git attr
 
 WORKDIR /app
 
