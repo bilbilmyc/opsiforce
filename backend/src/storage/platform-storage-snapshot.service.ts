@@ -44,6 +44,11 @@ interface TombstoneRow {
   directory: string;
 }
 
+interface OrphanScan {
+  directories: string[];
+  error: boolean;
+}
+
 interface ClaimTotals {
   capacityBytes: number;
   usedBytes: number;
@@ -73,17 +78,17 @@ export class PlatformStorageSnapshotService {
       this.loadTenantNames(),
     ]);
 
-    const orphanedDirectories = await this.findOrphanedDirectories(liveEnvironments, tombstones);
+    const orphanScan = await this.findOrphanedDirectories(liveEnvironments, tombstones);
     const usage = await this.directoryUsage.measure([
       ...liveEnvironments.map((row) => row.directory),
       ...tombstones.map((row) => row.directory),
-      ...orphanedDirectories,
+      ...orphanScan.directories,
       EXPORTS_ROOT,
       IMPORTS_ROOT,
     ]);
 
     const tenantViews = this.buildTenants(liveEnvironments, tombstones, tenantNames, usage);
-    const buckets = this.buildBuckets(liveEnvironments, tombstones, orphanedDirectories, usage);
+    const buckets = this.buildBuckets(liveEnvironments, tombstones, orphanScan, usage);
 
     const attributedBytes =
       tenantViews.reduce((total, tenant) => total + tenant.totalBytes, 0) +
@@ -102,7 +107,7 @@ export class PlatformStorageSnapshotService {
       tenants: tenantViews,
       buckets,
       unaccountedBytes: claim.usedBytes - attributedBytes,
-      incomplete: [...usage.values()].some((entry) => entry.error),
+      incomplete: orphanScan.error || [...usage.values()].some((entry) => entry.error),
     };
   }
 
@@ -178,7 +183,7 @@ export class PlatformStorageSnapshotService {
   private async findOrphanedDirectories(
     liveEnvironments: LiveEnvironmentRow[],
     tombstones: TombstoneRow[]
-  ): Promise<string[]> {
+  ): Promise<OrphanScan> {
     const knownDirectories = new Set<string>([
       ...liveEnvironments.map((row) => row.directory),
       ...tombstones.map((row) => row.directory),
@@ -197,6 +202,7 @@ export class PlatformStorageSnapshotService {
 
     const orphaned: string[] = [];
     const pending = [PROJECTS_ROOT];
+    let scanFailed = false;
 
     while (pending.length > 0) {
       const relativeDirectory = pending.pop();
@@ -205,6 +211,7 @@ export class PlatformStorageSnapshotService {
         withFileTypes: true,
       }).catch((err: NodeJS.ErrnoException) => {
         if (err.code !== 'ENOENT') {
+          scanFailed = true;
           this.logger.warn(`Failed to scan ${relativeDirectory} for orphans: ${err.message}`);
         }
         return [];
@@ -219,7 +226,7 @@ export class PlatformStorageSnapshotService {
       }
     }
 
-    return orphaned;
+    return { directories: orphaned, error: scanFailed };
   }
 
   private buildTenants(
@@ -291,7 +298,7 @@ export class PlatformStorageSnapshotService {
   private buildBuckets(
     liveEnvironments: LiveEnvironmentRow[],
     tombstones: TombstoneRow[],
-    orphanedDirectories: string[],
+    orphanScan: OrphanScan,
     usage: Map<string, DirectoryUsage>
   ): PlatformStorageBucketsView {
     const sum = (directories: string[]): PlatformStorageBucketView =>
@@ -303,12 +310,16 @@ export class PlatformStorageSnapshotService {
         { bytes: 0, error: false }
       );
 
-    const orphaned = sum(orphanedDirectories);
+    const orphaned = sum(orphanScan.directories);
 
     return {
       pool: sum(liveEnvironments.filter((row) => row.tenantId === null).map((row) => row.directory)),
       tombstoned: sum(tombstones.filter((row) => row.tenantId === null).map((row) => row.directory)),
-      orphaned: { ...orphaned, count: orphanedDirectories.length },
+      orphaned: {
+        bytes: orphaned.bytes,
+        error: orphaned.error || orphanScan.error,
+        count: orphanScan.directories.length,
+      },
       exports: sum([EXPORTS_ROOT]),
       imports: sum([IMPORTS_ROOT]),
     };
