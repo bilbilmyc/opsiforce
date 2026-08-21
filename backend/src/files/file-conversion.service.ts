@@ -116,10 +116,12 @@ export class FileConversionService implements OnModuleDestroy {
 
   private track(job: ConversionJob): void {
     this.jobs.set(job.id, job);
-    while (this.jobs.size > MAX_TRACKED_JOBS) {
-      const oldest = this.jobs.keys().next();
-      if (oldest.done) break;
-      this.jobs.delete(oldest.value);
+    if (this.jobs.size <= MAX_TRACKED_JOBS) return;
+
+    for (const [id, tracked] of this.jobs) {
+      if (this.jobs.size <= MAX_TRACKED_JOBS) break;
+      if (tracked.status === ConversionStatus.Pending) continue;
+      this.jobs.delete(id);
     }
   }
 
