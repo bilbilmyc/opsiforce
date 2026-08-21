@@ -1,10 +1,13 @@
 import { createFileRoute, useNavigate } from '@tanstack/solid-router';
-import { createSignal, For, Show } from 'solid-js';
+import { createEffect, createSignal, For, Show } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { type Project } from '~/api/client';
 import { useCreateDefaultProject } from '~/api/default-project-target';
 import { usePermissions } from '~/api/permissions';
+import { useAccessibleTenants } from '~/api/tenants';
 import { Permission } from '~/constants/permissions';
+import { firstPermittedAdminTab } from '~/constants/admin-tabs';
+import Spinner from '~/components/ui/spinner';
 import { EXAMPLES, type Example } from '~/data/examples';
 import { ArrowUp, LoaderCircle, Upload } from '~/components/icons';
 import { ProjectImportDialog } from '~/components/project/project-import-dialog';
@@ -37,6 +40,36 @@ function ExampleCard(props: { example: Example; onClick: () => void }) {
 }
 
 function HomePage() {
+  const navigate = useNavigate();
+  const tenants = useAccessibleTenants();
+  const { permissions, hasPermission } = usePermissions();
+
+  const inOrganization = () => (tenants.data?.length ?? 0) > 0;
+  const platformDestination = () => firstPermittedAdminTab(hasPermission);
+
+  createEffect(() => {
+    if (tenants.isPending || permissions.isPending || inOrganization()) return;
+    const destination = platformDestination();
+    if (destination) navigate({ to: destination.to, replace: true });
+  });
+
+  return (
+    <Show when={!tenants.isPending && !inOrganization()} fallback={<ProjectComposer />}>
+      <div class="flex h-full items-center justify-center px-6 text-center">
+        <Show when={!platformDestination()} fallback={<Spinner />}>
+          <div class="flex flex-col gap-2">
+            <p class="text-sm font-medium text-foreground">No organization yet</p>
+            <p class="text-xs text-muted-foreground">
+              Your account is not a member of any organization. Ask an administrator to add you to one.
+            </p>
+          </div>
+        </Show>
+      </div>
+    </Show>
+  );
+}
+
+function ProjectComposer() {
   const navigate = useNavigate();
   const createDefaultProject = useCreateDefaultProject();
   const { hasPermission } = usePermissions();
