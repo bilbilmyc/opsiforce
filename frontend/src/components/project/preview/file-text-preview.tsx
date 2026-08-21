@@ -19,7 +19,7 @@ export interface FileTextPreviewProps {
 }
 
 export function FileTextPreview(props: FileTextPreviewProps) {
-  const state = createFileFetch(() => props.url, readText);
+  const state = createFileFetch(() => props.url, readText, MAX_TEXT_PREVIEW_BYTES);
   const content = () => loadedText(state());
 
   const source = () => {

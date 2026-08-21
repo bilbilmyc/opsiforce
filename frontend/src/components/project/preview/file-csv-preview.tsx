@@ -23,7 +23,7 @@ export interface FileCsvPreviewProps {
 }
 
 export function FileCsvPreview(props: FileCsvPreviewProps) {
-  const state = createFileFetch(() => props.url, readTable);
+  const state = createFileFetch(() => props.url, readTable, MAX_TABLE_PREVIEW_BYTES);
 
   return (
     <Switch>
