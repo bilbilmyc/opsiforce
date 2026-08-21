@@ -44,11 +44,6 @@ interface TombstoneRow {
   directory: string;
 }
 
-interface TenantIdentity {
-  slug: string;
-  displayName: string;
-}
-
 interface OrphanScan {
   directories: string[];
   error: boolean;
@@ -76,11 +71,11 @@ export class PlatformStorageSnapshotService {
   }
 
   async build(): Promise<PlatformStorageView> {
-    const [claim, liveEnvironments, tombstones, tenantIdentities] = await Promise.all([
+    const [claim, liveEnvironments, tombstones, tenantNames] = await Promise.all([
       this.readClaimTotals(),
       this.loadLiveEnvironments(),
       this.loadTombstones(),
-      this.loadTenantIdentities(),
+      this.loadTenantNames(),
     ]);
 
     const orphanScan = await this.findOrphanedDirectories(liveEnvironments, tombstones);
@@ -92,7 +87,7 @@ export class PlatformStorageSnapshotService {
       IMPORTS_ROOT,
     ]);
 
-    const tenantViews = this.buildTenants(liveEnvironments, tombstones, tenantIdentities, usage);
+    const tenantViews = this.buildTenants(liveEnvironments, tombstones, tenantNames, usage);
     const buckets = this.buildBuckets(liveEnvironments, tombstones, orphanScan, usage);
 
     const attributedBytes =
@@ -180,11 +175,9 @@ export class PlatformStorageSnapshotService {
     return [...byDirectory.values()];
   }
 
-  private async loadTenantIdentities(): Promise<Map<string, TenantIdentity>> {
-    const rows = await db
-      .select({ id: tenants.id, name: tenants.name, displayName: tenants.displayName })
-      .from(tenants);
-    return new Map(rows.map((row) => [row.id, { slug: row.name, displayName: row.displayName }]));
+  private async loadTenantNames(): Promise<Map<string, string>> {
+    const rows = await db.select({ id: tenants.id, displayName: tenants.displayName }).from(tenants);
+    return new Map(rows.map((row) => [row.id, row.displayName]));
   }
 
   private async findOrphanedDirectories(
@@ -239,7 +232,7 @@ export class PlatformStorageSnapshotService {
   private buildTenants(
     liveEnvironments: LiveEnvironmentRow[],
     tombstones: TombstoneRow[],
-    tenantIdentities: Map<string, TenantIdentity>,
+    tenantNames: Map<string, string>,
     usage: Map<string, DirectoryUsage>
   ): PlatformStorageTenantView[] {
     const environmentsByTenantProject = new Map<string, Map<string, PlatformStorageEnvironmentView[]>>();
@@ -289,12 +282,9 @@ export class PlatformStorageSnapshotService {
           .toSorted(compareProjects);
         const pendingDeletion = pendingDeletionByTenant.get(tenantId) ?? emptyPendingDeletion();
 
-        const identity = tenantIdentities.get(tenantId);
-
         return {
           id: tenantId,
-          name: identity?.displayName ?? tenantId,
-          slug: identity?.slug ?? '',
+          name: tenantNames.get(tenantId) ?? tenantId,
           totalBytes:
             projectViews.reduce((total, project) => total + project.totalBytes, 0) + pendingDeletion.bytes,
           error: projectViews.some((project) => project.error) || pendingDeletion.error,

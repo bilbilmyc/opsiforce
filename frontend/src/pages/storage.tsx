@@ -1,6 +1,4 @@
 import { createMemo, createSignal, For, Show, type Component, type JSX } from 'solid-js';
-import { Link } from '@tanstack/solid-router';
-import { createTenantState } from '~/lib/tenant-state';
 import {
   usePlatformStorage,
   type PlatformStorageBuckets,
@@ -267,7 +265,6 @@ function LegendItem(props: { color: string; label: string }) {
 }
 
 function RollupTable(props: { snapshot: PlatformStorageView }) {
-  const [currentTenant] = createTenantState();
   const tenants = useToggleSet();
   const projects = useToggleSet();
 
@@ -312,7 +309,6 @@ function RollupTable(props: { snapshot: PlatformStorageView }) {
                           project={project}
                           shareBaseBytes={shareBaseBytes()}
                           maxBytes={largestTenantBytes()}
-                          openable={tenant.slug === currentTenant()}
                           expanded={projects.has(project.id)}
                           onToggle={() => projects.toggle(project.id)}
                         />
@@ -532,11 +528,9 @@ function ProjectRow(props: {
   project: PlatformStorageProject;
   shareBaseBytes: number;
   maxBytes: number;
-  openable: boolean;
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const title = () => props.project.title?.trim() || 'Untitled project';
   return (
     <TableRow class="cursor-pointer" onClick={() => props.onToggle()}>
       <TableCell>
@@ -545,18 +539,7 @@ function ProjectRow(props: {
             class={cn('w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform', props.expanded && 'rotate-90')}
           />
           <FolderKanban class="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-          <Show when={props.openable} fallback={<span class="text-sm truncate">{title()}</span>}>
-            <Link
-              to="/projects/$projectId"
-              params={{ projectId: props.project.id }}
-              search={{ prompt: undefined }}
-              onClick={(event: MouseEvent) => event.stopPropagation()}
-              class="text-sm truncate hover:underline"
-              title="Open project"
-            >
-              {title()}
-            </Link>
-          </Show>
+          <span class="text-sm truncate">{props.project.title?.trim() || 'Untitled project'}</span>
           <Badge variant="secondary" class="text-[10px] px-1.5 py-0 shrink-0">
             {props.project.environments.length}
           </Badge>

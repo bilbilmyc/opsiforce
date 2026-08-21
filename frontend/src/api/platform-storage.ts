@@ -26,7 +26,6 @@ export interface PlatformStoragePendingDeletion {
 export interface PlatformStorageTenant {
   id: string;
   name: string;
-  slug: string;
   totalBytes: number;
   error: boolean;
   pendingDeletion: PlatformStoragePendingDeletion;
