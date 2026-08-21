@@ -37,7 +37,14 @@ const INLINE_CONTENT_TYPES = new Set([
 
 const SANDBOXED_CONTENT_TYPES = new Set(['text/html; charset=utf-8']);
 
-const SANDBOX_POLICY = 'sandbox allow-scripts';
+const SANDBOX_POLICY = [
+  'sandbox allow-scripts',
+  "default-src 'none'",
+  "script-src 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'unsafe-inline'",
+  'img-src data: blob:',
+  'font-src data:',
+].join('; ');
 
 export const FALLBACK_CONTENT_TYPE = 'application/octet-stream';
 
