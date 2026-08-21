@@ -29,6 +29,7 @@ Deleting a project does not remove its files immediately — it writes a tombsto
 
 ## See also
 
+- [Storage](storage.md) — how the bytes on this volume are counted and attributed back to Organizations.
 - [Pod Lifecycle](pod-lifecycle.md) — pod replacement, suspension, and the deterministic naming that makes the volume re-attach.
 - [Project Environments](../projects/environments.md) — why each environment has its own directory and session store.
 - Code: `backend/db/schema.ts` (`project_environments`, `deleted_projects`), `backend/src/pod/pod.template.ts` (XDG + `subPath`), `backend/src/cleanup/` (the workspace-cleanup queue/cron).

@@ -16,6 +16,7 @@
 - [Pods](runtime/pods.md) — the read-only operational view of running pods ([ADR-0013](adr/0013-pods-view-reads-live-keepalive-from-redis.md))
 - [Pending Project Pools](runtime/pool.md) — pre-baked projects for instant `New Project` claim
 - [Persistence](runtime/persistence.md) — what survives a pod swap, XDG layout, resume, workspace cleanup
+- [Storage](runtime/storage.md) — platform-wide disk usage on the shared claim ([ADR-0028](adr/0028-storage-view-computes-usage-on-demand-from-cephfs-rstats.md))
 - [Resources](runtime/resources.md) — per-project pod CPU/memory class ([ADR-0005](adr/0005-pod-class-project-level-snapshot.md))
 - [Pod Tools](runtime/pod-tools.md) — the embedded VS Code (code-server) and DB viewer (Datasette)
 

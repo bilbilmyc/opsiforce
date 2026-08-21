@@ -26,6 +26,14 @@ This is the load-bearing rule. `GET /api/permissions` powers **UI gating only** 
 
 **A route with no `@RequirePermission` is open to any authenticated member** — the guard allows when it finds no metadata. So frontend-only gating hides the UI while leaving the endpoint reachable. That is exactly how the Schedules admin endpoints were callable by everyone until a class-level guard was added. When you gate a feature, gate the endpoint too.
 
+## Platform-scope permissions
+
+Almost every route is organization-scoped: the global `TenantGuard` requires membership in the requested organization and stamps `request.tenantContext`, which services filter by. A handful of Admin views span *all* organizations, and for those "the current organization" is meaningless. Such a route is marked `@PlatformScope()` — the guard still demands `x-forwarded-groups` (it remains an authenticated-human route) but resolves no organization and stamps no context, so `@CurrentTenant()` must not be used on it. Holding the route's `@RequirePermission` is the only gate. The two discovery endpoints are platform-scope for the same reason — permissions (`GET /api/permissions`) and the caller's organization list (`GET /api/tenants`) both read only the groups header, so neither has any tenant to resolve.
+
+A platform-scope route needing no organization is not the same as the product offering organization-less accounts, and it does not: every account belongs to at least one Organization, and a platform-scope permission is granted *alongside* that membership rather than on its own. The app shell assumes it throughout — the project list, the create menu, the home composer, and the user record behind the name chip are all organization-scoped — so a membership-less account would be stranded by the client's blanket redirect to the permission-denied page long before a platform view rendered. Supporting one is a separate effort, not a side effect of adding a platform-scope view. See [ADR-0027](../adr/0027-platform-scope-routes-opt-out-of-tenant-resolution.md).
+
+The `platform_` segment in the permission name marks this scope (`can_manage_platform_defaults`, `can_view_platform_storage`). Platform-scope permissions get their own standalone Keycloak group and stay out of `OPSIFORCE_ADMIN_GROUP_PERMISSIONS`, so the default admin bundle never grants cross-organization visibility.
+
 ## Adding a permission
 
 1. **Pulumi** — add the role to `OPSIFORCE_ALL_PERMISSIONS` (and the admin group if appropriate) and create a group via `createGroupWithRoles()`.

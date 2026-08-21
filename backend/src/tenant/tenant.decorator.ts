@@ -13,3 +13,6 @@ export const CurrentTenant = createParamDecorator((_data: unknown, ctx: Executio
 
 export const IS_PUBLIC_KEY = 'isPublic';
 export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+
+export const IS_PLATFORM_SCOPE_KEY = 'isPlatformScope';
+export const PlatformScope = () => SetMetadata(IS_PLATFORM_SCOPE_KEY, true);

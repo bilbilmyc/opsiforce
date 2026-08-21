@@ -27,4 +27,5 @@ export const Perms = {
   manageExternalIntegration: 'can_manage_external_integration',
   viewExternalServicesUsage: 'can_view_external_services_usage',
   manageExternalServices: 'can_manage_external_services',
+  viewPlatformStorage: 'can_view_platform_storage',
 } as const;

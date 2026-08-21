@@ -2,7 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@
 import { Reflector } from '@nestjs/core';
 import { FastifyRequest } from 'fastify';
 import { TenantService } from './tenant.service';
-import { IS_PUBLIC_KEY, type TenantContext } from './tenant.decorator';
+import { IS_PLATFORM_SCOPE_KEY, IS_PUBLIC_KEY, type TenantContext } from './tenant.decorator';
 
 @Injectable()
 export class TenantGuard implements CanActivate {
@@ -20,6 +20,16 @@ export class TenantGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<FastifyRequest & { tenantContext: TenantContext }>();
     const groupsHeader = (request.headers['x-forwarded-groups'] as string | undefined) ?? '';
+
+    const isPlatformScope = this.reflector.getAllAndOverride<boolean>(IS_PLATFORM_SCOPE_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPlatformScope) {
+      if (!groupsHeader) throw new ForbiddenException('Not authenticated');
+      return true;
+    }
+
     const tenantNames = this.tenantService.resolveAccessibleTenantNames(groupsHeader);
     if (tenantNames.length === 0) throw new ForbiddenException('No opsiforce tenants assigned');
 
