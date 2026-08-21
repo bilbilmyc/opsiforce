@@ -94,6 +94,16 @@ function bucketsErrored(buckets: PlatformStorageBuckets): boolean {
   return bucketRows(buckets).some((row) => row.error);
 }
 
+function shownUnaccountedBytes(snapshot: PlatformStorageView): number {
+  return snapshot.capacitySuspect ? 0 : Math.max(snapshot.unaccountedBytes, 0);
+}
+
+function hasLedgerRows(snapshot: PlatformStorageView): boolean {
+  return (
+    snapshot.tenants.length > 0 || bucketsTotalBytes(snapshot.buckets) > 0 || shownUnaccountedBytes(snapshot) > 0
+  );
+}
+
 function useToggleSet() {
   const [open, setOpen] = createSignal<Set<string>>(new Set());
   const toggle = (id: string) =>
@@ -145,7 +155,7 @@ export function StoragePage() {
         {(view) => (
           <>
             <CapacityBar snapshot={view()} />
-            <Show when={view().tenants.length > 0 || bucketsTotalBytes(view().buckets) > 0} fallback={<EmptyState />}>
+            <Show when={hasLedgerRows(view())} fallback={<EmptyState />}>
               <RollupTable snapshot={view()} />
             </Show>
           </>
@@ -181,7 +191,7 @@ function CapacityBadge(props: { snapshot: PlatformStorageView }) {
 
 function CapacityBar(props: { snapshot: PlatformStorageView }) {
   const unattributedBytes = createMemo(() => bucketsTotalBytes(props.snapshot.buckets));
-  const unaccountedBytes = createMemo(() => Math.max(props.snapshot.unaccountedBytes, 0));
+  const unaccountedBytes = createMemo(() => shownUnaccountedBytes(props.snapshot));
   const freeBytes = createMemo(() => Math.max(props.snapshot.capacityBytes - props.snapshot.usedBytes, 0));
   const tenantSegments = createMemo(() =>
     props.snapshot.tenants
@@ -215,7 +225,7 @@ function CapacityBar(props: { snapshot: PlatformStorageView }) {
             title={`Unattributed · ${formatBytes(unattributedBytes())}`}
           />
         </Show>
-        <Show when={!props.snapshot.capacitySuspect && unaccountedBytes() > 0}>
+        <Show when={unaccountedBytes() > 0}>
           <div
             class={cn('h-full', UNACCOUNTED_COLOR)}
             style={{ width: `${width(unaccountedBytes())}%` }}
@@ -390,7 +400,7 @@ function RollupTable(props: { snapshot: PlatformStorageView }) {
 }
 
 function UnaccountedRow(props: { snapshot: PlatformStorageView }) {
-  const displayBytes = () => Math.max(props.snapshot.unaccountedBytes, 0);
+  const displayBytes = () => shownUnaccountedBytes(props.snapshot);
 
   return (
     <TableRow class="hover:bg-transparent">

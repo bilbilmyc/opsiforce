@@ -1,5 +1,5 @@
 import { Show, For } from 'solid-js';
-import { useAccessibleTenants } from '~/api/tenants';
+import { api, type Tenant } from '~/api/client';
 import { createTenantState } from '~/lib/tenant-state';
 import {
   DropdownMenu,
@@ -9,11 +9,15 @@ import {
 } from '~/components/ui/dropdown-menu';
 import { SidebarMenu, SidebarMenuItem } from '~/components/ui/sidebar';
 import { Building2, ChevronsUpDown } from '~/components/icons';
+import { createAppQuery } from '~/lib/create-app-query';
 
 export default function TenantSelector() {
   const [currentTenant, setTenant] = createTenantState();
 
-  const tenantsQuery = useAccessibleTenants();
+  const tenantsQuery = createAppQuery(() => ({
+    queryKey: ['tenants'],
+    queryFn: () => api.get<Tenant[]>('/tenants'),
+  }));
 
   const currentDisplayName = () => {
     const tenants = tenantsQuery.data;

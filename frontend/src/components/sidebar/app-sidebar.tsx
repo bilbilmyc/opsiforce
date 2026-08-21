@@ -1,10 +1,9 @@
-import { Show, createSignal, type JSX } from 'solid-js';
+import { Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { useNavigate } from '@tanstack/solid-router';
 import { useAgents } from '~/api/agents';
 import { usePermissions } from '~/api/permissions';
-import { useUserInfo } from '~/api/user';
-import { useAccessibleTenants } from '~/api/tenants';
+import { useCurrentUser } from '~/api/user';
 import { useCreateDefaultProject } from '~/api/default-project-target';
 import { Permission } from '~/constants/permissions';
 import { firstPermittedSettingsTab } from '~/constants/settings-tabs';
@@ -40,16 +39,37 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const { toggleSidebar } = useSidebar();
   const { hasPermission } = usePermissions();
-  const userInfo = useUserInfo();
-  const tenants = useAccessibleTenants();
+  const currentUser = useCurrentUser();
+  const agents = useAgents();
+  const createDefaultProject = useCreateDefaultProject();
 
   const [search, setSearch] = createSignal('');
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = createSignal(false);
+  const [importOpen, setImportOpen] = createSignal(false);
+  let searchRef: HTMLInputElement | undefined;
 
-  const inOrganization = () => (tenants.data?.length ?? 0) > 0;
   const canOpenSettings = () => !!firstPermittedSettingsTab(hasPermission);
   const canOpenAdmin = () => !!firstPermittedAdminTab(hasPermission);
 
-  const userName = () => userInfo.data?.preferredUsername ?? '';
+  const projectCreateDisabled = () => createDefaultProject.isPending() || !createDefaultProject.hasDestination();
+  const menuDisabled = () =>
+    projectCreateDisabled() && !hasPermission(Permission.importProject) && !hasPermission(Permission.manageWorkspaces);
+
+  const handleCreateProject = async (agentId: string) => {
+    try {
+      const project = await createDefaultProject.createProject({ agentId });
+      toast.success('Project created');
+      navigate({
+        to: '/projects/$projectId',
+        params: { projectId: project.id },
+        search: { prompt: undefined },
+      });
+    } catch {
+      toast.error('Failed to create project');
+    }
+  };
+
+  const userName = () => currentUser.data?.displayName ?? '';
   const userInitial = () => {
     const name = userName();
     return name ? name.charAt(0).toUpperCase() : 'U';
@@ -77,28 +97,101 @@ export function AppSidebar() {
           <SidebarTrigger />
         </div>
 
-        <Show when={inOrganization()}>
-          <ProjectTools search={search()} onSearchChange={setSearch} />
-        </Show>
+        <div class="group-data-[collapsible=icon]/sidebar:hidden flex items-center gap-1.5 pb-2">
+          <div class="relative flex-1 min-w-0">
+            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
+            <input
+              ref={(el) => (searchRef = el)}
+              type="text"
+              placeholder="Search..."
+              onInput={(e) => setSearch(e.currentTarget.value)}
+              onBlur={(e) => {
+                if (!e.relatedTarget) {
+                  requestAnimationFrame(() => {
+                    if (document.activeElement === document.body) {
+                      searchRef?.focus();
+                    }
+                  });
+                }
+              }}
+              class="flex h-8 w-full rounded-md border border-input bg-background py-1 pl-7 pr-7 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+            />
+            <Show when={search()}>
+              <button
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  setSearch('');
+                  if (searchRef) {
+                    searchRef.value = '';
+                    searchRef.focus();
+                  }
+                }}
+                class="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X class="w-3 h-3" />
+              </button>
+            </Show>
+          </div>
+          <CreateMenu
+            disabled={projectCreateDisabled()}
+            canCreateWorkspace={hasPermission(Permission.manageWorkspaces)}
+            canImport={hasPermission(Permission.importProject)}
+            agents={agents.data}
+            onCreateProject={handleCreateProject}
+            onOpenCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+            onOpenImport={() => setImportOpen(true)}
+            trigger={(triggerProps) => (
+              <Button
+                {...triggerProps}
+                variant="outline"
+                size="icon"
+                class="h-8 w-8 shrink-0"
+                disabled={menuDisabled()}
+                title="Create"
+              >
+                <Plus class="w-4 h-4" />
+              </Button>
+            )}
+          />
+        </div>
+        <div class="hidden group-data-[collapsible=icon]/sidebar:flex justify-center pb-2">
+          <CreateMenu
+            disabled={projectCreateDisabled()}
+            canCreateWorkspace={hasPermission(Permission.manageWorkspaces)}
+            canImport={hasPermission(Permission.importProject)}
+            agents={agents.data}
+            onCreateProject={handleCreateProject}
+            onOpenCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+            onOpenImport={() => setImportOpen(true)}
+            trigger={(triggerProps) => (
+              <button
+                {...triggerProps}
+                class="w-7 h-7 rounded-md flex items-center justify-center text-sidebar-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+                disabled={menuDisabled()}
+                title="Create"
+              >
+                <Plus class="w-4 h-4" />
+              </button>
+            )}
+          />
+        </div>
       </SidebarHeader>
 
       <SidebarSeparator />
 
       <SidebarContent>
-        <Show when={inOrganization()}>
-          <div class="hidden group-data-[collapsible=icon]/sidebar:block px-2 py-2">
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={() => toggleSidebar()}>
-                  <FolderKanban class="w-4 h-4 shrink-0" />
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </div>
-          <div class="group-data-[collapsible=icon]/sidebar:hidden px-2 py-1">
-            <ProjectSidebar search={search()} />
-          </div>
-        </Show>
+        <div class="hidden group-data-[collapsible=icon]/sidebar:block px-2 py-2">
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton onClick={() => toggleSidebar()}>
+                <FolderKanban class="w-4 h-4 shrink-0" />
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
+        <div class="group-data-[collapsible=icon]/sidebar:hidden px-2 py-1">
+          <ProjectSidebar search={search()} />
+        </div>
       </SidebarContent>
 
       <SidebarSeparator />
@@ -161,119 +254,9 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
-    </Sidebar>
-  );
-}
-
-function ProjectTools(props: { search: string; onSearchChange: (value: string) => void }): JSX.Element {
-  const navigate = useNavigate();
-  const { hasPermission } = usePermissions();
-  const agents = useAgents();
-  const createDefaultProject = useCreateDefaultProject();
-
-  const [createWorkspaceOpen, setCreateWorkspaceOpen] = createSignal(false);
-  const [importOpen, setImportOpen] = createSignal(false);
-  let searchRef: HTMLInputElement | undefined;
-
-  const projectCreateDisabled = () => createDefaultProject.isPending() || !createDefaultProject.hasDestination();
-  const menuDisabled = () =>
-    projectCreateDisabled() && !hasPermission(Permission.importProject) && !hasPermission(Permission.manageWorkspaces);
-
-  const handleCreateProject = async (agentId: string) => {
-    try {
-      const project = await createDefaultProject.createProject({ agentId });
-      toast.success('Project created');
-      navigate({
-        to: '/projects/$projectId',
-        params: { projectId: project.id },
-        search: { prompt: undefined },
-      });
-    } catch {
-      toast.error('Failed to create project');
-    }
-  };
-
-  const createMenuProps = () => ({
-    disabled: projectCreateDisabled(),
-    canCreateWorkspace: hasPermission(Permission.manageWorkspaces),
-    canImport: hasPermission(Permission.importProject),
-    agents: agents.data,
-    onCreateProject: handleCreateProject,
-    onOpenCreateWorkspace: () => setCreateWorkspaceOpen(true),
-    onOpenImport: () => setImportOpen(true),
-  });
-
-  return (
-    <>
-      <div class="group-data-[collapsible=icon]/sidebar:hidden flex items-center gap-1.5 pb-2">
-        <div class="relative flex-1 min-w-0">
-          <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground pointer-events-none" />
-          <input
-            ref={(el) => (searchRef = el)}
-            type="text"
-            placeholder="Search..."
-            onInput={(e) => props.onSearchChange(e.currentTarget.value)}
-            onBlur={(e) => {
-              if (!e.relatedTarget) {
-                requestAnimationFrame(() => {
-                  if (document.activeElement === document.body) {
-                    searchRef?.focus();
-                  }
-                });
-              }
-            }}
-            class="flex h-8 w-full rounded-md border border-input bg-background py-1 pl-7 pr-7 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-          />
-          <Show when={props.search}>
-            <button
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                props.onSearchChange('');
-                if (searchRef) {
-                  searchRef.value = '';
-                  searchRef.focus();
-                }
-              }}
-              class="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center rounded-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <X class="w-3 h-3" />
-            </button>
-          </Show>
-        </div>
-        <CreateMenu
-          {...createMenuProps()}
-          trigger={(triggerProps) => (
-            <Button
-              {...triggerProps}
-              variant="outline"
-              size="icon"
-              class="h-8 w-8 shrink-0"
-              disabled={menuDisabled()}
-              title="Create"
-            >
-              <Plus class="w-4 h-4" />
-            </Button>
-          )}
-        />
-      </div>
-      <div class="hidden group-data-[collapsible=icon]/sidebar:flex justify-center pb-2">
-        <CreateMenu
-          {...createMenuProps()}
-          trigger={(triggerProps) => (
-            <button
-              {...triggerProps}
-              class="w-7 h-7 rounded-md flex items-center justify-center text-sidebar-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
-              disabled={menuDisabled()}
-              title="Create"
-            >
-              <Plus class="w-4 h-4" />
-            </button>
-          )}
-        />
-      </div>
 
       <CreateWorkspaceDialog open={createWorkspaceOpen()} onOpenChange={setCreateWorkspaceOpen} />
       <ProjectImportDialog open={importOpen()} onOpenChange={setImportOpen} />
-    </>
+    </Sidebar>
   );
 }
