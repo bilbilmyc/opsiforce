@@ -67,7 +67,7 @@ export class UploadController {
             lastProgressAt = now;
             if (!summaryEvents) emit({ type: 'progress', path: relativePath, bytes });
           };
-          const { size } = await this.uploadService.streamFileToDisk(destPath, part.file, onProgress);
+          const { size } = await this.uploadService.streamFileToDisk(targetDirectory, destPath, part.file, onProgress);
 
           uploaded += 1;
           if (!summaryEvents) emit({ type: 'file', path: relativePath, size, ok: true });

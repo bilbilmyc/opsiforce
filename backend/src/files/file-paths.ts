@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { realpath } from 'fs/promises';
+import { lstat, realpath } from 'fs/promises';
 import path from 'path';
 
 const MAX_PATH_COMPONENT_LENGTH = 255;
@@ -82,6 +82,16 @@ export async function isOpenedFileWithinRoot(root: string, fd: number): Promise<
     return real === realRoot || real.startsWith(realRoot + path.sep);
   } catch {
     return false;
+  }
+}
+
+export async function isNearestExistingAncestorWithinRoot(root: string, target: string): Promise<boolean> {
+  let current = path.dirname(target);
+  for (;;) {
+    if (await lstat(current).catch(() => null)) return isResolvedPathWithinRoot(root, current);
+    const parent = path.dirname(current);
+    if (parent === current) return false;
+    current = parent;
   }
 }
 

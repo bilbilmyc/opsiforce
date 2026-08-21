@@ -1,11 +1,12 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createWriteStream } from 'fs';
-import { lstat, mkdir, unlink } from 'fs/promises';
+import { constants } from 'fs';
+import { lstat, mkdir, open, unlink } from 'fs/promises';
 import { pipeline, Readable, Transform } from 'stream';
 import { promisify } from 'util';
 import path from 'path';
 import {
+  isNearestExistingAncestorWithinRoot,
   isResolvedPathWithinRoot,
   resolveFilePathWithinRoot,
   resolveUserUploadsRoot,
@@ -14,6 +15,9 @@ import {
 } from './file-paths';
 
 const pipelineAsync = promisify(pipeline);
+
+const NO_FOLLOW_WRITE_FLAGS =
+  constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | (constants.O_NOFOLLOW ?? 0);
 
 @Injectable()
 export class UploadService {
@@ -38,7 +42,12 @@ export class UploadService {
     }
 
     const info = await lstat(target).catch(() => null);
-    if (!info) return target;
+    if (!info) {
+      if (!(await isNearestExistingAncestorWithinRoot(uploadsRoot, target))) {
+        throw new BadRequestException('Upload target must be inside user uploads');
+      }
+      return target;
+    }
     if (!info.isDirectory()) throw new BadRequestException('Upload target is not a directory');
     if (!(await isResolvedPathWithinRoot(uploadsRoot, target))) {
       throw new BadRequestException('Upload target must be inside user uploads');
@@ -51,11 +60,16 @@ export class UploadService {
   }
 
   async streamFileToDisk(
+    containmentRoot: string,
     filePath: string,
     fileStream: Readable,
     onProgress?: (bytesWritten: number) => void
   ): Promise<{ size: number }> {
-    await mkdir(path.dirname(filePath), { recursive: true });
+    const directory = path.dirname(filePath);
+    await mkdir(directory, { recursive: true });
+    if (!(await isResolvedPathWithinRoot(containmentRoot, directory))) {
+      throw new BadRequestException('Upload target must be inside user uploads');
+    }
     let size = 0;
     const counter = new Transform({
       transform(chunk, _enc, cb) {
@@ -65,11 +79,14 @@ export class UploadService {
         cb();
       },
     });
+    const handle = await open(filePath, NO_FOLLOW_WRITE_FLAGS);
     try {
-      await pipelineAsync(fileStream, counter, createWriteStream(filePath));
+      await pipelineAsync(fileStream, counter, handle.createWriteStream({ autoClose: false }));
     } catch (err) {
       await unlink(filePath).catch(() => {});
       throw err;
+    } finally {
+      await handle.close().catch(() => {});
     }
     return { size };
   }
