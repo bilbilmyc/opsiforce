@@ -22,8 +22,8 @@ import { Route as SettingsEnvironmentsRouteImport } from './routes/settings/envi
 import { Route as SettingsDefaultsRouteImport } from './routes/settings/defaults'
 import { Route as SettingsBillingRouteImport } from './routes/settings/billing'
 import { Route as ProjectsProjectIdRouteImport } from './routes/projects/$projectId'
-import { Route as AdminPodsRouteImport } from './routes/admin/pods'
 import { Route as AdminStorageRouteImport } from './routes/admin/storage'
+import { Route as AdminPodsRouteImport } from './routes/admin/pods'
 import { Route as AdminExternalServicesIndexRouteImport } from './routes/admin/external-services/index'
 import { Route as AdminExternalServicesUsageRouteImport } from './routes/admin/external-services/usage'
 
@@ -92,14 +92,14 @@ const ProjectsProjectIdRoute = ProjectsProjectIdRouteImport.update({
   path: '/projects/$projectId',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminPodsRoute = AdminPodsRouteImport.update({
-  id: '/pods',
-  path: '/pods',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
 const AdminStorageRoute = AdminStorageRouteImport.update({
   id: '/storage',
   path: '/storage',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminPodsRoute = AdminPodsRouteImport.update({
+  id: '/pods',
+  path: '/pods',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminExternalServicesIndexRoute =
@@ -333,18 +333,18 @@ declare module '@tanstack/solid-router' {
       preLoaderRoute: typeof ProjectsProjectIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/pods': {
-      id: '/admin/pods'
-      path: '/pods'
-      fullPath: '/admin/pods'
-      preLoaderRoute: typeof AdminPodsRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
     '/admin/storage': {
       id: '/admin/storage'
       path: '/storage'
       fullPath: '/admin/storage'
       preLoaderRoute: typeof AdminStorageRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/pods': {
+      id: '/admin/pods'
+      path: '/pods'
+      fullPath: '/admin/pods'
+      preLoaderRoute: typeof AdminPodsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/external-services/': {
