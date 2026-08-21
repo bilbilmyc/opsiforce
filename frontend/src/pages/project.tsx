@@ -1,23 +1,25 @@
-import { Show, createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
+import { Show, createEffect, createMemo, createSignal, on, onCleanup, untrack } from 'solid-js';
 import { useNavigate } from '@tanstack/solid-router';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
 import { ApiError } from '~/api/client';
 import { useProjectStatus } from '~/api/projects';
 import { useProjectEnvironments, useSetEnvironmentSession } from '~/api/environments';
+import { deletionCoversPath } from '~/api/files';
 import Spinner from '~/components/ui/spinner';
-import ProjectHeader, { type ProjectTab } from '~/components/project/project-header';
+import { ProjectHeader, type ProjectTab } from '~/components/project/project-header';
 import { ProjectChatTab } from '~/components/project/project-chat-tab';
 import ProjectCodeTab from '~/components/project/project-code-tab';
 import ProjectDbTab from '~/components/project/project-db-tab';
-import { ProjectPreviewPanel } from '~/components/project/project-preview-panel';
+import { ProjectFilesTab } from '~/components/project/files';
+import { ProjectPreviewPanel, type FilePreviewRequest } from '~/components/project/preview';
 import ProjectDisabled from '~/components/project/project-disabled';
 import ProjectFailed from '~/components/project/project-failed';
 import EnvProdBanner from '~/components/project/environments/env-prod-banner';
 import { useJobDock } from '~/components/project/jobs/job-dock-context';
 import { useOpenCodeConnection } from '~/components/project/use-opencode-connection';
 
-export default function ProjectView(props: { projectId: string; initialPrompt?: string }) {
+export function ProjectView(props: { projectId: string; initialPrompt?: string }) {
   const navigate = useNavigate();
   const jobDock = useJobDock();
   const { hasPermission } = usePermissions();
@@ -27,6 +29,14 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
   const [activeTab, setActiveTab] = createSignal<ProjectTab>('chat');
   const [visitedTabs, setVisitedTabs] = createSignal<Set<ProjectTab>>(new Set<ProjectTab>(['chat']));
   const [activeEnvironmentId, setActiveEnvironmentId] = createSignal(props.projectId);
+  const [previewRequest, setPreviewRequest] = createSignal<FilePreviewRequest | null>(null);
+
+  const previewFile = (path: string) => setPreviewRequest({ path });
+  const closePreview = () => setPreviewRequest(null);
+  const closePreviewOfDeleted = (deletedPath: string) => {
+    const previewed = previewRequest()?.path;
+    if (previewed && deletionCoversPath(deletedPath, previewed)) closePreview();
+  };
 
   const selectTab = (tab: ProjectTab) => {
     setActiveTab(tab);
@@ -59,6 +69,8 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
     if (!exists) untrack(() => setActiveEnvironmentId(props.projectId));
   });
 
+  createEffect(on(activeEnvironmentId, () => closePreview(), { defer: true }));
+
   createEffect(() => {
     if (isDevelopmentActive()) return;
     if (activeEnvironment()?.status !== 'suspended') return;
@@ -85,9 +97,16 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
   });
   const app = () => statusQuery.data?.app;
 
+  const [agentIdleToken, setAgentIdleToken] = createSignal(0);
+
   let reloadPreview: () => void = () => {};
   const onReloadRef = (fn: () => void) => {
     reloadPreview = fn;
+  };
+
+  const handleAgentIdle = () => {
+    reloadPreview();
+    setAgentIdleToken((token) => token + 1);
   };
 
   createEffect(() => {
@@ -141,13 +160,27 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
                     environmentId={activeEnvironmentId()}
                     router={router()}
                     currentTitle={statusQuery.data?.title ?? null}
-                    onPreviewReload={() => reloadPreview()}
+                    onAgentIdle={handleAgentIdle}
+                    onPreviewFile={previewFile}
                   />
                 )}
               </Show>
             </Show>
           </Show>
         </div>
+
+        <Show when={visitedTabs().has('files')}>
+          <div class="flex-1 min-w-0 flex flex-col" style={{ display: activeTab() === 'files' ? 'flex' : 'none' }}>
+            <ProjectFilesTab
+              projectId={props.projectId}
+              environmentId={activeEnvironmentId()}
+              active={activeTab() === 'files'}
+              refreshToken={agentIdleToken()}
+              onPreviewFile={previewFile}
+              onFileDeleted={closePreviewOfDeleted}
+            />
+          </div>
+        </Show>
 
         <Show when={visitedTabs().has('code') && canViewCode()}>
           <div class="flex-1 min-w-0 flex flex-col" style={{ display: activeTab() === 'code' ? 'flex' : 'none' }}>
@@ -161,16 +194,17 @@ export default function ProjectView(props: { projectId: string; initialPrompt?: 
           </div>
         </Show>
 
-        <Show when={app()?.exists ? app() : null}>
-          {(meta) => (
-            <ProjectPreviewPanel
-              projectId={props.projectId}
-              environmentId={activeEnvironmentId()}
-              environmentSlug={activeEnvironment()?.slug ?? null}
-              appName={meta().name ?? undefined}
-              onReloadRef={onReloadRef}
-            />
-          )}
+        <Show when={app()?.exists === true || previewRequest() !== null}>
+          <ProjectPreviewPanel
+            projectId={props.projectId}
+            environmentId={activeEnvironmentId()}
+            environmentSlug={activeEnvironment()?.slug ?? null}
+            hasApp={app()?.exists === true}
+            appName={app()?.name ?? undefined}
+            previewRequest={previewRequest()}
+            onClosePreview={closePreview}
+            onReloadRef={onReloadRef}
+          />
         </Show>
       </div>
     </div>

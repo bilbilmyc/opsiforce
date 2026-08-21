@@ -6,16 +6,16 @@ import { PlatformProvider } from '@opencode-ai/app/context/platform';
 import { ServerConnection } from '@opencode-ai/app/context/server';
 import { useGlobal } from '@opencode-ai/app/context/global';
 import { useSyncProjectTitle } from '~/api/projects';
-import FileUpload from '~/components/file-upload';
+import { FileUpload } from '~/components/file-upload';
 import { DictationButton } from '~/components/dictation-button';
 import Spinner from '~/components/ui/spinner';
-import WorkspaceDownloadLinks from './workspace-download-links';
+import { WorkspaceFileLinks } from './workspace-file-links';
 import OpencodeOverrides from './opencode-overrides';
 import { platform } from './platform';
 
 function OpenCodeEventBridge(props: {
   server: ServerConnection.Any;
-  onReload: () => void;
+  onIdle: () => void;
   onTitle: (title: string) => void;
 }) {
   const global = useGlobal();
@@ -25,7 +25,7 @@ function OpenCodeEventBridge(props: {
     const event = e.details;
     if (event.type === 'session.status' && event.properties.status.type === 'idle') {
       if (timer) clearTimeout(timer);
-      timer = setTimeout(() => props.onReload(), 1500);
+      timer = setTimeout(() => props.onIdle(), 1500);
       return;
     }
     if (event.type === 'session.updated' && !event.properties.info.parentID) {
@@ -44,7 +44,8 @@ export interface ProjectChatTabProps {
   environmentId: string;
   router: Component<BaseRouterProps>;
   currentTitle: string | null;
-  onPreviewReload: () => void;
+  onAgentIdle: () => void;
+  onPreviewFile: (path: string) => void;
 }
 
 export function ProjectChatTab(props: ProjectChatTabProps) {
@@ -105,7 +106,7 @@ export function ProjectChatTab(props: ProjectChatTabProps) {
               disableHealthCheck
               serverScoped={<OpencodeOverrides />}
             >
-              <OpenCodeEventBridge server={server} onReload={() => props.onPreviewReload()} onTitle={onTitle} />
+              <OpenCodeEventBridge server={server} onIdle={() => props.onAgentIdle()} onTitle={onTitle} />
             </AppInterface>
           </AppBaseProviders>
         </PlatformProvider>
@@ -118,7 +119,11 @@ export function ProjectChatTab(props: ProjectChatTabProps) {
       <div ref={embedHost} class="contents" />
       <DictationButton projectId={props.projectId} environmentId={props.environmentId} />
       <FileUpload projectId={props.projectId} environmentId={props.environmentId} />
-      <WorkspaceDownloadLinks projectId={props.projectId} environmentId={props.environmentId} />
+      <WorkspaceFileLinks
+        projectId={props.projectId}
+        environmentId={props.environmentId}
+        onPreviewFile={props.onPreviewFile}
+      />
       <Show when={booting()}>
         <Spinner label="Connecting..." overlay />
       </Show>

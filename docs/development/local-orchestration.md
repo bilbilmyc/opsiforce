@@ -33,7 +33,12 @@ Two kinds of resource share the one view:
 
 - **In-cluster workloads** — the backend, the four runtime proxies, and the `opsiforce-proxy`
   ingress in **static** auth mode (see below). Tilt builds their images straight into
-  minikube's daemon and deploys the Helm charts.
+  minikube's daemon and deploys the Helm charts. The [document converter](../projects/file-preview.md)
+  rides along here too, even though there is nothing of ours to build in it: a third-party
+  pinned image applied on every `tilt up`, rather than a one-time infra step that a day-two
+  run would skip. (Worth knowing while touching anything policy-shaped here: minikube's
+  default CNI does not enforce NetworkPolicies at all, so the existing bifrost policy is
+  inert locally — a deny rule can only be proven on a cluster whose CNI implements them.)
 - **Host-side `local_resource`s** — the frontend dev server (Vite), the codex proxy (only on
   the subscription LLM path; it reads the recorded choice from `~/.opsiforce/config.json`),
   data-store port-forwards for poking Postgres/Redis from host tools, and an optional mail

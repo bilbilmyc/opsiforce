@@ -1,0 +1,136 @@
+import { BadRequestException, Injectable, Logger, NotFoundException, type OnModuleDestroy } from '@nestjs/common';
+import { randomUUID } from 'crypto';
+import { basename, extname } from 'path';
+import { isConvertibleToPdf, MAX_CONVERTIBLE_BYTES } from './convertible-formats';
+import {
+  ConversionFailure,
+  ConversionStatus,
+  type ConversionStatusResponse,
+} from './file-conversion.types';
+import { GotenbergService } from './gotenberg.service';
+import { WorkspaceFileService } from './workspace-file.service';
+
+const JOB_TTL_MS = 5 * 60_000;
+const SWEEP_INTERVAL_MS = 60_000;
+const MAX_TRACKED_JOBS = 32;
+
+interface ConversionJob {
+  id: string;
+  projectId: string;
+  directory: string;
+  name: string;
+  status: ConversionStatus;
+  failure?: ConversionFailure;
+  error?: string;
+  pdf?: Buffer;
+  expiresAt: number;
+}
+
+export interface ConversionResult {
+  name: string;
+  pdf: Buffer;
+}
+
+@Injectable()
+export class FileConversionService implements OnModuleDestroy {
+  private readonly logger = new Logger(FileConversionService.name);
+  private readonly jobs = new Map<string, ConversionJob>();
+  private readonly sweeper: NodeJS.Timeout;
+
+  constructor(
+    private readonly workspaceFileService: WorkspaceFileService,
+    private readonly gotenbergService: GotenbergService
+  ) {
+    this.sweeper = setInterval(() => this.sweep(), SWEEP_INTERVAL_MS);
+    this.sweeper.unref();
+  }
+
+  onModuleDestroy(): void {
+    clearInterval(this.sweeper);
+    this.jobs.clear();
+  }
+
+  async start(projectId: string, directory: string, relativePath: string): Promise<string> {
+    if (!isConvertibleToPdf(relativePath)) throw new BadRequestException('This format is not convertible');
+
+    const file = await this.workspaceFileService.openForRead(directory, relativePath);
+    const job: ConversionJob = {
+      id: randomUUID(),
+      projectId,
+      directory,
+      name: basename(relativePath),
+      status: ConversionStatus.Pending,
+      expiresAt: Date.now() + JOB_TTL_MS,
+    };
+    this.track(job);
+
+    if (file.size > MAX_CONVERTIBLE_BYTES) {
+      await file.handle.close().catch(() => {});
+      this.fail(job, ConversionFailure.Unconvertible, 'This document is too large to convert');
+      return job.id;
+    }
+
+    const bytes = await file.handle.readFile().finally(() => file.handle.close().catch(() => {}));
+    void this.run(job, bytes);
+    return job.id;
+  }
+
+  status(projectId: string, directory: string, jobId: string): ConversionStatusResponse {
+    const job = this.find(projectId, directory, jobId);
+    return { status: job.status, failure: job.failure, error: job.error };
+  }
+
+  result(projectId: string, directory: string, jobId: string): ConversionResult {
+    const job = this.find(projectId, directory, jobId);
+    if (job.status !== ConversionStatus.Complete || !job.pdf) throw new NotFoundException('Conversion result not ready');
+    return { name: `${basename(job.name, extname(job.name))}.pdf`, pdf: job.pdf };
+  }
+
+  private async run(job: ConversionJob, bytes: Buffer): Promise<void> {
+    const outcome = await this.gotenbergService.convertToPdf({ name: job.name, bytes, traceId: job.id });
+    if (!this.jobs.has(job.id)) return;
+
+    if (outcome.ok) {
+      job.status = ConversionStatus.Complete;
+      job.pdf = outcome.pdf;
+      job.expiresAt = Date.now() + JOB_TTL_MS;
+      return;
+    }
+    this.fail(job, outcome.failure, outcome.error);
+  }
+
+  private fail(job: ConversionJob, failure: ConversionFailure, error: string): void {
+    job.status = ConversionStatus.Failed;
+    job.failure = failure;
+    job.error = error;
+    job.expiresAt = Date.now() + JOB_TTL_MS;
+  }
+
+  private find(projectId: string, directory: string, jobId: string): ConversionJob {
+    const job = this.jobs.get(jobId);
+    if (!job || job.projectId !== projectId || job.directory !== directory || job.expiresAt <= Date.now()) {
+      throw new NotFoundException('Conversion job not found');
+    }
+    return job;
+  }
+
+  private track(job: ConversionJob): void {
+    this.jobs.set(job.id, job);
+    while (this.jobs.size > MAX_TRACKED_JOBS) {
+      const oldest = this.jobs.keys().next();
+      if (oldest.done) break;
+      this.jobs.delete(oldest.value);
+    }
+  }
+
+  private sweep(): void {
+    const now = Date.now();
+    let removed = 0;
+    for (const [id, job] of this.jobs) {
+      if (job.expiresAt > now) continue;
+      this.jobs.delete(id);
+      removed += 1;
+    }
+    if (removed > 0) this.logger.debug(`Discarded ${removed} expired conversion job(s)`);
+  }
+}

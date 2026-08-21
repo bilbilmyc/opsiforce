@@ -35,7 +35,7 @@ export interface EditAppDialogProps {
   initialDescription: string | null;
 }
 
-export default function EditAppDialog(props: EditAppDialogProps) {
+export function EditAppDialog(props: EditAppDialogProps) {
   const updateApp = useUpdateApp();
   const [name, setName] = createSignal('');
   const [description, setDescription] = createSignal('');

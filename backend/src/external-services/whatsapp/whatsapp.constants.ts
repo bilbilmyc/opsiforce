@@ -8,12 +8,4 @@ export const WHATSAPP_GROUP_CHAT_SUFFIX = '@g.us';
 
 export const WHATSAPP_INDIVIDUAL_CHAT_SUFFIX = '@s.whatsapp.net';
 
-export const WHATSAPP_MEDIA_TYPES = new Set([
-  'image',
-  'video',
-  'audio',
-  'voice',
-  'document',
-  'sticker',
-  'gif',
-]);
+export const WHATSAPP_MEDIA_TYPES = new Set(['image', 'video', 'audio', 'voice', 'document', 'sticker', 'gif']);

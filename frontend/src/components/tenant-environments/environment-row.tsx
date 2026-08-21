@@ -126,8 +126,8 @@ export function EnvironmentRow(props: EnvironmentRowProps) {
             when={!isLocked()}
             fallback={
               <p class="text-xs text-muted-foreground">
-                {props.environment.name} is protected — its name and slug are locked, but you can change its badge
-                label and color.
+                {props.environment.name} is protected — its name and slug are locked, but you can change its badge label
+                and color.
               </p>
             }
           >

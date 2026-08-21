@@ -61,6 +61,10 @@ When you make a file for the user to download — CSV, spreadsheet, PDF, export,
 
 The platform turns any `/workspace/...` link into a browser download. Use the plain path only — **never** prefix it with `sandbox:` (the link gets stripped and the user gets nothing), and don't use `file:`/`localhost` URLs, ad-hoc HTTP servers, or pasted file contents.
 
+**Documents you generate belong in `/workspace/generated_files/`** — `mkdir -p` it on first use, save there, and end the turn with the link (`[Q3-report.docx](/workspace/generated_files/Q3-report.docx)`); the platform surfaces that folder as the project's **Generated files**.
+
+**For any docx, pptx, xlsx, or pdf deliverable, load the `document-generation` skill first** — the libraries are already installed in this container, and the skill carries the recipes, the taste defaults, and the versioned-filename rule for revisions.
+
 ## Runtime environment
 
 The dev servers are **already running** when you start — the container entrypoint launches them automatically.

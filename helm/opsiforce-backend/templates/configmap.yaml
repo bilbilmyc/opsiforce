@@ -36,6 +36,9 @@ data:
   {{- if .Values.imagePullSecrets }}
   IMAGE_PULL_SECRETS: {{ .Values.imagePullSecrets | toJson | quote }}
   {{- end }}
+  {{- if .Values.config.gotenbergUrl }}
+  GOTENBERG_URL: {{ .Values.config.gotenbergUrl | quote }}
+  {{- end }}
   {{- if .Values.config.bifrostProxyUrl }}
   BIFROST_PROXY_URL: {{ .Values.config.bifrostProxyUrl | quote }}
   {{- end }}

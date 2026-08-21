@@ -35,6 +35,7 @@ config:
   agentNodeSelector: {}
   agentTolerations: []
   openaiApiKey: ""
+  gotenbergUrl: ""
   bifrostProxyUrl: ""
   bifrostPodProxyUrl: ""
   bifrostAdminUsername: ""

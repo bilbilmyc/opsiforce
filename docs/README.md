@@ -26,6 +26,8 @@
 - [Project Apps](projects/project-apps.md) — per-environment app identity and editing ([ADR-0016](adr/0016-app-details-are-per-environment.md))
 - [App Readiness](projects/app-readiness.md) — go-live/serving pushed from the pod, not polled ([ADR-0015](adr/0015-app-liveness-pushed-not-polled.md))
 - [Schedules](projects/schedules.md) — per-environment agent-requested cron, wake-on-fire
+- [Files Tab](projects/files-tab.md) — the curated three-section view of an environment's workspace files, its upload/delete verbs, and how it stays fresh
+- [File Preview](projects/file-preview.md) — reading a generated document in the side panel: the App | File panel, chat file cards, the format matrix, the inline content endpoint, and the in-cluster docx/pptx converter
 - [File Downloads](projects/file-downloads.md) — downloading workspace files from chat
 - [Dictation](projects/dictation.md) — voice input for the chat prompt, and why transcription is pinned to the real OpenAI provider
 
@@ -33,6 +35,7 @@
 - [Agents](agents/agent-system.md) — agent profiles, how they reach a workspace, the model ([ADR-0008](adr/0008-agent-model-owned-by-agent-config.md))
 - [Agent Updates](agents/agent-updates.md) — keeping persisted workspaces aligned with a newer profile
 - [Agent Status](agents/agent-status.md) — the Working/Idle signal behind the sidebar spinner, pushed from the pod ([ADR-0020](adr/0020-agent-status-pushed-and-resynced-not-heartbeated.md))
+- [Document Generation](agents/document-generation.md) — the docx/pptx/xlsx/pdf stack baked into the agent image, the shared skill, and the Generated files convention
 
 **Gateways** (`gateways/`)
 - [LLM Gateway](gateways/llm-gateway.md) — Bifrost, per-project virtual keys, budget hierarchy ([ADR-0003](adr/0003-one-bifrost-team-per-project-keys-per-env.md))
