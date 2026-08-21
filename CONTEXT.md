@@ -177,8 +177,24 @@ The permission-gated surface where a member **configures** the Organization curr
 _Avoid_: Tenant Settings (retired user-facing label — the old modal that held only Integrations + Environments); Config (non-canonical); Admin (the operational sibling — a separate destination, not a synonym for Settings); conflating with Defaults (one section within Settings, not the whole)
 
 **Admin**:
-The permission-gated surface where a member **observes and operates** the running state of the Organization currently chosen in the selector — the counterpart to Settings, which configures it. A sibling destination reached from the avatar dropdown, built on the same left-rail layout (one page per area, each independently gated). Its first page is Pods. The test for where a view belongs: if it shows or acts on what is running now, it is Admin; if it changes stored configuration, it is Settings.
+The permission-gated surface where a member **observes and operates** running state — the counterpart to Settings, which configures it. A sibling destination reached from the avatar dropdown, built on the same left-rail layout (one page per area, each independently gated). Most pages show the Organization currently chosen in the selector (Pods, Usage); a page gated by a Platform-scope permission shows all Organizations at once and ignores the selector. Its first page is Pods. The test for where a view belongs: if it shows or acts on what is running now, it is Admin; if it changes stored configuration, it is Settings.
 _Avoid_: Settings (the configuration sibling — a different destination); Admin panel, Console, Operations, Monitoring (non-canonical — say Admin); conflating with Pods (the first page within Admin, not the whole)
+
+**Platform-scope permission**:
+A permission whose view spans **all Organizations** rather than the one chosen in the selector — the `platform_` segment in its name marks the scope (e.g. `can_view_platform_storage`). Granting one is granting cross-Organization visibility, so its Keycloak group is never part of the default admin bundle. There is no "super admin": cross-Organization capability is a property of individual permissions, not of a role.
+_Avoid_: Super admin, Global admin (role concepts — the system has only flat permissions); Cross-tenant permission (say Platform-scope)
+
+**Storage**:
+The Admin view of disk usage on the shared volume — one measured number per ProjectEnvironment directory, rolled up Environment → Project → Organization, plus Unattributed storage, reconciled against the volume's actual usage. Gated by a Platform-scope permission, so it shows all Organizations and ignores the selector. Read-only, current-state snapshot; sizes may lag recent writes.
+_Avoid_: Disk usage, Quota (no quotas exist — the view only observes); Usage (the external-services Admin page — a different thing); Storage view per Organization (Platform-scope by definition)
+
+**Pending deletion**:
+Disk usage from an Organization's deleted Projects and ProjectEnvironments whose directories are retained until cleanup retention expires. Attributed to the Organization — it answers "why is this Organization's total bigger than the sum of its projects" — as one aggregate per Organization, never itemized (the project record is gone; a bare directory identifier tells an operator nothing).
+_Avoid_: Tombstoned (reserve for directories attributable to no Organization); Deleted storage (non-canonical)
+
+**Unattributed storage**:
+Disk usage on the shared volume that belongs to no Organization: the **pool** (live unclaimed pool projects), **tombstoned** (retained deleted directories whose record names no Organization), **orphaned** (directories matching no record at all), **exports** and **imports** (transient archives), and **unaccounted** (the computed residual between everything measured and the volume's actual usage). An Organization's own retained deleted directories are NOT unattributed — they are its Pending deletion.
+_Avoid_: Platform storage (reads as "all storage on the platform", which this is not); System storage (non-canonical); Orphaned (one bucket within, not the whole)
 
 **Pods**:
 The view of an Organization's running environment pods — one row per running ProjectEnvironment, grouped by Project — showing each pod's status, age, Resources, configured timeouts, and live Keep-alive activity (when it was last kept alive and by which kind). Read-only; the first page within Admin.

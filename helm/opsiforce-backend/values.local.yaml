@@ -33,6 +33,7 @@ config:
   cephfsPvcName: "opsiforce-data"
   storageType: "hostPath"
   storageMountPath: "/workspace-data"
+  storageClaimSize: ""
   proxyControlToken: "opsiforce-local-proxy-token"
   agentWorkspaceUpdateOnStartup: "true"
   agentUpdateJobTimeoutMs: "1800000"

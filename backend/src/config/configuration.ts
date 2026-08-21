@@ -15,6 +15,28 @@ function parseBooleanEnv(env: string | undefined, fallback: boolean): boolean {
   return env === 'true' || env === '1';
 }
 
+const QUANTITY_MULTIPLIERS: Record<string, number> = {
+  '': 1,
+  K: 1000,
+  M: 1000 ** 2,
+  G: 1000 ** 3,
+  T: 1000 ** 4,
+  P: 1000 ** 5,
+  Ki: 1024,
+  Mi: 1024 ** 2,
+  Gi: 1024 ** 3,
+  Ti: 1024 ** 4,
+  Pi: 1024 ** 5,
+};
+
+function parseQuantityEnv(env: string | undefined): number | null {
+  if (env === undefined || env.trim() === '') return null;
+  const match = /^(\d+(?:\.\d+)?)\s*([KMGTP]i?)?$/.exec(env.trim());
+  if (!match) return null;
+  const bytes = Number(match[1]) * QUANTITY_MULTIPLIERS[match[2] ?? ''];
+  return Number.isSafeInteger(bytes) && bytes > 0 ? bytes : null;
+}
+
 function parseIntOrNull(env: string | undefined): number | null {
   if (env === undefined || env === '') return null;
   const parsed = parseInt(env, 10);
@@ -66,6 +88,7 @@ export const configuration = () => {
     proxyControlToken: process.env.PROXY_CONTROL_TOKEN || 'opsiforce-local-proxy-token',
     openaiApiKey: process.env.OPENAI_API_KEY || '',
     storageMountPath: process.env.STORAGE_MOUNT_PATH || '/workspace-data',
+    storageClaimBytes: parseQuantityEnv(process.env.STORAGE_CLAIM_SIZE),
     importChunkSize: parseInt(process.env.IMPORT_CHUNK_SIZE || '8388608', 10),
     gotenbergUrl: process.env.GOTENBERG_URL || 'http://opsiforce-gotenberg:3006',
     bifrostProxyUrl: process.env.BIFROST_PROXY_URL || '',

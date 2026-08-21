@@ -2,7 +2,7 @@ import { Body, Controller, Get, Patch, Req } from '@nestjs/common';
 import { FastifyRequest } from 'fastify';
 import { Perms } from '../permission/permission.constants';
 import { RequirePermission } from '../permission/permission.guard';
-import { CurrentTenant, type TenantContext } from './tenant.decorator';
+import { CurrentTenant, PlatformScope, type TenantContext } from './tenant.decorator';
 import { TenantService } from './tenant.service';
 import type { TenantConfigResponse, UpdateTenantConfigDto } from './tenant.types';
 
@@ -11,6 +11,7 @@ export class TenantController {
   constructor(private readonly tenantService: TenantService) {}
 
   @Get()
+  @PlatformScope()
   async findAll(@Req() req: FastifyRequest) {
     const groupsHeader = (req.headers['x-forwarded-groups'] as string) ?? '';
     const tenantNames = this.tenantService.resolveAccessibleTenantNames(groupsHeader);
