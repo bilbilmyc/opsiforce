@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { randomUUID } from 'crypto';
 import { constants } from 'fs';
-import { lstat, mkdir, open, unlink } from 'fs/promises';
+import { lstat, mkdir, open, rename, unlink } from 'fs/promises';
 import { pipeline, Readable, Transform } from 'stream';
 import { promisify } from 'util';
 import path from 'path';
@@ -16,8 +17,7 @@ import {
 
 const pipelineAsync = promisify(pipeline);
 
-const NO_FOLLOW_WRITE_FLAGS =
-  constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | (constants.O_NOFOLLOW ?? 0);
+const STAGING_WRITE_FLAGS = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0);
 
 @Injectable()
 export class UploadService {
@@ -79,11 +79,14 @@ export class UploadService {
         cb();
       },
     });
-    const handle = await open(filePath, NO_FOLLOW_WRITE_FLAGS);
+    // Staged beside the target and renamed on success, so a failed replacement cannot destroy the existing file.
+    const stagingPath = path.join(directory, `.${path.basename(filePath)}.${randomUUID()}.part`);
+    const handle = await open(stagingPath, STAGING_WRITE_FLAGS);
     try {
       await pipelineAsync(fileStream, counter, handle.createWriteStream({ autoClose: false }));
+      await rename(stagingPath, filePath);
     } catch (err) {
-      await unlink(filePath).catch(() => {});
+      await unlink(stagingPath).catch(() => {});
       throw err;
     } finally {
       await handle.close().catch(() => {});
