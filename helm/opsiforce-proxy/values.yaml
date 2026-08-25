@@ -21,6 +21,7 @@ auth:
       - can_duplicate_project
       - can_export_project
       - can_import_project
+      - can_view_queue_dashboard
       - can_manage_workspaces
       - can_move_projects_between_workspaces
       - can_edit_app_details
