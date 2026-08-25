@@ -85,6 +85,10 @@ export async function isOpenedFileWithinRoot(root: string, fd: number): Promise<
   }
 }
 
+export function hasHiddenSegment(relativePath: string): boolean {
+  return relativePath.split('/').some((segment) => segment.startsWith('.'));
+}
+
 export async function isNearestExistingAncestorWithinRoot(root: string, target: string): Promise<boolean> {
   let current = path.dirname(target);
   for (;;) {

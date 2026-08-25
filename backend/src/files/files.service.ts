@@ -4,6 +4,7 @@ import { lstat, readdir, rm, stat } from 'fs/promises';
 import path from 'path';
 import {
   GENERATED_FILES_DIRECTORY_NAME,
+  hasHiddenSegment,
   HIDDEN_ROOT_DIRECTORY_NAMES,
   isResolvedPathWithinRoot,
   resolveFilePathWithinRoot,
@@ -85,6 +86,12 @@ export class FilesService {
 
   private async readDirectory(root: string, target: string, relativePath: string): Promise<FileEntry[]> {
     if (!(await isResolvedPathWithinRoot(root, target))) throw new NotFoundException('Directory not found');
+
+    const realRelativePath = await resolveRealRelativePath(root, target);
+    if (realRelativePath === null || hasHiddenSegment(realRelativePath) || isHiddenRootPath(realRelativePath)) {
+      throw new NotFoundException('Directory not found');
+    }
+
     const info = await stat(target).catch(() => null);
     if (!info) throw new NotFoundException('Directory not found');
     if (!info.isDirectory()) throw new BadRequestException('Not a directory');
