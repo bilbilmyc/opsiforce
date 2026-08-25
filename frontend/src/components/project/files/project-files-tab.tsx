@@ -50,6 +50,7 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
       () => {
         setSection('generated');
         setFolderSegments([]);
+        setPendingDelete(null);
       },
       { defer: true }
     )

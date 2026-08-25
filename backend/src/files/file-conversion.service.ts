@@ -1,4 +1,12 @@
-import { BadRequestException, Injectable, Logger, NotFoundException, type OnModuleDestroy } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  NotFoundException,
+  type OnModuleDestroy,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { basename, extname } from 'path';
 import { isConvertibleToPdf, MAX_CONVERTIBLE_BYTES } from './convertible-formats';
@@ -9,6 +17,8 @@ import { WorkspaceFileService } from './workspace-file.service';
 const JOB_TTL_MS = 5 * 60_000;
 const SWEEP_INTERVAL_MS = 60_000;
 const MAX_TRACKED_JOBS = 32;
+// A pending job pins its document in memory until Gotenberg answers, so admission is capped too.
+const MAX_PENDING_JOBS = 8;
 
 interface ConversionJob {
   id: string;
@@ -48,6 +58,9 @@ export class FileConversionService implements OnModuleDestroy {
 
   async start(projectId: string, directory: string, relativePath: string): Promise<string> {
     if (!isConvertibleToPdf(relativePath)) throw new BadRequestException('This format is not convertible');
+    if (this.pendingJobs() >= MAX_PENDING_JOBS) {
+      throw new HttpException('Too many conversions in progress', HttpStatus.TOO_MANY_REQUESTS);
+    }
 
     const file = await this.workspaceFileService.openForRead(directory, relativePath);
     const job: ConversionJob = {
@@ -114,6 +127,14 @@ export class FileConversionService implements OnModuleDestroy {
       throw new NotFoundException('Conversion job not found');
     }
     return job;
+  }
+
+  private pendingJobs(): number {
+    let pending = 0;
+    for (const job of this.jobs.values()) {
+      if (job.status === ConversionStatus.Pending) pending += 1;
+    }
+    return pending;
   }
 
   private track(job: ConversionJob): void {

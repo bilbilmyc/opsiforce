@@ -94,6 +94,10 @@ async function convert(
       setState({ status: 'missing' });
       return;
     }
+    if (err instanceof ApiError && err.status === 429) {
+      setState({ status: 'failed', failure: 'busy', message: 'The converter is busy. Try again in a moment.' });
+      return;
+    }
     setState({ status: 'failed', failure: 'retryable' });
     return;
   }
