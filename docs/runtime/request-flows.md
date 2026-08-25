@@ -50,7 +50,7 @@ When a live request fails mid-stream the proxy calls `/failure` rather than re-r
 
 ## Project and environment teardown
 
-- **Delete project** — `DELETE /api/projects/{id}` deletes every environment's pod (404 ignored), clears timeout keys, revokes Bifrost keys and deletes the team, removes the rows, and inserts a `deleted_projects` tombstone. The workspace is retained 7 days, then reaped (see [Persistence — workspace cleanup](persistence.md#workspace-cleanup)).
+- **Delete project** — `DELETE /api/projects/{id}` deletes every environment's pod (404 ignored), clears timeout keys, revokes Bifrost keys and deletes the team, then tombstones each environment into `deleted_project_environments` before removing the project row. The workspace is retained 7 days, then reaped (see [Persistence — workspace cleanup](persistence.md#workspace-cleanup)).
 - **Duplicate / publish** — these are storage-preparation flows that then hand off to the normal startup gate; their progress streams over SSE. See [Duplication](../projects/duplication.md) and [Project Environments — Publishing](../projects/environments.md#publishing).
 
 ## See also

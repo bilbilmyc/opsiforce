@@ -1189,7 +1189,7 @@ export class ProjectService implements OnApplicationBootstrap {
   }
 
   async remove(id: string, tenantId: string): Promise<void> {
-    const project = await this.findOne(id, tenantId);
+    await this.findOne(id, tenantId);
     const envs = await this.projectEnvironmentService.listByProjectId(id);
 
     await db
@@ -1218,20 +1218,11 @@ export class ProjectService implements OnApplicationBootstrap {
       this.agentStatusService.clear(id, env.id);
     });
 
-    await db.delete(projects).where(eq(projects.id, id));
-
-    if (project.tenantId) {
-      await Promise.allSettled(
-        envs.map((env) =>
-          this.projectEnvironmentService.delete({
-            id: env.id,
-            projectId: env.projectId,
-            tenantId: env.tenantId,
-            directory: env.directory,
-          })
-        )
-      );
+    for (const env of envs) {
+      await this.projectEnvironmentService.delete(env);
     }
+
+    await db.delete(projects).where(eq(projects.id, id));
   }
 
   async disable(id: string, tenantId: string): Promise<ProjectResponse> {
@@ -1332,12 +1323,7 @@ export class ProjectService implements OnApplicationBootstrap {
     this.appReadiness.clear(env.id);
     this.agentStatusService.clear(projectId, env.id);
 
-    await this.projectEnvironmentService.delete({
-      id: env.id,
-      projectId: env.projectId,
-      tenantId: env.tenantId,
-      directory: env.directory,
-    });
+    await this.projectEnvironmentService.delete(env);
 
     await this.projectEventsService.publish(projectId);
   }

@@ -353,13 +353,6 @@ export const projectVirtualKeys = pgTable("project_virtual_keys", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [index("idx_project_virtual_keys_environment").on(table.projectEnvironmentId)])
 
-export const deletedProjects = pgTable("deleted_projects", {
-  id: text("id").primaryKey(),
-  tenantId: text("tenant_id").notNull(),
-  directory: text("directory").notNull(),
-  deletedAt: timestamp("deleted_at").defaultNow().notNull(),
-})
-
 export const deletedProjectEnvironments = pgTable("deleted_project_environments", {
   id: text("id").primaryKey(),
   projectId: text("project_id").notNull(),
