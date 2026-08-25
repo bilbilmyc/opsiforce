@@ -2,13 +2,18 @@ import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Job } from 'bullmq';
-import { eq, lte } from 'drizzle-orm';
-import { readdir, rm, rmdir } from 'fs/promises';
+import { and, eq, lte, type SQL } from 'drizzle-orm';
+import { readdir, rm, rmdir, stat } from 'fs/promises';
 import path from 'path';
 import { db } from '../../db';
-import { deletedProjectEnvironments, deletedProjects, projectEnvironments } from '../../db/schema';
+import { deletedProjectEnvironments, projectEnvironments } from '../../db/schema';
 
 export const WORKSPACE_CLEANUP_QUEUE = 'workspace-cleanup';
+
+export interface WorkspaceCleanupJobData {
+  tenantId?: string;
+  ignoreRetention?: boolean;
+}
 
 @Processor(WORKSPACE_CLEANUP_QUEUE)
 export class WorkspaceCleanupProcessor extends WorkerHost {
@@ -22,60 +27,57 @@ export class WorkspaceCleanupProcessor extends WorkerHost {
     this.retentionDays = this.configService.getOrThrow<number>('workspaceCleanupRetentionDays');
   }
 
-  async process(_job: Job): Promise<void> {
-    await this.removeExpiredTombstones();
-    await this.removeOrphanedDirectories();
+  async process(job: Job<WorkspaceCleanupJobData | undefined>): Promise<void> {
+    const scope = job.data ?? {};
+    await this.removeExpiredTombstones(scope);
+    if (!scope.tenantId) await this.removeOrphanedDirectories();
   }
 
-  private async removeExpiredTombstones(): Promise<void> {
-    const cutoff = new Date(Date.now() - this.retentionDays * 24 * 60 * 60 * 1000);
-    const [expiredEnvironments, expiredProjects] = await Promise.all([
-      db
-        .select({ id: deletedProjectEnvironments.id, directory: deletedProjectEnvironments.directory })
-        .from(deletedProjectEnvironments)
-        .where(lte(deletedProjectEnvironments.deletedAt, cutoff)),
-      db
-        .select({ id: deletedProjects.id, directory: deletedProjects.directory })
-        .from(deletedProjects)
-        .where(lte(deletedProjects.deletedAt, cutoff)),
-    ]);
+  private async removeExpiredTombstones(scope: WorkspaceCleanupJobData): Promise<void> {
+    const cutoff = scope.ignoreRetention
+      ? new Date()
+      : new Date(Date.now() - this.retentionDays * 24 * 60 * 60 * 1000);
+    const conditions: SQL[] = [lte(deletedProjectEnvironments.deletedAt, cutoff)];
+    if (scope.tenantId) conditions.push(eq(deletedProjectEnvironments.tenantId, scope.tenantId));
+    const expiredEnvironments = await db
+      .select({ id: deletedProjectEnvironments.id, directory: deletedProjectEnvironments.directory })
+      .from(deletedProjectEnvironments)
+      .where(and(...conditions));
 
-    const total = expiredEnvironments.length + expiredProjects.length;
-    if (total === 0) return;
-    this.logger.log(`Found ${total} expired workspace(s) to clean up`);
+    if (expiredEnvironments.length === 0) return;
+    this.logger.log(`Found ${expiredEnvironments.length} expired workspace(s) to clean up`);
+
+    let removed = 0;
 
     for (const record of expiredEnvironments) {
-      await this.removeTombstoneDirectory(record.directory);
+      if (!(await this.tryRemoveTombstoneDirectory(record.directory))) continue;
       await db.delete(deletedProjectEnvironments).where(eq(deletedProjectEnvironments.id, record.id));
+      removed++;
     }
 
-    for (const record of expiredProjects) {
-      await this.removeTombstoneDirectory(record.directory);
-      await db.delete(deletedProjects).where(eq(deletedProjects.id, record.id));
-    }
-
-    this.logger.log(`Removed ${total} expired workspace(s)`);
+    this.logger.log(`Removed ${removed} of ${expiredEnvironments.length} expired workspace(s)`);
   }
 
-  private async removeTombstoneDirectory(directory: string): Promise<void> {
+  private async tryRemoveTombstoneDirectory(directory: string): Promise<boolean> {
     const workspacePath = path.join(this.storageMountPath, directory);
-    await rm(workspacePath, { recursive: true, force: true }).catch((err) => {
+    try {
+      await rm(workspacePath, { recursive: true, force: true });
+      return true;
+    } catch (err) {
       this.logger.warn(`Failed to remove workspace ${directory}: ${(err as Error).message}`);
-    });
-    await this.pruneEmptyAncestors(path.dirname(directory));
+      return false;
+    }
   }
 
   private async removeOrphanedDirectories(): Promise<void> {
-    const [environmentRows, deletedEnvironmentRows, deletedProjectRows] = await Promise.all([
+    const [environmentRows, deletedEnvironmentRows] = await Promise.all([
       db.select({ directory: projectEnvironments.directory }).from(projectEnvironments),
       db.select({ directory: deletedProjectEnvironments.directory }).from(deletedProjectEnvironments),
-      db.select({ directory: deletedProjects.directory }).from(deletedProjects),
     ]);
 
     const knownPaths = new Set<string>();
     for (const row of environmentRows) knownPaths.add(row.directory);
     for (const row of deletedEnvironmentRows) knownPaths.add(row.directory);
-    for (const row of deletedProjectRows) knownPaths.add(row.directory);
 
     const keepPrefixes = new Set<string>();
     for (const p of knownPaths) {
@@ -106,6 +108,11 @@ export class WorkspaceCleanupProcessor extends WorkerHost {
       const childAbs = path.join(absPath, entry.name);
       const childRel = path.posix.join(relPath, entry.name);
 
+      if (entry.name.startsWith('.')) {
+        if (await this.removeIfStaleTempDirectory(childAbs, childRel)) removed++;
+        continue;
+      }
+
       if (knownPaths.has(childRel)) continue;
 
       if (keepPrefixes.has(childRel)) {
@@ -123,14 +130,18 @@ export class WorkspaceCleanupProcessor extends WorkerHost {
     return removed;
   }
 
-  private async pruneEmptyAncestors(relDir: string): Promise<void> {
-    let current = relDir;
-    while (current && current !== '.' && current !== path.sep) {
-      if (path.dirname(current) === '.') break;
-      const abs = path.join(this.storageMountPath, current);
-      const removed = await this.removeIfEmpty(abs);
-      if (!removed) break;
-      current = path.dirname(current);
+  private async removeIfStaleTempDirectory(absPath: string, relPath: string): Promise<boolean> {
+    const stats = await stat(absPath).catch(() => null);
+    if (!stats) return false;
+    const ageMs = Date.now() - stats.mtimeMs;
+    if (ageMs < this.retentionDays * 24 * 60 * 60 * 1000) return false;
+    try {
+      await rm(absPath, { recursive: true, force: true });
+      this.logger.log(`Removed stale temp directory ${relPath}`);
+      return true;
+    } catch (err) {
+      this.logger.warn(`Failed to remove stale temp directory ${relPath}: ${(err as Error).message}`);
+      return false;
     }
   }
 

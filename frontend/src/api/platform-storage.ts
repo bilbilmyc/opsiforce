@@ -1,3 +1,4 @@
+import { createMutation } from '@tanstack/solid-query';
 import { api } from './client';
 import { createAppQuery } from '~/lib/create-app-query';
 
@@ -67,5 +68,11 @@ export function usePlatformStorage() {
   return createAppQuery(() => ({
     queryKey: ['platform-storage'],
     queryFn: () => api.get<PlatformStorageView>('/platform/storage'),
+  }));
+}
+
+export function useCleanupTenantStorage() {
+  return createMutation(() => ({
+    mutationFn: (tenantId: string) => api.post<{ enqueued: boolean }>('/platform/storage/cleanup', { tenantId }),
   }));
 }

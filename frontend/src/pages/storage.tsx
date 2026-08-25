@@ -1,11 +1,17 @@
 import { createMemo, createSignal, For, Show, type Component, type JSX } from 'solid-js';
+import { toast } from 'solid-sonner';
 import {
+  useCleanupTenantStorage,
   usePlatformStorage,
   type PlatformStorageBuckets,
   type PlatformStorageProject,
   type PlatformStorageTenant,
   type PlatformStorageView,
 } from '~/api/platform-storage';
+import { usePermissions } from '~/api/permissions';
+import { Permission } from '~/constants/permissions';
+import ConfirmDialog from '~/components/ui/confirm-dialog';
+import { Popover, PopoverTrigger, PopoverContent } from '~/components/ui/popover';
 import { formatBytes, formatShare } from '~/lib/format-bytes';
 import { cn } from '~/lib/cn';
 import { Badge, badgeVariants } from '~/components/ui/badge';
@@ -16,6 +22,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '~/components/ui/tooltip
 import {
   AlertTriangle,
   Building2,
+  ChevronDown,
   ChevronRight,
   Clock,
   Database,
@@ -474,7 +481,7 @@ function TenantRow(props: {
           <Badge variant="secondary" class="text-[10px] px-1.5 py-0 shrink-0">
             {props.tenant.projects.length}
           </Badge>
-          <PendingDeletionBadge pendingDeletion={props.tenant.pendingDeletion} />
+          <PendingDeletionBadge tenant={props.tenant} />
           <Show when={props.tenant.error}>
             <MeasurementError label="Some directories could not be measured; this total is incomplete." />
           </Show>
@@ -489,37 +496,87 @@ function TenantRow(props: {
   );
 }
 
-function PendingDeletionBadge(props: { pendingDeletion: PlatformStorageTenant['pendingDeletion'] }) {
-  const visible = () =>
-    props.pendingDeletion.error || props.pendingDeletion.count > 0 || props.pendingDeletion.bytes > 0;
+function pendingDeletionBadgeClass(interactive: boolean): string {
+  return cn(
+    badgeVariants({ variant: 'outline' }),
+    'text-[10px] px-1.5 py-0 gap-1 font-normal text-muted-foreground shrink-0',
+    interactive ? 'cursor-pointer hover:bg-muted' : 'cursor-default'
+  );
+}
+
+function PendingDeletionBadge(props: { tenant: PlatformStorageTenant }) {
+  const { hasPermission } = usePermissions();
+  const cleanup = useCleanupTenantStorage();
+  const [confirmOpen, setConfirmOpen] = createSignal(false);
+
+  const pending = () => props.tenant.pendingDeletion;
+  const visible = () => pending().error || pending().count > 0 || pending().bytes > 0;
+  const canCleanup = () => hasPermission(Permission.managePlatformStorage) && pending().count > 0;
+
+  const badgeBody = () => (
+    <>
+      <Trash2 class="w-2.5 h-2.5" />
+      <Show when={!pending().error} fallback={<>pending deletion unmeasured</>}>
+        <span class="tabular-nums">{formatBytes(pending().bytes)}</span> pending deletion ·{' '}
+        <span class="tabular-nums">{pending().count}</span>
+      </Show>
+    </>
+  );
+
+  const summary = () => (
+    <Show
+      when={!pending().error}
+      fallback="Some pending-deletion directories could not be measured; this aggregate is incomplete."
+    >
+      {pending().count} {pending().count === 1 ? 'directory' : 'directories'} of deleted project environments still
+      on disk for the recovery window. Cleanup will reclaim {formatBytes(pending().bytes)}.
+    </Show>
+  );
+
+  const startCleanup = () => {
+    cleanup.mutate(props.tenant.id, {
+      onSuccess: () => toast.success('Cleanup started in the background — space will be reclaimed shortly'),
+      onError: () => toast.error('Failed to start cleanup'),
+    });
+  };
 
   return (
     <Show when={visible()}>
-      <Tooltip>
-        <TooltipTrigger
-          as="span"
-          class={cn(
-            badgeVariants({ variant: 'outline' }),
-            'text-[10px] px-1.5 py-0 gap-1 font-normal text-muted-foreground cursor-default shrink-0'
-          )}
-        >
-          <Trash2 class="w-2.5 h-2.5" />
-          <Show when={!props.pendingDeletion.error} fallback={<>pending deletion unmeasured</>}>
-            <span class="tabular-nums">{formatBytes(props.pendingDeletion.bytes)}</span> pending deletion ·{' '}
-            <span class="tabular-nums">{props.pendingDeletion.count}</span>
-          </Show>
-        </TooltipTrigger>
-        <TooltipContent>
-          <Show
-            when={!props.pendingDeletion.error}
-            fallback="Some pending-deletion directories could not be measured; this aggregate is incomplete."
-          >
-            {props.pendingDeletion.count}{' '}
-            {props.pendingDeletion.count === 1 ? 'directory' : 'directories'} of deleted projects or environments
-            still on disk for the recovery window. Cleanup will reclaim {formatBytes(props.pendingDeletion.bytes)}.
-          </Show>
-        </TooltipContent>
-      </Tooltip>
+      <Show
+        when={canCleanup()}
+        fallback={
+          <Tooltip>
+            <TooltipTrigger as="span" class={pendingDeletionBadgeClass(false)}>
+              {badgeBody()}
+            </TooltipTrigger>
+            <TooltipContent>{summary()}</TooltipContent>
+          </Tooltip>
+        }
+      >
+        <Popover>
+          <PopoverTrigger as="span" class={pendingDeletionBadgeClass(true)} onClick={(event: MouseEvent) => event.stopPropagation()}>
+            {badgeBody()}
+            <ChevronDown class="w-2.5 h-2.5" />
+          </PopoverTrigger>
+          <PopoverContent class="w-72 space-y-2 p-3 text-xs" onClick={(event: MouseEvent) => event.stopPropagation()}>
+            <p>{summary()}</p>
+            <Button variant="destructive" size="sm" class="w-full" onClick={() => setConfirmOpen(true)}>
+              Clean up now
+            </Button>
+          </PopoverContent>
+        </Popover>
+        <ConfirmDialog
+          open={confirmOpen()}
+          onOpenChange={setConfirmOpen}
+          title={`Clean up ${props.tenant.name} storage now?`}
+          description={`${pending().count} ${
+            pending().count === 1 ? 'directory' : 'directories'
+          } (${formatBytes(pending().bytes)}) will be removed immediately, skipping the remaining recovery window. This cannot be undone.`}
+          confirmLabel="Clean up now"
+          variant="destructive"
+          onConfirm={startCleanup}
+        />
+      </Show>
     </Show>
   );
 }

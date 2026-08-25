@@ -38,6 +38,8 @@ Asking the mount rather than trusting configuration is deliberate. The claim siz
 
 Gated by `can_view_platform_storage`, a [platform-scope permission](../organization/permissions.md): the route resolves no Organization and stamps no tenant context, and Pulumi never grants it as part of the default admin bundle. It is granted on top of an operator's ordinary Organization membership rather than on its own — the app shell assumes every account belongs to one ([ADR-0027](../adr/0027-platform-scope-routes-opt-out-of-tenant-resolution.md)). The view ignores the Organization selector entirely, because the point is the view across all of them.
 
+Operators holding the separate `can_manage_platform_storage` permission also get a **Clean up now** control next to an Organization's pending-deletion badge. Confirming it enqueues the same `workspace-cleanup` job scoped to that Organization with the retention window ignored, reclaiming its tombstoned directories immediately instead of waiting out the seven days; the orphan sweep stays with the nightly run. The permission is deliberately split from the view permission because it destroys the recovery window.
+
 ## See also
 
 - [Persistence](persistence.md) — the volume being measured, the workspace layout, and the tombstone/cleanup cycle that pending deletion reflects.

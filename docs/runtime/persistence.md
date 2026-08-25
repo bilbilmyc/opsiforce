@@ -25,11 +25,11 @@ Resume is frontend-owned and scoped to the **active environment**, because each 
 
 ## Workspace cleanup
 
-Deleting a project does not remove its files immediately — it writes a tombstone (`deleted_projects` / `deleted_project_environments`). A daily BullMQ `workspace-cleanup` job (3 AM) then does two things: removes workspaces whose tombstone is older than **7 days** (and prunes now-empty tenant directories), and removes orphaned directories that have no row in either `projects` or the tombstones. The 7-day window allows recovery from an accidental delete.
+Deleting a project or environment does not remove its files immediately — each environment gets a tombstone row in `deleted_project_environments`, written before the live rows are removed so a directory is never untracked. A daily BullMQ `workspace-cleanup` job (3 AM) then does two things: removes workspaces whose tombstone is older than **7 days** (a tombstone row is only deleted once its directory removal actually succeeds, so a failed removal retries on the next run), and sweeps the `projects/` root for orphaned directories that have neither a live environment row nor a tombstone. Hidden dot-directories (the `.<id>.copying` / `.<id>.git-rebuild` temp dirs that duplication and publish create there) are exempt from the orphan sweep until they are older than the same 7-day window, so an in-flight operation is never swept but a crashed one still gets reaped. The 7-day window allows recovery from an accidental delete. Operators with `can_manage_platform_storage` can skip the wait for one Organization from the [Storage page](storage.md) — that enqueues the same job scoped to the Organization with the retention window ignored.
 
 ## See also
 
 - [Storage](storage.md) — how the bytes on this volume are counted and attributed back to Organizations.
 - [Pod Lifecycle](pod-lifecycle.md) — pod replacement, suspension, and the deterministic naming that makes the volume re-attach.
 - [Project Environments](../projects/environments.md) — why each environment has its own directory and session store.
-- Code: `backend/db/schema.ts` (`project_environments`, `deleted_projects`), `backend/src/pod/pod.template.ts` (XDG + `subPath`), `backend/src/cleanup/` (the workspace-cleanup queue/cron).
+- Code: `backend/db/schema.ts` (`project_environments`, `deleted_project_environments`), `backend/src/pod/pod.template.ts` (XDG + `subPath`), `backend/src/cleanup/` (the workspace-cleanup queue/cron).

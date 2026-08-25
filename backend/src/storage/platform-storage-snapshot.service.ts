@@ -4,14 +4,7 @@ import { eq } from 'drizzle-orm';
 import { readdir, statfs } from 'node:fs/promises';
 import path from 'node:path';
 import { db } from '../../db';
-import {
-  deletedProjectEnvironments,
-  deletedProjects,
-  environments,
-  projectEnvironments,
-  projects,
-  tenants,
-} from '../../db/schema';
+import { deletedProjectEnvironments, environments, projectEnvironments, projects, tenants } from '../../db/schema';
 import { DIRECTORY_USAGE_STRATEGY, type DirectoryUsageStrategy } from './directory-usage.strategy';
 import type {
   DirectoryUsage,
@@ -160,19 +153,10 @@ export class PlatformStorageSnapshotService {
       .leftJoin(environments, eq(environments.id, projectEnvironments.environmentId)) as Promise<LiveEnvironmentRow[]>;
   }
 
-  private async loadTombstones(): Promise<TombstoneRow[]> {
-    const [deletedEnvironmentRows, deletedProjectRows] = await Promise.all([
-      db
-        .select({ tenantId: deletedProjectEnvironments.tenantId, directory: deletedProjectEnvironments.directory })
-        .from(deletedProjectEnvironments),
-      db.select({ tenantId: deletedProjects.tenantId, directory: deletedProjects.directory }).from(deletedProjects),
-    ]);
-    const byDirectory = new Map<string, TombstoneRow>();
-    for (const row of [...deletedEnvironmentRows, ...deletedProjectRows]) {
-      const existing = byDirectory.get(row.directory);
-      if (!existing || existing.tenantId === null) byDirectory.set(row.directory, row);
-    }
-    return [...byDirectory.values()];
+  private loadTombstones(): Promise<TombstoneRow[]> {
+    return db
+      .select({ tenantId: deletedProjectEnvironments.tenantId, directory: deletedProjectEnvironments.directory })
+      .from(deletedProjectEnvironments);
   }
 
   private async loadTenantNames(): Promise<Map<string, string>> {

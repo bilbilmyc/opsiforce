@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bullmq';
 import { ConfigService } from '@nestjs/config';
+import { WORKSPACE_CLEANUP_QUEUE } from '../cleanup/workspace-cleanup.processor';
 import { CephfsDirectoryUsageStrategy } from './cephfs-directory-usage.strategy';
 import { DIRECTORY_USAGE_STRATEGY, type DirectoryUsageStrategy } from './directory-usage.strategy';
 import { HostPathDirectoryUsageStrategy } from './hostpath-directory-usage.strategy';
@@ -8,6 +10,7 @@ import { PlatformStorageSnapshotService } from './platform-storage-snapshot.serv
 import { PlatformStorageService } from './platform-storage.service';
 
 @Module({
+  imports: [BullModule.registerQueue({ name: WORKSPACE_CLEANUP_QUEUE })],
   controllers: [PlatformStorageController],
   providers: [
     PlatformStorageService,
