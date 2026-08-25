@@ -19,7 +19,10 @@ env:
   LIBREOFFICE_AUTO_START: "true"
   LIBREOFFICE_MAX_QUEUE_SIZE: "10"
   LIBREOFFICE_DENY_PRIVATE_IPS: "true"
-  API_BODY_LIMIT: "32MB"
+  # Gotenberg parses this as DECIMAL, so "32MB" is 32,000,000 bytes — below the backend's
+  # 32 MiB (33,554,432) convertible cap, and multipart framing adds more on top. Kept clear of
+  # both so the backend's own size guard is the only limit a member can hit.
+  API_BODY_LIMIT: "40MB"
   API_DISABLE_DOWNLOAD_FROM: "true"
 
 resources:

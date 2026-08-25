@@ -59,6 +59,9 @@ export class GotenbergService {
     if (response.status === 400) {
       return { ok: false, failure: ConversionFailure.Unconvertible, error: 'This document could not be converted' };
     }
+    if (response.status === 413) {
+      return { ok: false, failure: ConversionFailure.Unconvertible, error: 'This document is too large to convert' };
+    }
     if (BUSY_STATUSES.has(response.status)) {
       return { ok: false, failure: ConversionFailure.Busy, error: 'The converter is busy' };
     }
