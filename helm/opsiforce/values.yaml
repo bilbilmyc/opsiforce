@@ -8,7 +8,7 @@ storage:
   type: pvc
   pvcName: opsiforce-cephfs
   className: ceph-filesystem-immediate
-  size: 250Gi
+  size: 300Gi
   hostPath: /tmp/opsiforce-data
 
 agent:
