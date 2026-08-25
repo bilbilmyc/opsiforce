@@ -4,9 +4,8 @@ import { open, type FileHandle } from 'fs/promises';
 import { basename } from 'path';
 import {
   hasHiddenSegment,
-  isOpenedFileWithinRoot,
   resolveFilePathWithinRoot,
-  resolveRealRelativePath,
+  resolveOpenedFileRelativePath,
   resolveWorkspaceRoot,
   WORKSPACE_FILE_PATH_POLICY,
 } from './file-paths';
@@ -33,14 +32,8 @@ export class WorkspaceFileService {
     if (!handle) throw new NotFoundException('File not found');
 
     const info = await handle.stat().catch(() => null);
-    const realRelativePath = await resolveRealRelativePath(root, filePath);
-    if (
-      !info ||
-      !info.isFile() ||
-      !(await isOpenedFileWithinRoot(root, handle.fd)) ||
-      realRelativePath === null ||
-      hasHiddenSegment(realRelativePath)
-    ) {
+    const realRelativePath = await resolveOpenedFileRelativePath(root, handle.fd);
+    if (!info || !info.isFile() || realRelativePath === null || hasHiddenSegment(realRelativePath)) {
       await handle.close().catch(() => {});
       throw new NotFoundException('File not found');
     }

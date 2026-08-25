@@ -75,6 +75,25 @@ export async function isResolvedPathWithinRoot(root: string, target: string): Pr
   }
 }
 
+export async function resolveOpenedFileRelativePath(root: string, fd: number): Promise<string | null> {
+  return relativeToRealRoot(root, `/proc/self/fd/${fd}`);
+}
+
+export async function resolveRealPathRelativeToRoot(root: string, target: string): Promise<string | null> {
+  return relativeToRealRoot(root, target);
+}
+
+async function relativeToRealRoot(root: string, target: string): Promise<string | null> {
+  try {
+    const realRoot = await realpath(root);
+    const real = await realpath(target);
+    if (real !== realRoot && !real.startsWith(realRoot + path.sep)) return null;
+    return path.relative(realRoot, real);
+  } catch {
+    return null;
+  }
+}
+
 export async function isOpenedFileWithinRoot(root: string, fd: number): Promise<boolean> {
   try {
     const realRoot = await realpath(root);

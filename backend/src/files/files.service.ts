@@ -8,6 +8,7 @@ import {
   HIDDEN_ROOT_DIRECTORY_NAMES,
   isResolvedPathWithinRoot,
   resolveFilePathWithinRoot,
+  resolveRealPathRelativeToRoot,
   resolveRealRelativePath,
   resolveWorkspaceRoot,
   USER_UPLOADS_DIRECTORY_NAME,
@@ -85,9 +86,7 @@ export class FilesService {
   }
 
   private async readDirectory(root: string, target: string, relativePath: string): Promise<FileEntry[]> {
-    if (!(await isResolvedPathWithinRoot(root, target))) throw new NotFoundException('Directory not found');
-
-    const realRelativePath = await resolveRealRelativePath(root, target);
+    const realRelativePath = await resolveRealPathRelativeToRoot(root, target);
     if (realRelativePath === null || hasHiddenSegment(realRelativePath) || isHiddenRootPath(realRelativePath)) {
       throw new NotFoundException('Directory not found');
     }
