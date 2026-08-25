@@ -40,6 +40,7 @@ export class UploadService {
     if (target !== uploadsRoot && !target.startsWith(uploadsRoot + path.sep)) {
       throw new BadRequestException('Upload target must be inside user uploads');
     }
+    if (target === uploadsRoot) return uploadsRoot;
 
     const info = await lstat(target).catch(() => null);
     if (!info) {
