@@ -40,26 +40,33 @@ async function request<T>(
   setState: (state: FileFetchState<T>) => void,
   maxBytes?: number
 ): Promise<void> {
+  // read() parses on past an abort, so a superseded request must not reach setState.
+  const commit = (next: FileFetchState<T>) => {
+    if (signal.aborted) return;
+    setState(next);
+  };
+
   try {
     const headers = maxBytes === undefined ? undefined : { Range: `bytes=0-${maxBytes}` };
     const response = await fetch(url, { signal, headers });
     if (response.status === 404) {
-      setState({ status: 'missing' });
+      commit({ status: 'missing' });
       return;
     }
     // An empty file cannot satisfy a byte range; it is not an error, it reads as no content.
     if (response.status === 416) {
-      setState({ status: 'ready', value: await read(new Response(new ArrayBuffer(0), { headers: response.headers })) });
+      const value = await read(new Response(new ArrayBuffer(0), { headers: response.headers }));
+      commit({ status: 'ready', value });
       return;
     }
     if (!response.ok) {
-      setState({ status: 'error' });
+      commit({ status: 'error' });
       return;
     }
-    setState({ status: 'ready', value: await read(response) });
+    const value = await read(response);
+    commit({ status: 'ready', value });
   } catch {
-    if (signal.aborted) return;
-    setState({ status: 'error' });
+    commit({ status: 'error' });
   }
 }
 

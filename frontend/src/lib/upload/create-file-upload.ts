@@ -66,13 +66,13 @@ export function createFileUpload(options: CreateFileUploadOptions): FileUpload {
     };
   }
 
-  function sendStreaming(files: UploadFile[], totalData: number): Promise<UploadResult> {
+  function sendStreaming(files: UploadFile[], totalData: number, url: string): Promise<UploadResult> {
     const boundary = multipartBoundary();
     const controller = new AbortController();
     cancelHandle = () => controller.abort();
     const body = streamingMultipartBody(files, boundary, controller.signal, makeProgressReporter(totalData));
 
-    return fetch(options.url(), {
+    return fetch(url, {
       method: 'POST',
       headers: uploadHeaders({ 'Content-Type': `multipart/form-data; boundary=${boundary}` }),
       body,
@@ -92,7 +92,7 @@ export function createFileUpload(options: CreateFileUploadOptions): FileUpload {
       });
   }
 
-  function sendXhr(files: UploadFile[], totalData: number): Promise<UploadResult> {
+  function sendXhr(files: UploadFile[], totalData: number, url: string): Promise<UploadResult> {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       const reportProgress = makeProgressReporter(totalData);
@@ -118,7 +118,7 @@ export function createFileUpload(options: CreateFileUploadOptions): FileUpload {
       xhr.onerror = () => reject(new Error('Network error during upload'));
       xhr.ontimeout = () => reject(new Error('Upload timed out'));
 
-      xhr.open('POST', options.url());
+      xhr.open('POST', url);
       for (const [header, value] of Object.entries(uploadHeaders())) {
         xhr.setRequestHeader(header, value);
       }
@@ -132,6 +132,8 @@ export function createFileUpload(options: CreateFileUploadOptions): FileUpload {
       toast.info('An upload is already in progress');
       return;
     }
+
+    const targetUrl = options.url();
 
     setTotalFiles(files.length);
     setPreparedFiles(0);
@@ -159,7 +161,7 @@ export function createFileUpload(options: CreateFileUploadOptions): FileUpload {
       await nextFrame();
 
       const send = supportsRequestStreams ? sendStreaming : sendXhr;
-      const result = await send(files, totalData);
+      const result = await send(files, totalData, targetUrl);
       showUploadResult(result);
       options.onUploaded?.(files, result);
     } catch (err) {
