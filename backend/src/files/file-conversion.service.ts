@@ -2,11 +2,7 @@ import { BadRequestException, Injectable, Logger, NotFoundException, type OnModu
 import { randomUUID } from 'crypto';
 import { basename, extname } from 'path';
 import { isConvertibleToPdf, MAX_CONVERTIBLE_BYTES } from './convertible-formats';
-import {
-  ConversionFailure,
-  ConversionStatus,
-  type ConversionStatusResponse,
-} from './file-conversion.types';
+import { ConversionFailure, type ConversionOutcome, ConversionStatus, type ConversionStatusResponse } from './file-conversion.types';
 import { GotenbergService } from './gotenberg.service';
 import { WorkspaceFileService } from './workspace-file.service';
 
@@ -87,7 +83,13 @@ export class FileConversionService implements OnModuleDestroy {
   }
 
   private async run(job: ConversionJob, bytes: Buffer): Promise<void> {
-    const outcome = await this.gotenbergService.convertToPdf({ name: job.name, bytes, traceId: job.id });
+    const outcome = await this.gotenbergService
+      .convertToPdf({ name: job.name, bytes, traceId: job.id })
+      .catch((err: unknown): ConversionOutcome => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.logger.warn(`Conversion of ${job.name} threw: ${message}`);
+        return { ok: false as const, failure: ConversionFailure.Retryable, error: 'The converter failed' };
+      });
     if (!this.jobs.has(job.id)) return;
 
     if (outcome.ok) {

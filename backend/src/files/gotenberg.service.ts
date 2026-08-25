@@ -45,7 +45,12 @@ export class GotenbergService {
     }
 
     if (response.ok) {
-      return { ok: true, pdf: Buffer.from(await response.arrayBuffer()) };
+      const body = await response.arrayBuffer().catch(() => null);
+      if (!body) {
+        this.logger.warn(`Conversion of ${input.name} answered ok but the body could not be read`);
+        return { ok: false, failure: ConversionFailure.Retryable, error: 'The converter failed' };
+      }
+      return { ok: true, pdf: Buffer.from(body) };
     }
 
     const detail = await response.text().catch(() => '');
