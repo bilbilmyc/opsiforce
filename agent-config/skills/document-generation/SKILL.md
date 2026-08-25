@@ -124,6 +124,8 @@ chromium --headless --no-sandbox --disable-gpu --hide-scrollbars \
 
 Set page geometry in the HTML (`@page { size: A4; margin: 20mm; }`), keep tables together with `break-inside: avoid`, and embed images as `data:` URIs or absolute `file:///` paths — the page is loaded from disk with no network.
 
+**If you deliver an `.html` file instead of a PDF, inline everything.** The platform serves previewed HTML with `default-src 'none'`, so remote scripts, stylesheets, images, and any `fetch` are blocked. A report that pulls a chart library off a CDN renders broken in the preview panel and gives the user no clue why. Inline `<script>` and `<style>` still execute and `data:` images still draw, so build charts from data embedded in the page — or deliver a PDF, which is the better format for anything the user will keep.
+
 **Programmatic (tabular, generated per record, thousands of pages):** `reportlab` Platypus.
 
 ```python
