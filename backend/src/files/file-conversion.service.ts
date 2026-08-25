@@ -18,6 +18,7 @@ const JOB_TTL_MS = 5 * 60_000;
 const SWEEP_INTERVAL_MS = 60_000;
 const MAX_TRACKED_JOBS = 32;
 // A pending job pins its document in memory until Gotenberg answers, so admission is capped too.
+// The slot is reserved synchronously in start(), before any await, or a burst would all pass the check.
 const MAX_PENDING_JOBS = 8;
 
 interface ConversionJob {
@@ -62,7 +63,6 @@ export class FileConversionService implements OnModuleDestroy {
       throw new HttpException('Too many conversions in progress', HttpStatus.TOO_MANY_REQUESTS);
     }
 
-    const file = await this.workspaceFileService.openForRead(directory, relativePath);
     const job: ConversionJob = {
       id: randomUUID(),
       projectId,
@@ -73,15 +73,22 @@ export class FileConversionService implements OnModuleDestroy {
     };
     this.track(job);
 
-    if (file.size > MAX_CONVERTIBLE_BYTES) {
-      await file.handle.close().catch(() => {});
-      this.fail(job, ConversionFailure.Unconvertible, 'This document is too large to convert');
-      return job.id;
-    }
+    try {
+      const file = await this.workspaceFileService.openForRead(directory, relativePath);
 
-    const bytes = await file.handle.readFile().finally(() => file.handle.close().catch(() => {}));
-    void this.run(job, bytes);
-    return job.id;
+      if (file.size > MAX_CONVERTIBLE_BYTES) {
+        await file.handle.close().catch(() => {});
+        this.fail(job, ConversionFailure.Unconvertible, 'This document is too large to convert');
+        return job.id;
+      }
+
+      const bytes = await file.handle.readFile().finally(() => file.handle.close().catch(() => {}));
+      void this.run(job, bytes);
+      return job.id;
+    } catch (err) {
+      this.jobs.delete(job.id);
+      throw err;
+    }
   }
 
   status(projectId: string, directory: string, jobId: string): ConversionStatusResponse {
