@@ -128,7 +128,7 @@ export function ProjectView(props: { projectId: string; initialPrompt?: string }
             status={data().status}
             workspaceId={data().workspaceId}
             appExists={!!data().app?.exists}
-            showTabs={!!connection.router()}
+            showAgentTabs={!!connection.router()}
             activeTab={activeTab()}
             onActiveTabChange={selectTab}
             environments={environmentList()}

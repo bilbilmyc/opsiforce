@@ -28,15 +28,17 @@ export class UploadService {
   }
 
   async resolveUploadTargetDirectory(directory: string, targetPath: string | undefined): Promise<string> {
+    const workspaceRoot = resolveWorkspaceRoot(this.storageMountPath, directory);
     const uploadsRoot = resolveUserUploadsRoot(this.storageMountPath, directory);
+    // Every containment check below resolves against uploadsRoot, so uploadsRoot itself must stay in the workspace.
+    if ((await lstat(uploadsRoot).catch(() => null)) && !(await isResolvedPathWithinRoot(workspaceRoot, uploadsRoot))) {
+      throw new BadRequestException('Upload target must be inside user uploads');
+    }
+
     const requested = targetPath?.replace(/^\/+|\/+$/g, '');
     if (!requested || requested === '.') return uploadsRoot;
 
-    const target = resolveFilePathWithinRoot(
-      resolveWorkspaceRoot(this.storageMountPath, directory),
-      requested,
-      UPLOAD_FILE_PATH_POLICY
-    );
+    const target = resolveFilePathWithinRoot(workspaceRoot, requested, UPLOAD_FILE_PATH_POLICY);
     if (target !== uploadsRoot && !target.startsWith(uploadsRoot + path.sep)) {
       throw new BadRequestException('Upload target must be inside user uploads');
     }

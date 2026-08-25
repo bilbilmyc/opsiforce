@@ -16,7 +16,7 @@ export interface ProjectHeaderProps {
   status: ProjectStatus;
   workspaceId: string | null;
   appExists: boolean;
-  showTabs: boolean;
+  showAgentTabs: boolean;
   activeTab: ProjectTab;
   onActiveTabChange: (tab: ProjectTab) => void;
   environments: ProjectEnvironment[];
@@ -41,32 +41,30 @@ export function ProjectHeader(props: ProjectHeaderProps) {
   return (
     <div class="flex items-center justify-between gap-2 px-3 py-2 bg-background border-b border-border shrink-0">
       <div class="flex items-center gap-2 min-w-0">
-        <Show when={props.showTabs}>
-          <Tabs value={props.activeTab} onChange={(v) => props.onActiveTabChange(v as ProjectTab)} class="w-auto">
-            <TabsList class="w-auto">
-              <TabsTrigger value="chat" class="flex-none gap-1.5">
-                <MessageSquare class="w-3.5 h-3.5" />
-                Chat
+        <Tabs value={props.activeTab} onChange={(v) => props.onActiveTabChange(v as ProjectTab)} class="w-auto">
+          <TabsList class="w-auto">
+            <TabsTrigger value="chat" class="flex-none gap-1.5">
+              <MessageSquare class="w-3.5 h-3.5" />
+              Chat
+            </TabsTrigger>
+            <TabsTrigger value="files" class="flex-none gap-1.5">
+              <Files class="w-3.5 h-3.5" />
+              Files
+            </TabsTrigger>
+            <Show when={props.showAgentTabs && canViewCode()}>
+              <TabsTrigger value="code" class="flex-none gap-1.5">
+                <CodeIcon class="w-3.5 h-3.5" />
+                Code
               </TabsTrigger>
-              <TabsTrigger value="files" class="flex-none gap-1.5">
-                <Files class="w-3.5 h-3.5" />
-                Files
+            </Show>
+            <Show when={props.showAgentTabs && canViewDb()}>
+              <TabsTrigger value="db" class="flex-none gap-1.5">
+                <Database class="w-3.5 h-3.5" />
+                DB
               </TabsTrigger>
-              <Show when={canViewCode()}>
-                <TabsTrigger value="code" class="flex-none gap-1.5">
-                  <CodeIcon class="w-3.5 h-3.5" />
-                  Code
-                </TabsTrigger>
-              </Show>
-              <Show when={canViewDb()}>
-                <TabsTrigger value="db" class="flex-none gap-1.5">
-                  <Database class="w-3.5 h-3.5" />
-                  DB
-                </TabsTrigger>
-              </Show>
-            </TabsList>
-          </Tabs>
-        </Show>
+            </Show>
+          </TabsList>
+        </Tabs>
         <EnvironmentsPopover
           projectId={props.projectId}
           environments={props.environments}
