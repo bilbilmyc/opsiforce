@@ -27,4 +27,5 @@ export const Permission = {
   viewExternalServicesUsage: 'can_view_external_services_usage',
   manageExternalServices: 'can_manage_external_services',
   viewPlatformStorage: 'can_view_platform_storage',
+  managePlatformStorage: 'can_manage_platform_storage',
 } as const;

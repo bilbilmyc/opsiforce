@@ -37,6 +37,7 @@ auth:
       - can_manage_external_services
       - can_view_external_services_usage
       - can_view_platform_storage
+      - can_manage_platform_storage
 
 keycloakMs:
   enabled: true
