@@ -122,6 +122,28 @@ _Avoid_: Message (ambiguous — also covers the Agent's reply); Query, Command
 Speaking into the chat instead of typing — a recording made from the prompt's mic button is transcribed to text and inserted into the prompt draft for review; nothing is sent until the user sends. The audio is transient input, never a stored artifact. The spoken language is auto-detected by default, with an explicit per-browser language override.
 _Avoid_: Voice message (implies the audio itself is attached or kept); Voice chat, Speech-to-text (the mechanism, not the feature); Transcription (the backend step, not the user-facing act)
 
+### Files
+
+**Files**:
+The project workspace tab where a user sees and manages the Active environment's workspace files — User uploads, Generated files, and any stray files the Agent left at the workspace root — with folder drill-down and breadcrumbs. Visible to every project member; the App's source, platform data, and dotfiles never appear in it.
+_Avoid_: File browser, File manager (dev-tool connotation — it is a curated view, not the filesystem); Workspace (the Org-level Project grouping — a different thing)
+
+**User uploads**:
+Files a user added to a ProjectEnvironment — attached in chat or uploaded from the Files tab — kept durably in the environment's upload area with their original folder layout preserved.
+_Avoid_: Attachments (implies message-scoped; uploads are durable workspace files, not parts of a Prompt)
+
+**Generated files**:
+The Agent's finished deliverables — documents, reports, exports — saved by convention into the environment's designated output folder, which the Files tab surfaces as its own section. The folder comes into existence on first write; deliverables the Agent drops elsewhere still surface in the tab as other files.
+_Avoid_: Artifacts (claude.ai's concept — different mechanics); Outputs (vague); Generated app (the App source — a different thing entirely)
+
+**File preview**:
+Reading a finished workspace file in the project's right side panel instead of downloading it — opened by clicking a file link the Agent posted in chat, or a file in the Files tab. It shares the panel with the App preview through an App | File switcher, shows one file at a time, and never opens or switches modes on its own. Formats outside the supported set are not an error state: they offer a download instead.
+_Avoid_: Artifact preview (implies claude.ai's streaming artifacts; this is finished files only); Viewer, File viewer (suggests a separate surface — it is the same panel the App preview uses); App preview (the running App in that panel — the other mode, not this one)
+
+**Document conversion**:
+Turning a Word or PowerPoint deliverable into a PDF so File preview can render it, on a shared in-cluster converter the Agent cannot reach. It runs as a job — the panel is told a conversion is pending, then shown the PDF — and the result is transient, so reopening the same file converts it again. An unconvertible document offers a download instead of failing.
+_Avoid_: Export (the Project Export & Import feature — a different thing); Rendering (the browser-side half of File preview); Caching, Cached PDF (there is no conversion cache — results are job plumbing)
+
 ### Schedules
 
 **Schedule**:

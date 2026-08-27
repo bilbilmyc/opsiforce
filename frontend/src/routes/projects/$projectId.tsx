@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/solid-router';
-import ProjectView from '~/pages/project';
+import { ProjectView } from '~/pages/project';
 
 export const Route = createFileRoute('/projects/$projectId')({
   validateSearch: (search: Record<string, unknown>) => ({

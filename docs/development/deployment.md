@@ -2,20 +2,23 @@
 
 > How Opsiforce ships to a cluster: what builds, the order it deploys in and why, and the rollout mechanics. The workflow file and Helm charts are the source of truth for the exact commands; this explains the shape.
 
-CI/CD is a single GitHub Actions workflow, `.github/workflows/opsiforce.yml`. It builds **4 Docker images** in parallel (backend, frontend, agent, runtime-proxies — all in one GHCR repo, distinguished by tag prefix) and then deploys **6 Helm charts** sequentially to the target cluster. Pushes to `main` deploy to the development namespace; pushes to `production-opsiforce` deploy to production; PRs build only.
+CI/CD is a single GitHub Actions workflow, `.github/workflows/opsiforce.yml`. It builds **4 Docker images** in parallel (backend, frontend, agent, runtime-proxies — all in one GHCR repo, distinguished by tag prefix) and then deploys **7 Helm charts** sequentially to the target cluster. Pushes to `main` deploy to the development namespace; pushes to `production-opsiforce` deploy to production; PRs build only.
 
 ## Deploy order is a dependency chain
 
-The six charts must apply in this order because each depends on what came before — this is the durable fact to preserve:
+The charts apply in this order because each depends on what came before — this is the durable fact to preserve:
 
 ```
 1. opsiforce (infra)   creates the ServiceAccount + CephFS PVC everything else mounts/uses
 2. bifrost             must be up before the backend (backend calls its Admin API on boot)
-3. opsiforce-backend   must be up before the proxies (they call its control API)
-4. opsiforce-frontend  ─┐ both must exist before the edge proxy routes to them
-5. runtime-proxies     ─┘ (four Go deployments — agent/app/vscode/db — from one image)
-6. opsiforce-proxy     nginx + OAuth2 Proxy + Traefik IngressRoutes; fans out to all of the above
+3. gotenberg           no boot dependency — ordered here so the converter Service exists first
+4. opsiforce-backend   must be up before the proxies (they call its control API)
+5. opsiforce-frontend  ─┐ both must exist before the edge proxy routes to them
+6. runtime-proxies     ─┘ (four Go deployments — agent/app/vscode/db — from one image)
+7. opsiforce-proxy     nginx + OAuth2 Proxy + Traefik IngressRoutes; fans out to all of the above
 ```
+
+Gotenberg is the odd one out: nothing calls it at boot, so its position is a convenience rather than a constraint. It carries no image of ours (a pinned upstream tag) and its Service name is fixed by `fullnameOverride`, so its deploy step takes no `--set` at all — the backend's default converter URL is already correct in every environment.
 
 The charts are wired together with `--set` flags carrying service names, the agent image tag, the PVC name, and the Bifrost URL across the boundaries above. Release names follow `opsiforce-{chart}-{env}`.
 
@@ -36,5 +39,6 @@ The upstream Bifrost chart is deployed from its public Helm repo, with the runni
 
 - [`../README.md`](../../README.md) / [Commands](commands.md) — running and developing locally.
 - [LLM Gateway](../gateways/llm-gateway.md) — the Bifrost chart and why it deploys before the backend.
+- [File Preview](../projects/file-preview.md) — what the Gotenberg chart is for, and how the converter is contained.
 - [Pod Lifecycle](../runtime/pod-lifecycle.md) — how the agent image tag a deploy pins becomes the pod the platform runs.
 - Source of truth: `.github/workflows/opsiforce.yml` and `helm/`.

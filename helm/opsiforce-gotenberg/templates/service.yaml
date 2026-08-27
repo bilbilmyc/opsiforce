@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "opsiforce-gotenberg.fullname" . }}
+  labels:
+    {{- include "opsiforce-gotenberg.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      protocol: TCP
+      targetPort: http
+  selector:
+    app: {{ include "opsiforce-gotenberg.fullname" . }}

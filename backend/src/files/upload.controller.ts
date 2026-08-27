@@ -1,12 +1,11 @@
-import { Controller, Post, Param, Query, Req, Res, Logger } from '@nestjs/common';
+import { Controller, Post, Param, Req, Res, Logger } from '@nestjs/common';
 import type { MultipartFile } from '@fastify/multipart';
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { UploadService } from './upload.service';
-import { ProjectService } from '../project/project.service';
-import { ProjectEnvironmentService } from '../project-environment/project-environment.service';
+import { SingleQuery } from './single-query.decorator';
+import { WorkspaceAccessService } from './workspace-access.service';
 import { CurrentTenant, type TenantContext } from '../tenant/tenant.decorator';
 import { CurrentUser, type UserContext } from '../user/user.decorator';
-import { UserService } from '../user/user.service';
 
 interface MultipartRequest extends FastifyRequest {
   parts(): AsyncIterableIterator<MultipartFile | { type: 'field' }>;
@@ -20,27 +19,23 @@ export class UploadController {
 
   constructor(
     private readonly uploadService: UploadService,
-    private readonly projectService: ProjectService,
-    private readonly projectEnvironmentService: ProjectEnvironmentService,
-    private readonly userService: UserService
+    private readonly workspaceAccessService: WorkspaceAccessService
   ) {}
 
   @Post(':projectId/upload')
   async upload(
     @Param('projectId') projectId: string,
-    @Query('environmentId') environmentId: string | undefined,
+    @SingleQuery('environmentId') environmentId: string | undefined,
+    @SingleQuery('targetPath') targetPath: string | undefined,
     @CurrentTenant() tenant: TenantContext,
     @CurrentUser() user: UserContext,
     @Req() req: MultipartRequest,
     @Res() reply: FastifyReply
   ) {
-    const userId = await this.userService.resolveUserId(user, tenant.tenantId);
-    const project = await this.projectService.findOneForUser({ projectId, tenantId: tenant.tenantId, userId });
+    const directory = await this.workspaceAccessService.resolveDirectory(projectId, environmentId, tenant, user);
+    const targetDirectory = await this.uploadService.resolveUploadTargetDirectory(directory, targetPath);
 
-    const env = await this.projectEnvironmentService.findRequestedForProject(projectId, environmentId);
-    const directory = env?.directory ?? project.directory;
-
-    this.projectService.touchActivity(environmentId ?? projectId).catch(() => {});
+    this.workspaceAccessService.touchActivity(projectId, environmentId);
 
     reply.hijack();
     reply.raw.writeHead(200, {
@@ -64,7 +59,7 @@ export class UploadController {
         const relativePath = part.fieldname;
 
         try {
-          const destPath = this.uploadService.resolveUploadPath(directory, relativePath);
+          const destPath = this.uploadService.resolveUploadPath(targetDirectory, relativePath);
           let lastProgressAt = 0;
           const onProgress = (bytes: number) => {
             const now = Date.now();
@@ -72,7 +67,7 @@ export class UploadController {
             lastProgressAt = now;
             if (!summaryEvents) emit({ type: 'progress', path: relativePath, bytes });
           };
-          const { size } = await this.uploadService.streamFileToDisk(destPath, part.file, onProgress);
+          const { size } = await this.uploadService.streamFileToDisk(targetDirectory, destPath, part.file, onProgress);
 
           uploaded += 1;
           if (!summaryEvents) emit({ type: 'file', path: relativePath, size, ok: true });

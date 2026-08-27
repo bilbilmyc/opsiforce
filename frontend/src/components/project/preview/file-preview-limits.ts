@@ -1,0 +1,11 @@
+export const SNIFF_BYTE_COUNT = 8192;
+
+export const MAX_TEXT_PREVIEW_BYTES = 512 * 1024;
+
+export const MAX_TABLE_PREVIEW_BYTES = 4 * 1024 * 1024;
+
+export const MAX_WORKBOOK_PREVIEW_BYTES = 16 * 1024 * 1024;
+
+export const MAX_TABLE_PREVIEW_ROWS = 500;
+
+export const MAX_TABLE_PREVIEW_COLUMNS = 200;

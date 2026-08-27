@@ -86,6 +86,22 @@ k8s_resource(
     labels=['cluster'],
 )
 
+# ───────────────────────── Gotenberg document converter ─────────────────────────
+# Shared office-to-PDF converter behind the docx/pptx preview. Third-party image, so
+# nothing to build or live-update; deployed here rather than in the infra step so a
+# `tilt up` reconciles it on every run.
+k8s_yaml(helm(
+    '../helm/opsiforce-gotenberg',
+    name='opsiforce-gotenberg',
+    namespace='local',
+    values=['../helm/opsiforce-gotenberg/values.local.yaml'],
+))
+
+k8s_resource(
+    'opsiforce-gotenberg',
+    labels=['cluster'],
+)
+
 # ───────────────────────── Runtime proxies ─────────────────────────
 # Go binaries (mode={agent,app,vscode,db}). Deployed in the same namespace
 # as backend + agents so RBAC stays namespaced and service references

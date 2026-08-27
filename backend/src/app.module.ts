@@ -9,7 +9,7 @@ import { PodModule } from './pod/pod.module';
 import { ProjectModule } from './project/project.module';
 import { TimeoutModule } from './timeout/timeout.module';
 import { ProxyModule } from './proxy/proxy.module';
-import { UploadModule } from './upload/upload.module';
+import { FilesModule } from './files/files.module';
 import { TranscriptionModule } from './transcription/transcription.module';
 import { TenantModule } from './tenant/tenant.module';
 import { TenantGuard } from './tenant/tenant.guard';
@@ -68,7 +68,7 @@ function parseRedisUrl(url: string) {
     AgentModule,
     TimeoutModule,
     ProxyModule,
-    UploadModule,
+    FilesModule,
     TranscriptionModule,
     BifrostModule,
     PermissionModule,

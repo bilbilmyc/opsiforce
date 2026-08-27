@@ -8,10 +8,8 @@ import { AppAgentController } from './app.controller.agent';
 import { AgentStatusController } from './agent-status.controller';
 import { AgentStatusStreamController } from './agent-status-stream.controller';
 import { PodClassController } from './pod-class.controller';
-import { DownloadController } from './download.controller';
 import { ProjectService } from './project.service';
 import { ProjectAuthService } from './project-auth.service';
-import { DownloadService } from './download.service';
 import { ProjectFilesService } from './project-files.service';
 import { ProjectDuplicateProcessor } from './project-duplicate.processor';
 import { ProjectImportController } from './project-import.controller';
@@ -78,14 +76,12 @@ import { ExternalServicesModule } from '../external-services';
     AgentStatusController,
     AgentStatusStreamController,
     PodClassController,
-    DownloadController,
     ProjectImportController,
     ProjectImportUploadController,
   ],
   providers: [
     ProjectService,
     ProjectAuthService,
-    DownloadService,
     ProjectFilesService,
     ProjectDuplicateProcessor,
     ProjectImportService,
