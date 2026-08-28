@@ -1,37 +1,28 @@
-import { useSortable } from '@dnd-kit/solid/sortable';
+import { useDraggable } from '@dnd-kit/solid';
 import { type Project } from '~/api/client';
-import { DndType } from '~/lib/sidebar-dnd';
+import { DndType, type ProjectDragData } from '~/lib/sidebar-dnd';
 import { ProjectCard } from '../project-card';
 
 export default function SidebarDraggableProjectRow(props: {
   project: Project;
-  index: number;
-  groupId: string;
   isActive: boolean;
   onSelect: () => void;
   onRename: (id: string, title: string) => void;
   onSettings: () => void;
   onDeleted: () => void;
 }) {
-  const sortable = useSortable({
+  const draggable = useDraggable({
     get id() {
       return `proj:${props.project.id}`;
     },
-    get index() {
-      return props.index;
-    },
-    get group() {
-      return props.groupId;
-    },
     type: DndType.Project,
-    accept: DndType.Project,
-    get data() {
+    get data(): ProjectDragData {
       return { projectId: props.project.id };
     },
   });
 
   return (
-    <div ref={sortable.ref} style={{ opacity: sortable.isDragging() ? 0.5 : 1 }}>
+    <div ref={draggable.ref} style={{ opacity: draggable.isDragging() ? 0.5 : 1 }}>
       <ProjectCard
         project={props.project}
         isActive={props.isActive}

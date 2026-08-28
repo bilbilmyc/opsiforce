@@ -1,0 +1,21 @@
+# Sidebar project rows are plain draggables, not sortables
+
+Status: accepted
+
+Project rows in the sidebar were registered as dnd-kit **sortables** (`useSortable`), the same primitive that carries workspace rows. Workspaces genuinely sort — their order is a persisted user preference — but projects never did: the sidebar orders them by `last_prompt_at` ([ADR-0021](0021-sidebar-orders-by-last-prompt.md)), there is no per-project position anywhere in the schema, and the drop handler only ever read the *group* a project landed in, never its index. The sortable registration bought an insertion preview for an ordering the next refetch would throw away. We now register project rows with `useDraggable`; the only drop targets for a project are the workspace/Public drop zone and a folder zone — never another project row.
+
+The reason this matters beyond tidiness is that dnd-kit's `OptimisticSortingPlugin` engages whenever **both** the drag source and the hovered target are sortables. On every `dragover` it re-parents the row's DOM node and assigns `sortable.group`/`sortable.index` to the hovered group, and it restores them in exactly one situation — a *canceled* drag. An app that declines the drop does not cancel it, so the mutated group survives the drop; and because the underlying data never changed, the Solid effect inside `useSortable` that syncs `group` back from props never re-runs, its dependency being unchanged. The row's sortable stays enrolled in a group the project isn't in, permanently.
+
+That state then fed the move handler, which read the origin from `source.initialGroup`. QA found the visible edge: dragging a Public project into a private workspace showed the "Public and workspace projects can't be made private" error the first time and nothing the second, because by then `initialGroup` *was* the private workspace, so the handler saw origin equal to destination and returned as a no-op. The same staleness followed a dismissed confirm dialog and a release outside every drop zone.
+
+## Why not keep the preview and revert it
+
+Reverting means restoring the plugin's DOM re-parenting as well as the group and index of every row it shifted. The plugin's own revert is reachable only through a canceled drag, which the app cannot trigger from a drop it wants to decline — so declining would mean reimplementing the library's internals against its private ordering, and re-testing that reimplementation on every dnd-kit bump. Preventing the plugin from engaging at all (`event.preventDefault()` on `dragover`) works and was tried, but it leaves project rows registered as sortables that are never sorted — a trap primed for whoever removes the "unnecessary" `onDragOver` later. Not opting into sorting is the same outcome with nothing to maintain.
+
+## Consequences
+
+- **Origin comes from data, destination from the drop target.** The move handler reads the project's own `workspaceId`/`folderId` and the target droppable's id — both authoritative, neither derived from drag state. Every path that declines a drop (blocked private move, dismissed dialog, release outside a zone, failed mutation) is correct by construction, not by remembering to revert.
+- **No insertion preview while dragging a project.** Feedback is the floating drag clone plus the destination zone's highlight. Because a row is no longer its own drop target, hovering one highlights the whole group it belongs to — which is the real granularity of the drop, and more than the old behaviour showed (hovering a row used to highlight nothing).
+- **Workspace rows stay sortable.** Their order *is* persisted, through the `workspaceOrder` preference, so the optimistic index is exactly what the drop handler wants.
+- **If project ordering ever becomes persisted**, project rows go back to sortables — and the declined-drop revert becomes a real problem to solve, not one to avoid.
+- The private-move rule is enforced in both layers: the frontend blocks it pre-flight from the sidebar and the actions menu (`lib/project-move.ts`), and `WorkspaceService.assignProject` throws the identically-worded `ForbiddenException`. The client guard saves a round trip and a pointless confirm dialog; it is not the only thing holding the rule.

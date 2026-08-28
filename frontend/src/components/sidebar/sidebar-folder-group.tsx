@@ -144,11 +144,9 @@ export function SidebarFolderGroup(props: {
             fallback={<p class="text-xs text-muted-foreground/50 py-1 px-2 italic">No projects yet.</p>}
           >
             <For each={props.projects}>
-              {(project, idx) => (
+              {(project) => (
                 <SidebarDraggableProjectRow
                   project={project}
-                  index={idx()}
-                  groupId={groupId()}
                   isActive={project.id === props.activeProjectId}
                   onSelect={() => props.onSelectProject(project.id)}
                   onRename={(id, title) => props.onRenameProject(id, title)}

@@ -34,6 +34,16 @@ export interface Placement {
   folderId: string | null;
 }
 
+export interface ProjectDragData {
+  projectId: string;
+}
+
+export function toProjectDragData(value: object): ProjectDragData | null {
+  if (!('projectId' in value)) return null;
+  const { projectId } = value;
+  return typeof projectId === 'string' ? { projectId } : null;
+}
+
 export interface FolderDragData {
   folderId: string;
   workspaceId: string;
@@ -45,6 +55,10 @@ export function toFolderDragData(value: object): FolderDragData | null {
   const { folderId, workspaceId, folderName } = value;
   if (typeof folderId !== 'string' || typeof workspaceId !== 'string' || typeof folderName !== 'string') return null;
   return { folderId, workspaceId, folderName };
+}
+
+export function dropGroupId(target: { id: string | number } | null | undefined): string | undefined {
+  return target ? String(target.id) : undefined;
 }
 
 export function readDropWorkspaceId(value: object): string | undefined {

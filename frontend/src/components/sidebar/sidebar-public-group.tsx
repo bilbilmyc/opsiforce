@@ -1,6 +1,5 @@
 import { For, Show, type JSX } from 'solid-js';
 import { type Project } from '~/api/client';
-import { PUBLIC_ID } from '~/lib/sidebar-dnd';
 import { ChevronDown, ChevronRight, Globe } from '~/components/icons';
 import SidebarDraggableProjectRow from './sidebar-draggable-project-row';
 import SidebarDropZone from './sidebar-drop-zone';
@@ -40,11 +39,9 @@ export function SidebarPublicGroup(props: {
             fallback={<p class="text-xs text-muted-foreground/50 py-1 px-2 italic">No public projects yet.</p>}
           >
             <For each={props.projects}>
-              {(project, idx) => (
+              {(project) => (
                 <SidebarDraggableProjectRow
                   project={project}
-                  index={idx()}
-                  groupId={PUBLIC_ID}
                   isActive={project.id === props.activeProjectId}
                   onSelect={() => props.onSelectProject(project.id)}
                   onRename={(id, title) => props.onRenameProject(id, title)}
