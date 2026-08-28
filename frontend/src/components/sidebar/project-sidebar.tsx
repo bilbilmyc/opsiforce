@@ -25,11 +25,14 @@ import { projectMoveBlockReason } from '~/lib/project-move';
 import {
   DndType,
   type FolderDragData,
+  type Placement,
   PUBLIC_ID,
+  dropGroupId,
   parseGroupId,
   readDropWorkspaceId,
   setActiveDragType,
   toFolderDragData,
+  toProjectDragData,
 } from '~/lib/sidebar-dnd';
 import { Permission } from '~/constants/permissions';
 import { Boxes } from '~/components/icons';
@@ -210,15 +213,15 @@ export function ProjectSidebar(props: { search: string }) {
     reorderWorkspacesByIndex(initialIndex, index);
   };
 
-  const handleProjectMove = (projectId: string, initialGroup: string | undefined, group: string | undefined) => {
-    if (!group || initialGroup === group) return;
-    const from = parseGroupId(initialGroup ?? PUBLIC_ID);
-    const to = parseGroupId(group);
+  const handleProjectMove = (projectId: string, toGroupId: string | undefined) => {
+    if (!toGroupId) return;
     const project = (projects.data ?? []).find((p) => p.id === projectId);
     if (!project) return;
+    const from: Placement = { workspaceId: project.workspaceId ?? null, folderId: project.folderId ?? null };
+    const to = parseGroupId(toGroupId);
 
     if (to.workspaceId === from.workspaceId) {
-      if (to.workspaceId === null || (project.folderId ?? null) === to.folderId) return;
+      if (to.workspaceId === null || from.folderId === to.folderId) return;
       moveToFolder.mutate({ workspaceId: to.workspaceId, projectId, folderId: to.folderId });
       return;
     }
@@ -289,26 +292,18 @@ export function ProjectSidebar(props: { search: string }) {
 
     if (source.type === DndType.Folder) {
       const folder = toFolderDragData(source.data);
-      if (!folder) return;
-      handleFolderMove(folder, target ? readDropWorkspaceId(target.data) : undefined);
-      return;
-    }
-
-    if (!isSortable(source)) return;
-
-    if (source.type === DndType.Workspace) {
-      handleWorkspaceReorder(source.initialIndex, source.index);
+      if (folder) handleFolderMove(folder, target ? readDropWorkspaceId(target.data) : undefined);
       return;
     }
 
     if (source.type === DndType.Project) {
-      const initialGroup = source.initialGroup as string | undefined;
-      let group = source.group as string | undefined;
-      if (initialGroup === group && target && !isSortable(target)) {
-        group = String(target.id);
-      }
-      const projectId = (source.data as { projectId: string }).projectId;
-      handleProjectMove(projectId, initialGroup, group);
+      const project = toProjectDragData(source.data);
+      if (project) handleProjectMove(project.projectId, dropGroupId(target));
+      return;
+    }
+
+    if (source.type === DndType.Workspace && isSortable(source)) {
+      handleWorkspaceReorder(source.initialIndex, source.index);
     }
   };
 

@@ -175,11 +175,9 @@ export function SidebarWorkspaceGroup(props: {
             }
           >
             <For each={view().loose}>
-              {(project, idx) => (
+              {(project) => (
                 <SidebarDraggableProjectRow
                   project={project}
-                  index={idx()}
-                  groupId={props.workspace.id}
                   isActive={project.id === props.activeProjectId}
                   onSelect={() => props.onSelectProject(project.id)}
                   onRename={(id, title) => props.onRenameProject(id, title)}
