@@ -4,7 +4,7 @@ service:
 fullnameOverride: opsiforce-bifrost
 
 image:
-  tag: "v1.5.3"
+  tag: "v2.0.0"
 
 replicaCount: 1
 
@@ -44,7 +44,6 @@ bifrost:
     key: key
   authConfig:
     isEnabled: true
-    disableAuthOnInference: true
     existingSecret: opsiforce-bifrost-admin-auth
     usernameKey: username
     passwordKey: password
@@ -52,6 +51,7 @@ bifrost:
     enableLogging: true
     logRetentionDays: 7
     allowDirectKeys: false
+    enforceAuthOnInference: true
   providers:
     openai:
       keys:
@@ -62,8 +62,8 @@ bifrost:
       network_config:
         default_request_timeout_in_seconds: 1200
         max_retries: 2
-        retry_backoff_initial: 500
-        retry_backoff_max: 5000
+        retry_backoff_initial_ms: 500
+        retry_backoff_max_ms: 5000
         stream_idle_timeout_in_seconds: 3600
     anthropic:
       keys:
@@ -74,8 +74,8 @@ bifrost:
       network_config:
         default_request_timeout_in_seconds: 1200
         max_retries: 2
-        retry_backoff_initial: 500
-        retry_backoff_max: 5000
+        retry_backoff_initial_ms: 500
+        retry_backoff_max_ms: 5000
         stream_idle_timeout_in_seconds: 3600
     custom-openai-1:
       keys:
@@ -95,8 +95,8 @@ bifrost:
         base_url: "http://host.minikube.internal:8455"
         default_request_timeout_in_seconds: 1200
         max_retries: 2
-        retry_backoff_initial: 500
-        retry_backoff_max: 5000
+        retry_backoff_initial_ms: 500
+        retry_backoff_max_ms: 5000
         stream_idle_timeout_in_seconds: 3600
       custom_provider_config:
         is_key_less: true
@@ -130,8 +130,8 @@ bifrost:
         base_url: "http://host.minikube.internal:8455"
         default_request_timeout_in_seconds: 1200
         max_retries: 2
-        retry_backoff_initial: 500
-        retry_backoff_max: 5000
+        retry_backoff_initial_ms: 500
+        retry_backoff_max_ms: 5000
         stream_idle_timeout_in_seconds: 3600
       custom_provider_config:
         is_key_less: true
@@ -165,8 +165,8 @@ bifrost:
         base_url: "http://host.minikube.internal:8455"
         default_request_timeout_in_seconds: 1200
         max_retries: 2
-        retry_backoff_initial: 500
-        retry_backoff_max: 5000
+        retry_backoff_initial_ms: 500
+        retry_backoff_max_ms: 5000
         stream_idle_timeout_in_seconds: 3600
       custom_provider_config:
         is_key_less: true
