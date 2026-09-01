@@ -21,37 +21,11 @@ const SUBSCRIPTION_OVERLAY = `bifrost:
     custom-openai-1:
       network_config:
         base_url: "${HOST_BRIDGE_BASE_URL}"
-    custom-openai-2:
-      network_config:
-        base_url: "${HOST_BRIDGE_BASE_URL}"
-    custom-openai-3:
-      network_config:
-        base_url: "${HOST_BRIDGE_BASE_URL}"
 `;
 
 const KEY_OVERLAY = `bifrost:
   providers:
     custom-openai-1:
-      keys:
-        - name: openai-byok
-          value: env.OPENAI_API_KEY
-          weight: 1
-          models: ["*"]
-      network_config:
-        base_url: "${OPENAI_BASE_URL}"
-      custom_provider_config:
-        is_key_less: false
-    custom-openai-2:
-      keys:
-        - name: openai-byok
-          value: env.OPENAI_API_KEY
-          weight: 1
-          models: ["*"]
-      network_config:
-        base_url: "${OPENAI_BASE_URL}"
-      custom_provider_config:
-        is_key_less: false
-    custom-openai-3:
       keys:
         - name: openai-byok
           value: env.OPENAI_API_KEY
