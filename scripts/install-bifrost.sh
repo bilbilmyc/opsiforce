@@ -19,7 +19,7 @@ sh "${script_dir}/upsert-bifrost-secrets.sh" local
 
 set -- -f "${package_dir}/helm/bifrost/values.local.yaml"
 n=1
-for provider in custom-openai-1 custom-openai-2 custom-openai-3; do
+for provider in custom-openai-1; do
   eval "base_url=\"\${OPSIFORCE_BIFROST_CUSTOM_PROVIDER${n}_BASE_URL:-}\""
   if [ -n "${base_url}" ]; then
     set -- "$@" --set-string "bifrost.providers.${provider}.network_config.base_url=${base_url}"
