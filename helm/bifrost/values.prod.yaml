@@ -71,6 +71,7 @@ postgresql:
     passwordKey: password
 
 bifrost:
+  sourceOfTruth: "config.json"
   encryptionKeySecret:
     name: opsiforce-bifrost-encryption
     key: key
