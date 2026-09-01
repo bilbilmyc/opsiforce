@@ -34,6 +34,7 @@ export const DEVICE_POLL_SAFETY_MARGIN_MS = 3000;
 
 export const MODEL_CATALOG: readonly string[] = [
   'gpt-5.6-sol',
+  'gpt-5.6-sol-fast',
   'gpt-5.5',
   'gpt-5.4',
   'gpt-5.4-mini',
