@@ -29,7 +29,7 @@ done
 
 helm upgrade --install --wait --namespace local --create-namespace \
   opsiforce-bifrost bifrost/bifrost \
-  --version 2.0.15 \
+  --version 2.1.37 \
   "$@"
 
 kubectl apply --namespace local -f "${package_dir}/helm/bifrost/networkpolicy.yaml"
