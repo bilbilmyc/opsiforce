@@ -78,7 +78,7 @@ The dev servers are **already running** when you start — the container entrypo
 
 **Adding a package:** run `yarn add <pkg>`, **wait a few seconds** for the frontend to auto-restart (the platform bounces Vite once so it picks up the new dep), then import it.
 
-**Don't fix import/resolve errors by editing `vite.config.ts`** (`optimizeDeps.exclude`/`include`) — it forces extra restarts and usually makes things worse. A resolve error right after `yarn add` is transient: wait for the reload, then re-check.
+**Don't fix import/resolve errors by editing `vite.config.ts`** (`optimizeDeps.exclude`/`include`) — it forces extra restarts and usually makes things worse. A resolve error right after `yarn add` is transient: wait for the reload, then re-check. `frontend/hmr-toggle.ts` and its `hmrToggle()` entry in `vite.config.ts` are platform-owned — never remove or edit them.
 
 **If it *persists*** — `X tried to access Y, but it isn't declared in its dependencies`, or `Could not resolve 'Y'` inside `.yarn/__virtual__/…` — it's a Yarn PnP gap (a library using an undeclared dependency). Declare it in `/workspace/app/.yarnrc.yml`, then run `yarn install`:
 
