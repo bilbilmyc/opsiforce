@@ -14,7 +14,7 @@ The pod reports; the backend listens. Nothing polls. This is the second producer
 AGENT POD (opencode container)              BACKEND
 ┌────────────────────────────┐           ┌───────────────────────────┐
 │ opencode — sessions          │           │ GatewayAuthGuard           │
-│  GET /session/status         │  push     │  token → {project, env}    │
+│  GET /api/session/active     │  push     │  token → {project, env}    │
 │  GET /event (SSE)            │  {working}│                            │
 │                             │           │ AgentStatusService         │
 │ agent-control (Go)          ├──────────►│  • per-env Working level   │
@@ -27,7 +27,7 @@ AGENT POD (opencode container)              BACKEND
         └ and schedules already use
 ```
 
-`agent-control` subscribes to opencode's event bus and tracks the set of sessions reported `busy` or `retry` by the native `session.status` event (never the deprecated `session.idle`). Working is simply whether that set is non-empty, which covers sub-agent sessions as naturally as the root one. While the stream is up it pushes one idempotent `{working}` event **only when the level changes**; on boot and on every event-stream reconnect it re-reads `GET /session/status` and pushes the snapshot **unconditionally** — even an unchanged or Idle level, because the backend's copy may have gone stale during the gap (a run that finished while the process was down must still clear). So a pod restart, a container crash, or its own crash self-heals by re-reporting truth.
+`agent-control` subscribes to opencode's event bus and tracks the set of sessions reported `busy` or `retry` by the native `session.status` event (never the deprecated `session.idle`). Working is simply whether that set is non-empty, which covers sub-agent sessions as naturally as the root one. While the stream is up it pushes one idempotent `{working}` event **only when the level changes**; on boot and on every event-stream reconnect it re-reads `GET /api/session/active` and pushes the snapshot **unconditionally** — even an unchanged or Idle level, because the backend's copy may have gone stale during the gap (a run that finished while the process was down must still clear). So a pod restart, a container crash, or its own crash self-heals by re-reporting truth.
 
 The backend's `AgentStatusService` owns the level per ProjectEnvironment in memory, keyed by the environment behind the pushing pod's gateway bearer — a pod cannot report for another environment. A Project is Working when **any** of its environments is, so prompting a published environment's Agent spins the project too. `GET /projects` carries the resulting `agentStatus` (`working` | `idle`) per project, and the sidebar renders the extra-small spinner as a leading icon while Working, nothing while Idle, with an accessible "Agent working" label.
 
@@ -35,7 +35,7 @@ Live updates ride the existing Redis project-events bus: whenever a project's OR
 
 ## Why there is no heartbeat
 
-opencode's status is *queryable at rest* (`GET /session/status`), so staleness is repaired by re-reading truth at boundaries rather than by continuously proving liveness. An Idle pod pushes nothing at all — the resting state costs zero traffic — and the boot/reconnect snapshot re-establishes the level whenever the subscription could have missed a transition. The other two boundaries live in the backend: it **clears the level at every environment-lifecycle transition it drives** — suspend, restart, disable, fail, delete, and the pod-recreating publish — because a pod that stops existing cannot be Working (`AgentStatusService.clear`, called beside each `appReadiness` boundary), and on boot it runs a **one-shot reconcile** that re-reads `/session/status` of every active environment's pod before the HTTP listener starts, so runs in flight across a backend restart reappear as Working without user action. The full reasoning and the rejected heartbeat/poll/persist options are in [ADR-0020](../adr/0020-agent-status-pushed-and-resynced-not-heartbeated.md).
+opencode's status is *queryable at rest* (`GET /api/session/active`), so staleness is repaired by re-reading truth at boundaries rather than by continuously proving liveness. An Idle pod pushes nothing at all — the resting state costs zero traffic — and the boot/reconnect snapshot re-establishes the level whenever the subscription could have missed a transition. The other two boundaries live in the backend: it **clears the level at every environment-lifecycle transition it drives** — suspend, restart, disable, fail, delete, and the pod-recreating publish — because a pod that stops existing cannot be Working (`AgentStatusService.clear`, called beside each `appReadiness` boundary), and on boot it runs a **one-shot reconcile** that re-reads `/api/session/active` of every active environment's pod before the HTTP listener starts, so runs in flight across a backend restart reappear as Working without user action. The full reasoning and the rejected heartbeat/poll/persist options are in [ADR-0020](../adr/0020-agent-status-pushed-and-resynced-not-heartbeated.md).
 
 The in-memory level assumes the single backend replica, exactly as `AppReadinessService` does; scaling out moves the map to Redis, the path ADR-0015 already prescribes for `serving`.
 

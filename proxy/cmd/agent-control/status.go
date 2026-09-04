@@ -12,8 +12,8 @@ import (
 
 const (
 	defaultOpencodeURL   = "http://127.0.0.1:4096"
-	statusSnapshotPath   = "/session/status"
-	statusEventPath      = "/event"
+	statusSnapshotPath   = "/api/session/active"
+	statusEventPath      = "/api/event"
 	statusEventType      = "session.status"
 	streamReconnectDelay = 2 * time.Second
 )
@@ -82,19 +82,19 @@ func (w *statusWatcher) snapshot() bool {
 		return false
 	}
 
-	var data map[string]struct {
-		Type string `json:"type"`
+	var snapshot struct {
+		Data map[string]struct {
+			Type string `json:"type"`
+		} `json:"data"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&snapshot); err != nil {
 		log.Printf("agent-status: decode status snapshot failed: %v", err)
 		return false
 	}
 
 	clear(w.sessions)
-	for id, status := range data {
-		if isWorkingStatus(status.Type) {
-			w.sessions[id] = struct{}{}
-		}
+	for id := range snapshot.Data {
+		w.sessions[id] = struct{}{}
 	}
 	return true
 }
@@ -149,13 +149,13 @@ func (w *statusWatcher) stream() {
 
 func (w *statusWatcher) applyEvent(data string) bool {
 	var ev struct {
-		Type       string `json:"type"`
-		Properties struct {
+		Type string `json:"type"`
+		Data struct {
 			SessionID string `json:"sessionID"`
 			Status    struct {
 				Type string `json:"type"`
 			} `json:"status"`
-		} `json:"properties"`
+		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(data), &ev); err != nil {
 		return false
@@ -164,10 +164,10 @@ func (w *statusWatcher) applyEvent(data string) bool {
 		return false
 	}
 
-	if isWorkingStatus(ev.Properties.Status.Type) {
-		w.sessions[ev.Properties.SessionID] = struct{}{}
+	if isWorkingStatus(ev.Data.Status.Type) {
+		w.sessions[ev.Data.SessionID] = struct{}{}
 	} else {
-		delete(w.sessions, ev.Properties.SessionID)
+		delete(w.sessions, ev.Data.SessionID)
 	}
 	return true
 }

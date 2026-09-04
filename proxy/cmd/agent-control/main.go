@@ -22,6 +22,7 @@ const (
 var appGuardNames = []string{"app-backend", "app-frontend"}
 
 func main() {
+	go runOpencodeAuthProxy()
 	go runReporter()
 	go runStatusWatcher()
 

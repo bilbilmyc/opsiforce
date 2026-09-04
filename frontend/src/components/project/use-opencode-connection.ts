@@ -3,7 +3,7 @@ import type { BaseRouterProps } from '@solidjs/router';
 import { api, type OpenCodeSession, type ProjectStatus } from '~/api/client';
 import type { ProjectEnvironmentStatus } from '~/api/environments';
 import { useSyncProjectTitle } from '~/api/projects';
-import { createDirectoryRouter } from './platform';
+import { createSessionRouter } from './platform';
 
 type ConnectionStatus = ProjectStatus | ProjectEnvironmentStatus;
 
@@ -27,27 +27,18 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
 
   const syncTitle = (title: string) => syncProjectTitle(options.projectId, title, options.currentTitle());
 
-  async function resolveDirectory(environmentId: string): Promise<string | undefined> {
-    try {
-      const res = await fetch(`/api/proxy/${environmentId}/path`);
-      if (!res.ok) return undefined;
-      const payload = (await res.json()) as { directory?: string };
-      return payload.directory;
-    } catch {
-      return undefined;
-    }
-  }
-
   async function resolveSessionId(environmentId: string): Promise<string | undefined> {
     try {
-      const sessions = await api.get<OpenCodeSession[]>(`/proxy/${environmentId}/session?roots=true`);
-      const roots = Array.isArray(sessions) ? sessions : [];
+      const response = await api.get<{ data?: OpenCodeSession[] }>(
+        `/proxy/${environmentId}/api/session?parentID=null&order=asc`
+      );
+      const roots = Array.isArray(response?.data) ? response.data : [];
       if (roots.length === 0) return undefined;
       const remembered = options.rememberedSessionId();
       const pinned = remembered ? roots.find((s) => s.id === remembered) : undefined;
       const chosen = pinned ?? roots.toSorted((a, b) => (a.time?.created ?? 0) - (b.time?.created ?? 0))[0];
       if (!chosen) return undefined;
-      syncTitle(chosen.title);
+      if (chosen.title) syncTitle(chosen.title);
       if (chosen.id !== remembered) options.onResolveSession(environmentId, chosen.id);
       return chosen.id;
     } catch {
@@ -55,14 +46,16 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
     }
   }
 
-  async function startFromInitialPrompt(environmentId: string): Promise<string | undefined> {
-    if (!options.initialPrompt || environmentId !== options.projectId) return undefined;
+  async function createSession(environmentId: string): Promise<string | undefined> {
     try {
-      const session = await api.post<OpenCodeSession>(`/proxy/${environmentId}/session`);
+      const created = await api.post<{ data?: OpenCodeSession }>(`/proxy/${environmentId}/api/session`, {});
+      const session = created?.data;
       if (!session?.id) return undefined;
-      await api.post(`/proxy/${environmentId}/session/${session.id}/prompt_async`, {
-        parts: [{ type: 'text', text: options.initialPrompt }],
-      });
+      if (options.initialPrompt && environmentId === options.projectId) {
+        await api.post(`/proxy/${environmentId}/api/session/${session.id}/prompt`, {
+          text: options.initialPrompt,
+        });
+      }
       options.onResolveSession(environmentId, session.id);
       return session.id;
     } catch {
@@ -72,17 +65,16 @@ export function useOpenCodeConnection(options: OpenCodeConnectionOptions) {
 
   async function connect(environmentId: string) {
     const isActiveEnv = () => environmentId === options.environmentId();
-    const directory = await resolveDirectory(environmentId);
+    const existingSessionId = await resolveSessionId(environmentId);
     if (!isActiveEnv()) return;
-    if (!directory) {
+    const sessionId = existingSessionId ?? (await createSession(environmentId));
+    if (!isActiveEnv()) return;
+    if (!sessionId) {
       connecting = false;
       return;
     }
-    const existingSessionId = await resolveSessionId(environmentId);
-    if (!isActiveEnv()) return;
-    const sessionId = existingSessionId ?? (await startFromInitialPrompt(environmentId));
-    if (!isActiveEnv()) return;
-    setRouter(() => createDirectoryRouter(directory, sessionId));
+    const serverUrl = `${window.location.origin}/api/proxy/${environmentId}`;
+    setRouter(() => createSessionRouter(serverUrl, sessionId));
   }
 
   function reset() {

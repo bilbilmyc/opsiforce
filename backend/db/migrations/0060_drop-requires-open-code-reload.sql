@@ -1,0 +1,1 @@
+ALTER TABLE "project_agent_updates" DROP COLUMN "requires_open_code_reload";

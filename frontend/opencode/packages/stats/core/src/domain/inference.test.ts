@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { buildStatsQueries, toGeoAggregate, toModelAggregate, toProviderAggregate } from "./inference"
+import { toGeoAggregate, toModelAggregate, toProviderAggregate } from "./inference"
 import { modelAuthor, normalizeInferenceModel, statModel, statProvider } from "./model-normalization"
 
 describe("inference stat normalization", () => {
@@ -36,6 +36,17 @@ describe("inference stat normalization", () => {
     expect(statProvider("big-pickle", "gpt-5", "opencode")).toBe("openai")
     expect(statProvider("big-pickle", "", "opencode")).toBe("unknown")
     expect(statProvider("unknown", "", "custom-provider")).toBe("custom-provider")
+  })
+
+  test("merges renamed models under their current name", () => {
+    expect(statModel("x-preview-f", "")).toBe("ox-alpha")
+    expect(statModel("xiaomi/mimo-v2.5", "")).toBe("mimo-v2.5")
+    expect(toModelAggregate(aggregate("x-preview-f", "openai"))).toMatchObject([
+      {
+        provider: "openai",
+        model: "ox-alpha",
+      },
+    ])
   })
 
   test("model aggregates prefer provider.model and use normalized model", () => {
@@ -81,55 +92,6 @@ describe("inference stat normalization", () => {
         period_key: "2026-W20",
       }),
     ).toMatchObject([{ period_key: "2026-W20" }])
-  })
-
-  test("builds bounded R2 SQL queries for each day and week", () => {
-    const queries = buildStatsQueries(new Date("2026-08-10T00:00:00.000Z"), new Date("2026-08-12T12:00:00.000Z"), {
-      namespace: "inference",
-      table: "generation",
-      dataset: "zen",
-    })
-
-    expect(queries).toHaveLength(8)
-    expect(queries[0]).toContain("'week' AS grain")
-    expect(queries[0]).toContain("'2026-W33' AS period_key")
-    expect(queries[2]).toContain("'2026-08-10' AS period_key")
-    expect(queries[6]).toContain("'2026-08-12' AS period_key")
-    expect(queries[0]).toContain('FROM "inference"."generation"')
-    expect(queries[0]).toContain("event_type = 'generation.completed'")
-    expect(queries[0]).toContain("product = 'go'")
-    expect(queries[0]).toContain("LIMIT 10000")
-    expect(queries[0]).toContain("approx_distinct(session) AS sessions")
-    expect(queries[1]).toContain("'geo_model' ELSE 'geo'")
-    expect(queries[1]).toContain("0 AS sessions")
-  })
-
-  test("aligns periods to UTC calendar boundaries", () => {
-    const queries = buildStatsQueries(new Date("2026-06-17T15:56:00.000Z"), new Date("2026-06-19T15:56:00.000Z"), {
-      namespace: "inference",
-      table: "generation",
-      dataset: "zen",
-    })
-
-    expect(queries).toHaveLength(8)
-    expect(queries[0]).toContain("'2026-W25' AS period_key")
-    expect(queries[0]).toContain("started_at >= '2026-06-15T00:00:00.000Z'")
-    expect(queries[2]).toContain("'2026-06-17' AS period_key")
-    expect(queries[2]).toContain("started_at >= '2026-06-17T00:00:00.000Z'")
-    expect(queries[2]).toContain("started_at < '2026-06-18T00:00:00.000Z'")
-    expect(queries[6]).toContain("'2026-06-19' AS period_key")
-    expect(queries[6]).toContain("started_at < '2026-06-19T15:56:00.000Z'")
-  })
-
-  test("uses an exclusive live and legacy source handoff", () => {
-    const [query] = buildStatsQueries(new Date("2026-08-11T00:00:00.000Z"), new Date("2026-08-12T00:00:00.000Z"), {
-      namespace: "inference",
-      table: "generation",
-      dataset: "zen",
-    })
-
-    expect(query).toContain("(source = 'inference-legacy' AND started_at < '2026-08-11T10:57:48.186Z')")
-    expect(query).toContain("(source = 'inference' AND started_at >= '2026-08-11T10:57:48.186Z')")
   })
 })
 

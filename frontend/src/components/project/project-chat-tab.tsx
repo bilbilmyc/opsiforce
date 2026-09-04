@@ -1,17 +1,15 @@
 import { Show, createSignal, onCleanup, onMount, untrack, type Component } from 'solid-js';
 import { render } from 'solid-js/web';
 import type { BaseRouterProps } from '@solidjs/router';
-import { AppBaseProviders, AppInterface } from '@opencode-ai/app/app';
-import { PlatformProvider } from '@opencode-ai/app/context/platform';
-import { ServerConnection } from '@opencode-ai/app/context/server';
-import { useGlobal } from '@opencode-ai/app/context/global';
+import { AppBaseProviders, AppInterface, PlatformProvider, ServerConnection } from '@opencode-ai/app';
+import { useGlobal } from '@opencode-ai/app/runtime/server/runtime';
 import { useSyncProjectTitle } from '~/api/projects';
 import { FileUpload } from '~/components/file-upload';
 import { DictationButton } from '~/components/dictation-button';
 import Spinner from '~/components/ui/spinner';
 import { WorkspaceFileLinks } from './workspace-file-links';
 import OpencodeOverrides from './opencode-overrides';
-import { platform } from './platform';
+import { createProxyPlatform } from './platform';
 
 function OpenCodeEventBridge(props: {
   server: ServerConnection.Any;
@@ -19,21 +17,20 @@ function OpenCodeEventBridge(props: {
   onTitle: (title: string) => void;
 }) {
   const global = useGlobal();
-  const sdk = untrack(() => global.ensureServerCtx(props.server).sdk);
+  const ctx = untrack(() => global.ensureServerCtx(props.server));
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const unsub = sdk.event.listen((e) => {
-    const event = e.details;
-    if (event.type === 'session.status' && event.properties.status.type === 'idle') {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => props.onIdle(), 1500);
-      return;
-    }
-    if (event.type === 'session.updated' && !event.properties.info.parentID) {
-      props.onTitle(event.properties.info.title);
-    }
+  const unsubIdle = ctx.sdk.event.on('session.status', (event) => {
+    if (event.data.status.type !== 'idle') return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => props.onIdle(), 1500);
+  });
+  const unsubTitle = ctx.sdk.event.on('session.renamed', (event) => {
+    if (ctx.data.session.get(event.data.sessionID)?.parentID) return;
+    props.onTitle(event.data.title);
   });
   onCleanup(() => {
-    unsub();
+    unsubIdle();
+    unsubTitle();
     if (timer) clearTimeout(timer);
   });
   return null;
@@ -53,6 +50,7 @@ export function ProjectChatTab(props: ProjectChatTabProps) {
   const url = untrack(() => `${window.location.origin}/api/proxy/${props.environmentId}`);
   const server: ServerConnection.Http = { type: 'http', http: { url } };
   const serverKey = ServerConnection.Key.make(url);
+  const platform = createProxyPlatform(url);
   const router = untrack(() => props.router);
   const onTitle = (title: string) => syncTitle(props.projectId, title, props.currentTitle);
 
@@ -60,7 +58,8 @@ export function ProjectChatTab(props: ProjectChatTabProps) {
   const [booting, setBooting] = createSignal(true);
 
   const coverBootUntilComposerPaints = () => {
-    const composerPainted = () => !!embedHost.querySelector('[contenteditable="true"], textarea');
+    const composerPainted = () =>
+      !!embedHost.querySelector('[data-component="composer-editor"][contenteditable="true"], [contenteditable="true"], textarea');
     const settle = () => {
       observer.disconnect();
       clearTimeout(maxTimer);
@@ -99,13 +98,8 @@ export function ProjectChatTab(props: ProjectChatTabProps) {
       () => (
         <PlatformProvider value={platform}>
           <AppBaseProviders>
-            <AppInterface
-              defaultServer={serverKey}
-              servers={[server]}
-              router={router}
-              disableHealthCheck
-              serverScoped={<OpencodeOverrides />}
-            >
+            <AppInterface defaultServer={serverKey} servers={[server]} router={router}>
+              <OpencodeOverrides />
               <OpenCodeEventBridge server={server} onIdle={() => props.onAgentIdle()} onTitle={onTitle} />
             </AppInterface>
           </AppBaseProviders>

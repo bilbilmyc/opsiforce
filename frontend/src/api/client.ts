@@ -227,8 +227,7 @@ export interface WorkspacePreferences {
 export interface OpenCodeSession {
   id: string;
   parentID?: string;
-  directory: string;
-  title: string;
+  title?: string;
   time: { created: number; updated: number };
 }
 

@@ -17,15 +17,20 @@
     "paths": {
       "~/*": ["./src/*"],
       "@/*": ["./opencode/packages/app/src/*"],
+      "@opencode-ai/app": ["./opencode/packages/app/src/index.ts"],
       "@opencode-ai/app/*": ["./opencode/packages/app/src/*"],
       "@opencode-ai/ui/*": ["./opencode/packages/ui/src/*", "./opencode/packages/ui/src/components/*"],
       "@opencode-ai/core/*": ["./opencode/packages/core/src/*"],
       "@opencode-ai/schema/*": ["./opencode/packages/schema/src/*"],
-      "@opencode-ai/session-ui/*": ["./opencode/packages/session-ui/src/*"],
-      "@opencode-ai/llm/*": ["./opencode/packages/llm/src/*"],
+      "@opencode-ai/session-ui/*": ["./opencode/packages/session-ui/src/*", "./opencode/packages/session-ui/src/components/*"],
       "@opencode-ai/plugin/*": ["./opencode/packages/plugin/src/*"],
-      "@opencode-ai/sdk": ["./opencode/packages/sdk/js/src/index.ts"],
-      "@opencode-ai/sdk/*": ["./opencode/packages/sdk/js/src/*"]
+      "@opencode-ai/client": ["./opencode/packages/client/src/promise/index.ts"],
+      "@opencode-ai/client/*": ["./opencode/packages/client/src/*"],
+      "@opencode-ai/util/*": ["./opencode/packages/util/src/*"],
+      "@opencode-ai/theme/*": ["./opencode/packages/theme/src/*"],
+      "@opencode-ai/protocol/*": ["./opencode/packages/protocol/src/*"],
+      "@opencode-ai/sdk": ["./opencode/packages/sdk/src/index.ts"],
+      "@opencode-ai/sdk/*": ["./opencode/packages/sdk/src/*"]
     }
   },
   "include": ["src"],

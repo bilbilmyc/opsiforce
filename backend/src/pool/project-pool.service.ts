@@ -843,11 +843,12 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
     try {
       const config = JSON.parse(await readFile(configPath, 'utf8')) as {
         model?: string;
-        agent?: Record<string, { model?: string; variant?: string } | undefined>;
+        agents?: Record<string, { model?: string } | undefined>;
       };
-      const agent = config.agent?.[agentName];
-      if (config.model !== modelSelection.model || agent?.model !== modelSelection.model) return false;
-      if (modelSelection.variant && agent?.variant !== modelSelection.variant) return false;
+      const agentRef = config.agents?.[agentName]?.model ?? '';
+      const [agentModel, agentVariant] = agentRef.split('#');
+      if (config.model !== modelSelection.model || agentModel !== modelSelection.model) return false;
+      if (modelSelection.variant && agentVariant !== modelSelection.variant) return false;
       return true;
     } catch {
       return false;

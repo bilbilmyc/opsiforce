@@ -273,6 +273,10 @@ function opencodeConfigPath(ctx) {
   return join(ctx.paths.packageRoot, 'agent-config', 'opencode.local.json');
 }
 
+function modelCatalogPath(ctx) {
+  return join(ctx.paths.packageRoot, 'agent-config', 'models.json');
+}
+
 function readJson(file) {
   return JSON.parse(readFileSync(file, 'utf8'));
 }
@@ -296,8 +300,8 @@ function currentModelId(ctx) {
 
 function openAiWhitelist(ctx) {
   try {
-    const list = readJson(opencodeConfigPath(ctx)).provider?.openai?.whitelist;
-    return Array.isArray(list) ? list.filter((model) => typeof model === 'string') : [];
+    const models = readJson(opencodeConfigPath(ctx)).providers?.openai?.models;
+    return models && typeof models === 'object' ? Object.keys(models) : [];
   } catch {
     return [];
   }
@@ -313,9 +317,23 @@ function setAgentModel(ctx, modelId) {
 
   const opencode = readJson(opencodeConfigPath(ctx));
   opencode.model = target;
-  const whitelist = opencode.provider?.openai?.whitelist;
-  if (Array.isArray(whitelist) && !whitelist.includes(modelId)) whitelist.push(modelId);
+  const models = opencode.providers?.openai?.models;
+  if (models && typeof models === 'object' && !(modelId in models)) models[modelId] = {};
   writeJson(opencodeConfigPath(ctx), opencode);
+
+  const catalog = readJson(modelCatalogPath(ctx));
+  const catalogModels = catalog.openai?.models;
+  if (catalogModels && typeof catalogModels === 'object' && !(modelId in catalogModels)) {
+    const { experimental, ...template } = catalogModels[DEFAULT_MODEL_ID] ?? Object.values(catalogModels)[0] ?? {};
+    catalogModels[modelId] = {
+      ...template,
+      id: modelId,
+      name: modelId,
+      family: modelId,
+      release_date: new Date().toISOString().slice(0, 10),
+    };
+    writeJson(modelCatalogPath(ctx), catalog);
+  }
 }
 
 async function ensureUsableModel(ctx, availableIds) {
