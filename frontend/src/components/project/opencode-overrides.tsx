@@ -13,6 +13,7 @@ export default function OpencodeOverrides() {
     theme.setColorScheme('light');
     settings.appearance.setTabLayout('horizontal');
     settings.general.setShowFileTree(false);
+    settings.general.setShowCustomAgents(true);
     settings.general.setTimelineDetail(quietTimeline);
     settings.general.setReleaseNotes(false);
   });
