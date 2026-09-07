@@ -135,25 +135,26 @@ body {
   z-index: 1000 !important;
 }
 
-.oc-chat-only header.h-10.shrink-0,
-.oc-chat-only .w-16.shrink-0,
-.oc-chat-only aside,
-.oc-chat-only nav,
-.oc-chat-only button[aria-label='More options'],
-.oc-chat-only [data-action='prompt-attach'],
-.oc-chat-only div[data-session-title] h1,
-.oc-chat-only .flex-col.md\:flex-row > .h-auto:has([role='tablist']),
+
 .oc-chat-only header[data-slot='titlebar-v2'],
-/* empty-session screen: upstream's wordmark and the project picker below the composer */
-.oc-chat-only [data-component='session-new-design'] svg[viewBox='0 0 720 129'],
-.oc-chat-only [data-action='prompt-project'] {
+.oc-chat-only button[aria-label='More options'],
+.oc-chat-only div[data-session-title] h1,
+.oc-chat-only [data-slot='session-project-trigger'],
+.oc-chat-only [data-slot='session-review-toggle'],
+.oc-chat-only [data-slot='session-chat-panel'] .h-12 > .shrink-0.flex.items-center.gap-2 > button,
+.oc-chat-only [data-action='composer-attach'],
+.oc-chat-only [data-slot='session-side-panel-presence'],
+[data-option-key='action:manage'] {
   display: none !important;
 }
 
-.oc-chat-only .flex-col.md\:flex-row > :first-child {
-  flex: 1 !important;
-  max-width: 100% !important;
+.oc-chat-only [data-slot='session-chat-panel'] .h-12 > .shrink-0.flex.items-center.gap-2 [data-component='tooltip-v2-trigger'] > button {
+  pointer-events: none;
+}
+
+.oc-chat-only [data-slot='session-chat-panel'] {
   width: 100% !important;
+  flex: 1 1 auto !important;
 }
 
 .oc-chat-only main {
@@ -164,10 +165,6 @@ body {
   overflow: hidden !important;
   width: 100% !important;
   min-width: 0 !important;
-}
-
-.oc-chat-only [style*='--main-left'] {
-  --main-left: 0px !important;
 }
 
 a[data-workspace-file-card] {

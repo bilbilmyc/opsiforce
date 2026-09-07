@@ -178,7 +178,7 @@ export class AgentUpdateService implements OnApplicationBootstrap {
     const project = await this.projectService.findOneById(update.projectId).catch(() => null);
     if (!project) return { status: 'skipped', reloadStatus: 'skipped:project-not-found' };
 
-    if (!update.requiresOpenCodeReload && !update.requiresPodRecreate) {
+    if (!update.requiresPodRecreate) {
       return this.applyReload(update.id, 'skipped:not-required');
     }
     if (
@@ -196,47 +196,26 @@ export class AgentUpdateService implements OnApplicationBootstrap {
     if ('error' in session) return this.deferReload(update.id, session.reloadStatus, session.error);
     if (session.busy) return this.deferReload(update.id, 'pending:active-session');
 
-    if (update.requiresPodRecreate) {
-      try {
-        await this.projectService.reassignPodById(project.id);
-        return this.applyReload(update.id, 'pod-recreate-requested', { podRecreated: true });
-      } catch (err) {
-        const error = err instanceof Error ? err.message : String(err);
-        return this.deferReload(update.id, `pending:pod-recreate:${error}`, error);
-      }
-    }
-
-    return this.disposeOpenCode(update.id, project.podIp);
-  }
-
-  private async disposeOpenCode(updateId: string, podIp: string): Promise<ReloadOutcome> {
     try {
-      const response = await fetch(this.agentUrl(podIp, '/instance/dispose'), { method: 'POST' });
-      if (!response.ok) {
-        return this.deferReload(
-          updateId,
-          `pending:dispose-${response.status}`,
-          `OpenCode dispose returned ${response.status}`
-        );
-      }
-      return this.applyReload(updateId, 'disposed');
+      await this.projectService.reassignPodById(project.id);
+      return this.applyReload(update.id, 'pod-recreate-requested', { podRecreated: true });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      return this.deferReload(updateId, `pending:dispose:${error}`, error);
+      return this.deferReload(update.id, `pending:pod-recreate:${error}`, error);
     }
   }
 
   private async checkSession(podIp: string): Promise<SessionStatus> {
     try {
-      const response = await fetch(this.agentUrl(podIp, '/session/status'));
-      if (!response.ok) {
-        return {
-          error: `Session status returned ${response.status}`,
-          reloadStatus: `pending:session-status-${response.status}`,
-        };
+      const response = await fetch(this.agentUrl(podIp, '/api/session/active'));
+      if (response.ok) {
+        const snapshot = (await response.json()) as { data?: Record<string, { type?: string }> };
+        return { busy: Object.keys(snapshot.data ?? {}).length > 0 };
       }
-      const data = (await response.json()) as Record<string, { type?: string }>;
-      return { busy: Object.values(data).some((item) => item?.type === 'busy') };
+      return {
+        error: `Session status returned ${response.status}`,
+        reloadStatus: `pending:session-status-${response.status}`,
+      };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       return { error, reloadStatus: `pending:session-status:${error}` };

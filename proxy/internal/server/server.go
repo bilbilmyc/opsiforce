@@ -28,11 +28,11 @@ import (
 
 var projectIDPattern = regexp.MustCompile(`^[a-z0-9-]+$`)
 
-// promptSendPattern matches the opencode upstream paths a user Prompt send
-// crosses: POST /session/{id}/prompt and /session/{id}/prompt_async. It is the
-// single coupling point to opencode's naming; if those paths are renamed the
-// sidebar silently stops reordering, so the classification lives here alone.
-var promptSendPattern = regexp.MustCompile(`^/session/[^/]+/prompt(_async)?$`)
+// promptSendPattern matches the opencode upstream path a user Prompt send
+// crosses: POST /api/session/{id}/prompt. It is the single coupling point to
+// opencode's naming; if that path is renamed the sidebar silently stops
+// reordering, so the classification lives here alone.
+var promptSendPattern = regexp.MustCompile(`^/api/session/[^/]+/prompt$`)
 
 const environmentIDLength = 36
 

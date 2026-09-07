@@ -9,8 +9,8 @@ import { extractErrorMessage } from '~/api/client';
 import { useTranscriptionAvailability } from '~/api/transcription';
 import { dictationLanguage, reconcileDictationLanguage, DictationLanguageMenu } from '~/components/dictation-language';
 
-const PROMPT_EDITOR_SELECTOR = '[data-component="prompt-input"]';
-const PROMPT_SUBMIT_SELECTOR = '[data-action="prompt-submit"]';
+const PROMPT_EDITOR_SELECTOR = '[data-component="composer-editor"]';
+const PROMPT_SUBMIT_SELECTOR = '[data-action="composer-submit"]';
 const TOOLBAR_GRACE_MS = 2000;
 const MAX_RECORDING_MS = 5 * 60 * 1000;
 const AUDIO_BITS_PER_SECOND = 32_000;

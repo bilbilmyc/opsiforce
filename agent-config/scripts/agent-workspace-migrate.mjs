@@ -22,7 +22,6 @@ const summary = {
   skippedMigrations: [],
   failedMigrations: [],
   conflicts: [],
-  requiresOpenCodeReload: false,
   requiresPodRecreate: false,
   status: "applied",
 }
@@ -70,14 +69,27 @@ async function modelOverride(agentConfig, currentConfig) {
 function variantOverride(agentConfig, currentConfig) {
   if (process.env.AGENT_VARIANT) return process.env.AGENT_VARIANT
   if (typeof agentConfig?.variant === "string") return agentConfig.variant
-  const agent = currentConfig?.agent?.[agentName]
-  if (agent && typeof agent === "object" && typeof agent.variant === "string") return agent.variant
+  const agent = currentConfig?.agents?.[agentName]
+  if (agent && typeof agent === "object") {
+    const { variant } = splitModelRef(agent.model)
+    if (variant) return variant
+  }
   return ""
 }
 
 function currentAgentConfig(config) {
-  const agent = config?.agent?.[agentName]
+  const agent = config?.agents?.[agentName]
   return agent && typeof agent === "object" ? agent : {}
+}
+
+function splitModelRef(ref) {
+  if (typeof ref !== "string" || !ref) return { model: "", variant: "" }
+  const [model, variant = ""] = ref.split("#")
+  return { model, variant }
+}
+
+function joinModelRef(model, variant) {
+  return variant ? `${model}#${variant}` : model
 }
 
 async function applyOpenCodeConfig(model, variant) {
@@ -85,10 +97,11 @@ async function applyOpenCodeConfig(model, variant) {
   const next = { ...config }
   if (model) next.model = model
   if (model || variant) {
-    next.agent = { ...(next.agent ?? {}) }
-    next.agent[agentName] = { ...(currentAgentConfig(next) ?? {}) }
-    if (model) next.agent[agentName].model = model
-    if (variant) next.agent[agentName].variant = variant
+    next.agents = { ...(next.agents ?? {}) }
+    const current = { ...(currentAgentConfig(next) ?? {}) }
+    const existing = splitModelRef(current.model)
+    current.model = joinModelRef(model || existing.model, variant || existing.variant)
+    next.agents[agentName] = current
   }
   await writeJson(opencodeConfigPath, next)
 }
@@ -98,13 +111,6 @@ async function copyAgentOwnedFiles() {
   const currentConfig = await readJson(opencodeConfigPath, {})
   const model = await modelOverride(agentConfig, currentConfig)
   const variant = variantOverride(agentConfig, currentConfig)
-  const currentAgent = currentAgentConfig(currentConfig)
-  if (
-    (model && currentConfig?.model !== model) ||
-    (model && currentAgent.model !== model) ||
-    (variant && currentAgent.variant !== variant)
-  )
-    summary.requiresOpenCodeReload = true
   await mkdir(path.dirname(opencodeConfigPath), { recursive: true })
   await mkdir(path.join(workspace, ".opencode", "agents"), { recursive: true })
   await cp(path.join(opencodeRoot, "opencode.json"), opencodeConfigPath)
@@ -257,7 +263,6 @@ async function applyWorkspaceMigrations(alreadyApplied) {
     }
     if (summary.conflicts.length > conflictsBefore) continue
     summary.appliedMigrations.push(migration.id)
-    if (migration.requiresOpenCodeReload) summary.requiresOpenCodeReload = true
     if (migration.requiresPodRecreate) summary.requiresPodRecreate = true
   }
 }
@@ -303,8 +308,6 @@ async function main() {
   const alreadyApplied = new Set(previouslyApplied)
 
   const agentConfig = await loadAgentConfig()
-  summary.requiresOpenCodeReload = ledger.agentVersion !== summary.targetVersion
-    || metadataRequires(agentConfig, "requiresOpenCodeReload")
   summary.requiresPodRecreate = metadataRequires(agentConfig, "requiresPodRecreate")
 
   await copyAgentOwnedFiles()

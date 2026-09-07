@@ -16,10 +16,15 @@ const OC_PACKAGE_DIRS: Record<string, string> = {
   core: "core",
   schema: "schema",
   "session-ui": "session-ui",
-  llm: "llm",
   plugin: "plugin",
   "effect-drizzle-sqlite": "effect-drizzle-sqlite",
-  sdk: "sdk/js",
+  sdk: "sdk",
+  client: "client",
+  util: "util",
+  theme: "theme",
+  protocol: "protocol",
+  ai: "ai",
+  codemode: "codemode",
 };
 
 const exportsCache = new Map<string, Record<string, unknown> | null>();
@@ -98,6 +103,7 @@ function opencodeResolver(): Plugin {
     name: "opencode-resolver",
     enforce: "pre",
     resolveId(source) {
+      if (source === "virtual:vite-opencode-picker/client") return "\0opencode-picker-stub";
       if (!source.startsWith("@opencode-ai/")) return null;
       const rest = source.slice("@opencode-ai/".length);
       const [name, ...segments] = rest.split("/");
@@ -105,6 +111,10 @@ function opencodeResolver(): Plugin {
       if (!pkgDir) return null;
       const subpath = segments.join("/");
       return resolveFromExports(pkgDir, subpath) ?? resolveFromSource(pkgDir, subpath);
+    },
+    load(id) {
+      if (id === "\0opencode-picker-stub") return "export default {};";
+      return null;
     },
   };
 }
@@ -127,12 +137,24 @@ export default defineConfig(({ mode }) => ({
       { find: "@/", replacement: path.join(OC_PACKAGES_ROOT, "app/src") + "/" },
       { find: "~/", replacement: path.resolve(import.meta.dirname, "src") + "/" },
       {
-        find: /^@opencode-ai\/ui\/v2\/styles\/(.*)$/,
-        replacement: path.join(OC_PACKAGES_ROOT, "ui/src/v2/styles/$1"),
+        find: /^@opencode-ai\/session-ui\/v2\/(.*\.css)$/,
+        replacement: path.join(OC_PACKAGES_ROOT, "session-ui/src/v2/components/$1"),
       },
       {
-        find: /^@opencode-ai\/ui\/v2\/(.*\.css)$/,
-        replacement: path.join(OC_PACKAGES_ROOT, "ui/src/v2/components/$1"),
+        find: "@opencode-ai/ui/button.css",
+        replacement: path.join(OC_PACKAGES_ROOT, "ui/src/actions/button/button.css"),
+      },
+      {
+        find: "@opencode-ai/ui/file-tree.css",
+        replacement: path.join(OC_PACKAGES_ROOT, "ui/src/styles/file-tree.css"),
+      },
+      {
+        find: "@opencode-ai/ui/text-input.css",
+        replacement: path.join(OC_PACKAGES_ROOT, "ui/src/forms/text-input/text-input.css"),
+      },
+      {
+        find: "@opencode-ai/ui/styles/tokens",
+        replacement: path.join(OC_PACKAGES_ROOT, "ui/src/styles/tokens/index.css"),
       },
       {
         find: "@opencode-ai/ui/styles/tailwind",

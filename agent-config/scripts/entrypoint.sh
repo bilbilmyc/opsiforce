@@ -14,7 +14,8 @@ EXTERNAL_SERVICES_DB=/workspace/data/external-services.db
 
 guard webapp /workspace/app/startup.sh &
 
-guard opencode opencode serve --port "${OPENCODE_PORT:-4096}" --hostname 0.0.0.0 &
+export OPENCODE_PASSWORD="${OPENCODE_PASSWORD:-${OPSIFORCE_CONTROL_TOKEN:-opencode-pod-local}}"
+guard opencode opencode2 serve --port "${OPENCODE_INTERNAL_PORT:-4106}" --hostname 127.0.0.1 &
 
 guard vscode code-server \
   --host 0.0.0.0 --port "${VSCODE_PORT}" \

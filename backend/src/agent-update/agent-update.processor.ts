@@ -158,9 +158,10 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     const modelSelection = this.agentUpdateService.agentModelSelection(agentName);
     if (!modelSelection) return true;
     const config = await this.readWorkspaceOpenCodeConfig(directory);
-    const agent = config?.agent?.[agentName];
-    if (config?.model !== modelSelection.model || agent?.model !== modelSelection.model) return false;
-    if (modelSelection.variant && agent?.variant !== modelSelection.variant) return false;
+    const agentRef = config?.agents?.[agentName]?.model ?? '';
+    const [agentModel, agentVariant] = agentRef.split('#');
+    if (config?.model !== modelSelection.model || agentModel !== modelSelection.model) return false;
+    if (modelSelection.variant && agentVariant !== modelSelection.variant) return false;
     return true;
   }
 
@@ -196,7 +197,6 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
         skippedMigrations: summary.skippedMigrations,
         conflicts: summary.conflicts,
         failedMigrations: summary.failedMigrations,
-        requiresOpenCodeReload: summary.requiresOpenCodeReload,
         requiresPodRecreate: summary.requiresPodRecreate,
         reloadStatus: status === AgentUpdateStatus.ReloadPending ? 'pending:queued' : null,
         error: summary.error ?? null,
@@ -213,13 +213,13 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     if (!succeeded || summary.status === 'failed' || summary.failedMigrations.length > 0)
       return AgentUpdateStatus.Failed;
     if (summary.conflicts.length > 0) return AgentUpdateStatus.Conflict;
-    if (summary.requiresOpenCodeReload || summary.requiresPodRecreate) return AgentUpdateStatus.ReloadPending;
+    if (summary.requiresPodRecreate) return AgentUpdateStatus.ReloadPending;
     return AgentUpdateStatus.Applied;
   }
 
   private needsDeferredReload(project: { podIp: string | null }, summary: AgentWorkspaceMigrationSummary): boolean {
     if (!project.podIp) return false;
-    return summary.requiresOpenCodeReload || summary.requiresPodRecreate;
+    return summary.requiresPodRecreate;
   }
 
   private async readSummary(
@@ -255,13 +255,13 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
 
   private async readWorkspaceOpenCodeConfig(directory: string): Promise<{
     model?: string;
-    agent?: Record<string, { model?: string; variant?: string } | undefined>;
+    agents?: Record<string, { model?: string } | undefined>;
   } | null> {
     const configPath = path.join(this.storageMountPath, directory, '.opencode', 'opencode.json');
     try {
       return JSON.parse(await readFile(configPath, 'utf8')) as {
         model?: string;
-        agent?: Record<string, { model?: string; variant?: string } | undefined>;
+        agents?: Record<string, { model?: string } | undefined>;
       };
     } catch {
       return null;

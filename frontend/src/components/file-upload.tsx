@@ -102,7 +102,7 @@ export const FileUpload: Component<{ projectId: string; environmentId: string }>
 
 function injectUploadSummary(entries: string[]) {
   if (entries.length === 0) return;
-  const editor = document.querySelector<HTMLDivElement>('[data-component="prompt-input"]');
+  const editor = document.querySelector<HTMLDivElement>('[data-component="composer-editor"]');
   if (!editor) return;
   editor.focus();
 

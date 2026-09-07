@@ -5,7 +5,7 @@ import { Location } from "@opencode-ai/core/location"
 import { Effect, Queue } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder, HttpApiSchema } from "effect/unstable/httpapi"
-import * as Socket from "effect/unstable/socket/Socket"
+import { Socket } from "effect/unstable/socket"
 import { Api } from "../api"
 import { CorsConfig, isAllowedRequestOrigin } from "../cors"
 import { ForbiddenError, PtyNotFoundError } from "@opencode-ai/protocol/errors"
@@ -16,6 +16,7 @@ import {
 } from "@opencode-ai/protocol/groups/pty"
 import { response } from "../location"
 import { PtyEnvironment } from "../pty-environment"
+import { runPtySocket } from "./pty-socket"
 
 const ticketScope = Effect.gen(function* () {
   const location = yield* Location.Service
@@ -32,7 +33,8 @@ export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
       .handle(
         "pty.list",
         Effect.fn(function* () {
-          return yield* response((yield* Pty.Service).list())
+          const pty = yield* Pty.Service
+          return yield* response(pty.list())
         }),
       )
       .handle(
@@ -205,15 +207,15 @@ export const PtyHandler = HttpApiBuilder.group(Api, "server.pty", (handlers) =>
             }
           })
 
-          yield* Effect.race(
+          yield* runPtySocket(
             drain,
             socket.runRaw((message) => {
               const decoded = PtyProtocol.decodeInput(message)
               if (decoded !== undefined) attachment.write(decoded)
             }),
+            attachment.detach,
           ).pipe(
             Effect.catchReason("SocketError", "SocketCloseError", () => Effect.void),
-            Effect.ensuring(Effect.sync(() => attachment.detach())),
             Effect.orDie,
           )
           return HttpServerResponse.empty()

@@ -36,7 +36,7 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     requests Pillow datasette==1.0a28 datasette-write-ui==0.0.1a14 \
     openpyxl==3.1.5 reportlab==5.0.1 pypdf==6.16.1
 
-RUN npm install -g bun opencode-ai@1.18.18 agent-browser
+RUN npm install -g bun @opencode-ai/cli@0.0.0-beta-19059 agent-browser
 
 RUN mkdir -p /opt/doc-tools \
     && npm install --prefix /opt/doc-tools --no-audit --no-fund \
@@ -51,12 +51,10 @@ RUN mkdir -p /workspace /opt/opencode /opt/agents
 WORKDIR /workspace
 
 COPY ${OPENCODE_CONFIG} /opt/opencode/opencode.json
-
-COPY agent-config/plugins/package.json agent-config/plugins/package-lock.json /opt/opencode/plugins/
-RUN npm ci --omit=dev --prefix /opt/opencode/plugins
-COPY agent-config/plugins/image-normalize.ts /opt/opencode/plugins/image-normalize.ts
+COPY agent-config/models.json /opt/opencode/models.json
 
 COPY agent-config/ /opt/agent-config-src/
+ENV OPENCODE_MODELS_PATH=/opt/opencode/models.json OPENCODE_DISABLE_MODELS_FETCH=true
 RUN cp -a /opt/agent-config-src/agents/. /opt/agents/ \
     && if [ -d /opt/agent-config-src/private/agents ]; then cp -a /opt/agent-config-src/private/agents/. /opt/agents/; fi \
     && node /opt/agent-config-src/scripts/compose-skills.mjs /opt/agent-config-src/skills /opt/agents \
@@ -77,13 +75,12 @@ COPY --from=log-writer-builder /out/log-writer /usr/local/bin/log-writer
 COPY --from=log-writer-builder /out/agent-control /usr/local/bin/agent-control
 RUN chmod +x /usr/local/bin/log-writer /usr/local/bin/agent-control
 
-ENV OPENCODE_ENABLE_EXA=true
 ARG EXA_API_KEY=""
 ENV EXA_API_KEY=$EXA_API_KEY
 ENV NODE_OPTIONS=--max-http-header-size=131072
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s \
-  CMD wget -q --spider http://localhost:4096/global/health || exit 1
+  CMD wget -q --spider http://localhost:4096/api/health || exit 1
 
 EXPOSE 4096 3000 8080 8081 4910
 

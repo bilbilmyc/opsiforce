@@ -1,4 +1,4 @@
-import { base64Encode } from "@opencode-ai/core/util/encode"
+import { base64Encode } from "@opencode-ai/util/encode"
 import { expect, test } from "@playwright/test"
 import { mockOpenCodeServer } from "../utils/mock-server"
 import { expectSessionTitle } from "../utils/waits"
@@ -61,8 +61,7 @@ test("opens and searches project files inline", async ({ page }) => {
     pageMessages: () => ({ items: [] }),
   })
   await page.addInitScript(
-    ({ directory, server, sessionID }) => {
-      localStorage.setItem("settings.v3", JSON.stringify({ general: { newLayoutDesigns: true } }))
+    ({ directory, server, sessionID, tabKey }) => {
       localStorage.setItem(
         "opencode.global.dat:server",
         JSON.stringify({
@@ -70,10 +69,8 @@ test("opens and searches project files inline", async ({ page }) => {
           lastProject: { local: directory },
         }),
       )
-      localStorage.setItem(
-        "opencode.global.dat:layout",
-        JSON.stringify({ review: { diffStyle: "split", panelOpened: true } }),
-      )
+      localStorage.setItem("opencode.global.dat:layout", JSON.stringify({ review: { diffStyle: "split" } }))
+      localStorage.setItem("opencode.window.browser.dat:tabs.panes", JSON.stringify({ [tabKey]: { review: true } }))
       localStorage.setItem(
         "opencode.global.dat:review-panel-v2",
         JSON.stringify({ sidebarOpened: false, sidebarWidth: 240, expandMode: "collapse" }),
@@ -83,7 +80,7 @@ test("opens and searches project files inline", async ({ page }) => {
         JSON.stringify([{ type: "session", server, sessionId: sessionID }]),
       )
     },
-    { directory, server, sessionID },
+    { directory, server, sessionID, tabKey: `${server}\n/server/${base64Encode(server)}/session/${sessionID}` },
   )
 
   await page.goto(`/server/${base64Encode(server)}/session/${sessionID}`)
@@ -94,22 +91,37 @@ test("opens and searches project files inline", async ({ page }) => {
   const sidebarToggle = panel.getByRole("button", { name: "Toggle file tree" })
   const contextButton = page.getByRole("button", { name: "View context usage" })
   await contextButton.click()
-  await expect(panel.getByRole("tab", { name: "Context" })).toHaveAttribute("data-selected", "")
+  await expect(panel.getByRole("tab", { name: "Context", selected: true })).toBeVisible()
+  await expect(panel.getByRole("button", { name: "Open file" }).locator("use")).toHaveAttribute(
+    "href",
+    "#opencode-v2-icon-plus",
+  )
   await panel.getByRole("button", { name: "Open file" }).click()
-  await expect(panel.getByRole("tab", { name: "Open file" })).toHaveAttribute("data-selected", "")
+  const openFileTab = panel.getByRole("tab", { name: "Open file" })
+  const openFileTabClose = openFileTab.locator("..").getByRole("button", { name: "Close tab" })
+  await expect(openFileTab).toHaveAttribute("data-selected", "")
+  await expect(openFileTab.locator("..")).toHaveCSS("padding-inline-end", "4px")
+  await expect(openFileTab.locator("..")).toHaveCSS("gap", "8px")
+  await expect(openFileTab.locator("use")).toHaveAttribute("href", "#opencode-v2-icon-file-tree")
+  await expect(openFileTab.getByText("Open file", { exact: true }).locator("..")).not.toHaveClass(/italic/)
+  await expect(openFileTabClose).toHaveAttribute("data-variant", "ghost-muted")
+  await expect(openFileTabClose).toHaveCSS("opacity", "1")
   await expect(sidebarToggle).toBeDisabled()
   await expect(sidebar).toBeVisible()
   await contextButton.click()
-  await expect(panel.getByRole("tab", { name: "Context" })).toHaveAttribute("data-selected", "")
+  await expect(panel.getByRole("tab", { name: "Context", selected: true })).toBeVisible()
+  await expect(openFileTabClose).toHaveCSS("opacity", "0")
   await expect(sidebar).toBeHidden()
   await panel.getByRole("button", { name: "Open file" }).click()
   const filter = panel.getByRole("combobox", { name: "Filter files" })
   await expect(filter).toBeFocused()
-  await expect(panel.getByRole("tab", { name: "Open file" })).toHaveAttribute("data-selected", "")
+  await expect(panel.getByRole("tab", { name: "Open file", selected: true })).toBeVisible()
   await expect(panel.getByText("open-file-project", { exact: true })).toBeVisible()
 
   await panel.getByRole("button", { name: "README.md" }).click()
-  await expect(panel.getByRole("tab", { name: "README.md" })).toHaveAttribute("data-selected", "")
+  await expect(panel.getByRole("tab", { name: "README.md", selected: true })).toBeVisible()
+  await expect(panel.getByRole("tab", { name: "README.md" }).locator("..")).toHaveCSS("padding-inline-end", "4px")
+  await expect(panel.getByRole("tab", { name: "README.md" }).locator("..")).toHaveCSS("gap", "8px")
   await expect(sidebarToggle).toBeEnabled()
   await expect(panel.getByText("contents:README.md", { exact: true })).toBeVisible()
   await expect(sidebar).toHaveCount(0)
@@ -124,21 +136,23 @@ test("opens and searches project files inline", async ({ page }) => {
   expect(resultID).toBeTruthy()
   await expect(filter).toHaveAttribute("aria-activedescendant", resultID!)
   await filter.press("Enter")
-  await expect(panel.getByRole("tab", { name: "nested.ts" })).toHaveAttribute("data-selected", "")
+  await expect(panel.getByRole("tab", { name: "nested.ts", selected: true })).toBeVisible()
+  await expect(panel.getByRole("tab", { name: "nested.ts" }).locator("..")).toHaveCSS("padding-inline-end", "4px")
+  await expect(panel.getByRole("tab", { name: "nested.ts" }).locator("..")).toHaveCSS("gap", "8px")
   await expect(sidebarToggle).toBeEnabled()
   await expect(panel.getByText("contents:src/nested.ts", { exact: true })).toBeVisible()
-  expect(searches).toContainEqual({ query: "nested", dirs: "false", limit: 200 })
+  expect(searches).toContainEqual({ query: "nested", dirs: "file", limit: 200 })
 
   await panel.getByRole("button", { name: "Open file" }).click()
   await expect(panel.getByRole("tab", { name: "nested.ts" })).toHaveCount(1)
-  await expect(panel.getByRole("tab", { name: "Open file" })).toHaveAttribute("data-selected", "")
+  await expect(panel.getByRole("tab", { name: "Open file", selected: true })).toBeVisible()
   await expect(sidebarToggle).toBeDisabled()
   await panel.locator("#session-side-panel-review-tab").click()
   await expect(sidebarToggle).toBeEnabled()
   await panel.getByRole("tab", { name: "Open file" }).click()
   await page.keyboard.press("Control+w")
   await expect(panel.getByRole("tab", { name: "Open file" })).toHaveCount(0)
-  await expect(panel.getByRole("tab", { name: "nested.ts" })).toHaveAttribute("data-selected", "")
+  await expect(panel.getByRole("tab", { name: "nested.ts", selected: true })).toBeVisible()
 })
 
 function fileNode(path: string) {

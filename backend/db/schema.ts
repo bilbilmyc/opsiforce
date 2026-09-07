@@ -309,7 +309,6 @@ export const projectAgentUpdates = pgTable(
     fromVersion: text("from_version"),
     targetVersion: text("target_version").notNull(),
     status: agentUpdateStatusEnum("status").notNull().default("running"),
-    requiresOpenCodeReload: boolean("requires_open_code_reload").notNull().default(false),
     requiresPodRecreate: boolean("requires_pod_recreate").notNull().default(false),
     reloadStatus: text("reload_status"),
     reloadAttempt: integer("reload_attempt").notNull().default(0),

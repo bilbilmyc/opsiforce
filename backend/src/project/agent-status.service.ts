@@ -9,8 +9,6 @@ const RECONCILE_PROBE_TIMEOUT_MS = 3 * 1000;
 const RECONCILE_RETRY_BASE_MS = 5 * 1000;
 const RECONCILE_RETRY_MAX_MS = 60 * 1000;
 
-const isWorkingStatus = (sessionStatusType: string | undefined): boolean =>
-  sessionStatusType === 'busy' || sessionStatusType === 'retry';
 
 @Injectable()
 export class AgentStatusService implements OnApplicationBootstrap, OnModuleDestroy {
@@ -58,13 +56,12 @@ export class AgentStatusService implements OnApplicationBootstrap, OnModuleDestr
 
   private async reconcileEnvironment(env: ProjectEnvironmentContext): Promise<boolean> {
     const upstream = this.proxyService.resolveUpstreamForProject(env);
-    const res = await fetch(`${upstream}/session/status`, {
+    const res = await fetch(`${upstream}/api/session/active`, {
       signal: AbortSignal.timeout(RECONCILE_PROBE_TIMEOUT_MS),
     });
     if (!res.ok) throw new Error(`status snapshot returned ${res.status}`);
-
-    const sessions = (await res.json()) as Record<string, { type?: string }>;
-    const working = Object.values(sessions).some((session) => isWorkingStatus(session.type));
+    const snapshot = (await res.json()) as { data?: Record<string, { type?: string }> };
+    const working = Object.keys(snapshot.data ?? {}).length > 0;
     if (working) this.setWorking(env.projectId, env.id, true);
     return working;
   }

@@ -41,7 +41,6 @@ export interface AgentWorkspaceMigrationSummary {
   skippedMigrations: string[];
   failedMigrations: AgentMigrationFailure[];
   conflicts: AgentUpdateConflict[];
-  requiresOpenCodeReload: boolean;
   requiresPodRecreate: boolean;
   status: 'applied' | 'conflict' | 'failed';
   error?: string;
