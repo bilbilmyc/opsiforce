@@ -94,7 +94,7 @@ function joinModelRef(model, variant) {
 
 async function applyOpenCodeConfig(model, variant) {
   const config = await readJson(opencodeConfigPath, {})
-  const next = { ...config }
+  const next = { ...config, default_agent: agentName }
   if (model) next.model = model
   if (model || variant) {
     next.agents = { ...(next.agents ?? {}) }
