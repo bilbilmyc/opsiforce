@@ -17,7 +17,7 @@ docker login sealos.hub:5000
 powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1
 ```
 
-阿里云镜像需要认证时，也先执行 `docker login registry.cn-beijing.aliyuncs.com`。脚本构建 4 个项目镜像，拉取 5 个第三方运行镜像，将全部 9 个镜像推送到内网仓库。默认平台是 `linux/amd64`。
+阿里云镜像需要认证时，也先执行 `docker login registry.cn-beijing.aliyuncs.com`。脚本构建 4 个项目镜像，拉取 5 个第三方运行镜像，将全部 9 个镜像推送到内网仓库。构建日志中的项目镜像名称直接使用指定的仓库和 tag，例如 `sealos.hub:5000/opsiforce/opsiforce-backend:v1.0.0`。默认不导出 tar、不创建导出用的中间标签。默认平台是 `linux/amd64`。
 
 ## Linux 构建并推送
 
@@ -76,14 +76,14 @@ kubectl -n opsiforce get pods
 
 ## 可选：导出镜像包
 
-Windows 构建命令默认直接推送；需要 tar 时添加一个参数：
+Windows 默认构建并推送。需要 tar 时才额外添加 `-Export`；这个选项不会关闭推送：
 
 ```powershell
-# 仅导出，不推送
-powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1 -Mode export
+# 构建、推送，并额外导出 tar
+powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1 -Export
 
-# 同时推送和导出
-powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1 -Mode both
+# 构建并导出 tar，不推送
+powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1 -Export -NoPush
 ```
 
 输出为 `deploy/images.tar`，包含全部 9 个运行所需镜像。仅导出模式下，将它与 `deploy` 目录一起复制到具有 Docker 的内网机器，在该目录执行以下命令，再执行前面的部署命令：

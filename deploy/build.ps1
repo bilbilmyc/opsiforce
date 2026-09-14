@@ -4,16 +4,15 @@
 需要 Docker Desktop 处于 Linux 容器模式。
 在项目根目录执行：powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1
 构建和推送不需要节点 IP，节点地址只在部署时填写。
-加 -Mode export 只导出 images.tar；加 -Mode both 同时推送和导出。
+默认构建并推送；加 -Export 额外导出 images.tar；加 -Export -NoPush 只构建并导出。
 加 -Tag 指定版本、-Registry 指定仓库；加 -NoPush 只构建并保留本地镜像。
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('push', 'export', 'both')]
-    [string]$Mode = 'push',
     [string]$Registry = 'sealos.hub:5000/opsiforce',
     [ValidatePattern('^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$')]
     [string]$Tag = 'local',
+    [switch]$Export,
     [switch]$NoPush,
     [ValidateSet('linux/amd64', 'linux/arm64')]
     [string]$Platform = 'linux/amd64'
@@ -36,9 +35,6 @@ function Invoke-Docker {
 }
 
 try {
-    if ($NoPush -and $Mode -ne 'push') {
-        throw '-NoPush 用于只构建；如需导出，请使用 -Mode export，不要同时指定。'
-    }
     $Registry = $Registry.TrimEnd('/')
     if ($Registry -cnotmatch '^[a-z0-9][a-z0-9.-]*(:[0-9]+)?(/[a-z0-9][a-z0-9._-]*)+$') {
         throw 'Registry 请填写 主机[:端口]/命名空间，不要包含 http(s)://。'
@@ -54,14 +50,12 @@ try {
     $Images = @()
     $Components = @('backend', 'frontend', 'runtime-proxy', 'agent')
     foreach ($Component in $Components) {
-        # 先使用统一的本地标签，推送时再按目标仓库打标签。
-        $Image = "opsiforce/opsiforce-${Component}:$Tag"
+        # 构建名称就是最终推送地址，不创建额外的本地中间标签。
+        $Image = "$Registry/opsiforce-${Component}:$Tag"
         Write-Host "构建镜像：$Image"
         $BuildArgs = @('buildx', 'build', '--load', '--platform', $Platform,
             '-t', $Image, '-f', (Join-Path $PSScriptRoot "docker/Dockerfile.$Component"))
         Invoke-Docker -DockerArgs ($BuildArgs + @($ProjectRoot))
-        # 打目标仓库标签只操作本地镜像，不需要连接仓库。
-        Invoke-Docker -DockerArgs @('tag', $Image, "$Registry/opsiforce-${Component}:$Tag")
         $Images += $Image
     }
 
@@ -71,32 +65,37 @@ try {
     foreach ($Dependency in $Dependencies) {
         Write-Host "准备运行镜像：$Dependency"
         Invoke-Docker -DockerArgs @('pull', '--platform', $Platform, "$SourceRegistry/$Dependency")
-        Invoke-Docker -DockerArgs @('tag', "$SourceRegistry/$Dependency", "opsiforce/$Dependency")
-        Invoke-Docker -DockerArgs @('tag', "opsiforce/$Dependency", "$Registry/$Dependency")
-        $Images += "opsiforce/$Dependency"
+        Invoke-Docker -DockerArgs @('tag', "$SourceRegistry/$Dependency", "$Registry/$Dependency")
+        $Images += "$Registry/$Dependency"
     }
 
-    if ($Mode -eq 'export' -or $Mode -eq 'both') {
+    if ($Export) {
         Write-Host '正在导出全部 9 个镜像，镜像包较大，请等待完成。'
+        # 仅导出时创建迁移标签，兼容 deploy.sh import，可导入到不同目标仓库。
+        $ExportImages = @()
+        foreach ($Image in $Images) {
+            $ExportImage = 'opsiforce/' + $Image.Substring($Registry.Length + 1)
+            Invoke-Docker -DockerArgs @('tag', $Image, $ExportImage)
+            $ExportImages += $ExportImage
+        }
         # 使用 --output 写二进制包，避免 PowerShell 重定向损坏文件。
-        Invoke-Docker -DockerArgs (@('save', '--output', $PartialArchive) + $Images)
+        Invoke-Docker -DockerArgs (@('save', '--output', $PartialArchive) + $ExportImages)
         Move-Item -LiteralPath $PartialArchive -Destination $Archive -Force
         Write-Host "打包完成：$Archive"
     }
 
     if ($NoPush) {
-        Write-Host '全部 9 个镜像已保留在本地，未推送，也未导出 tar。'
-        exit 0
+        Write-Host '全部 9 个镜像已保留在本地，未推送。'
+        if (-not $Export) { exit 0 }
     }
 
-    if ($Mode -eq 'push' -or $Mode -eq 'both') {
+    if (-not $NoPush) {
         foreach ($Image in $Images) {
-            $TargetImage = "$Registry/" + $Image.Substring('opsiforce/'.Length)
-            Write-Host "推送镜像：$TargetImage"
+            Write-Host "推送镜像：$Image"
             try {
-                Invoke-Docker -DockerArgs @('push', $TargetImage)
+                Invoke-Docker -DockerArgs @('push', $Image)
             } catch {
-                [Console]::Error.WriteLine("推送失败：$TargetImage。全部 9 个镜像仍在本地，本次未完成推送。")
+                [Console]::Error.WriteLine("推送失败：${Image}。全部 9 个镜像仍在本地，本次未完成推送。")
                 [Console]::Error.WriteLine('仓库恢复后可重跑原命令复用构建缓存，或使用 docker push 推送本地镜像。')
                 exit 2
             }
@@ -109,7 +108,7 @@ try {
     $RegistryOption = ''
     if ($Registry -ne 'sealos.hub:5000/opsiforce') { $RegistryOption = " --registry $Registry" }
     Write-Host '将 deploy 目录复制到内网虚拟机，在该目录执行：'
-    if ($Mode -eq 'export') {
+    if ($NoPush -and $Export) {
         Write-Host '  请一并复制 images.tar，然后执行：'
         Write-Host "  docker login $($Registry.Split('/')[0])"
         Write-Host "  bash deploy.sh import$TagOption$RegistryOption"
@@ -120,7 +119,7 @@ try {
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1
 } finally {
-    if (Test-Path -LiteralPath $PartialArchive) {
+    if ($Export -and (Test-Path -LiteralPath $PartialArchive)) {
         Remove-Item -LiteralPath $PartialArchive -Force
     }
 }
