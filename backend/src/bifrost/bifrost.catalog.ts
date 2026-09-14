@@ -73,7 +73,8 @@ export function runtimeModelConfig(models: ChannelModel[], selected: string | nu
       models: Object.fromEntries(models.filter(m => m.provider === provider).map(m => [m.name, {
         name: m.name, modelID: `${provider}/${m.name}`,
         capabilities: { tools: true, input: ['text'], output: ['text'] },
-        variants: [{ id: 'default' }],
+        // OpenCode adds the default choice itself; only additional variants belong here.
+        variants: [],
         ...modelLimits(m),
       }])),
     };
