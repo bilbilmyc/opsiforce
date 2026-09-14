@@ -5,7 +5,9 @@ set -euo pipefail
 REGISTRY=${REGISTRY:-sealos.hub:5000/opsiforce}
 SOURCE_REGISTRY=${SOURCE_REGISTRY:-registry.cn-beijing.aliyuncs.com/mayc}
 PLATFORM=${PLATFORM:-linux/amd64}
-NODE_IP=${NODE_IP:-127.0.0.1}              # 浏览器可访问的测试集群节点 IPv4 地址。
+NODE_IP=${NODE_IP:-}                     # 仅 expose 临时测试地址显示使用。
+DOMAIN=${DOMAIN:-opsiforce.localtest.me}   # 公司 CDN 的业务根域名；不用于集群内部通信。
+PUBLIC_SCHEME=${PUBLIC_SCHEME:-https}      # CDN 对外协议；本机 HTTP 测试可设置 http。
 KUBE_CONTEXT=${KUBE_CONTEXT:-}             # 留空时使用 kubectl 当前的集群上下文。
 IMAGE_PULL_SECRET=${IMAGE_PULL_SECRET:-}   # opsiforce 命名空间中已有的镜像拉取 Secret 名称。
 OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -50,12 +52,12 @@ case "$ACTION" in sync|build|push|import|deploy|render|port-forward|expose) ;; *
   bash deploy.sh build --tag v1.0.0 --registry sealos.hub:5000/opsiforce
   # 2. 在能访问阿里云和内网仓库的机器上，同步第三方运行镜像
   bash deploy.sh sync --registry sealos.hub:5000/opsiforce
-  # 3. 在已配置 kubectl 的内网机器上部署；示例 IP 改成可访问的 Kubernetes 节点 IP
-  bash deploy.sh deploy --tag v1.0.0 --registry sealos.hub:5000/opsiforce --node-ip 192.168.1.10
+  # 3. 在已配置 kubectl 的内网机器上部署，通过 Service 提供 HTTP 回源
+  bash deploy.sh deploy --tag v1.0.0 --registry sealos.hub:5000/opsiforce
 
 sync 从 $SOURCE_REGISTRY 同步 nginx、bifrost、gotenberg、postgres、redis，保留各自版本，无需 --tag。
 deploy 使用已推送的镜像，创建资源、执行数据库迁移并等待服务启动，不重新构建。
-部署成功后访问 https://节点IP:30443。
+部署提供 opsiforce-edge:8080；测试可运行 port-forward 后访问 http://localhost:30080。
 
 默认使用测试环境，无需填写 local；默认仓库为 sealos.hub:5000/opsiforce。
 更换仓库时加 --registry 主机:端口/命名空间，须与 Windows 的 -Registry 一致。
@@ -77,12 +79,12 @@ build 默认先构建全部选定镜像，再推送；推送失败时本地镜�
   deploy        使用 YAML 部署服务，自动执行数据库迁移并等待启动
   import        导入 Windows 导出的镜像包并推送到目标仓库
   render        仅生成 YAML
-  port-forward  将平台入口转发到本机 30443 端口
+  port-forward  将平台入口转发到本机 30080 端口
   expose        为已启动的项目开放临时 NodePort
 
 完整格式：$0 命令 [local|prod] [组件|环境UUID] [--tag 版本] [--registry 仓库地址] [--node-ip 节点IP] [--no-push]
 组件可选 all、backend、frontend、runtime-proxy、agent，默认 all。
---node-ip 仅部署、渲染和临时访问时使用，构建和推送不需要。
+--node-ip 仅 expose 临时访问使用；部署和集群内部通信无需节点 IP。
 其他配置见 deploy/README.md；模型 Key 可以留空。
 EOF
   exit 0;;
@@ -153,22 +155,11 @@ if [[ "$ACTION" == build || "$ACTION" == push ]]; then
   exit 0
 fi
 
-# 仅部署、渲染和临时访问需要节点地址或域名。
-if [[ "$PROFILE" == local ]]; then
-  [[ "$NODE_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || { echo 'NODE_IP 必须是 IPv4 地址。' >&2; exit 1; }
-  IFS=. read -r ip1 ip2 ip3 ip4 <<< "$NODE_IP"
-  for octet in "$ip1" "$ip2" "$ip3" "$ip4"; do
-    ((10#$octet <= 255)) || { echo 'NODE_IP 的每段数字必须在 0 到 255 之间。' >&2; exit 1; }
-  done
-  DOMAIN=${DOMAIN:-$NODE_IP}
-  PORT_SUFFIX=:30443
-  DB_MODE=${DB_MODE:-bundled}
-else
-  : "${DOMAIN:?生产环境需要设置 DOMAIN 域名}"
-  PORT_SUFFIX=
-  DB_MODE=external
-fi
-[[ "$DOMAIN" =~ ^[a-z0-9][a-z0-9.-]*[a-z0-9]$ ]] || { echo 'DOMAIN 必须是域名或 IPv4 地址，不要包含端口或协议。' >&2; exit 1; }
+# 集群内部一律使用 Service DNS；DOMAIN 只用于浏览器公开地址。
+PORT_SUFFIX=
+if [[ "$PROFILE" == local ]]; then DB_MODE=${DB_MODE:-bundled}; else DB_MODE=external; fi
+[[ "$DOMAIN" =~ ^[a-z0-9][a-z0-9.-]*[a-z0-9]$ ]] || { echo 'DOMAIN 必须是域名，不要包含端口或协议。' >&2; exit 1; }
+[[ "$PUBLIC_SCHEME" == http || "$PUBLIC_SCHEME" == https ]] || { echo 'PUBLIC_SCHEME 只能是 http 或 https。' >&2; exit 1; }
 
 k() {
   if [[ -n "$KUBE_CONTEXT" ]]; then kubectl --context "$KUBE_CONTEXT" -n opsiforce "$@"
@@ -176,6 +167,7 @@ k() {
 }
 if [[ "$ACTION" == expose ]]; then
   [[ "$PROFILE" == local && "$COMPONENT" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] || { echo '用法：expose local 环境UUID --node-ip 节点IPv4地址' >&2; exit 1; }
+  : "${NODE_IP:?expose 需要 --node-ip 用于显示临时测试地址}"
   export RUNTIME_ENV=$COMPONENT
   RUNTIME_POD=$(k get pods -l "opsiforce.io/environment-id=$RUNTIME_ENV" -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}')
   RUNTIME_POD=${RUNTIME_POD%%$'\n'*}
@@ -192,7 +184,7 @@ if [[ "$ACTION" == expose ]]; then
 fi
 if [[ "$ACTION" == port-forward ]]; then
   [[ "$PROFILE" == local ]] || { echo 'port-forward 仅支持 local 测试环境。' >&2; exit 1; }
-  k port-forward svc/opsiforce-edge 30443:443
+  k port-forward svc/opsiforce-edge 30080:8080
   exit 0
 fi
 
@@ -249,22 +241,12 @@ if [[ -n "$IMAGE_PULL_SECRET" ]]; then
   PULL_SECRETS_JSON="[{\"name\":\"$IMAGE_PULL_SECRET\"}]"
 fi
 RELEASE_ID=$(date -u +%Y%m%d%H%M%S)
-export REGISTRY TAG DOMAIN PORT_SUFFIX DOMAIN_REGEX PG_HOST PG_PORT PG_USER BIFROST_DATABASE PG_SSLMODE
+export REGISTRY TAG DOMAIN PUBLIC_SCHEME PORT_SUFFIX DOMAIN_REGEX PG_HOST PG_PORT PG_USER BIFROST_DATABASE PG_SSLMODE
 export PULL_SECRETS_JSON RELEASE_ID
 FILES=(base apps migration)
 if [[ "$DB_MODE" == bundled ]]; then FILES+=(local-infra); fi
-if [[ "$PROFILE" == local ]]; then
-  # 当前前端生成 HTTPS 应用地址，因此 Nginx 提供 HTTPS 入口。
-  if [[ ! -f "$STATE/tls.crt" || ! -f "$STATE/tls.key" || "$(cat "$STATE/tls-domain" 2>/dev/null || true)" != "$DOMAIN|$NODE_IP" ]]; then
-    openssl req -x509 -nodes -newkey rsa:2048 -days 365 -keyout "$STATE/tls.key" -out "$STATE/tls.crt" \
-      -subj "/CN=$DOMAIN" -addext "subjectAltName=IP:$NODE_IP,IP:127.0.0.1,DNS:$DOMAIN,DNS:*.$DOMAIN,DNS:*.apps.$DOMAIN,DNS:*.preview.apps.$DOMAIN,DNS:*.code.$DOMAIN,DNS:*.db.$DOMAIN" >/dev/null 2>&1
-    printf '%s' "$DOMAIN|$NODE_IP" > "$STATE/tls-domain"
-  fi
-  export TLS_CRT_B64=$(openssl base64 -A -in "$STATE/tls.crt")
-  export TLS_KEY_B64=$(openssl base64 -A -in "$STATE/tls.key")
-  FILES+=(local-edge)
-else FILES+=(production-edge); fi
-TOKENS='${REGISTRY} ${TAG} ${DOMAIN} ${PORT_SUFFIX} ${DOMAIN_REGEX} ${PG_HOST} ${PG_PORT} ${PG_USER} ${BIFROST_DATABASE} ${PG_SSLMODE} ${PULL_SECRETS_JSON} ${RELEASE_ID} ${DATABASE_URL_B64} ${REDIS_URL_B64} ${PG_PASSWORD_B64} ${ADMIN_PASSWORD_B64} ${PROXY_CONTROL_TOKEN_B64} ${BIFROST_ENCRYPTION_KEY_B64} ${EXTERNAL_SERVICES_ENCRYPTION_KEY_B64} ${OIDC_PLUGIN_SECRET_B64} ${OPENAI_API_KEY_B64} ${ANTHROPIC_API_KEY_B64} ${TLS_CRT_B64} ${TLS_KEY_B64}'
+if [[ "$PROFILE" == local ]]; then FILES+=(local-edge); else FILES+=(production-edge); fi
+TOKENS='${REGISTRY} ${TAG} ${DOMAIN} ${PUBLIC_SCHEME} ${PORT_SUFFIX} ${DOMAIN_REGEX} ${PG_HOST} ${PG_PORT} ${PG_USER} ${BIFROST_DATABASE} ${PG_SSLMODE} ${PULL_SECRETS_JSON} ${RELEASE_ID} ${DATABASE_URL_B64} ${REDIS_URL_B64} ${PG_PASSWORD_B64} ${ADMIN_PASSWORD_B64} ${PROXY_CONTROL_TOKEN_B64} ${BIFROST_ENCRYPTION_KEY_B64} ${EXTERNAL_SERVICES_ENCRYPTION_KEY_B64} ${OIDC_PLUGIN_SECRET_B64} ${OPENAI_API_KEY_B64} ${ANTHROPIC_API_KEY_B64}'
 for file in "${FILES[@]}"; do envsubst "$TOKENS" < "$DIR/k8s/$file.yaml" > "$OUT/$file.yaml"; done
 [[ "$ACTION" == render ]] && { echo "YAML 已生成到：$OUT"; exit 0; }
 
@@ -296,9 +278,6 @@ if [[ "$PROFILE" == local ]]; then k apply -f "$OUT/local-edge.yaml"; else k app
 for deployment in backend frontend proxy-agent proxy-app proxy-vscode proxy-db bifrost gotenberg edge; do
   k rollout status "deployment/opsiforce-$deployment" --timeout=900s
 done
-if [[ "$PROFILE" == local ]]; then
-  echo "部署完成，访问地址：https://$NODE_IP:30443"
-  echo "请在测试浏览器中信任证书 $STATE/tls.crt；使用 expose 命令临时开放应用、VS Code 和数据库界面端口。"
-else
-  echo '生产工作负载已就绪；私有服务 opsiforce-edge:8080 还需要接入主体产品的认证和路由。'
-fi
+echo '工作负载已就绪；集群内通过 http://opsiforce-edge:8080 访问回源入口。'
+echo '测试入口：http://节点地址:30080；也可执行 bash deploy.sh port-forward 后访问 http://localhost:30080。'
+echo '公网接入：由公司 CDN 终止 TLS，保留 Host 并转发 WebSocket/SSE，使用公司实际域名设置 DOMAIN。'

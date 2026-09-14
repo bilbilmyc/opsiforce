@@ -1,3 +1,4 @@
+import { publicDomain, publicScheme } from '~/lib/public-url';
 export const ENVIRONMENT_SLUG_MAX_LENGTH = 26;
 export const ENVIRONMENT_SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -6,7 +7,7 @@ export function appHostLabel(environmentId: string, slug: string | null | undefi
 }
 
 export function appPublicUrl(environmentId: string, slug: string | null | undefined): string {
-  return `https://${appHostLabel(environmentId, slug)}.${import.meta.env.VITE_WEBAPP_DOMAIN}/`;
+  return `${publicScheme()}://${appHostLabel(environmentId, slug)}.${publicDomain('apps')}/`;
 }
 
 export function slugifyEnvironmentName(name: string): string {

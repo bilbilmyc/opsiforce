@@ -7,5 +7,5 @@ export function appCanonicalHost(routingId: string, slug: string | null | undefi
 }
 
 export function appPublicUrl(routingId: string, slug: string | null | undefined, appsHostname: string): string {
-  return `https://${appCanonicalHost(routingId, slug, appsHostname)}/`;
+  return `${process.env.APP_PUBLIC_SCHEME === 'http' ? 'http' : 'https'}://${appCanonicalHost(routingId, slug, appsHostname)}/`;
 }

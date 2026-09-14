@@ -3,7 +3,7 @@ import Spinner from '~/components/ui/spinner';
 
 export default function ProjectDbTab(props: { environmentId: string }) {
   const [loading, setLoading] = createSignal(true);
-  const url = () => `https://${props.environmentId}.${import.meta.env.VITE_DB_DOMAIN}/`;
+  const url = () => `/api/db/${encodeURIComponent(props.environmentId)}/`;
 
   createEffect(
     on(

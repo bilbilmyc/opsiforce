@@ -1,3 +1,4 @@
+import { publicDomain, publicScheme } from '~/lib/public-url';
 import { Show, createEffect, createSignal, on, onMount, type JSX } from 'solid-js';
 import { Check, Copy, LoaderCircle, PanelRightClose, Pencil, RefreshCw } from '~/components/icons';
 import { ToolbarButton } from '~/components/ui/toolbar-button';
@@ -28,8 +29,8 @@ export function AppPreviewPane(props: AppPreviewPaneProps) {
   const activeEnv = () => environments.data?.find((e) => e.id === props.environmentId);
   const showEditAction = () => canEditAppDetails() && activeEnv()?.hasApp === true;
 
-  const previewDomain = import.meta.env.VITE_WEBAPP_PREVIEW_DOMAIN;
-  const previewUrl = () => `https://${props.environmentId}.${previewDomain}/`;
+  const previewDomain = publicDomain('preview.apps');
+  const previewUrl = () => `${publicScheme()}://${props.environmentId}.${previewDomain}/`;
   const publicUrl = () => appPublicUrl(props.environmentId, props.environmentSlug);
 
   createEffect(

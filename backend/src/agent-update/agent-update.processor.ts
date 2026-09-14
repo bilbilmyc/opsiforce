@@ -156,7 +156,7 @@ export class AgentUpdateProcessor extends WorkerHost implements OnApplicationShu
     const ledger = await this.readLedger(directory, agentName);
     if (ledger?.agentVersion !== targetVersion) return false;
     const modelSelection = this.agentUpdateService.agentModelSelection(agentName);
-    if (!modelSelection) return true;
+    if (this.configService.get<string>('bifrostProxyUrl') || !modelSelection) return true;
     const config = await this.readWorkspaceOpenCodeConfig(directory);
     const agentRef = config?.agents?.[agentName]?.model ?? '';
     const [agentModel, agentVariant] = agentRef.split('#');

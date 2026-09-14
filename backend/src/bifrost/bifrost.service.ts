@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { eq, and, isNull } from 'drizzle-orm';
 import crypto from 'crypto';
@@ -17,10 +17,19 @@ import type {
   CreateTeamRequest,
   CreateTeamResponse,
 } from './bifrost.types';
-import { BIFROST_PROVIDER_CONFIGS } from './bifrost.providers';
+import { availableModels, providerGrants, runtimeModelConfig, type Channel, type ChannelKey, type ChannelModel } from './bifrost.catalog';
+import { agentModelDefaults } from '../../db/schema';
+import { readFile, writeFile, rename } from 'node:fs/promises';
+import path from 'node:path';
 
 @Injectable()
-export class BifrostService {
+export class BifrostService implements OnModuleInit, OnModuleDestroy {
+  private syncTimer?: ReturnType<typeof setInterval>;
+  private syncPending?: Promise<void>;
+  private catalogPending?: Promise<ChannelModel[]>;
+  private catalogCache?: { at: number; models: ChannelModel[] };
+  private grantsApplied = new Map<string, string>();
+  private resourcePending = new Map<string, Promise<void>>();
   private readonly logger = new Logger(BifrostService.name);
   private readonly proxyUrl: string;
   private readonly podProxyUrl: string;
@@ -35,6 +44,141 @@ export class BifrostService {
     this.podProxyUrl = this.configService.get<string>('bifrostPodProxyUrl', '') || this.proxyUrl;
     this.adminUsername = this.configService.get<string>('bifrostAdminUsername', '');
     this.adminPassword = this.configService.get<string>('bifrostAdminPassword', '');
+  }
+
+  onModuleInit() {
+    if (!this.isEnabled()) return;
+    this.syncTimer = setInterval(() => {
+      void this.syncModels().catch(err => this.logger.warn(`Bifrost model sync failed: ${err.message}`));
+    }, 30_000);
+    this.syncTimer.unref();
+  }
+
+  onModuleDestroy() { if (this.syncTimer) clearInterval(this.syncTimer); }
+
+  async getModels(force = false): Promise<ChannelModel[]> {
+    if (!this.isEnabled()) return [];
+    if (!force && this.catalogCache && Date.now() - this.catalogCache.at < 15_000) return this.catalogCache.models;
+    if (this.catalogPending) return this.catalogPending;
+    this.catalogPending = (async () => {
+      const [providers, catalog] = await Promise.all([
+        this.request<{ providers: Channel[] }>('GET', '/api/providers'),
+        this.getCatalogModels(),
+      ]);
+      const channels = await Promise.all(providers.providers.map(async p => ({
+        ...p, keys: (await this.request<{ keys: ChannelKey[] }>('GET', `/api/providers/${encodeURIComponent(p.name)}/keys`)).keys ?? [],
+      })));
+      const models = availableModels(channels, catalog);
+      this.catalogCache = { at: Date.now(), models };
+      return models;
+    })();
+    try { return await this.catalogPending; } finally { this.catalogPending = undefined; }
+  }
+
+  private async getCatalogModels(): Promise<ChannelModel[]> {
+    const models: ChannelModel[] = [];
+    const seen = new Set<string>();
+    const limit = 100;
+    // Bifrost defaults to five entries per page. Advance by the actual count,
+    // since the server may cap the requested page size.
+    for (let page = 0; page < 1000; page++) {
+      const result = await this.request<{ models: ChannelModel[]; total: number }>(
+        'GET', `/api/models/details?limit=${limit}&offset=${models.length}`
+      );
+      if (!Array.isArray(result.models) || !Number.isSafeInteger(result.total) || result.total < 0) {
+        throw new Error('Bifrost returned an invalid model catalog page');
+      }
+      if (!result.models.length && models.length < result.total) {
+        throw new Error('Bifrost model catalog pagination ended before the reported total');
+      }
+      for (const model of result.models) {
+        const id = JSON.stringify([model.provider, model.name]);
+        if (seen.has(id)) throw new Error('Bifrost model catalog changed during pagination; retry the refresh');
+        seen.add(id);
+        models.push(model);
+      }
+      if (models.length >= result.total) return models;
+    }
+    throw new Error('Bifrost model catalog exceeded the pagination safety limit');
+  }
+
+  async modelCatalog() {
+    const models = await this.getModels();
+    const [defaults] = await db.select().from(agentModelDefaults).where(eq(agentModelDefaults.id, 'default'));
+    return { models, defaultModel: models.length ? runtimeModelConfig(models, defaults?.model ?? null).model : null };
+  }
+
+  async setDefaultModel(model: unknown) {
+    const models = await this.getModels(true);
+    if (typeof model !== 'string' || !models.some(m => `${m.provider}/${m.name}` === model)) {
+      throw new BadRequestException('请选择 Bifrost 当前可用的渠道和模型。');
+    }
+    await db.insert(agentModelDefaults).values({ id: 'default', model })
+      .onConflictDoUpdate({ target: agentModelDefaults.id, set: { model, updatedAt: new Date() } });
+    if (this.syncPending) await this.syncPending;
+    await this.syncModels();
+    return this.modelCatalog();
+  }
+
+  private async modelConfig() {
+    const { models, defaultModel } = await this.modelCatalog();
+    return runtimeModelConfig(models, defaultModel);
+  }
+
+  async syncModels(): Promise<void> {
+    if (!this.isEnabled()) return;
+    if (this.syncPending) return this.syncPending;
+    this.syncPending = this.runModelSync();
+    try { await this.syncPending; } finally { this.syncPending = undefined; }
+  }
+
+  private async runModelSync() {
+    await this.getModels(true);
+    const config = await this.modelConfig();
+    const rows = await db.select({ id: projects.id, tenantId: projects.tenantId }).from(projects);
+    const failures: string[] = [];
+    for (const project of rows) {
+      try {
+        await this.ensureResources(project.id, project.tenantId);
+        const environments = await db.select().from(projectEnvironments).where(eq(projectEnvironments.projectId, project.id));
+        for (const env of environments) {
+          const root = path.resolve(this.configService.get<string>('storageMountPath', '/workspace-data'));
+          const file = path.resolve(root, env.directory, '.opencode/opencode.json');
+          if (!file.startsWith(root + path.sep)) throw new Error('Invalid workspace directory');
+          let current;
+          try { current = JSON.parse(await readFile(file, 'utf8')); }
+          catch (err) { if ((err as NodeJS.ErrnoException).code === 'ENOENT') continue; throw err; }
+          const agentName = current.default_agent || 'app-builder';
+          const next = { ...current, ...config, agents: { ...current.agents,
+            [agentName]: { ...current.agents?.[agentName], model: `${config.model}#default` },
+          } };
+          if (JSON.stringify(current) === JSON.stringify(next)) continue;
+          const temp = `${file}.${crypto.randomUUID()}.tmp`;
+          await writeFile(temp, JSON.stringify(next, null, 2) + '\n');
+          await rename(temp, file);
+        }
+      } catch (err) {
+        failures.push(project.id);
+        this.logger.warn(`Model sync for project ${project.id} failed: ${(err as Error).message}`);
+      }
+    }
+    if (failures.length) throw new Error(`模型已保存，但 ${failures.length} 个项目同步失败，请检查后端日志并重试刷新。`);
+  }
+
+  async createProjectResources(params: { projectId: string; tenantId: string }) {
+    return this.ensureResources(params.projectId, params.tenantId);
+  }
+
+  async createOrphanProjectResources(params: { projectId: string }) {
+    return this.ensureResources(params.projectId, null);
+  }
+
+  private async ensureResources(projectId: string, tenantId: string | null): Promise<void> {
+    const pending = this.resourcePending.get(projectId);
+    if (pending) return pending;
+    const task = tenantId ? this.provisionProjectResources({ projectId, tenantId }) : this.provisionOrphanProjectResources({ projectId });
+    this.resourcePending.set(projectId, task);
+    try { await task; } finally { this.resourcePending.delete(projectId); }
   }
 
   isEnabled(): boolean {
@@ -63,6 +207,7 @@ export class BifrostService {
     const credentials = Buffer.from(`${this.adminUsername}:${this.adminPassword}`).toString('base64');
     const response = await fetch(url, {
       method,
+      signal: AbortSignal.timeout(20_000),
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Basic ${credentials}`,
@@ -249,19 +394,22 @@ export class BifrostService {
         )
       );
 
+    const models = await this.getModels();
+    if (!models.length) throw new Error('Bifrost 尚无可用聊天模型，请配置渠道 Key 和模型。');
+    const grants = providerGrants(models).map(p => keyType === 'backend' ? { ...p, allowed_models: ['*'] } : p);
     if (existing) {
+      const signature = JSON.stringify(grants);
+      if (this.grantsApplied.get(existing.bifrostKeyId) !== signature) {
+        await this.request('PUT', `/api/governance/virtual-keys/${existing.bifrostKeyId}`, { provider_configs: grants });
+        this.grantsApplied.set(existing.bifrostKeyId, signature);
+      }
       return { keyId: existing.bifrostKeyId, keyToken: existing.bifrostKeyToken };
     }
 
     const payload: CreateVirtualKeyRequest = {
       name: `project-${projectId.slice(0, 8)}-${keyType}`,
       description: `Virtual key (${keyType}) for project ${projectId}${tenantId ? ` (tenant: ${tenantId})` : ' (pool)'}`,
-      provider_configs: BIFROST_PROVIDER_CONFIGS[keyType].map(({ provider, weight }) => ({
-        provider,
-        weight,
-        allowed_models: ['*'],
-        key_ids: ['*'],
-      })),
+      provider_configs: grants,
       budgets: [this.budgetFor(budgets, keyType)],
       ...(teamId ? { team_id: teamId } : {}),
     };
@@ -296,7 +444,7 @@ export class BifrostService {
     return this.createProjectTeam(projectId, budgets, customerId);
   }
 
-  async createProjectResources(params: { projectId: string; tenantId: string }): Promise<void> {
+  private async provisionProjectResources(params: { projectId: string; tenantId: string }): Promise<void> {
     const { projectId, tenantId } = params;
 
     const [tenant] = await db.select().from(tenants).where(eq(tenants.id, tenantId));
@@ -313,7 +461,7 @@ export class BifrostService {
     ]);
   }
 
-  async createOrphanProjectResources(params: { projectId: string }): Promise<void> {
+  private async provisionOrphanProjectResources(params: { projectId: string }): Promise<void> {
     const { projectId } = params;
 
     const budgets = await this.defaultsService.getGlobalBudgets();
@@ -327,12 +475,16 @@ export class BifrostService {
 
   async getEnvironmentPodOptions(
     projectEnvironmentId: string
-  ): Promise<{ bifrostApiKey: string; bifrostBackendApiKey?: string; bifrostProxyUrl: string } | null> {
+  ): Promise<{ bifrostApiKey: string; bifrostBackendApiKey?: string; bifrostProxyUrl: string; agentModelConfig: string } | null> {
+    if (!this.isEnabled()) return null;
     const [env] = await db
       .select({ projectId: projectEnvironments.projectId })
       .from(projectEnvironments)
       .where(eq(projectEnvironments.id, projectEnvironmentId));
     if (!env) return null;
+    const [project] = await db.select({ tenantId: projects.tenantId }).from(projects).where(eq(projects.id, env.projectId));
+    if (!project) return null;
+    await this.ensureResources(env.projectId, project.tenantId);
 
     const keys = await db
       .select()
@@ -351,6 +503,7 @@ export class BifrostService {
       bifrostApiKey: chatKey.bifrostKeyToken,
       bifrostBackendApiKey: backendKey.bifrostKeyToken,
       bifrostProxyUrl: this.podProxyUrl,
+      agentModelConfig: JSON.stringify(await this.modelConfig()),
     };
   }
 

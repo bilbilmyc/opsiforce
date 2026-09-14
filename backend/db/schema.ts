@@ -688,3 +688,9 @@ export const tenantBudgetDefaults = pgTable("tenant_budget_defaults", {
   defaultBackendBudgetDuration: text("default_backend_budget_duration").notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })
+
+export const agentModelDefaults = pgTable("agent_model_defaults", {
+  id: text("id").primaryKey(),
+  model: text("model").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

@@ -1,6 +1,6 @@
 # 测试环境部署
 
-只处理镜像构建、推送和 Kubernetes 部署，保留原产品代码。Windows 和 Linux 都支持构建，选择其中一台联网机器即可。
+使用普通 Dockerfile、Kubernetes YAML 和 Shell 脚本部署。Windows 和 Linux 都支持构建，选择其中一台联网机器即可。
 
 - **部署**：前端、后端、运行时代理、Bifrost、Gotenberg、测试 PostgreSQL / Redis、Nginx 测试入口；Agent 在打开项目时创建。
 - **不部署**：Traefik、StorageClass、NetworkPolicy、Keycloak、OAuth2 Proxy。
@@ -61,8 +61,8 @@ powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1 -Tag v1.0.0 -NoPush
 将最新 `deploy` 目录复制到虚拟机。预先准备 Bash、kubectl、openssl、envsubst（gettext），确认 kubectl 指向测试集群。在 `deploy` 目录执行：
 
 ```bash
-# 仓库和 tag 与构建时一致；把示例 IP 改成浏览器能访问的 Kubernetes 节点 IP
-bash deploy.sh deploy --tag v1.0.0 --registry sealos.hub:5000/opsiforce --node-ip 192.168.1.10
+# 仓库和 tag 与构建时一致，不需要节点 IP
+bash deploy.sh deploy --tag v1.0.0 --registry sealos.hub:5000/opsiforce
 
 # 查看启动状态
 kubectl -n opsiforce get pods
@@ -70,11 +70,11 @@ kubectl -n opsiforce get pods
 
 如果构建时没有指定版本（例如直接运行 Windows 的 `build.ps1`），将上面的 `--tag v1.0.0` 改为 `--tag local`。`deploy` 使用仓库中已经推送的镜像，不会重新构建或同步镜像。
 
-访问 **`https://192.168.1.10:30443`**。平台主入口不需要域名，使用固定测试用户。测试证书保存在 `.state/local/tls.crt`，浏览器需信任该证书。
+访问 **`http://节点地址:30080`**，或执行 `bash deploy.sh port-forward` 后访问 **`http://localhost:30080`**。测试环境使用固定用户，不自动创建证书，也不强制跳转 HTTPS。集群内回源地址为 `http://opsiforce-edge:8080`。生产模式使用 ClusterIP，并依赖公司认证入口传入受信任的用户头；不要直接公开未经认证的生产回源服务。
 
-部署按顺序创建基础资源、启动 PG / Redis、执行数据库迁移、启动应用；失败会停止。集群节点从内网仓库拉取镜像，无需访问外网下载构建依赖。私有仓库需要集群已有拉取凭据；可用 `IMAGE_PULL_SECRET=凭据名称 bash deploy.sh deploy --node-ip 节点IP` 指定 opsiforce 命名空间中已有的 Secret。
+部署按顺序创建基础资源、启动 PG / Redis、执行数据库迁移、启动应用；失败会停止。集群节点从内网仓库拉取镜像，无需访问外网下载构建依赖。私有仓库需要集群已有拉取凭据；可用 `IMAGE_PULL_SECRET=凭据名称 bash deploy.sh deploy` 指定 opsiforce 命名空间中已有的 Secret。
 
-`local` 是默认测试环境，以上命令无需填写。构建不需要节点 IP，节点 IP 只在部署或临时访问时使用。
+`local` 是默认测试环境，以上命令无需填写。构建不需要节点 IP，节点 IP 仅在 expose 临时访问命令中用于显示地址。
 
 ## 可选：导出镜像包
 
@@ -100,7 +100,7 @@ bash deploy.sh import
 ## 需要时再改的配置
 
 - 仓库：Windows 使用 `-Registry 主机:端口/命名空间`；Linux 使用 `--registry 主机:端口/命名空间`，构建和部署保持一致。
-- 镜像版本：默认 `local`。Windows 可用 `-Tag v2`；Linux 构建、推送、导入和部署都使用 `--tag v2`，例如 `bash deploy.sh deploy --tag v2 --node-ip 节点IP`。兼容原有 `TAG=v2` 环境变量，命令行选项优先。
+- 镜像版本：默认 `local`。Windows 可用 `-Tag v2`；Linux 构建、推送、导入和部署都使用 `--tag v2`，例如 `bash deploy.sh deploy --tag v2`。兼容原有 `TAG=v2` 环境变量，命令行选项优先。
 - 架构：Windows 可用 `-Platform linux/arm64`；Linux 可用 `PLATFORM=linux/arm64`，基础镜像也必须支持该架构。
 - 模型 Key：`OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 可以留空，之后再配置。没有有效模型时，AI 对话和代码生成不可用。国内模型还需要配置供应商地址和模型名。
 - 构建下载源：npm / Yarn 使用 npmmirror，apk / apt / pip 使用清华源，Go 使用 goproxy.cn。OpenCode 单独使用官方 npm 源，因为国内源缺少固定版本的 Linux x64 平台包；GitHub、SheetJS 和 code-server 等直链也需要构建机能访问外网。
@@ -113,17 +113,57 @@ Dockerfile 会先读取 `deploy/packages/` 中的本地安装包，找不到时�
 
 例如 amd64 构建使用 `deploy/packages/code-server_4.117.0_amd64.deb`。然后重跑原来的构建命令即可，不需要新参数。Windows 也支持相同方式。本地包和联网下载的包都会校验官方 SHA256；`.deb` 已加入 Git 忽略规则。校验来源为 [官方 v4.117.0 发布资产](https://api.github.com/repos/coder/code-server/releases/tags/v4.117.0)。
 
-## 保留原项目的预览限制
-
-前端继续使用原项目的 `VITE_*` 构建配置，Dockerfile 默认采用 `frontend/local-envs.sh` 中的测试值。这些值影响项目 App、VS Code、数据库界面的子域名链接；平台主页面和 API 通过 IP + NodePort 访问。没有增加前端运行时配置，也没有改写产品路由。
-
-无域名时，内嵌链接不会自动适配 NodePort。需要测试项目中的 App / VS Code / DB 时，先在平台打开项目，再在 `deploy` 目录执行：
+## 公司 CDN 回源
 
 ```bash
-kubectl -n opsiforce get pods -l app=opsiforce-agent -L opsiforce.io/environment-id
+# 首次配置一次公司实际业务根域名；域名变化无需重建前端镜像
+DOMAIN=ops.example.com PUBLIC_SCHEME=https bash deploy.sh deploy --tag v1.0.0
+```
+
+公司 CDN 负责 HTTPS 和证书，回源到 `opsiforce-edge:8080`（集群内）或测试 NodePort `30080`（集群外）。CDN 保留原始 Host，支持 WebSocket、SSE、较长请求超时，并关闭 API/SSE 缓存。路由范围包括主域名、`*.apps.<DOMAIN>`、`*.preview.apps.<DOMAIN>`。Code 和 DB 使用主域名下的路径，不再要求额外子域名。公网 DNS 和公司认证由现有体系配置。
+
+前端从 `/runtime-config.js` 读取业务域名和对外协议，后端同步使用相同配置。`DOMAIN` 只影响浏览器地址；PostgreSQL、Redis、Bifrost、Gotenberg、后端和代理之间均使用 Kubernetes Service DNS。`PUBLIC_SCHEME=http` 可用于具备 DNS 的 HTTP 测试环境。
+
+没有域名时，平台、聊天、Code 和 DB 均可通过同一 NodePort 使用。浏览器访问 `/api/code/<环境UUID>/` 和 `/api/db/<环境UUID>/`，入口通过 `opsiforce-proxy-vscode:3003`、`opsiforce-proxy-db:3004` 回源；代理校验用户权限、租户和项目访问权，再连接该环境的动态 Pod。浏览器本身不直接访问 Kubernetes Service DNS。
+
+Datasette 使用 `DB_VIEWER_BASE_URL=/api/db/<环境UUID>/` 生成资源和表链接；已有 Agent 需在任务空闲时重建 Pod 才能加载此进程参数。HTTP 下代码文件浏览和编辑可用，VS Code 的部分 Webview 扩展仍要求 HTTPS。App 的子域名预览需要实际 DNS，需要临时测试时：
+
+```bash
 bash deploy.sh expose local 环境UUID --node-ip 192.168.1.10
 ```
 
-使用输出的独立 NodePort 地址访问。这些临时测试端口直接连接项目 Pod，不经过平台登录和代理；项目休眠后需在平台唤醒，Pod 更换后重新执行 `expose`。
+这些临时端口直接连接项目 Pod，不经过平台认证，Pod 更换后需重新执行。不要用于公网生产入口。
 
-YAML 模板位于 `k8s/`，展开后的文件位于 `.generated/local/`。`.state/local/` 保存随机密钥和证书，重复部署时不要删除。这里只说明测试用法，生产接入留待后续处理。
+## Bifrost 渠道与模型
+
+1. 在 Bifrost 配置渠道名称、协议、地址、启用的 Key 和模型。名称区分大小写。Key 的模型列表可显式填写自定义模型，`*` 使用 Bifrost 已发现的目录。
+2. 平台每 30 秒自动同步。打开 Opsiforce 项目，使用聊天输入框旁唯一的模型选择器切换当前对话模型。
+3. 平台管理员在 **Settings → Defaults → 平台默认模型** 配置默认值，也可在那里手动刷新渠道。此设置用于未单独选模型的对话；已有对话的主动选择保持不变。
+
+真实渠道 Key 只存于 Bifrost；浏览器收到的只有渠道和模型名称，Agent 使用项目虚拟 Key。新项目及已有缺 Key 的项目会补建凭据，已有虚拟 Key 同步授权，不再引用固定渠道名单。模型目录和平台默认模型不再依赖镜像重建。
+
+目前使用 Bifrost 的 OpenAI Chat Completions 接口统一转发，渠道需支持聊天、流式响应和工具调用。Bifrost 返回目录不代表上游推理一定成功。图像、语音、纯推理端点不属于 Agent 聊天目录。
+
+模型规格从 Bifrost `/api/models/details` 分页读取，优先使用有效的 `context_length`、`max_input_tokens`、`max_output_tokens`，取消统一写死的 32768/4096。Bifrost 暂未提供 GLM 5.3 规格时，`glm-5.3` 和 `glm-5.3-flash` 按部署负责人提供的 1,000,000 token 上下文配置；这不代表已验证上游能处理完整 1M 输入。
+
+其他未知模型不写 `limit`，继承当前 OpenCode 的 200,000 上下文和 32,000 输出预留默认值。上下文是 Agent 决定何时压缩历史所需的本地规格，无法通过省略请求参数自动探测。输出预留也不同于请求参数：此集成不额外设置 `max_tokens`，实际默认输出长度由上游决定。聊天显示折叠的思考、工具执行和压缩记录，避免把这些过程全部隐藏为 Working。
+
+Bifrost 的 `source_of_truth: split` 保留未变更的配置项在后台的修改；文件配置内容改变仍可能在重启时覆盖对应项。部署不要删除 Bifrost 数据库或 `.state/local/secrets.env`。
+
+## 中文支持
+
+内嵌 OpenCode 支持简体和繁体中文，可依据浏览器语言加载，也可在其语言设置中切换。Agent 可接收中文提示词，中文回答能力取决于所选模型。Opsiforce 外层导航、项目管理和管理页面尚未全面国际化；本次新增模型设置提供中文文案。
+
+模板位于 `k8s/`，渲染文件位于 `.generated/local/`。`.state/local/` 保存随机密钥，升级必须复用，不能重新生成数据库密码。
+
+详细检查、镜像构建、集群恢复及真实对话结果见 [验证记录](VALIDATION.md)。
+
+## 当前虚拟机工作流与 HTTPS 影响
+
+本地修改并提交到 `origin/main`；虚拟机在 `/root/opsiforce` 执行 `git pull --ff-only`，再使用该目录下的脚本构建、部署。此前 `/root/opsiforce-model-sync` 是修复验证用的副本，不是后续日常构建目录。Git 拉取和镜像构建/推送本身不会更新正在运行的 Kubernetes 工作负载。
+
+当前 `http://12.2.40.40:30080` 已验证文字聊天、模型选择、Code 文件读取和 DB 查询。访问远程 IP 的 HTTP 页面时，以下功能受浏览器安全上下文限制：Code 的 Webview 扩展页面（例如部分 Markdown/Notebook 预览）、调用 Clipboard API 的复制按钮、麦克风/摄像头采集。HTTPS 能满足这一必要条件，但扩展、权限和业务配置仍需各自满足。参考 [code-server FAQ](https://coder.com/docs/code-server/FAQ)、[Clipboard API](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API)、[getUserMedia](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)。
+
+后续可在公司 CDN/反向代理终止 HTTPS，集群内继续使用 HTTP 和 Service DNS。HTTPS 主站中的 iframe 和 WebSocket 也必须使用相容的 HTTPS/WSS 地址，避免混合内容。增加 HTTPS 不要求搬迁数据库或项目文件。
+
+注意区分 HTTPS 与重新部署的影响：当前运行环境经过定向更新，保留了手动配置。仓库的全量部署模板仍将 Bifrost Service 定义为 ClusterIP，直接重跑 `deploy` 会覆盖手动开放的 `38080`；模板的默认租户/权限映射也不等同于当前集群的全部配置。全量发布前应先渲染并核对这些差异，复用 `/root/opsiforce/deploy/.state/local/secrets.env`；当前 HTTP 环境需明确设置 `PUBLIC_SCHEME=http`。本轮代码推送不执行这一步。

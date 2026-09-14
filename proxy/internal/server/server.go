@@ -353,47 +353,64 @@ func (s *Server) handleApp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSubdomain(w http.ResponseWriter, r *http.Request, surface backend.Surface) {
-	setCORSHeaders(w, r)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
-		return
+	prefix := "/api/code/"
+	if surface == backend.SurfaceDB {
+		prefix = "/api/db/"
 	}
-
-	projectID := extractProjectIDFromHost(r.Host)
+	projectID := ""
+	upstreamPath := pathOrSlash(r.URL.Path)
+	pathPrefix := ""
+	if strings.HasPrefix(r.URL.Path, prefix) {
+		parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, prefix), "/", 2)
+		projectID = parts[0]
+		if len(projectID) != environmentIDLength || !projectIDPattern.MatchString(projectID) {
+			writeJSONStatus(w, http.StatusBadRequest, notFoundBody)
+			return
+		}
+		pathPrefix = prefix + projectID
+		if len(parts) == 1 {
+			target := pathPrefix + "/"
+			if r.URL.RawQuery != "" {
+				target += "?" + r.URL.RawQuery
+			}
+			http.Redirect(w, r, target, http.StatusTemporaryRedirect)
+			return
+		}
+		upstreamPath = "/" + parts[1]
+	} else {
+		setCORSHeaders(w, r)
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		projectID = extractProjectIDFromHost(r.Host)
+	}
 	if projectID == "" {
-		writeJSONStatus(w, http.StatusBadRequest, []byte(`{"error":"Invalid subdomain"}`))
+		writeJSONStatus(w, http.StatusBadRequest, []byte(`{"error":"Invalid project route"}`))
 		return
 	}
-
-	ensured, err := s.resolve(r.Context(), projectID, surface, r.Header, "")
+	ensured, err := s.resolve(r.Context(), projectID, surface, r.Header, authSignature(r.Header))
 	if err != nil {
 		s.writeEnsureError(w, err)
 		return
 	}
-
 	if ensured.State != "ready" {
 		writeStateResponse(w, ensured.State)
 		return
 	}
-
-	targetBase := ensured.Upstream
-
-	targetURL, err := buildTargetURL(targetBase, pathOrSlash(r.URL.Path), r.URL.RawQuery)
+	// Both tools receive an unprefixed path. Datasette adds its configured
+	// base_url to generated links; forwarding the prefix duplicates it.
+	targetURL, err := buildTargetURL(ensured.Upstream, upstreamPath, r.URL.RawQuery)
 	if err != nil {
 		s.sendFailureResponse(w, r.Context(), projectID)
 		return
 	}
-
 	if isUpgradeRequest(r) {
 		release := s.wsKeepAlive.acquire(projectID, surface)
 		defer release()
 	}
-
 	s.serveReverseProxy(w, r, projectID, targetURL, reverseProxyOptions{
-		dropAcceptEncoding: true,
-		stripFrameHeaders:  true,
-		stripOriginUpgrade: true,
-		stripUserIdentity:  true,
+		dropAcceptEncoding: true, stripFrameHeaders: true, stripOriginUpgrade: true, stripUserIdentity: true, pathPrefix: pathPrefix,
 	})
 }
 
@@ -561,6 +578,7 @@ func (s *Server) roundTripAppRequest(
 }
 
 type reverseProxyOptions struct {
+	pathPrefix         string
 	dropAcceptEncoding bool
 	stripFrameHeaders  bool
 	stripOriginUpgrade bool
@@ -585,6 +603,10 @@ func (s *Server) serveReverseProxy(
 			proxyRequest.Out.URL.RawPath = targetURL.RawPath
 			proxyRequest.Out.URL.RawQuery = targetURL.RawQuery
 			proxyRequest.Out.Host = targetURL.Host
+			if options.pathPrefix != "" {
+				// Datasette derives absolute facet/export URLs from the public Host.
+				proxyRequest.Out.Host = proxyRequest.In.Host
+			}
 			passThroughForwardedHeaders(proxyRequest.Out.Header, proxyRequest.In.Header)
 			stripAuthProxyHeaders(proxyRequest.Out.Header)
 			if options.stripUserIdentity {
@@ -599,6 +621,22 @@ func (s *Server) serveReverseProxy(
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			sanitizeReverseProxyHeaders(resp.Header, options.stripFrameHeaders)
+			if options.pathPrefix != "" {
+				location := resp.Header.Get("Location")
+				if strings.HasPrefix(location, "/") && !strings.HasPrefix(location, "//") && !strings.HasPrefix(location, options.pathPrefix+"/") {
+					resp.Header.Set("Location", options.pathPrefix+location)
+				}
+				cookies := resp.Cookies()
+				if len(cookies) > 0 {
+					resp.Header.Del("Set-Cookie")
+					for _, cookie := range cookies {
+						if strings.HasPrefix(cookie.Path, "/") && !strings.HasPrefix(cookie.Path, options.pathPrefix+"/") {
+							cookie.Path = options.pathPrefix + cookie.Path
+						}
+						resp.Header.Add("Set-Cookie", cookie.String())
+					}
+				}
+			}
 			if resp.StatusCode < http.StatusBadRequest {
 				return nil
 			}
@@ -1065,6 +1103,9 @@ func jsonHeader(headers http.Header) string {
 
 func authSignature(headers http.Header) string {
 	hash := sha1.New()
-	_, _ = hash.Write([]byte(headers.Get("x-forwarded-groups")))
+	for _, name := range []string{"x-forwarded-groups", "x-forwarded-user", "x-forwarded-email"} {
+		_, _ = hash.Write([]byte(headers.Get(name)))
+		_, _ = hash.Write([]byte{0})
+	}
 	return hex.EncodeToString(hash.Sum(nil))
 }

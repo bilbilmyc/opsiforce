@@ -129,6 +129,7 @@ data:
   SERVICE_GATEWAY_URL: http://opsiforce-backend:3001/api/gateway
   EXTERNAL_SERVICES_URL: http://opsiforce-backend:3001/api/external-services/agent
   APPS_HOSTNAME: apps.${DOMAIN}${PORT_SUFFIX}
+  APP_PUBLIC_SCHEME: ${PUBLIC_SCHEME}
   WEBAPP_SERVICE_NAME: opsiforce-proxy-app
   WEBAPP_SERVICE_PORT: '3002'
   DEFAULT_TENANT_NAME: default
@@ -140,7 +141,7 @@ data:
     "can_publish_project", "can_delete_environment", "can_manage_users", "can_manage_schedules", "can_view_pods", "can_manage_external_integration",
     "can_view_external_services_usage", "can_manage_external_services", "can_view_platform_storage", "can_manage_platform_storage"],
     "tenants": ["default"]}}'
-  EXTERNAL_SERVICES_WEBHOOK_BASE_URL: https://${DOMAIN}${PORT_SUFFIX}
+  EXTERNAL_SERVICES_WEBHOOK_BASE_URL: ${PUBLIC_SCHEME}://${DOMAIN}${PORT_SUFFIX}
   MAILGUN_DOMAIN: ''
   MAILGUN_RECEIVE_DOMAIN: ''
   MAILGUN_SENDER: ''

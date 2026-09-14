@@ -9,13 +9,6 @@ data:
     worker_processes auto;
     events { worker_connections 10240; }
     http {
-      server {
-        listen 8080;
-        location = /healthz { return 200 "ok"; }
-        location / { return 302 https://$host:30443$request_uri; }
-      }
-      ssl_certificate /etc/nginx/tls/tls.crt;
-      ssl_certificate_key /etc/nginx/tls/tls.key;
       client_max_body_size 0;
       client_body_timeout 3600s;
       send_timeout 3600s;
@@ -32,37 +25,44 @@ data:
       proxy_set_header X-Forwarded-Preferred-Username "local";
       proxy_set_header X-Forwarded-Email "local@opsiforce.test";
       proxy_set_header X-Forwarded-Groups "opsiforce-admins";
-      proxy_set_header X-Forwarded-Proto https;
+      proxy_set_header X-Forwarded-Proto ${PUBLIC_SCHEME};
       proxy_read_timeout 86400s;
       proxy_send_timeout 86400s;
       server {
-        listen 8443 ssl default_server;
+        listen 8080 default_server;
         server_name _;
         location = /healthz { access_log off; return 200 'ok'; }
+        location = /runtime-config.js {
+          default_type application/javascript;
+          add_header Cache-Control "no-store";
+          return 200 'window.__OPSIFORCE_CONFIG__={"domain":"${DOMAIN}","scheme":"${PUBLIC_SCHEME}"};';
+        }
         location /api/gateway { return 403; }
         location /api/external-services/agent { return 403; }
         location /api/internal { return 403; }
+        location /api/code/ { proxy_pass http://opsiforce-proxy-vscode:3003; }
+        location /api/db/ { proxy_pass http://opsiforce-proxy-db:3004; }
         location /api/proxy { proxy_pass http://opsiforce-proxy-agent:3005; }
         location /api { proxy_pass http://opsiforce-backend:3001; }
         location / { proxy_pass http://opsiforce-frontend:8080; }
       }
       server {
-        listen 8443 ssl;
+        listen 8080;
         server_name ~^[a-f0-9-]+\.code\.${DOMAIN_REGEX}$;
         location / { proxy_pass http://opsiforce-proxy-vscode:3003; }
       }
       server {
-        listen 8443 ssl;
+        listen 8080;
         server_name ~^[a-f0-9-]+\.db\.${DOMAIN_REGEX}$;
         location / { proxy_pass http://opsiforce-proxy-db:3004; }
       }
       server {
-        listen 8443 ssl;
+        listen 8080;
         server_name ~^[a-f0-9-]+\.preview\.apps\.${DOMAIN_REGEX}$;
         location / { proxy_pass http://opsiforce-proxy-app:3002; }
       }
       server {
-        listen 8443 ssl;
+        listen 8080;
         server_name ~^[a-z0-9-]+\.apps\.${DOMAIN_REGEX}$;
         location / { proxy_pass http://opsiforce-proxy-app:3002; }
       }
@@ -78,13 +78,9 @@ spec:
     app: opsiforce-edge
   ports:
   - name: http
-    port: 80
+    port: 8080
     targetPort: 8080
     nodePort: 30080
-  - name: https
-    port: 443
-    targetPort: 8443
-    nodePort: 30443
   type: NodePort
 ---
 apiVersion: apps/v1
@@ -112,8 +108,6 @@ spec:
         ports:
         - name: http
           containerPort: 8080
-        - name: https
-          containerPort: 8443
         resources:
           requests:
             cpu: 100m
@@ -141,23 +135,7 @@ spec:
         - name: nginx
           mountPath: /etc/nginx/nginx.conf
           subPath: nginx.conf
-        - name: tls
-          mountPath: /etc/nginx/tls
-          readOnly: true
       volumes:
       - name: nginx
         configMap:
           name: opsiforce-edge
-      - name: tls
-        secret:
-          secretName: opsiforce-local-tls
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: opsiforce-local-tls
-  namespace: opsiforce
-type: kubernetes.io/tls
-data:
-  tls.crt: '${TLS_CRT_B64}'
-  tls.key: '${TLS_KEY_B64}'

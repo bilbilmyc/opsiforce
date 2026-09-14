@@ -3,7 +3,7 @@ import Spinner from '~/components/ui/spinner';
 
 export default function ProjectCodeTab(props: { environmentId: string }) {
   const [loading, setLoading] = createSignal(true);
-  const url = () => `https://${props.environmentId}.${import.meta.env.VITE_VSCODE_DOMAIN}/?folder=/workspace`;
+  const url = () => `/api/code/${encodeURIComponent(props.environmentId)}/?folder=/workspace`;
 
   createEffect(
     on(

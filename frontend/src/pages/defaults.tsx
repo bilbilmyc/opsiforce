@@ -8,6 +8,7 @@ import { Permission } from '~/constants/permissions';
 import { Clock, CircleDollarSign, SlidersHorizontal } from '~/components/icons';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '~/components/ui/tabs';
 import { Button } from '~/components/ui/button';
+import { PlatformModelSettings } from '~/components/settings/platform-model-settings';
 import { SettingsSection } from '~/components/settings/settings-section';
 import { TimeoutRow } from '~/components/ui/timeout-row';
 import { BudgetRow } from '~/components/ui/budget-row';
@@ -31,8 +32,11 @@ export function DefaultsPage() {
     <SettingsSection
       icon={SlidersHorizontal}
       title="Defaults"
-      description="The starting timeouts and budgets new organizations and projects are created with."
+      description="Manage the platform model default and the starting timeouts and budgets for organizations and projects."
     >
+      <Show when={canPlatform()}>
+        <PlatformModelSettings />
+      </Show>
       <Tabs value={scope()} onChange={(v) => setScope(v as Scope)}>
         <TabsList>
           <Show when={canPlatform()}>

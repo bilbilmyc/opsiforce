@@ -1,6 +1,6 @@
 # Agent model is owned by agent-config, not a tenant/platform default
 
-Status: accepted
+Status: superseded for Bifrost deployments (2026-09-14); see [0033](0033-bifrost-dynamic-models.md).
 
 The platform had two competing stores for "which LLM does the agent run on". `agent-config/agents.json` carries each agent's `model`, which the pod init container injects over the workspace `opencode.json` at startup — this is what actually runs. In parallel, migration `0014` created `global_agent_defaults` and `tenant_agent_defaults` tables with a `default_model` column, a `DefaultsService` read/write API, a `model-registry` of selectable models, and per-tenant seeding on tenant creation — mirroring the two-tier shape used for timeouts and budgets. The DB side was **write-only**: nothing read `default_model` at runtime, no UI ever exposed it, and the seeded value sat inert. Two sources of truth, one of them dead.
 

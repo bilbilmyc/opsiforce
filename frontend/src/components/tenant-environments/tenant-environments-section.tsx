@@ -1,3 +1,4 @@
+import { publicDomain } from '~/lib/public-url';
 import { For, Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { ENVIRONMENT_SLUG_MAX_LENGTH, ENVIRONMENT_SLUG_PATTERN, slugifyEnvironmentName } from '~/lib/app-url';
@@ -144,7 +145,7 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
                 <p class="break-all text-xs text-muted-foreground">
                   App URLs will look like{' '}
                   <span class="font-mono">
-                    {'<app-id>'}-{slug()}.{import.meta.env.VITE_WEBAPP_DOMAIN}
+                    {'<app-id>'}-{slug()}.{publicDomain('apps')}
                   </span>
                 </p>
               </Show>

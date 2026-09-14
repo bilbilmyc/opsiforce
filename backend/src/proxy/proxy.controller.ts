@@ -1,3 +1,6 @@
+import { UserService } from '../user/user.service';
+import { Perms } from '../permission/permission.constants';
+import { hasPermission } from '../permission/permission.utils';
 import {
   BadRequestException,
   Body,
@@ -54,7 +57,8 @@ export class ProxyController {
     private readonly projectService: ProjectService,
     private readonly projectEnvironmentService: ProjectEnvironmentService,
     private readonly tenantService: TenantService,
-    private readonly agentUpdateService: AgentUpdateService
+    private readonly agentUpdateService: AgentUpdateService,
+    private readonly userService: UserService
   ) {
     this.proxyControlToken = this.configService.getOrThrow<string>('proxyControlToken');
     this.appsHostname = this.configService.getOrThrow<string>('appsHostname');
@@ -65,7 +69,10 @@ export class ProxyController {
     @Param('environmentId') environmentId: string,
     @Body() body: ProxySurfaceBody,
     @Headers('x-proxy-control-token') token: string | undefined,
-    @Headers('x-forwarded-groups') groupsHeader: string | undefined
+    @Headers('x-forwarded-groups') groupsHeader: string | undefined,
+    @Headers('x-forwarded-user') userIdHeader?: string,
+    @Headers('x-forwarded-email') emailHeader?: string,
+    @Headers('x-forwarded-preferred-username') usernameHeader?: string
   ): Promise<EnsureProxyResponse> {
     this.assertToken(token);
 
@@ -74,9 +81,19 @@ export class ProxyController {
     const env = await this.projectEnvironmentService.findByIdOrNull(environmentId);
     if (!env) throw new NotFoundException(`Project environment ${environmentId} not found`);
 
-    if (surface === 'agent') {
+    if (surface === 'agent' || surface === 'vscode' || surface === 'db') {
       if (!env.tenantId) throw new BadRequestException(`Project environment ${environmentId} not yet claimed`);
       await this.assertProjectTenantAccess(env.tenantId, groupsHeader);
+    }
+
+    if (surface === 'vscode' || surface === 'db') {
+      if (!userIdHeader) throw new UnauthorizedException('No authenticated user');
+      const permission = surface === 'vscode' ? Perms.viewCodeTab : Perms.viewDbTab;
+      if (!hasPermission(groupsHeader ?? '', permission)) throw new ForbiddenException(`Missing permission: ${permission}`);
+      const userId = await this.userService.resolveUserId({
+        userId: userIdHeader, username: usernameHeader ?? userIdHeader, email: emailHeader ?? null, displayName: usernameHeader ?? null,
+      }, env.tenantId!);
+      await this.projectService.findOneForUser({ projectId: env.projectId, tenantId: env.tenantId!, userId });
     }
 
     const activity = activityForSurface(surface);

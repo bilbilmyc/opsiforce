@@ -84,8 +84,10 @@ func (c *Client) Ensure(ctx context.Context, projectID string, surface Surface, 
 	req.Header.Set("content-type", "application/json")
 	req.Header.Set("x-proxy-control-token", c.token)
 
-	if groups := headers.Get("x-forwarded-groups"); groups != "" {
-		req.Header.Set("x-forwarded-groups", groups)
+	for _, name := range []string{"x-forwarded-groups", "x-forwarded-user", "x-forwarded-email", "x-forwarded-preferred-username"} {
+		if value := headers.Get(name); value != "" {
+			req.Header.Set(name, value)
+		}
 	}
 
 	resp, err := c.client.Do(req)

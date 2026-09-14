@@ -1,6 +1,6 @@
 # The model catalog is a file baked into the agent image
 
-Status: accepted (2026-09-04)
+Status: superseded for Bifrost deployments (2026-09-14); see [0033](0033-bifrost-dynamic-models.md).
 
 On opencode 1.18.18 the picker was constrained with `provider.<id>.whitelist`. OpenCode v2 removed that field with no replacement, and a provider named in `opencode.json` is force-enabled together with its entire models.dev catalog; the `models` map only overlays metadata onto it. The v2 embed therefore showed 69 models and the "OpenCode Zen" provider. The `provider.use` deny we had placed under `permissions` was inert: only `experimental.policies` reads that action.
 

@@ -107,8 +107,7 @@ The AI coding assistant a user converses with inside a ProjectEnvironment's pod.
 _Avoid_: Bot, Assistant (non-canonical)
 
 **Agent Model**:
-The LLM an Agent runs on. A platform-level property of the Agent profile, uniform across every tenant and Project — not a tenant- or project-configurable setting. Changing it is a platform rollout, not a default anyone tunes.
-_Avoid_: Default model (it is **not** a configurable default — Defaults covers timeouts and budgets only)
+The LLM an Agent runs on. In Bifrost deployments, channels and models are discovered from Bifrost; platform administrators select a persistent default and users select a model for their conversation. Channel changes are synchronized without rebuilding the agent image. Standalone deployments retain the agent-config fallback. See ADR 0033.
 
 **Agent Status**:
 Whether an Agent is **Working** — processing a run it was prompted to do, including any mid-run provider retries — or **Idle** (no run in flight; a suspended or absent pod is simply Idle, not a third state). Carried per ProjectEnvironment, since each environment has its own Agent; a Project counts as Working when any of its environments' Agents is, shown at-a-glance beside the project in the sidebar. Distinct from Keep-alive's *agent activity*, which is the user's traffic touching the pod — not the Agent thinking.

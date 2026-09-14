@@ -704,7 +704,7 @@ data:
           }
         }
       },
-      "source_of_truth": "config.json"
+      "source_of_truth": "split"
     }
 ---
 apiVersion: v1

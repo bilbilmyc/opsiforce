@@ -106,7 +106,8 @@ export function normalizeProviderList(
       status: model.status,
       options: model.settings ?? {},
       headers: model.headers ?? {},
-      release_date: new Date(model.time.released).toISOString().slice(0, 10),
+      // Custom gateway models may have no release date (0). Keep it unknown so the picker does not hide them as 1970 models.
+      release_date: model.time.released > 0 ? new Date(model.time.released).toISOString().slice(0, 10) : "",
       variants: Object.fromEntries(model.variants.map((variant) => [variant.id, variant.settings ?? {}])),
     }
   }

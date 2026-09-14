@@ -37,7 +37,7 @@ export const SETTINGS_TABS: SettingsTab[] = [
   {
     to: '/settings/defaults',
     label: 'Defaults',
-    description: 'The starting timeouts and budgets new organizations and projects are created with.',
+    description: 'Platform model default, timeouts and budgets.',
     group: 'Configuration',
     icon: SlidersHorizontal,
     isPermitted: (has) => has(Permission.managePlatformDefaults) || has(Permission.manageTenantDefaults),

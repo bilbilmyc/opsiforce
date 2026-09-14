@@ -838,7 +838,7 @@ export class ProjectPoolService implements OnApplicationBootstrap, OnModuleDestr
       }
     }
 
-    if (!modelSelection) return true;
+    if (this.bifrostService.isEnabled() || !modelSelection) return true;
     const configPath = join(this.storageMountPath, directory, '.opencode', 'opencode.json');
     try {
       const config = JSON.parse(await readFile(configPath, 'utf8')) as {

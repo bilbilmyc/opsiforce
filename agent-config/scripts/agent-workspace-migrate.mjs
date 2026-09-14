@@ -115,6 +115,17 @@ async function copyAgentOwnedFiles() {
   await mkdir(path.join(workspace, ".opencode", "agents"), { recursive: true })
   await cp(path.join(opencodeRoot, "opencode.json"), opencodeConfigPath)
   await applyOpenCodeConfig(model, variant)
+  const dynamic = process.env.OPSIFORCE_MODEL_CONFIG || (
+    currentConfig.plugins?.includes('-opencode.models.dev')
+      ? JSON.stringify({ model: currentConfig.model, providers: currentConfig.providers, plugins: currentConfig.plugins }) : ''
+  )
+  if (dynamic) {
+    const runtime = JSON.parse(dynamic)
+    const config = await readJson(opencodeConfigPath, {})
+    await writeJson(opencodeConfigPath, { ...config, ...runtime, agents: {
+      ...config.agents, [agentName]: { ...config.agents?.[agentName], model: `${runtime.model}#default` },
+    } })
+  }
   await cp(path.join(agentRoot, "agent.md"), path.join(workspace, ".opencode", "agents", `${agentName}.md`))
   await rm(path.join(workspace, ".opencode", "skills"), { recursive: true, force: true })
   if (await exists(path.join(agentRoot, "skills"))) {

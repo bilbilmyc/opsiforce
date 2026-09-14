@@ -32,6 +32,7 @@ guard dbviewer datasette serve \
   "${EXTERNAL_SERVICES_DB}" \
   --host 0.0.0.0 --port "${DB_VIEWER_PORT}" \
   --cors --create \
+  --setting base_url "${DB_VIEWER_BASE_URL:-/}" \
   --setting sql_time_limit_ms "${DB_VIEWER_SQL_TIME_LIMIT_MS}" \
   --metadata /opt/opencode/datasette-metadata.yml &
 

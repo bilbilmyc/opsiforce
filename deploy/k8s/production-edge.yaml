@@ -22,16 +22,23 @@ data:
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection $connection_upgrade;
       proxy_set_header Host $http_host;
-      proxy_set_header X-Forwarded-Proto https;
+      proxy_set_header X-Forwarded-Proto ${PUBLIC_SCHEME};
       proxy_read_timeout 86400s;
       proxy_send_timeout 86400s;
       server {
         listen 8080 default_server;
         server_name _;
         location = /healthz { access_log off; return 200 'ok'; }
+        location = /runtime-config.js {
+          default_type application/javascript;
+          add_header Cache-Control "no-store";
+          return 200 'window.__OPSIFORCE_CONFIG__={"domain":"${DOMAIN}","scheme":"${PUBLIC_SCHEME}"};';
+        }
         location /api/gateway { return 403; }
         location /api/external-services/agent { return 403; }
         location /api/internal { return 403; }
+        location /api/code/ { proxy_pass http://opsiforce-proxy-vscode:3003; }
+        location /api/db/ { proxy_pass http://opsiforce-proxy-db:3004; }
         location /api/proxy { proxy_pass http://opsiforce-proxy-agent:3005; }
         location /api { proxy_pass http://opsiforce-backend:3001; }
         location / { proxy_pass http://opsiforce-frontend:8080; }
@@ -49,6 +56,11 @@ data:
       server {
         listen 8080;
         server_name ~^[a-f0-9-]+\.preview\.apps\.${DOMAIN_REGEX}$;
+        location / { proxy_pass http://opsiforce-proxy-app:3002; }
+      }
+      server {
+        listen 8080;
+        server_name ~^[a-z0-9-]+\.apps\.${DOMAIN_REGEX}$;
         location / { proxy_pass http://opsiforce-proxy-app:3002; }
       }
     }

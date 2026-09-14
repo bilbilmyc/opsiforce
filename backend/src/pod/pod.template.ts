@@ -25,6 +25,7 @@ export interface PodTemplateOptions {
   openaiApiKey?: string;
   agentName?: string;
   bifrostProxyUrl?: string;
+  agentModelConfig?: string;
   bifrostApiKey?: string;
   bifrostBackendApiKey?: string;
   gatewayApiKey?: string;
@@ -75,7 +76,10 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
           name: 'init-config',
           image: options.agentContainerImage,
           imagePullPolicy: options.imagePullPolicy,
-          env: [{ name: 'AGENT_NAME', value: resolvedAgentName }],
+          env: [
+            { name: 'AGENT_NAME', value: resolvedAgentName },
+            ...(options.agentModelConfig ? [{ name: 'OPSIFORCE_MODEL_CONFIG', value: options.agentModelConfig }] : []),
+          ],
           command: [
             'sh',
             '-c',
@@ -106,6 +110,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             { name: 'XDG_CACHE_HOME', value: '/workspace/.xdg/cache' },
             { name: 'XDG_STATE_HOME', value: '/workspace/.xdg/state' },
             { name: 'AGENT_NAME', value: resolvedAgentName },
+            ...(routingId ? [{ name: 'DB_VIEWER_BASE_URL', value: `/api/db/${routingId}/` }] : []),
             ...(options.controlToken
               ? [
                   { name: 'OPSIFORCE_CONTROL_TOKEN', value: options.controlToken },
@@ -124,6 +129,7 @@ export function buildPodSpec(options: PodTemplateOptions): k8s.V1Pod {
             ...(options.bifrostApiKey && options.bifrostProxyUrl
               ? [
                   { name: 'OPENAI_API_KEY', value: options.bifrostApiKey },
+                  ...(options.agentModelConfig ? [{ name: 'OPSIFORCE_MODEL_CONFIG', value: options.agentModelConfig }] : []),
                   { name: 'OPENAI_BASE_URL', value: options.bifrostProxyUrl },
                   { name: 'ANTHROPIC_API_KEY', value: options.bifrostApiKey },
                   {
