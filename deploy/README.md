@@ -160,6 +160,25 @@ Bifrost 的 `source_of_truth: split` 保留未变更的配置项在后台的修�
 
 ## 当前虚拟机工作流与 HTTPS 影响
 
+### 安装测试入口控制器
+
+40 的集群已存在 IngressRoute CRD；控制器通过 `install-ingress.sh` 安装为 Traefik DaemonSet。版本固定为 Helm Chart 41.5.0 / Traefik v3.7.13。配置在 `traefik/values.yaml`，无域名的 HTTP 路由在 `traefik/opsiforce-http.yaml`，不需要 `--node-ip`。
+
+首次将官方镜像同步到现有内网仓库，然后在项目根目录执行：
+
+```bash
+docker pull traefik:v3.7.13
+docker tag traefik:v3.7.13 sealos.hub:5000/opsiforce/traefik:v3.7.13
+docker push sealos.hub:5000/opsiforce/traefik:v3.7.13
+bash deploy/install-ingress.sh
+```
+
+控制器使用节点的 80/443 端口，现有 `30080` 和 `38080` 保留；未配置证书时只使用 HTTP 80，不强制 HTTPS。HTTP IngressRoute 按路径 `/` 转发到 `opsiforce-edge:8080`，再沿用现有平台路由。该入口继承当前测试身份配置，正式公开管理平台前需要接入公司认证。
+
+这一步安装的是入口，不会让 `*.localtest.me` 自动指向虚拟机，也没有安装原 Helm 方案的 OIDC 插件。当前 App 预览仍使用独立主机名；实现纯 IP 下的自动预览还需适配应用路径、资源地址和 Vite HMR。开发预览无需发布：应用开发服务启动并写入 `app/app.meta.json` 后，平台显示预览窗口；Production 发布是后续独立步骤。
+
+### 日常构建与 HTTPS
+
 本地修改并提交到 `origin/main`；虚拟机在 `/root/opsiforce` 执行 `git pull --ff-only`，再使用该目录下的脚本构建、部署。此前 `/root/opsiforce-model-sync` 是修复验证用的副本，不是后续日常构建目录。Git 拉取和镜像构建/推送本身不会更新正在运行的 Kubernetes 工作负载。
 
 当前 `http://12.2.40.40:30080` 已验证文字聊天、模型选择、Code 文件读取和 DB 查询。访问远程 IP 的 HTTP 页面时，以下功能受浏览器安全上下文限制：Code 的 Webview 扩展页面（例如部分 Markdown/Notebook 预览）、调用 Clipboard API 的复制按钮、麦克风/摄像头采集。HTTPS 能满足这一必要条件，但扩展、权限和业务配置仍需各自满足。参考 [code-server FAQ](https://coder.com/docs/code-server/FAQ)、[Clipboard API](https://developer.mozilla.org/en-US/docs/Web/API/Clipboard_API)、[getUserMedia](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)。
