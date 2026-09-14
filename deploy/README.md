@@ -25,11 +25,11 @@ powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1
 
 ```bash
 docker login sealos.hub:5000
-bash deploy.sh sync
-bash deploy.sh build
+bash deploy.sh build --tag v1.0.0 --registry sealos.hub:5000/opsiforce
+bash deploy.sh sync --registry sealos.hub:5000/opsiforce
 ```
 
-`sync` 同步 5 个第三方运行镜像，已同步时可跳过。`build` 构建并推送 4 个项目镜像。构建机只需要 Docker，不要求安装 Node、Go 或 kubectl。
+`build` 构建并推送 4 个项目镜像，已成功时无需重复。`sync` 从阿里云的 `mayc` 仓库同步 5 个第三方运行镜像到内网仓库，保留各自的固定版本，无需指定 `--tag`；已同步时可跳过。同步机器需要同时访问阿里云和内网仓库。构建机只需要 Docker，不要求安装 Node、Go 或 kubectl。
 
 ## 指定版本、仓库或仅保留本地镜像
 
@@ -61,12 +61,14 @@ powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1 -Tag v1.0.0 -NoPush
 将最新 `deploy` 目录复制到虚拟机。预先准备 Bash、kubectl、openssl、envsubst（gettext），确认 kubectl 指向测试集群。在 `deploy` 目录执行：
 
 ```bash
-# 把示例 IP 改成浏览器能访问的 Kubernetes 节点 IP
-bash deploy.sh deploy --node-ip 192.168.1.10
+# 仓库和 tag 与构建时一致；把示例 IP 改成浏览器能访问的 Kubernetes 节点 IP
+bash deploy.sh deploy --tag v1.0.0 --registry sealos.hub:5000/opsiforce --node-ip 192.168.1.10
 
 # 查看启动状态
 kubectl -n opsiforce get pods
 ```
+
+如果构建时没有指定版本（例如直接运行 Windows 的 `build.ps1`），将上面的 `--tag v1.0.0` 改为 `--tag local`。`deploy` 使用仓库中已经推送的镜像，不会重新构建或同步镜像。
 
 访问 **`https://192.168.1.10:30443`**。平台主入口不需要域名，使用固定测试用户。测试证书保存在 `.state/local/tls.crt`，浏览器需信任该证书。
 

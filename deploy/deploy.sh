@@ -45,16 +45,23 @@ while [[ $# -gt 0 ]]; do
 done
 case "$ACTION" in sync|build|push|import|deploy|render|port-forward|expose) ;; *)
   cat <<EOF
-构建镜像不需要节点 IP：Windows 执行 build.ps1，Linux 执行 bash deploy.sh build。
-构建成功后，在虚拟机的 deploy 目录执行：
-  bash deploy.sh deploy --node-ip 192.168.1.10  # 改成内网 Kubernetes 节点 IP
+测试环境按三步执行，以下命令均在 deploy 目录运行：
+  # 1. 在联网构建机上构建并推送项目镜像；已成功时跳过
+  bash deploy.sh build --tag v1.0.0 --registry sealos.hub:5000/opsiforce
+  # 2. 在能访问阿里云和内网仓库的机器上，同步第三方运行镜像
+  bash deploy.sh sync --registry sealos.hub:5000/opsiforce
+  # 3. 在已配置 kubectl 的内网机器上部署；示例 IP 改成可访问的 Kubernetes 节点 IP
+  bash deploy.sh deploy --tag v1.0.0 --registry sealos.hub:5000/opsiforce --node-ip 192.168.1.10
+
+sync 从 $SOURCE_REGISTRY 同步 nginx、bifrost、gotenberg、postgres、redis，保留各自版本，无需 --tag。
+deploy 使用已推送的镜像，创建资源、执行数据库迁移并等待服务启动，不重新构建。
+部署成功后访问 https://节点IP:30443。
 
 默认使用测试环境，无需填写 local；默认仓库为 sealos.hub:5000/opsiforce。
 更换仓库时加 --registry 主机:端口/命名空间，须与 Windows 的 -Registry 一致。
 使用 --tag 指定镜像版本，默认 local（生产为 prod）；命令行优先于 TAG 环境变量。
 
-构建用法：
-  bash deploy.sh build --tag v1.0.0 --registry sealos.hub:5000/opsiforce
+可选用法：
   bash deploy.sh build --tag v1.0.0 --no-push  # 只构建，保留在本地
   bash deploy.sh push --tag v1.0.0            # 稍后单独推送，不重新构建
 build 默认先构建全部选定镜像，再推送；推送失败时本地镜像仍保留，退出码为 2。
@@ -63,10 +70,12 @@ build 默认先构建全部选定镜像，再推送；推送失败时本地镜�
   docker login sealos.hub:5000
   bash deploy.sh import                       # 导入全部镜像并推送到内网仓库
 
-其他用法（当前流程不用执行）：
+命令说明：
   build         构建项目镜像并自动推送
   push          推送已经构建的项目镜像
   sync          在联网机器上同步第三方镜像到目标仓库
+  deploy        使用 YAML 部署服务，自动执行数据库迁移并等待启动
+  import        导入 Windows 导出的镜像包并推送到目标仓库
   render        仅生成 YAML
   port-forward  将平台入口转发到本机 30443 端口
   expose        为已启动的项目开放临时 NodePort
