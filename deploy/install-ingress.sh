@@ -10,10 +10,11 @@ helm repo update traefik
 helm pull traefik/traefik --version "$CHART_VERSION" --destination "$STATE"
 tar -xzf "$STATE/traefik-$CHART_VERSION.tgz" -C "$STATE"
 
-# Existing CRDs are not Helm-owned. Update only Traefik Proxy's definitions,
-# then skip Helm's CRD installation; leave unrelated Hub/Gateway CRDs alone.
+# Keep a copy before updating CRDs left by a previous installation. Manage only
+# Traefik Proxy's definitions, leaving unrelated Hub/Gateway CRDs alone.
+kubectl get crd -o yaml > "$STATE/crds-before-$(date -u +%Y%m%d%H%M%S).yaml"
 for crd in "$STATE"/traefik/crds/traefik.io_*.yaml; do
-  kubectl apply --server-side --field-manager=opsiforce-ingress -f "$crd"
+  kubectl apply --server-side --force-conflicts --field-manager=opsiforce-ingress -f "$crd"
 done
 helm upgrade --install traefik "$STATE/traefik-$CHART_VERSION.tgz" \
   --namespace traefik --create-namespace --skip-crds \
