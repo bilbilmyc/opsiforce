@@ -31,6 +31,31 @@ bash deploy.sh build
 
 `sync` 同步 5 个第三方运行镜像，已同步时可跳过。`build` 构建并推送 4 个项目镜像。构建机只需要 Docker，不要求安装 Node、Go 或 kubectl。
 
+## 指定版本、仓库或仅保留本地镜像
+
+`build` 默认推送，不需要额外加 push 选项。
+
+```bash
+# Linux：指定版本和仓库，构建后自动推送
+bash deploy.sh build --tag v1.0.0 --registry sealos.hub:5000/opsiforce
+
+# Linux：只构建，不推送
+bash deploy.sh build --tag v1.0.0 --no-push
+
+# Linux：稍后单独推送，不重新构建（仓库和 tag 与构建时保持一致）
+bash deploy.sh push --tag v1.0.0 --registry sealos.hub:5000/opsiforce
+```
+
+```powershell
+# Windows：指定版本和仓库，构建后自动推送
+powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1 -Tag v1.0.0 -Registry sealos.hub:5000/opsiforce
+
+# Windows：只构建并准备全部 9 个镜像，不推送、不导出
+powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1 -Tag v1.0.0 -NoPush
+```
+
+两端都会先完成全部镜像的准备，再开始推送。目标仓库访问受限或推送失败时，本地镜像和标签仍保留，脚本提示未完成推送并返回退出码 `2`；不会自动继续部署。构建或依赖下载失败仍会立即停止。`--no-push` / `-NoPush` 主动跳过推送时返回成功；这不影响从源仓库下载基础镜像和依赖。
+
 ## 在内网虚拟机部署
 
 将最新 `deploy` 目录复制到虚拟机。预先准备 Bash、kubectl、openssl、envsubst（gettext），确认 kubectl 指向测试集群。在 `deploy` 目录执行：
@@ -73,7 +98,7 @@ bash deploy.sh import
 ## 需要时再改的配置
 
 - 仓库：Windows 使用 `-Registry 主机:端口/命名空间`；Linux 使用 `--registry 主机:端口/命名空间`，构建和部署保持一致。
-- 镜像版本：默认 `local`。Windows 可用 `-Tag v2`；Linux 构建、导入和部署都使用 `TAG=v2 bash deploy.sh ...`。
+- 镜像版本：默认 `local`。Windows 可用 `-Tag v2`；Linux 构建、推送、导入和部署都使用 `--tag v2`，例如 `bash deploy.sh deploy --tag v2 --node-ip 节点IP`。兼容原有 `TAG=v2` 环境变量，命令行选项优先。
 - 架构：Windows 可用 `-Platform linux/arm64`；Linux 可用 `PLATFORM=linux/arm64`，基础镜像也必须支持该架构。
 - 模型 Key：`OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 可以留空，之后再配置。没有有效模型时，AI 对话和代码生成不可用。国内模型还需要配置供应商地址和模型名。
 - 构建下载源：npm / Yarn 使用 npmmirror，apk / apt / pip 使用清华源，Go 使用 goproxy.cn。GitHub、SheetJS 和 code-server 等直链仍需要构建机能访问外网。

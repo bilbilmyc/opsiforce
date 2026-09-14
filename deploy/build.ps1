@@ -5,14 +5,16 @@
 在项目根目录执行：powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1
 构建和推送不需要节点 IP，节点地址只在部署时填写。
 加 -Mode export 只导出 images.tar；加 -Mode both 同时推送和导出。
+加 -Tag 指定版本、-Registry 指定仓库；加 -NoPush 只构建并保留本地镜像。
 #>
 [CmdletBinding()]
 param(
     [ValidateSet('push', 'export', 'both')]
     [string]$Mode = 'push',
     [string]$Registry = 'sealos.hub:5000/opsiforce',
-    [ValidatePattern('^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$')]
+    [ValidatePattern('^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$')]
     [string]$Tag = 'local',
+    [switch]$NoPush,
     [ValidateSet('linux/amd64', 'linux/arm64')]
     [string]$Platform = 'linux/amd64'
 )
@@ -34,6 +36,9 @@ function Invoke-Docker {
 }
 
 try {
+    if ($NoPush -and $Mode -ne 'push') {
+        throw '-NoPush 用于只构建；如需导出，请使用 -Mode export，不要同时指定。'
+    }
     $Registry = $Registry.TrimEnd('/')
     if ($Registry -cnotmatch '^[a-z0-9][a-z0-9.-]*(:[0-9]+)?(/[a-z0-9][a-z0-9._-]*)+$') {
         throw 'Registry 请填写 主机[:端口]/命名空间，不要包含 http(s)://。'
@@ -55,6 +60,8 @@ try {
         $BuildArgs = @('buildx', 'build', '--load', '--platform', $Platform,
             '-t', $Image, '-f', (Join-Path $PSScriptRoot "docker/Dockerfile.$Component"))
         Invoke-Docker -DockerArgs ($BuildArgs + @($ProjectRoot))
+        # 打目标仓库标签只操作本地镜像，不需要连接仓库。
+        Invoke-Docker -DockerArgs @('tag', $Image, "$Registry/opsiforce-${Component}:$Tag")
         $Images += $Image
     }
 
@@ -65,6 +72,7 @@ try {
         Write-Host "准备运行镜像：$Dependency"
         Invoke-Docker -DockerArgs @('pull', '--platform', $Platform, "$SourceRegistry/$Dependency")
         Invoke-Docker -DockerArgs @('tag', "$SourceRegistry/$Dependency", "opsiforce/$Dependency")
+        Invoke-Docker -DockerArgs @('tag', "opsiforce/$Dependency", "$Registry/$Dependency")
         $Images += "opsiforce/$Dependency"
     }
 
@@ -76,28 +84,38 @@ try {
         Write-Host "打包完成：$Archive"
     }
 
+    if ($NoPush) {
+        Write-Host '全部 9 个镜像已保留在本地，未推送，也未导出 tar。'
+        exit 0
+    }
+
     if ($Mode -eq 'push' -or $Mode -eq 'both') {
         foreach ($Image in $Images) {
             $TargetImage = "$Registry/" + $Image.Substring('opsiforce/'.Length)
             Write-Host "推送镜像：$TargetImage"
-            Invoke-Docker -DockerArgs @('tag', $Image, $TargetImage)
-            Invoke-Docker -DockerArgs @('push', $TargetImage)
+            try {
+                Invoke-Docker -DockerArgs @('push', $TargetImage)
+            } catch {
+                [Console]::Error.WriteLine("推送失败：$TargetImage。全部 9 个镜像仍在本地，本次未完成推送。")
+                [Console]::Error.WriteLine('仓库恢复后可重跑原命令复用构建缓存，或使用 docker push 推送本地镜像。')
+                exit 2
+            }
         }
         Write-Host "全部 9 个镜像已推送到：$Registry"
     }
 
-    $TagPrefix = ''
-    if ($Tag -ne 'local') { $TagPrefix = "TAG=$Tag " }
+    $TagOption = ''
+    if ($Tag -ne 'local') { $TagOption = " --tag $Tag" }
     $RegistryOption = ''
     if ($Registry -ne 'sealos.hub:5000/opsiforce') { $RegistryOption = " --registry $Registry" }
     Write-Host '将 deploy 目录复制到内网虚拟机，在该目录执行：'
     if ($Mode -eq 'export') {
         Write-Host '  请一并复制 images.tar，然后执行：'
         Write-Host "  docker login $($Registry.Split('/')[0])"
-        Write-Host "  ${TagPrefix}bash deploy.sh import$RegistryOption"
+        Write-Host "  bash deploy.sh import$TagOption$RegistryOption"
     }
     Write-Host '  将下面的“节点IP”替换成 Kubernetes 节点地址：'
-    Write-Host "  ${TagPrefix}bash deploy.sh deploy --node-ip 节点IP$RegistryOption"
+    Write-Host "  bash deploy.sh deploy --node-ip 节点IP$TagOption$RegistryOption"
 } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
     exit 1

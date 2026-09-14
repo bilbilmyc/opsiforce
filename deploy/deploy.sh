@@ -17,6 +17,7 @@ ACTION=${1:-help}
 [[ $# -eq 0 ]] || shift
 PROFILE=local
 COMPONENT=all
+NO_PUSH=false
 position=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -24,6 +25,14 @@ while [[ $# -gt 0 ]]; do
       [[ -n "${2:-}" && "$2" != --* ]] || { echo '--registry 后需要填写 主机[:端口]/命名空间。' >&2; exit 1; }
       REGISTRY=$2; shift 2;;
     --registry=*) REGISTRY=${1#*=}; shift;;
+    --tag)
+      [[ -n "${2:-}" && "$2" != --* ]] || { echo '--tag 后需要填写镜像版本，例如 v1.0.0。' >&2; exit 1; }
+      TAG=$2; shift 2;;
+    --tag=*)
+      TAG=${1#*=}
+      [[ -n "$TAG" ]] || { echo '--tag 不能为空。' >&2; exit 1; }
+      shift;;
+    --no-push) NO_PUSH=true; shift;;
     --node-ip)
       [[ -n "${2:-}" ]] || { echo '--node-ip 后需要填写节点 IPv4 地址。' >&2; exit 1; }
       NODE_IP=$2; shift 2;;
@@ -42,6 +51,13 @@ case "$ACTION" in sync|build|push|import|deploy|render|port-forward|expose) ;; *
 
 默认使用测试环境，无需填写 local；默认仓库为 sealos.hub:5000/opsiforce。
 更换仓库时加 --registry 主机:端口/命名空间，须与 Windows 的 -Registry 一致。
+使用 --tag 指定镜像版本，默认 local（生产为 prod）；命令行优先于 TAG 环境变量。
+
+构建用法：
+  bash deploy.sh build --tag v1.0.0 --registry sealos.hub:5000/opsiforce
+  bash deploy.sh build --tag v1.0.0 --no-push  # 只构建，保留在本地
+  bash deploy.sh push --tag v1.0.0            # 稍后单独推送，不重新构建
+build 默认先构建全部选定镜像，再推送；推送失败时本地镜像仍保留，退出码为 2。
 
 如果 Windows 选择了仅导出，则一并复制 images.tar，部署前先执行：
   docker login sealos.hub:5000
@@ -55,7 +71,7 @@ case "$ACTION" in sync|build|push|import|deploy|render|port-forward|expose) ;; *
   port-forward  将平台入口转发到本机 30443 端口
   expose        为已启动的项目开放临时 NodePort
 
-完整格式：$0 命令 [local|prod] [组件|环境UUID] [--registry 仓库地址] [--node-ip 节点IP]
+完整格式：$0 命令 [local|prod] [组件|环境UUID] [--tag 版本] [--registry 仓库地址] [--node-ip 节点IP] [--no-push]
 组件可选 all、backend、frontend、runtime-proxy、agent，默认 all。
 --node-ip 仅部署、渲染和临时访问时使用，构建和推送不需要。
 其他配置见 deploy/README.md；模型 Key 可以留空。
@@ -66,7 +82,8 @@ REGISTRY=${REGISTRY%/}
 [[ "$REGISTRY" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?(/[a-z0-9][a-z0-9._-]*)+$ ]] || { echo '仓库地址格式错误，请使用 主机[:端口]/命名空间，不要包含 http(s)://。' >&2; exit 1; }
 [[ "$PROFILE" == local || "$PROFILE" == prod ]] || { echo '环境只能是 local（测试）或 prod（生产）。' >&2; exit 1; }
 TAG=${TAG:-$PROFILE}
-[[ "$TAG" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$ ]] || { echo '镜像标签 TAG 格式错误。' >&2; exit 1; }
+[[ "$TAG" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$ ]] || { echo '镜像标签 TAG 格式错误，长度不能超过 128 个字符。' >&2; exit 1; }
+[[ "$NO_PUSH" == false || "$ACTION" == build ]] || { echo '--no-push 仅用于 build。' >&2; exit 1; }
 if [[ "$ACTION" != expose ]]; then
   case "$COMPONENT" in all) COMPONENTS=(backend frontend runtime-proxy agent);; backend|frontend|runtime-proxy|agent) COMPONENTS=("$COMPONENT");; *) echo '未知镜像组件，请使用 all、backend、frontend、runtime-proxy 或 agent。' >&2; exit 1;; esac
 fi
@@ -101,13 +118,29 @@ if [[ "$ACTION" == import ]]; then
   exit 0
 fi
 if [[ "$ACTION" == build || "$ACTION" == push ]]; then
+  images=()
   for component in "${COMPONENTS[@]}"; do
     image="$REGISTRY/opsiforce-$component:$TAG"
-    if [[ "$ACTION" == push ]]; then docker push "$image"; continue; fi
-    args=(buildx build --load --platform "$PLATFORM" -t "$image" -f "$DIR/docker/Dockerfile.$component")
-    docker "${args[@]}" "$ROOT"
-    docker push "$image"
+    images+=("$image")
+    if [[ "$ACTION" == build ]]; then
+      args=(buildx build --load --platform "$PLATFORM" -t "$image" -f "$DIR/docker/Dockerfile.$component")
+      docker "${args[@]}" "$ROOT"
+    fi
   done
+  if [[ "$NO_PUSH" == true ]]; then
+    echo "已构建 ${#images[@]} 个镜像，保留在本地，未推送。"
+    exit 0
+  fi
+  for image in "${images[@]}"; do
+    if ! docker push "$image"; then
+      echo "推送失败：${image}。本地镜像仍保留，本次未完成推送。" >&2
+      printf '仓库恢复后执行：' >&2
+      printf '%q ' bash "$0" push "$PROFILE" "$COMPONENT" --tag "$TAG" --registry "$REGISTRY" >&2
+      printf '\n' >&2
+      exit 2
+    fi
+  done
+  echo "全部 ${#images[@]} 个项目镜像已推送到：$REGISTRY"
   exit 0
 fi
 
