@@ -103,6 +103,14 @@ bash deploy.sh import
 - 模型 Key：`OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 可以留空，之后再配置。没有有效模型时，AI 对话和代码生成不可用。国内模型还需要配置供应商地址和模型名。
 - 构建下载源：npm / Yarn 使用 npmmirror，apk / apt / pip 使用清华源，Go 使用 goproxy.cn。OpenCode 单独使用官方 npm 源，因为国内源缺少固定版本的 Linux x64 平台包；GitHub、SheetJS 和 code-server 等直链也需要构建机能访问外网。
 
+## code-server 下载失败时
+
+Agent 需要安装 code-server。若构建日志在 `release-assets.githubusercontent.com` 报 TLS 连接错误，表示 GitHub 发布文件下载中断；不需要更换 Linux 或重新安装已经完成的依赖。
+
+Dockerfile 会先读取 `deploy/packages/` 中的本地安装包，找不到时才联网下载，并进行有限重试。构建机无法访问 GitHub 下载域名时，在能访问的机器下载 [amd64 安装包](https://github.com/coder/code-server/releases/download/v4.117.0/code-server_4.117.0_amd64.deb) 或 [arm64 安装包](https://github.com/coder/code-server/releases/download/v4.117.0/code-server_4.117.0_arm64.deb)，然后复制到构建机项目的 `deploy/packages/` 目录，保留原文件名。
+
+例如 amd64 构建使用 `deploy/packages/code-server_4.117.0_amd64.deb`。然后重跑原来的构建命令即可，不需要新参数。Windows 也支持相同方式。本地包和联网下载的包都会校验官方 SHA256；`.deb` 已加入 Git 忽略规则。校验来源为 [官方 v4.117.0 发布资产](https://api.github.com/repos/coder/code-server/releases/tags/v4.117.0)。
+
 ## 保留原项目的预览限制
 
 前端继续使用原项目的 `VITE_*` 构建配置，Dockerfile 默认采用 `frontend/local-envs.sh` 中的测试值。这些值影响项目 App、VS Code、数据库界面的子域名链接；平台主页面和 API 通过 IP + NodePort 访问。没有增加前端运行时配置，也没有改写产品路由。

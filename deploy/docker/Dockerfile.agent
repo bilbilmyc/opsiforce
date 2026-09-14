@@ -80,8 +80,28 @@ RUN node -e "const fs=require('fs'); for(const p of process.argv.slice(1)) fs.wr
     && ln -sf /opt/yarn/yarn.cjs /usr/local/bin/yarn \
     && ln -sf /opt/yarn/yarn.cjs /usr/local/bin/yarnpkg
 
-# 上游直接发布的安装脚本仍需外网，包管理器换源不会影响此地址。
-RUN curl -fsSL https://code-server.dev/install.sh | sh -s -- --version 4.117.0
+# 优先使用提前下载的安装包；目录为空时从官方地址下载并有限重试。
+# SHA256 来自官方 v4.117.0 发布资产，避免误装错误或不完整的包。
+COPY deploy/packages/ /tmp/opsiforce-packages/
+RUN set -eu; \
+    deb_arch=$(dpkg --print-architecture); \
+    case "$deb_arch" in \
+      amd64) package_sha=0791e20168ec68dbb49db7d67369b5ea092ce2a8a262741d750e8d7947d65a3f;; \
+      arm64) package_sha=88de7f01d56cdf90a06498b3710fa724ec516a532e654194d22149f75124c4f6;; \
+      *) echo "code-server 不支持此架构：$deb_arch" >&2; exit 1;; \
+    esac; \
+    package="/tmp/opsiforce-packages/code-server_4.117.0_${deb_arch}.deb"; \
+    if [ -f "$package" ]; then \
+      echo "使用本地 code-server 安装包：$package"; \
+    else \
+      curl --fail --location --retry 3 --retry-all-errors --retry-delay 2 \
+        --connect-timeout 15 --max-time 300 --retry-max-time 600 \
+        --output "$package" "https://github.com/coder/code-server/releases/download/v4.117.0/code-server_4.117.0_${deb_arch}.deb" \
+        || { echo 'code-server 下载失败。请在可访问 GitHub 的机器下载对应 .deb，放入 deploy/packages 后重跑构建。' >&2; exit 1; }; \
+    fi; \
+    printf '%s  %s\n' "$package_sha" "$package" | sha256sum -c -; \
+    dpkg -i "$package"; \
+    rm -rf /tmp/opsiforce-packages
 
 RUN mkdir -p /workspace /opt/opencode /opt/agents
 WORKDIR /workspace

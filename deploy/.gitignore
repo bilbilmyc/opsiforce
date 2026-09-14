@@ -2,3 +2,4 @@
 .generated/
 images.tar
 images.tar.partial
+packages/*.deb
