@@ -48,11 +48,10 @@ api:
 ingressRoute:
   dashboard:
     enabled: false
-logs:
-  general:
-    level: INFO
-  access:
-    enabled: true
+log:
+  level: INFO
+accessLog:
+  enabled: true
 resources:
   requests:
     cpu: 100m
