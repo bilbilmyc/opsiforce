@@ -101,7 +101,7 @@ bash deploy.sh import
 - 镜像版本：默认 `local`。Windows 可用 `-Tag v2`；Linux 构建、推送、导入和部署都使用 `--tag v2`，例如 `bash deploy.sh deploy --tag v2 --node-ip 节点IP`。兼容原有 `TAG=v2` 环境变量，命令行选项优先。
 - 架构：Windows 可用 `-Platform linux/arm64`；Linux 可用 `PLATFORM=linux/arm64`，基础镜像也必须支持该架构。
 - 模型 Key：`OPENAI_API_KEY`、`ANTHROPIC_API_KEY` 可以留空，之后再配置。没有有效模型时，AI 对话和代码生成不可用。国内模型还需要配置供应商地址和模型名。
-- 构建下载源：npm / Yarn 使用 npmmirror，apk / apt / pip 使用清华源，Go 使用 goproxy.cn。GitHub、SheetJS 和 code-server 等直链仍需要构建机能访问外网。
+- 构建下载源：npm / Yarn 使用 npmmirror，apk / apt / pip 使用清华源，Go 使用 goproxy.cn。OpenCode 单独使用官方 npm 源，因为国内源缺少固定版本的 Linux x64 平台包；GitHub、SheetJS 和 code-server 等直链也需要构建机能访问外网。
 
 ## 保留原项目的预览限制
 
