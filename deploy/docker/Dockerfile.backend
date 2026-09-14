@@ -1,0 +1,35 @@
+# syntax=registry.cn-beijing.aliyuncs.com/mayc/dockerfile:1
+# Build context: repository root. deploy/yarn.lock pins the standalone workspaces.
+FROM registry.cn-beijing.aliyuncs.com/mayc/node:24.18.0-alpine AS builder
+RUN apk add --no-cache python3 make g++ git
+WORKDIR /app
+ENV YARN_ENABLE_GLOBAL_CACHE=false
+COPY package.json .yarnrc.yml ./
+COPY deploy/yarn.lock ./yarn.lock
+COPY .yarn/releases/ .yarn/releases/
+COPY backend/package.json backend/package.json
+COPY frontend/package.json frontend/package.json
+COPY codex-proxy/package.json codex-proxy/package.json
+RUN corepack enable && yarn install --immutable
+COPY backend/ backend/
+COPY agent-config/ agent-config/
+RUN yarn workspace @opsiforce/backend build
+# Migrations are checked-in SQL. Never generate new migrations during image builds.
+RUN yarn workspaces focus @opsiforce/backend --production
+
+FROM registry.cn-beijing.aliyuncs.com/mayc/node:24.18.0-alpine AS server
+RUN apk add --no-cache git attr && corepack enable
+WORKDIR /app
+COPY --from=builder /app/package.json /app/yarn.lock /app/.yarnrc.yml ./
+COPY --from=builder /app/.yarn/ .yarn/
+COPY --from=builder /app/.pnp.* ./
+COPY --from=builder /app/backend/package.json backend/package.json
+COPY --from=builder /app/backend/dist/ backend/dist/
+COPY --from=builder /app/backend/db/ backend/db/
+COPY --from=builder /app/backend/platform-version.json backend/platform-version.json
+# Optional private registry is copied via its parent, without a failing wildcard COPY.
+COPY --from=builder /app/agent-config/ agent-config/
+WORKDIR /app/backend
+ENV NODE_ENV=production NODE_OPTIONS=--max-http-header-size=128000
+EXPOSE 3001
+CMD ["yarn", "start"]

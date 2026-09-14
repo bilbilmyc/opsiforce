@@ -1,0 +1,85 @@
+FROM registry.cn-beijing.aliyuncs.com/mayc/golang:1.26.2-alpine AS log-writer-builder
+
+WORKDIR /src
+
+COPY proxy/go.mod proxy/go.sum ./
+RUN go mod download
+
+COPY proxy/cmd/agent-log-writer ./cmd/agent-log-writer
+COPY proxy/cmd/agent-control ./cmd/agent-control
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/log-writer ./cmd/agent-log-writer
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/agent-control ./cmd/agent-control
+
+FROM registry.cn-beijing.aliyuncs.com/mayc/node:24.18.0-bookworm-slim
+
+ARG OPENCODE_CONFIG=agent-config/opencode.json
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash git curl ca-certificates build-essential python3 unzip less \
+    jq nano vim-tiny wget procps tree zip openssh-client python3-pip \
+    python3-venv ffmpeg \
+    sqlite3 \
+    pandoc poppler-utils \
+    fontconfig fonts-liberation \
+    chromium \
+    libnss3 libnspr4 libatk1.0-0 libatk-bridge2.0-0 libcups2 \
+    libdrm2 libdbus-1-3 libxkbcommon0 libxcomposite1 libxdamage1 \
+    libxfixes3 libxrandr2 libgbm1 libpango-1.0-0 libcairo2 \
+    libasound2 libatspi2.0-0 libwayland-client0 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN ln -s /usr/bin/python3 /usr/local/bin/python
+
+RUN pip3 install --no-cache-dir --break-system-packages \
+    requests Pillow datasette==1.0a28 datasette-write-ui==0.0.1a14 \
+    openpyxl==3.1.5 reportlab==5.0.1 pypdf==6.16.1
+
+RUN npm install -g bun @opencode-ai/cli@0.0.0-beta-19059 agent-browser
+
+RUN mkdir -p /opt/doc-tools \
+    && npm install --prefix /opt/doc-tools --no-audit --no-fund \
+    docx@9.7.1 pptxgenjs@4.0.1 pdf-lib@1.17.1 \
+    && ln -s /opt/doc-tools/node_modules /node_modules
+
+RUN corepack enable && corepack prepare yarn@4.17.0 --activate
+
+RUN curl -fsSL https://code-server.dev/install.sh | sh -s -- --version 4.117.0
+
+RUN mkdir -p /workspace /opt/opencode /opt/agents
+WORKDIR /workspace
+
+COPY ${OPENCODE_CONFIG} /opt/opencode/opencode.json
+COPY agent-config/models.json /opt/opencode/models.json
+
+COPY agent-config/ /opt/agent-config-src/
+ENV OPENCODE_MODELS_PATH=/opt/opencode/models.json OPENCODE_DISABLE_MODELS_FETCH=true
+RUN cp -a /opt/agent-config-src/agents/. /opt/agents/ \
+    && if [ -d /opt/agent-config-src/private/agents ]; then cp -a /opt/agent-config-src/private/agents/. /opt/agents/; fi \
+    && node /opt/agent-config-src/scripts/compose-skills.mjs /opt/agent-config-src/skills /opt/agents \
+    && node /opt/agent-config-src/scripts/merge-registry.mjs /opt/agent-config-src/agents.json /opt/agent-config-src/private/agents.json /opt/agents/agents.json \
+    && rm -rf /opt/agent-config-src /opt/agents/.gitkeep
+
+COPY agent-config/scripts/guard.sh /usr/local/bin/guard
+COPY agent-config/scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY agent-config/scripts/agent-workspace-migrate.mjs /usr/local/bin/agent-workspace-migrate
+COPY agent-config/datasette-metadata.yml /opt/opencode/datasette-metadata.yml
+RUN chmod +x /usr/local/bin/guard /usr/local/bin/entrypoint.sh /usr/local/bin/agent-workspace-migrate
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ripgrep file \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=log-writer-builder /out/log-writer /usr/local/bin/log-writer
+COPY --from=log-writer-builder /out/agent-control /usr/local/bin/agent-control
+RUN chmod +x /usr/local/bin/log-writer /usr/local/bin/agent-control
+
+ENV NODE_OPTIONS=--max-http-header-size=131072
+
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s \
+  CMD wget -q --spider http://localhost:4096/api/health || exit 1
+
+EXPOSE 4096 3000 8080 8081 4910
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

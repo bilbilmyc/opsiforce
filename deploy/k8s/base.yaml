@@ -1,0 +1,176 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: opsiforce
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: opsiforce-backend
+  namespace: opsiforce
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: opsiforce-pod-manager
+  namespace: opsiforce
+rules:
+- apiGroups:
+  - ''
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ''
+  resources:
+  - pods/log
+  verbs:
+  - get
+  - list
+- apiGroups:
+  - ''
+  resources:
+  - pods/exec
+  verbs:
+  - create
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - delete
+- apiGroups:
+  - traefik.io
+  resources:
+  - middlewares
+  - ingressroutes
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opsiforce-pod-manager
+  namespace: opsiforce
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: opsiforce-pod-manager
+subjects:
+- kind: ServiceAccount
+  name: opsiforce-backend
+  namespace: opsiforce
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: opsiforce
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: opsiforce-workspaces
+  namespace: opsiforce
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opsiforce-backend
+  namespace: opsiforce
+data:
+  K8S_NAMESPACE: opsiforce
+  POOL_SIZE_OVERRIDE: '0'
+  AGENT_CONTAINER_IMAGE: ${REGISTRY}/opsiforce-agent:${TAG}
+  AGENT_CONTAINER_IMAGE_PULL_POLICY: IfNotPresent
+  AGENT_PORT: '4096'
+  AGENT_CONTROL_PORT: '4910'
+  APP_PORT: '3000'
+  VSCODE_PORT: '8080'
+  DB_VIEWER_PORT: '8081'
+  CEPHFS_PVC_NAME: opsiforce-workspaces
+  STORAGE_TYPE: cephfs
+  STORAGE_MOUNT_PATH: /workspace-data
+  STORAGE_CLAIM_SIZE: 20Gi
+  AGENT_NODE_SELECTOR: '{}'
+  AGENT_TOLERATIONS: '[]'
+  AGENT_AFFINITY: '{}'
+  IMAGE_PULL_SECRETS: '${PULL_SECRETS_JSON}'
+  AGENT_WORKSPACE_UPDATE_ON_STARTUP: 'true'
+  AGENT_UPDATE_JOB_TIMEOUT_MS: '1800000'
+  GOTENBERG_URL: http://opsiforce-gotenberg:3006
+  BIFROST_PROXY_URL: http://opsiforce-bifrost:8080/v1
+  BIFROST_POD_PROXY_URL: http://opsiforce-bifrost:8080/v1
+  SERVICE_GATEWAY_URL: http://opsiforce-backend:3001/api/gateway
+  EXTERNAL_SERVICES_URL: http://opsiforce-backend:3001/api/external-services/agent
+  APPS_HOSTNAME: apps.${DOMAIN}${PORT_SUFFIX}
+  WEBAPP_SERVICE_NAME: opsiforce-proxy-app
+  WEBAPP_SERVICE_PORT: '3002'
+  DEFAULT_TENANT_NAME: default
+  SSO_GROUP_MAP: '{"opsiforce-admins": {"permissions": ["can_manage_project_budget_settings", "can_manage_project_timeout_settings",
+    "can_manage_project_logging_settings", "can_manage_project_auth_settings", "can_manage_project_pod_settings", "can_manage_tenant_budget",
+    "can_manage_platform_defaults", "can_manage_tenant_defaults", "can_view_code_tab", "can_view_db_tab", "can_disable_project",
+    "can_restart_project", "can_duplicate_project", "can_export_project", "can_import_project", "can_manage_workspaces",
+    "can_move_projects_between_workspaces", "can_edit_app_details", "can_manage_environments", "can_manage_environment_variables",
+    "can_publish_project", "can_delete_environment", "can_manage_users", "can_manage_schedules", "can_view_pods", "can_manage_external_integration",
+    "can_view_external_services_usage", "can_manage_external_services", "can_view_platform_storage", "can_manage_platform_storage"],
+    "tenants": ["default"]}}'
+  EXTERNAL_SERVICES_WEBHOOK_BASE_URL: https://${DOMAIN}${PORT_SUFFIX}
+  MAILGUN_DOMAIN: ''
+  MAILGUN_RECEIVE_DOMAIN: ''
+  MAILGUN_SENDER: ''
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opsiforce-runtime-proxies
+  namespace: opsiforce
+data:
+  OPSIFORCE_BACKEND_URL: http://opsiforce-backend:3001
+  STORAGE_MOUNT_PATH: /workspace-data
+  VSCODE_PORT: '8080'
+  DB_VIEWER_PORT: '8081'
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opsiforce-secrets
+  namespace: opsiforce
+type: Opaque
+data:
+  DATABASE_URL: '${DATABASE_URL_B64}'
+  REDIS_URL: '${REDIS_URL_B64}'
+  PG_PASSWORD: '${PG_PASSWORD_B64}'
+  PROXY_CONTROL_TOKEN: '${PROXY_CONTROL_TOKEN_B64}'
+  BIFROST_ENCRYPTION_KEY: '${BIFROST_ENCRYPTION_KEY_B64}'
+  EXTERNAL_SERVICES_ENCRYPTION_KEY: '${EXTERNAL_SERVICES_ENCRYPTION_KEY_B64}'
+  OIDC_PLUGIN_SECRET: '${OIDC_PLUGIN_SECRET_B64}'
+  OPENAI_API_KEY: '${OPENAI_API_KEY_B64}'
+  ANTHROPIC_API_KEY: '${ANTHROPIC_API_KEY_B64}'
+  BIFROST_ADMIN_USERNAME: YWRtaW4=
+  BIFROST_ADMIN_PASSWORD: '${ADMIN_PASSWORD_B64}'

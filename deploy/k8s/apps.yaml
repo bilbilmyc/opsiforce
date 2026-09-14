@@ -1,0 +1,854 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-backend
+  namespace: opsiforce
+spec:
+  selector:
+    app: opsiforce-backend
+  ports:
+  - name: http
+    port: 3001
+    targetPort: 3001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsiforce-backend
+  namespace: opsiforce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsiforce-backend
+  template:
+    metadata:
+      labels:
+        app: opsiforce-backend
+      annotations:
+        opsiforce.io/release: '${RELEASE_ID}'
+    spec:
+      automountServiceAccountToken: true
+      containers:
+      - name: backend
+        image: ${REGISTRY}/opsiforce-backend:${TAG}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3001
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: '2'
+            memory: 2Gi
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          periodSeconds: 20
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          periodSeconds: 10
+          failureThreshold: 60
+        envFrom:
+        - configMapRef:
+            name: opsiforce-backend
+        - secretRef:
+            name: opsiforce-secrets
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace-data
+      serviceAccountName: opsiforce-backend
+      terminationGracePeriodSeconds: 180
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: opsiforce-workspaces
+  strategy:
+    type: Recreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-frontend
+  namespace: opsiforce
+spec:
+  selector:
+    app: opsiforce-frontend
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsiforce-frontend
+  namespace: opsiforce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsiforce-frontend
+  template:
+    metadata:
+      labels:
+        app: opsiforce-frontend
+      annotations:
+        opsiforce.io/release: '${RELEASE_ID}'
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: frontend
+        image: ${REGISTRY}/opsiforce-frontend:${TAG}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 8080
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 20
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 10
+          failureThreshold: 60
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-proxy-agent
+  namespace: opsiforce
+spec:
+  selector:
+    app: opsiforce-proxy-agent
+  ports:
+  - name: http
+    port: 3005
+    targetPort: 3005
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsiforce-proxy-agent
+  namespace: opsiforce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsiforce-proxy-agent
+  template:
+    metadata:
+      labels:
+        app: opsiforce-proxy-agent
+      annotations:
+        opsiforce.io/release: '${RELEASE_ID}'
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: agent
+        image: ${REGISTRY}/opsiforce-runtime-proxy:${TAG}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3005
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 20
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          failureThreshold: 60
+        args:
+        - --mode
+        - agent
+        - --port
+        - '3005'
+        envFrom:
+        - configMapRef:
+            name: opsiforce-runtime-proxies
+        - secretRef:
+            name: opsiforce-secrets
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace-data
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: opsiforce-workspaces
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-proxy-app
+  namespace: opsiforce
+spec:
+  selector:
+    app: opsiforce-proxy-app
+  ports:
+  - name: http
+    port: 3002
+    targetPort: 3002
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsiforce-proxy-app
+  namespace: opsiforce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsiforce-proxy-app
+  template:
+    metadata:
+      labels:
+        app: opsiforce-proxy-app
+      annotations:
+        opsiforce.io/release: '${RELEASE_ID}'
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: app
+        image: ${REGISTRY}/opsiforce-runtime-proxy:${TAG}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3002
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 20
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          failureThreshold: 60
+        args:
+        - --mode
+        - app
+        - --port
+        - '3002'
+        envFrom:
+        - configMapRef:
+            name: opsiforce-runtime-proxies
+        - secretRef:
+            name: opsiforce-secrets
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace-data
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: opsiforce-workspaces
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-proxy-vscode
+  namespace: opsiforce
+spec:
+  selector:
+    app: opsiforce-proxy-vscode
+  ports:
+  - name: http
+    port: 3003
+    targetPort: 3003
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsiforce-proxy-vscode
+  namespace: opsiforce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsiforce-proxy-vscode
+  template:
+    metadata:
+      labels:
+        app: opsiforce-proxy-vscode
+      annotations:
+        opsiforce.io/release: '${RELEASE_ID}'
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: vscode
+        image: ${REGISTRY}/opsiforce-runtime-proxy:${TAG}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3003
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 20
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          failureThreshold: 60
+        args:
+        - --mode
+        - vscode
+        - --port
+        - '3003'
+        envFrom:
+        - configMapRef:
+            name: opsiforce-runtime-proxies
+        - secretRef:
+            name: opsiforce-secrets
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace-data
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: opsiforce-workspaces
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-proxy-db
+  namespace: opsiforce
+spec:
+  selector:
+    app: opsiforce-proxy-db
+  ports:
+  - name: http
+    port: 3004
+    targetPort: 3004
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsiforce-proxy-db
+  namespace: opsiforce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsiforce-proxy-db
+  template:
+    metadata:
+      labels:
+        app: opsiforce-proxy-db
+      annotations:
+        opsiforce.io/release: '${RELEASE_ID}'
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: db
+        image: ${REGISTRY}/opsiforce-runtime-proxy:${TAG}
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3004
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 512Mi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 20
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          failureThreshold: 60
+        args:
+        - --mode
+        - db
+        - --port
+        - '3004'
+        envFrom:
+        - configMapRef:
+            name: opsiforce-runtime-proxies
+        - secretRef:
+            name: opsiforce-secrets
+        volumeMounts:
+        - name: workspace
+          mountPath: /workspace-data
+      volumes:
+      - name: workspace
+        persistentVolumeClaim:
+          claimName: opsiforce-workspaces
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-gotenberg
+  namespace: opsiforce
+spec:
+  selector:
+    app: opsiforce-gotenberg
+  ports:
+  - name: http
+    port: 3006
+    targetPort: 3006
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsiforce-gotenberg
+  namespace: opsiforce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsiforce-gotenberg
+  template:
+    metadata:
+      labels:
+        app: opsiforce-gotenberg
+      annotations:
+        opsiforce.io/release: '${RELEASE_ID}'
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: gotenberg
+        image: ${REGISTRY}/gotenberg:8.36.0-libreoffice
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 3006
+        resources:
+          requests:
+            cpu: 200m
+            memory: 512Mi
+          limits:
+            cpu: '2'
+            memory: 2Gi
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 20
+        startupProbe:
+          httpGet:
+            path: /health
+            port: http
+          periodSeconds: 10
+          failureThreshold: 60
+        env:
+        - name: API_PORT
+          value: '3006'
+        - name: LIBREOFFICE_AUTO_START
+          value: 'true'
+        - name: LIBREOFFICE_MAX_QUEUE_SIZE
+          value: '10'
+        - name: LIBREOFFICE_DENY_PRIVATE_IPS
+          value: 'true'
+        - name: API_BODY_LIMIT
+          value: 40MB
+        - name: API_DISABLE_DOWNLOAD_FROM
+          value: 'true'
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opsiforce-bifrost-config
+  namespace: opsiforce
+data:
+  config.json: |
+    {
+      "auth_config": {
+        "admin_password": "env.BIFROST_ADMIN_PASSWORD",
+        "admin_username": "env.BIFROST_ADMIN_USERNAME",
+        "is_enabled": true
+      },
+      "client": {
+        "allow_direct_keys": false,
+        "allowed_origins": [
+          "*"
+        ],
+        "compat": {
+          "convert_chat_to_responses": false,
+          "convert_text_to_chat": false,
+          "should_convert_params": false,
+          "should_drop_params": false
+        },
+        "disable_content_logging": false,
+        "disable_db_pings_in_health": false,
+        "drop_excess_requests": true,
+        "dump_errors_in_console_logs": false,
+        "enable_logging": true,
+        "enforce_auth_on_inference": true,
+        "enforce_governance_header": false,
+        "initial_pool_size": 300,
+        "log_retention_days": 7,
+        "max_request_body_size_mb": 100
+      },
+      "config_store": {
+        "config": {
+          "db_name": "${BIFROST_DATABASE}",
+          "host": "${PG_HOST}",
+          "password": "env.BIFROST_POSTGRES_PASSWORD",
+          "port": "${PG_PORT}",
+          "ssl_mode": "${PG_SSLMODE}",
+          "user": "${PG_USER}"
+        },
+        "enabled": true,
+        "type": "postgres"
+      },
+      "logs_store": {
+        "config": {
+          "db_name": "${BIFROST_DATABASE}",
+          "host": "${PG_HOST}",
+          "password": "env.BIFROST_POSTGRES_PASSWORD",
+          "port": "${PG_PORT}",
+          "ssl_mode": "${PG_SSLMODE}",
+          "user": "${PG_USER}"
+        },
+        "enabled": true,
+        "type": "postgres"
+      },
+      "plugins": [
+        {
+          "config": {
+            "disable_content_logging": false,
+            "logging_headers": []
+          },
+          "enabled": true,
+          "name": "logging",
+          "version": 1
+        },
+        {
+          "config": {
+            "is_enterprise": false,
+            "is_vk_mandatory": false
+          },
+          "enabled": true,
+          "name": "governance",
+          "version": 1
+        }
+      ],
+      "providers": {
+        "anthropic": {
+          "keys": [
+            {
+              "id": "anthropic-primary",
+              "models": [
+                "*"
+              ],
+              "name": "anthropic-primary",
+              "value": "env.ANTHROPIC_API_KEY",
+              "weight": 1
+            }
+          ],
+          "network_config": {
+            "default_request_timeout_in_seconds": 1200,
+            "max_retries": 2,
+            "retry_backoff_initial": 500,
+            "retry_backoff_max": 5000,
+            "stream_idle_timeout_in_seconds": 3600
+          }
+        },
+        "custom-openai-1": {
+          "custom_provider_config": {
+            "allowed_requests": {
+              "chat_completion": true,
+              "chat_completion_stream": true,
+              "count_tokens": true,
+              "embedding": false,
+              "image_edit": false,
+              "image_edit_stream": false,
+              "image_generation": false,
+              "image_generation_stream": false,
+              "image_variation": false,
+              "list_models": true,
+              "responses": false,
+              "responses_stream": true,
+              "speech": false,
+              "speech_stream": false,
+              "text_completion": true,
+              "text_completion_stream": true,
+              "transcription": false,
+              "transcription_stream": false
+            },
+            "base_provider_type": "openai",
+            "is_key_less": false
+          },
+          "keys": [
+            {
+              "id": "openai-compatible",
+              "models": [
+                "*"
+              ],
+              "name": "openai-compatible",
+              "value": "env.OPENAI_API_KEY",
+              "weight": 1
+            }
+          ],
+          "network_config": {
+            "base_url": "https://api.openai.com/v1",
+            "default_request_timeout_in_seconds": 1200,
+            "max_retries": 2,
+            "retry_backoff_initial": 500,
+            "retry_backoff_max": 5000,
+            "stream_idle_timeout_in_seconds": 3600
+          }
+        },
+        "openai": {
+          "keys": [
+            {
+              "id": "openai-primary",
+              "models": [
+                "*"
+              ],
+              "name": "openai-primary",
+              "value": "env.OPENAI_API_KEY",
+              "weight": 1
+            }
+          ],
+          "network_config": {
+            "default_request_timeout_in_seconds": 1200,
+            "max_retries": 2,
+            "retry_backoff_initial": 500,
+            "retry_backoff_max": 5000,
+            "stream_idle_timeout_in_seconds": 3600
+          }
+        }
+      },
+      "source_of_truth": "config.json"
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-bifrost
+  namespace: opsiforce
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    app.kubernetes.io/name: bifrost
+    app.kubernetes.io/instance: opsiforce-bifrost
+    app.kubernetes.io/component: server
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: opsiforce-bifrost
+  namespace: opsiforce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: bifrost
+      app.kubernetes.io/instance: opsiforce-bifrost
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: bifrost
+        app.kubernetes.io/instance: opsiforce-bifrost
+        app.kubernetes.io/component: server
+      annotations:
+        opsiforce.io/release: '${RELEASE_ID}'
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      terminationGracePeriodSeconds: 60
+      containers:
+      - name: bifrost
+        securityContext:
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: false
+          runAsNonRoot: true
+          runAsUser: 1000
+        image: ${REGISTRY}/bifrost:v2.0.0
+        imagePullPolicy: IfNotPresent
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - sh
+              - -c
+              - sleep 15
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        env:
+        - name: APP_DIR
+          value: /app/data
+        - name: APP_PORT
+          value: '8080'
+        - name: APP_HOST
+          value: 0.0.0.0
+        - name: LOG_LEVEL
+          value: info
+        - name: LOG_STYLE
+          value: json
+        - name: BIFROST_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: opsiforce-secrets
+              key: BIFROST_ENCRYPTION_KEY
+        - name: BIFROST_POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: opsiforce-secrets
+              key: PG_PASSWORD
+        - name: BIFROST_ADMIN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: opsiforce-secrets
+              key: BIFROST_ADMIN_USERNAME
+        - name: BIFROST_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: opsiforce-secrets
+              key: BIFROST_ADMIN_PASSWORD
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: opsiforce-secrets
+              key: ANTHROPIC_API_KEY
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: opsiforce-secrets
+              key: OPENAI_API_KEY
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+        resources:
+          limits:
+            cpu: '2'
+            memory: 4Gi
+          requests:
+            cpu: 250m
+            memory: 1Gi
+        volumeMounts:
+        - name: config
+          mountPath: /app/data/config.json
+          subPath: config.json
+          readOnly: true
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          periodSeconds: 10
+          failureThreshold: 60
+      volumes:
+      - name: config
+        configMap:
+          name: opsiforce-bifrost-config
+      automountServiceAccountToken: false

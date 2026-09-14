@@ -217,6 +217,8 @@ The day-to-day commands you run *while* developing (type-check, lint, format, da
 
 ## Running in production
 
+For Dockerfiles, plain Kubernetes YAML, and a single build/deploy shell script, see **[deploy/README.md](deploy/README.md)**. Local mode uses the existing local-path storage class and Nginx; production mode provides a private integration endpoint for the host product and external PostgreSQL/Redis. Local testing supports an IP-based NodePort entry.
+
 The Quickstart targets local development. A production deployment uses the same components on infrastructure you operate:
 
 - Kubernetes control plane: a managed or self-managed cluster (not minikube), sized for the control plane plus the per-project agent pods.
@@ -224,4 +226,3 @@ The Quickstart targets local development. A production deployment uses the same 
 - RWX persistent storage: project workspaces need ReadWriteMany volumes that survive pod replacement; back them with a shared-storage system such as Ceph (for example Rook-Ceph or CephFS) or another RWX-capable provisioner.
 - Container registry: build and host the Opsiforce images (agent, backend, runtime-proxy, frontend) in your own registry instead of building into minikube.
 - Helm values, adjusted for your environment: image references and tags, ingress hosts and TLS, storage classes, replica counts, resource requests and limits, PostgreSQL/Redis, and Bifrost provider secrets.
-

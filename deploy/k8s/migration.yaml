@@ -1,0 +1,35 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opsiforce-migrate
+  namespace: opsiforce
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 900
+  template:
+    metadata:
+      labels:
+        app: opsiforce-migrate
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+      - name: migrate
+        image: ${REGISTRY}/opsiforce-backend:${TAG}
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: '1'
+            memory: 1Gi
+        command:
+        - yarn
+        - db:migrate
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: opsiforce-secrets
+              key: DATABASE_URL

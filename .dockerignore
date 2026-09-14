@@ -21,3 +21,8 @@ agent-config/private/agents/**/template/**/yarn.lock
 .DS_Store
 .idea
 .vscode
+
+# Deployment credentials and rendered Secrets are local only.
+**/.git
+deploy/.state
+deploy/.generated

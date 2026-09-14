@@ -1,0 +1,25 @@
+# Optional direct access for testing without wildcard DNS. Created by `deploy.sh expose`.
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-test-${RUNTIME_ENV}
+  namespace: opsiforce
+  ownerReferences:
+    - apiVersion: v1
+      kind: Pod
+      name: '${RUNTIME_POD}'
+      uid: '${RUNTIME_UID}'
+spec:
+  type: NodePort
+  selector:
+    opsiforce.io/environment-id: '${RUNTIME_ENV}'
+  ports:
+    - name: app
+      port: 3000
+      targetPort: 3000
+    - name: vscode
+      port: 8080
+      targetPort: 8080
+    - name: db
+      port: 8081
+      targetPort: 8081

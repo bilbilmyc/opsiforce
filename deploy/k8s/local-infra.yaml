@@ -1,0 +1,197 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: opsiforce-postgres-init
+  namespace: opsiforce
+data:
+  01-databases.sql: |
+    CREATE DATABASE opsiforce;
+    CREATE DATABASE bifrost;
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-postgres
+  namespace: opsiforce
+spec:
+  clusterIP: None
+  selector:
+    app: opsiforce-postgres
+  ports:
+  - name: tcp
+    port: 5432
+    targetPort: 5432
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: opsiforce-postgres
+  namespace: opsiforce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsiforce-postgres
+  template:
+    metadata:
+      labels:
+        app: opsiforce-postgres
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: postgres
+        image: ${REGISTRY}/postgres:16.4-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: tcp
+          containerPort: 5432
+        resources:
+          requests:
+            cpu: 250m
+            memory: 512Mi
+          limits:
+            cpu: '2'
+            memory: 2Gi
+        env:
+        - name: POSTGRES_USER
+          value: postgres
+        - name: POSTGRES_DB
+          value: postgres
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: opsiforce-secrets
+              key: PG_PASSWORD
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/postgresql/data
+        - name: init
+          mountPath: /docker-entrypoint-initdb.d
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+            - pg_isready -U postgres -d postgres
+          periodSeconds: 5
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+            - pg_isready -U postgres -d postgres
+          periodSeconds: 20
+        startupProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+            - pg_isready -U postgres -d postgres
+          failureThreshold: 60
+          periodSeconds: 5
+      volumes:
+      - name: init
+        configMap:
+          name: opsiforce-postgres-init
+  serviceName: opsiforce-postgres
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 5Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: opsiforce-redis
+  namespace: opsiforce
+spec:
+  clusterIP: None
+  selector:
+    app: opsiforce-redis
+  ports:
+  - name: tcp
+    port: 6379
+    targetPort: 6379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: opsiforce-redis
+  namespace: opsiforce
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: opsiforce-redis
+  template:
+    metadata:
+      labels:
+        app: opsiforce-redis
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: redis
+        image: ${REGISTRY}/redis:7.4.1-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: tcp
+          containerPort: 6379
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: '1'
+            memory: 1Gi
+        command:
+        - sh
+        - -ec
+        args:
+        - exec redis-server --appendonly yes --maxmemory-policy noeviction --notify-keyspace-events Ex --requirepass
+          "$REDIS_PASSWORD"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+            - REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping | grep -q PONG
+          periodSeconds: 10
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -ec
+            - REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping | grep -q PONG
+          periodSeconds: 10
+        env:
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: opsiforce-secrets
+              key: PG_PASSWORD
+  serviceName: opsiforce-redis
+  volumeClaimTemplates:
+  - apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: data
+    spec:
+      accessModes:
+      - ReadWriteOnce
+      storageClassName: local-path
+      resources:
+        requests:
+          storage: 5Gi
