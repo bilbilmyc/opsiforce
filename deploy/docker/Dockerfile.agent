@@ -71,7 +71,9 @@ RUN mkdir -p /opt/doc-tools \
 
 # 直接复用仓库内的 Yarn，不通过 Corepack 下载。
 COPY .yarn/releases/yarn-4.17.0.cjs /opt/yarn/yarn.cjs
-RUN chmod +x /opt/yarn/yarn.cjs \
+# 在镜像内清理 Windows 换行，不依赖已有工作区是否应用了 Git 换行规则。
+RUN node -e "const fs=require('fs'); for(const p of process.argv.slice(1)) fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace(/\r\n/g,'\n'))" /opt/yarn/yarn.cjs \
+    && chmod +x /opt/yarn/yarn.cjs \
     && ln -sf /opt/yarn/yarn.cjs /usr/local/bin/yarn \
     && ln -sf /opt/yarn/yarn.cjs /usr/local/bin/yarnpkg
 
@@ -96,7 +98,10 @@ COPY agent-config/scripts/guard.sh /usr/local/bin/guard
 COPY agent-config/scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY agent-config/scripts/agent-workspace-migrate.mjs /usr/local/bin/agent-workspace-migrate
 COPY agent-config/datasette-metadata.yml /opt/opencode/datasette-metadata.yml
-RUN chmod +x /usr/local/bin/guard /usr/local/bin/entrypoint.sh /usr/local/bin/agent-workspace-migrate
+# 这些脚本也通过 shebang 启动，统一清理 CRLF 后再设置可执行权限。
+RUN node -e "const fs=require('fs'); for(const p of process.argv.slice(1)) fs.writeFileSync(p,fs.readFileSync(p,'utf8').replace(/\r\n/g,'\n'))" \
+    /usr/local/bin/guard /usr/local/bin/entrypoint.sh /usr/local/bin/agent-workspace-migrate \
+    && chmod +x /usr/local/bin/guard /usr/local/bin/entrypoint.sh /usr/local/bin/agent-workspace-migrate
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ripgrep file \
