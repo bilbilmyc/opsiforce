@@ -1,5 +1,8 @@
 # syntax=registry.cn-beijing.aliyuncs.com/mayc/dockerfile:1
 FROM registry.cn-beijing.aliyuncs.com/mayc/golang:1.26.2-alpine AS builder
+# 依赖和校验记录通过国内代理获取，不回退到源码站直连。
+ENV GOPROXY=https://goproxy.cn \
+    GOSUMDB="sum.golang.org https://goproxy.cn/sumdb/sum.golang.org"
 WORKDIR /src
 COPY proxy/go.mod proxy/go.sum ./
 RUN go mod download
@@ -10,7 +13,8 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/opsiforce-proxy ./cmd/opsiforce-proxy
 
 FROM registry.cn-beijing.aliyuncs.com/mayc/alpine:3.22
-RUN apk add --no-cache ca-certificates
+RUN sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.tuna.tsinghua.edu.cn/alpine#g' /etc/apk/repositories \
+    && apk add --no-cache ca-certificates
 COPY --from=builder /out/opsiforce-proxy /usr/local/bin/opsiforce-proxy
 EXPOSE 3002 3003 3004 3005
 ENTRYPOINT ["/usr/local/bin/opsiforce-proxy"]

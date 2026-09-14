@@ -26,3 +26,5 @@ agent-config/private/agents/**/template/**/yarn.lock
 **/.git
 deploy/.state
 deploy/.generated
+deploy/images.tar
+deploy/images.tar.partial

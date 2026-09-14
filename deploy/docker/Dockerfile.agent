@@ -1,4 +1,6 @@
 FROM registry.cn-beijing.aliyuncs.com/mayc/golang:1.26.2-alpine AS log-writer-builder
+ENV GOPROXY=https://goproxy.cn \
+    GOSUMDB="sum.golang.org https://goproxy.cn/sumdb/sum.golang.org"
 
 WORKDIR /src
 
@@ -16,6 +18,24 @@ FROM registry.cn-beijing.aliyuncs.com/mayc/node:24.18.0-bookworm-slim
 
 ARG OPENCODE_CONFIG=agent-config/opencode.json
 
+# npm、Yarn、Node 编译头文件和 Python 包使用国内源。
+ENV npm_config_registry=https://registry.npmmirror.com \
+    YARN_NPM_REGISTRY_SERVER=https://registry.npmmirror.com \
+    COREPACK_NPM_REGISTRY=https://registry.npmmirror.com \
+    npm_config_disturl=https://npmmirror.com/mirrors/node \
+    PIP_INDEX_URL=https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# 同时兼容传统 sources.list 和 Debian 12 的 debian.sources。
+# 精简镜像先通过国内 HTTP 源安装证书（保留 APT 签名校验），随后改用 HTTPS。
+RUN set -eu; \
+    for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do \
+      [ -f "$source" ] || continue; \
+      sed -i -e 's#https\?://deb.debian.org/debian-security#http://mirrors.tuna.tsinghua.edu.cn/debian-security#g' \
+        -e 's#https\?://security.debian.org/debian-security#http://mirrors.tuna.tsinghua.edu.cn/debian-security#g' \
+        -e 's#https\?://deb.debian.org/debian#http://mirrors.tuna.tsinghua.edu.cn/debian#g' "$source"; \
+    done
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash git curl ca-certificates build-essential python3 unzip less \
     jq nano vim-tiny wget procps tree zip openssh-client python3-pip \
@@ -30,6 +50,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libasound2 libatspi2.0-0 libwayland-client0 \
     && rm -rf /var/lib/apt/lists/*
 
+RUN set -eu; \
+    for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do \
+      [ -f "$source" ] || continue; \
+      sed -i 's#http://mirrors.tuna.tsinghua.edu.cn/#https://mirrors.tuna.tsinghua.edu.cn/#g' "$source"; \
+    done
+
 RUN ln -s /usr/bin/python3 /usr/local/bin/python
 
 RUN pip3 install --no-cache-dir --break-system-packages \
@@ -43,8 +69,13 @@ RUN mkdir -p /opt/doc-tools \
     docx@9.7.1 pptxgenjs@4.0.1 pdf-lib@1.17.1 \
     && ln -s /opt/doc-tools/node_modules /node_modules
 
-RUN corepack enable && corepack prepare yarn@4.17.0 --activate
+# 直接复用仓库内的 Yarn，不通过 Corepack 下载。
+COPY .yarn/releases/yarn-4.17.0.cjs /opt/yarn/yarn.cjs
+RUN chmod +x /opt/yarn/yarn.cjs \
+    && ln -sf /opt/yarn/yarn.cjs /usr/local/bin/yarn \
+    && ln -sf /opt/yarn/yarn.cjs /usr/local/bin/yarnpkg
 
+# 上游直接发布的安装脚本仍需外网，包管理器换源不会影响此地址。
 RUN curl -fsSL https://code-server.dev/install.sh | sh -s -- --version 4.117.0
 
 RUN mkdir -p /workspace /opt/opencode /opt/agents

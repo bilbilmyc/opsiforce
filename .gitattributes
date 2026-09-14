@@ -1,0 +1,4 @@
+# Windows 检出后，容器中的 Linux 脚本仍使用 LF 换行。
+*.sh text eol=lf
+.yarn/releases/*.cjs text eol=lf
+deploy/docker/Dockerfile.* text eol=lf

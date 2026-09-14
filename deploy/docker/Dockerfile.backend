@@ -1,33 +1,46 @@
 # syntax=registry.cn-beijing.aliyuncs.com/mayc/dockerfile:1
-# Build context: repository root. deploy/yarn.lock pins the standalone workspaces.
+# 构建上下文为项目根目录，使用 deploy/yarn.lock 锁定依赖版本。
 FROM registry.cn-beijing.aliyuncs.com/mayc/node:24.18.0-alpine AS builder
-RUN apk add --no-cache python3 make g++ git
+RUN sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.tuna.tsinghua.edu.cn/alpine#g' /etc/apk/repositories \
+    && apk add --no-cache python3 make g++ git
 WORKDIR /app
-ENV YARN_ENABLE_GLOBAL_CACHE=false
+ENV YARN_ENABLE_GLOBAL_CACHE=false \
+    YARN_NPM_REGISTRY_SERVER=https://registry.npmmirror.com \
+    COREPACK_NPM_REGISTRY=https://registry.npmmirror.com \
+    npm_config_registry=https://registry.npmmirror.com \
+    npm_config_disturl=https://npmmirror.com/mirrors/node
 COPY package.json .yarnrc.yml ./
 COPY deploy/yarn.lock ./yarn.lock
 COPY .yarn/releases/ .yarn/releases/
 COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
 COPY codex-proxy/package.json codex-proxy/package.json
-RUN corepack enable && yarn install --immutable
+# 使用仓库内的 Yarn，避免 Corepack 额外访问境外地址下载 Yarn。
+RUN chmod +x /app/.yarn/releases/yarn-4.17.0.cjs \
+    && ln -sf /app/.yarn/releases/yarn-4.17.0.cjs /usr/local/bin/yarn \
+    && ln -sf /app/.yarn/releases/yarn-4.17.0.cjs /usr/local/bin/yarnpkg \
+    && yarn install --immutable
 COPY backend/ backend/
 COPY agent-config/ agent-config/
 RUN yarn workspace @opsiforce/backend build
-# Migrations are checked-in SQL. Never generate new migrations during image builds.
+# 数据库迁移使用已提交的 SQL，构建时不生成新迁移。
 RUN yarn workspaces focus @opsiforce/backend --production
 
 FROM registry.cn-beijing.aliyuncs.com/mayc/node:24.18.0-alpine AS server
-RUN apk add --no-cache git attr && corepack enable
+RUN sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.tuna.tsinghua.edu.cn/alpine#g' /etc/apk/repositories \
+    && apk add --no-cache git attr
 WORKDIR /app
 COPY --from=builder /app/package.json /app/yarn.lock /app/.yarnrc.yml ./
 COPY --from=builder /app/.yarn/ .yarn/
+RUN chmod +x /app/.yarn/releases/yarn-4.17.0.cjs \
+    && ln -sf /app/.yarn/releases/yarn-4.17.0.cjs /usr/local/bin/yarn \
+    && ln -sf /app/.yarn/releases/yarn-4.17.0.cjs /usr/local/bin/yarnpkg
 COPY --from=builder /app/.pnp.* ./
 COPY --from=builder /app/backend/package.json backend/package.json
 COPY --from=builder /app/backend/dist/ backend/dist/
 COPY --from=builder /app/backend/db/ backend/db/
 COPY --from=builder /app/backend/platform-version.json backend/platform-version.json
-# Optional private registry is copied via its parent, without a failing wildcard COPY.
+# 通过父目录复制可选的私有 Agent 配置，避免通配符未匹配时 COPY 失败。
 COPY --from=builder /app/agent-config/ agent-config/
 WORKDIR /app/backend
 ENV NODE_ENV=production NODE_OPTIONS=--max-http-header-size=128000

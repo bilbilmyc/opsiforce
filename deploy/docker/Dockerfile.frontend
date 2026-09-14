@@ -1,23 +1,32 @@
 # syntax=registry.cn-beijing.aliyuncs.com/mayc/dockerfile:1
 FROM registry.cn-beijing.aliyuncs.com/mayc/node:24.18.0-alpine AS builder
-RUN apk add --no-cache git python3 make g++
+RUN sed -i 's#https\?://dl-cdn.alpinelinux.org/alpine#https://mirrors.tuna.tsinghua.edu.cn/alpine#g' /etc/apk/repositories \
+    && apk add --no-cache git python3 make g++
 WORKDIR /app
-ENV YARN_ENABLE_GLOBAL_CACHE=false
+ENV YARN_ENABLE_GLOBAL_CACHE=false \
+    YARN_NPM_REGISTRY_SERVER=https://registry.npmmirror.com \
+    COREPACK_NPM_REGISTRY=https://registry.npmmirror.com \
+    npm_config_registry=https://registry.npmmirror.com \
+    npm_config_disturl=https://npmmirror.com/mirrors/node
 COPY package.json .yarnrc.yml ./
 COPY deploy/yarn.lock ./yarn.lock
 COPY .yarn/releases/ .yarn/releases/
 COPY backend/package.json backend/package.json
 COPY frontend/package.json frontend/package.json
 COPY codex-proxy/package.json codex-proxy/package.json
-RUN corepack enable && yarn install --immutable
+# 使用仓库内的 Yarn，避免 Corepack 额外访问境外地址下载 Yarn。
+RUN chmod +x /app/.yarn/releases/yarn-4.17.0.cjs \
+    && ln -sf /app/.yarn/releases/yarn-4.17.0.cjs /usr/local/bin/yarn \
+    && ln -sf /app/.yarn/releases/yarn-4.17.0.cjs /usr/local/bin/yarnpkg \
+    && yarn install --immutable
 COPY frontend/ frontend/
-ARG VITE_WEBAPP_DOMAIN
-ARG VITE_WEBAPP_PREVIEW_DOMAIN
-ARG VITE_VSCODE_DOMAIN
-ARG VITE_DB_DOMAIN
-RUN test -n "$VITE_WEBAPP_DOMAIN" && test -n "$VITE_WEBAPP_PREVIEW_DOMAIN" \
-    && test -n "$VITE_VSCODE_DOMAIN" && test -n "$VITE_DB_DOMAIN" \
-    && yarn workspace @opsiforce/frontend build
+# 保留原项目的构建方式，默认值与 frontend/local-envs.sh 一致。
+# 这些地址用于应用预览、编辑器和数据库界面，平台主入口通过 NodePort 访问。
+ARG VITE_WEBAPP_DOMAIN=apps.opsiforce.localtest.me
+ARG VITE_WEBAPP_PREVIEW_DOMAIN=preview.apps.opsiforce.localtest.me
+ARG VITE_VSCODE_DOMAIN=code.opsiforce.localtest.me
+ARG VITE_DB_DOMAIN=db.opsiforce.localtest.me
+RUN yarn workspace @opsiforce/frontend build
 
 FROM registry.cn-beijing.aliyuncs.com/mayc/nginx:1.28.0-alpine AS server
 COPY deploy/docker/frontend.conf /etc/nginx/conf.d/default.conf

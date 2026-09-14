@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Edit these defaults or override them with environment variables.
+# 可直接修改以下默认值，也可以通过同名环境变量覆盖。
 REGISTRY=${REGISTRY:-sealos.hub:5000/opsiforce}
 SOURCE_REGISTRY=${SOURCE_REGISTRY:-registry.cn-beijing.aliyuncs.com/mayc}
 PLATFORM=${PLATFORM:-linux/amd64}
-NODE_IP=${NODE_IP:-127.0.0.1}              # Reachable test-cluster node IP.
-KUBE_CONTEXT=${KUBE_CONTEXT:-}             # Empty: use the current kubectl context.
-IMAGE_PULL_SECRET=${IMAGE_PULL_SECRET:-}   # An existing Secret in namespace opsiforce.
+NODE_IP=${NODE_IP:-127.0.0.1}              # 浏览器可访问的测试集群节点 IPv4 地址。
+KUBE_CONTEXT=${KUBE_CONTEXT:-}             # 留空时使用 kubectl 当前的集群上下文。
+IMAGE_PULL_SECRET=${IMAGE_PULL_SECRET:-}   # opsiforce 命名空间中已有的镜像拉取 Secret 名称。
 OPENAI_API_KEY=${OPENAI_API_KEY:-}
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
 
@@ -21,74 +21,57 @@ position=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --registry)
-      [[ -n "${2:-}" && "$2" != --* ]] || { echo '--registry requires HOST[:PORT]/NAMESPACE.' >&2; exit 1; }
+      [[ -n "${2:-}" && "$2" != --* ]] || { echo '--registry 后需要填写 主机[:端口]/命名空间。' >&2; exit 1; }
       REGISTRY=$2; shift 2;;
     --registry=*) REGISTRY=${1#*=}; shift;;
     --node-ip)
-      [[ -n "${2:-}" ]] || { echo '--node-ip requires an IPv4 address.' >&2; exit 1; }
+      [[ -n "${2:-}" ]] || { echo '--node-ip 后需要填写节点 IPv4 地址。' >&2; exit 1; }
       NODE_IP=$2; shift 2;;
     --node-ip=*) NODE_IP=${1#*=}; shift;;
-    --*) echo "Unknown option: $1" >&2; exit 1;;
+    --*) echo "未知选项：$1" >&2; exit 1;;
     *)
-      case "$position" in 0) PROFILE=$1;; 1) COMPONENT=$1;; *) echo 'Too many arguments.' >&2; exit 1;; esac
+      case "$position" in 0) PROFILE=$1;; 1) COMPONENT=$1;; *) echo '位置参数过多，请查看脚本用法。' >&2; exit 1;; esac
       position=$((position + 1)); shift;;
   esac
 done
-case "$ACTION" in sync|build|push|deploy|render|port-forward|expose) ;; *)
-  echo "Usage: $0 {sync|build|push|deploy|render|port-forward|expose} [local|prod] [COMPONENT|ENVIRONMENT_ID] [--registry HOST[:PORT]/NAMESPACE] [--node-ip IP]"
-  echo 'build builds and pushes project images; sync copies third-party runtime images from Alibaba Cloud.'
+case "$ACTION" in sync|build|push|import|deploy|render|port-forward|expose) ;; *)
+  cat <<EOF
+构建镜像不需要节点 IP：Windows 执行 build.ps1，Linux 执行 bash deploy.sh build。
+构建成功后，在虚拟机的 deploy 目录执行：
+  bash deploy.sh deploy --node-ip 192.168.1.10  # 改成内网 Kubernetes 节点 IP
+
+默认使用测试环境，无需填写 local；默认仓库为 sealos.hub:5000/opsiforce。
+更换仓库时加 --registry 主机:端口/命名空间，须与 Windows 的 -Registry 一致。
+
+如果 Windows 选择了仅导出，则一并复制 images.tar，部署前先执行：
+  docker login sealos.hub:5000
+  bash deploy.sh import                       # 导入全部镜像并推送到内网仓库
+
+其他用法（当前流程不用执行）：
+  build         构建项目镜像并自动推送
+  push          推送已经构建的项目镜像
+  sync          在联网机器上同步第三方镜像到目标仓库
+  render        仅生成 YAML
+  port-forward  将平台入口转发到本机 30443 端口
+  expose        为已启动的项目开放临时 NodePort
+
+完整格式：$0 命令 [local|prod] [组件|环境UUID] [--registry 仓库地址] [--node-ip 节点IP]
+组件可选 all、backend、frontend、runtime-proxy、agent，默认 all。
+--node-ip 仅部署、渲染和临时访问时使用，构建和推送不需要。
+其他配置见 deploy/README.md；模型 Key 可以留空。
+EOF
   exit 0;;
 esac
 REGISTRY=${REGISTRY%/}
-[[ "$REGISTRY" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?(/[a-z0-9][a-z0-9._-]*)+$ ]] || { echo 'Invalid registry; use HOST[:PORT]/NAMESPACE without http(s)://.' >&2; exit 1; }
-[[ "$PROFILE" == local || "$PROFILE" == prod ]] || { echo 'Profile must be local or prod.' >&2; exit 1; }
+[[ "$REGISTRY" =~ ^[a-z0-9][a-z0-9.-]*(:[0-9]+)?(/[a-z0-9][a-z0-9._-]*)+$ ]] || { echo '仓库地址格式错误，请使用 主机[:端口]/命名空间，不要包含 http(s)://。' >&2; exit 1; }
+[[ "$PROFILE" == local || "$PROFILE" == prod ]] || { echo '环境只能是 local（测试）或 prod（生产）。' >&2; exit 1; }
 TAG=${TAG:-$PROFILE}
-if [[ "$PROFILE" == local ]]; then
-  [[ "$NODE_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || { echo 'NODE_IP must be an IPv4 address.' >&2; exit 1; }
-  IFS=. read -r ip1 ip2 ip3 ip4 <<< "$NODE_IP"
-  for octet in "$ip1" "$ip2" "$ip3" "$ip4"; do
-    ((10#$octet <= 255)) || { echo 'Invalid NODE_IP octet.' >&2; exit 1; }
-  done
-  DOMAIN=${DOMAIN:-$NODE_IP}
-  PORT_SUFFIX=:30443
-  DB_MODE=${DB_MODE:-bundled}
-else
-  if [[ "$ACTION" == sync || "$ACTION" == push ]]; then DOMAIN=${DOMAIN:-opsiforce.localtest.me}
-  else : "${DOMAIN:?Set DOMAIN for production}"; fi
-  PORT_SUFFIX=
-  DB_MODE=external
-fi
-[[ "$DOMAIN" =~ ^[a-z0-9][a-z0-9.-]*[a-z0-9]$ ]] || { echo 'DOMAIN must be a hostname without port or scheme.' >&2; exit 1; }
-[[ "$TAG" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$ ]] || { echo 'Invalid image tag.' >&2; exit 1; }
+[[ "$TAG" =~ ^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$ ]] || { echo '镜像标签 TAG 格式错误。' >&2; exit 1; }
 if [[ "$ACTION" != expose ]]; then
-  case "$COMPONENT" in all) COMPONENTS=(backend frontend runtime-proxy agent);; backend|frontend|runtime-proxy|agent) COMPONENTS=("$COMPONENT");; *) echo 'Unknown image component.' >&2; exit 1;; esac
+  case "$COMPONENT" in all) COMPONENTS=(backend frontend runtime-proxy agent);; backend|frontend|runtime-proxy|agent) COMPONENTS=("$COMPONENT");; *) echo '未知镜像组件，请使用 all、backend、frontend、runtime-proxy 或 agent。' >&2; exit 1;; esac
 fi
 
-k() {
-  if [[ -n "$KUBE_CONTEXT" ]]; then kubectl --context "$KUBE_CONTEXT" -n opsiforce "$@"
-  else kubectl -n opsiforce "$@"; fi
-}
-if [[ "$ACTION" == expose ]]; then
-  [[ "$PROFILE" == local && "$COMPONENT" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] || { echo 'Usage: expose local ENVIRONMENT_UUID --node-ip NODE_IP' >&2; exit 1; }
-  export RUNTIME_ENV=$COMPONENT
-  RUNTIME_POD=$(k get pods -l "opsiforce.io/environment-id=$RUNTIME_ENV" -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}')
-  RUNTIME_POD=${RUNTIME_POD%%$'\n'*}
-  [[ -n "$RUNTIME_POD" ]] || { echo 'Open the project in the platform first; no running environment Pod was found.' >&2; exit 1; }
-  k wait --for=condition=Ready "pod/$RUNTIME_POD" --timeout=300s
-  RUNTIME_UID=$(k get pod "$RUNTIME_POD" -o 'jsonpath={.metadata.uid}')
-  export RUNTIME_POD RUNTIME_UID
-  envsubst '${RUNTIME_ENV} ${RUNTIME_POD} ${RUNTIME_UID}' < "$DIR/k8s/local-runtime.yaml" | k apply -f -
-  while IFS=$'\t' read -r surface port; do
-    [[ -n "$surface" ]] && echo "$surface: http://$NODE_IP:$port/"
-  done < <(k get service "opsiforce-test-$RUNTIME_ENV" -o 'jsonpath={range .spec.ports[*]}{.name}{"\t"}{.nodePort}{"\n"}{end}')
-  echo 'Temporary local access; recreate it with this command after the environment Pod is replaced.'
-  exit 0
-fi
-if [[ "$ACTION" == port-forward ]]; then
-  [[ "$PROFILE" == local ]] || { echo 'port-forward is for local mode.' >&2; exit 1; }
-  k port-forward svc/opsiforce-edge 30443:443
-  exit 0
-fi
+# 构建、推送、导入只处理镜像，与部署地址无关。
 if [[ "$ACTION" == sync ]]; then
   dependencies=(nginx:1.28.0-alpine bifrost:v2.0.0 gotenberg:8.36.0-libreoffice)
   if [[ "$PROFILE" == local ]]; then dependencies+=(postgres:16.4-alpine redis:7.4.1-alpine); fi
@@ -99,31 +82,86 @@ if [[ "$ACTION" == sync ]]; then
   done
   exit 0
 fi
+if [[ "$ACTION" == import ]]; then
+  [[ "$PROFILE" == local && "$COMPONENT" == all ]] || { echo 'Windows 镜像包用于全量测试部署，请执行：bash deploy.sh import' >&2; exit 1; }
+  archive=${IMAGE_ARCHIVE:-$DIR/images.tar}
+  [[ -f "$archive" ]] || { echo "未找到镜像包：${archive}，请先从 Windows 复制 images.tar。" >&2; exit 1; }
+  docker load --input "$archive"
+  images=()
+  for component in "${COMPONENTS[@]}"; do images+=("opsiforce-$component:$TAG"); done
+  images+=(nginx:1.28.0-alpine bifrost:v2.0.0 gotenberg:8.36.0-libreoffice postgres:16.4-alpine redis:7.4.1-alpine)
+  # 先检查全量镜像是否存在，再开始推送，避免缺包或标签不一致时只推送一部分。
+  for image in "${images[@]}"; do docker image inspect "opsiforce/$image" >/dev/null; done
+  for image in "${images[@]}"; do
+    echo "推送镜像：$REGISTRY/$image"
+    docker tag "opsiforce/$image" "$REGISTRY/$image"
+    docker push "$REGISTRY/$image"
+  done
+  echo "全部 9 个镜像已推送到：$REGISTRY"
+  exit 0
+fi
 if [[ "$ACTION" == build || "$ACTION" == push ]]; then
   for component in "${COMPONENTS[@]}"; do
     image="$REGISTRY/opsiforce-$component:$TAG"
     if [[ "$ACTION" == push ]]; then docker push "$image"; continue; fi
     args=(buildx build --load --platform "$PLATFORM" -t "$image" -f "$DIR/docker/Dockerfile.$component")
-    if [[ "$component" == frontend ]]; then
-      args+=(--build-arg "VITE_WEBAPP_DOMAIN=apps.$DOMAIN$PORT_SUFFIX"
-             --build-arg "VITE_WEBAPP_PREVIEW_DOMAIN=preview.apps.$DOMAIN$PORT_SUFFIX"
-             --build-arg "VITE_VSCODE_DOMAIN=code.$DOMAIN$PORT_SUFFIX"
-             --build-arg "VITE_DB_DOMAIN=db.$DOMAIN$PORT_SUFFIX")
-    fi
     docker "${args[@]}" "$ROOT"
     docker push "$image"
   done
   exit 0
 fi
 
-command -v envsubst >/dev/null || { echo 'Install gettext (envsubst) first.' >&2; exit 1; }
-command -v openssl >/dev/null || { echo 'Install openssl first.' >&2; exit 1; }
-[[ "$DB_MODE" == bundled || "$DB_MODE" == external ]] || { echo 'DB_MODE must be bundled or external.' >&2; exit 1; }
+# 仅部署、渲染和临时访问需要节点地址或域名。
+if [[ "$PROFILE" == local ]]; then
+  [[ "$NODE_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || { echo 'NODE_IP 必须是 IPv4 地址。' >&2; exit 1; }
+  IFS=. read -r ip1 ip2 ip3 ip4 <<< "$NODE_IP"
+  for octet in "$ip1" "$ip2" "$ip3" "$ip4"; do
+    ((10#$octet <= 255)) || { echo 'NODE_IP 的每段数字必须在 0 到 255 之间。' >&2; exit 1; }
+  done
+  DOMAIN=${DOMAIN:-$NODE_IP}
+  PORT_SUFFIX=:30443
+  DB_MODE=${DB_MODE:-bundled}
+else
+  : "${DOMAIN:?生产环境需要设置 DOMAIN 域名}"
+  PORT_SUFFIX=
+  DB_MODE=external
+fi
+[[ "$DOMAIN" =~ ^[a-z0-9][a-z0-9.-]*[a-z0-9]$ ]] || { echo 'DOMAIN 必须是域名或 IPv4 地址，不要包含端口或协议。' >&2; exit 1; }
+
+k() {
+  if [[ -n "$KUBE_CONTEXT" ]]; then kubectl --context "$KUBE_CONTEXT" -n opsiforce "$@"
+  else kubectl -n opsiforce "$@"; fi
+}
+if [[ "$ACTION" == expose ]]; then
+  [[ "$PROFILE" == local && "$COMPONENT" =~ ^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$ ]] || { echo '用法：expose local 环境UUID --node-ip 节点IPv4地址' >&2; exit 1; }
+  export RUNTIME_ENV=$COMPONENT
+  RUNTIME_POD=$(k get pods -l "opsiforce.io/environment-id=$RUNTIME_ENV" -o 'jsonpath={range .items[*]}{.metadata.name}{"\n"}{end}')
+  RUNTIME_POD=${RUNTIME_POD%%$'\n'*}
+  [[ -n "$RUNTIME_POD" ]] || { echo '未找到运行环境 Pod，请先在平台中打开项目。' >&2; exit 1; }
+  k wait --for=condition=Ready "pod/$RUNTIME_POD" --timeout=300s
+  RUNTIME_UID=$(k get pod "$RUNTIME_POD" -o 'jsonpath={.metadata.uid}')
+  export RUNTIME_POD RUNTIME_UID
+  envsubst '${RUNTIME_ENV} ${RUNTIME_POD} ${RUNTIME_UID}' < "$DIR/k8s/local-runtime.yaml" | k apply -f -
+  while IFS=$'\t' read -r surface port; do
+    [[ -n "$surface" ]] && echo "$surface: http://$NODE_IP:$port/"
+  done < <(k get service "opsiforce-test-$RUNTIME_ENV" -o 'jsonpath={range .spec.ports[*]}{.name}{"\t"}{.nodePort}{"\n"}{end}')
+  echo '以上地址用于临时测试；环境 Pod 更换后，请重新执行此命令。'
+  exit 0
+fi
+if [[ "$ACTION" == port-forward ]]; then
+  [[ "$PROFILE" == local ]] || { echo 'port-forward 仅支持 local 测试环境。' >&2; exit 1; }
+  k port-forward svc/opsiforce-edge 30443:443
+  exit 0
+fi
+
+command -v envsubst >/dev/null || { echo '请先安装 gettext，以提供 envsubst 命令。' >&2; exit 1; }
+command -v openssl >/dev/null || { echo '请先安装 openssl。' >&2; exit 1; }
+[[ "$DB_MODE" == bundled || "$DB_MODE" == external ]] || { echo 'DB_MODE 只能是 bundled（部署测试数据库）或 external（外部数据库）。' >&2; exit 1; }
 umask 077
 STATE="$DIR/.state/$PROFILE"
 OUT="$DIR/.generated/$PROFILE"
 mkdir -p "$STATE" "$OUT"
-# Keep generated credentials stable across deployments. Do not delete this file on upgrades.
+# 重复部署复用已生成的密钥，升级时不要删除此文件。
 if [[ ! -f "$STATE/secrets.env" ]]; then
   for name in LOCAL_PASSWORD ADMIN_PASSWORD PROXY_CONTROL_TOKEN BIFROST_ENCRYPTION_KEY EXTERNAL_SERVICES_ENCRYPTION_KEY OIDC_PLUGIN_SECRET; do
     printf '%s=%s\n' "$name" "$(openssl rand -hex 32)"
@@ -137,18 +175,18 @@ if [[ "$DB_MODE" == bundled ]]; then
   PG_PASSWORD=$LOCAL_PASSWORD
   REDIS_URL="redis://:$LOCAL_PASSWORD@opsiforce-redis:6379/0"
 else
-  : "${PG_HOST:?Set the external PostgreSQL host}"
-  : "${PG_PASSWORD:?Set the external PostgreSQL password}"
-  : "${REDIS_URL:?Set the external Redis URL}"
+  : "${PG_HOST:?请设置外部 PostgreSQL 地址 PG_HOST}"
+  : "${PG_PASSWORD:?请设置外部 PostgreSQL 密码 PG_PASSWORD}"
+  : "${REDIS_URL:?请设置外部 Redis 连接地址 REDIS_URL}"
   PG_PORT=${PG_PORT:-5432}
   PG_USER=${PG_USER:-postgres}
 fi
 PG_DATABASE=${PG_DATABASE:-opsiforce}
 BIFROST_DATABASE=${BIFROST_DATABASE:-bifrost}
 PG_SSLMODE=${PG_SSLMODE:-disable}
-# These values occur inside Bifrost JSON; arbitrary passwords are passed through Secret data.
+# 这些字段会写入 Bifrost 的 JSON 配置；密码单独通过 Secret 传递。
 for name in PG_HOST PG_PORT PG_USER PG_DATABASE BIFROST_DATABASE PG_SSLMODE; do
-  [[ "${!name}" =~ ^[a-zA-Z0-9_.:-]+$ ]] || { echo "Invalid $name" >&2; exit 1; }
+  [[ "${!name}" =~ ^[a-zA-Z0-9_.:-]+$ ]] || { echo "$name 的值包含不支持的字符" >&2; exit 1; }
 done
 urlencode() {
   local LC_ALL=C text=$1 char encoded i
@@ -165,7 +203,7 @@ done
 DOMAIN_REGEX=${DOMAIN//./\\.}
 PULL_SECRETS_JSON='[]'
 if [[ -n "$IMAGE_PULL_SECRET" ]]; then
-  [[ "$IMAGE_PULL_SECRET" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || { echo 'Invalid IMAGE_PULL_SECRET.' >&2; exit 1; }
+  [[ "$IMAGE_PULL_SECRET" =~ ^[a-z0-9][a-z0-9.-]*$ ]] || { echo 'IMAGE_PULL_SECRET 名称格式错误。' >&2; exit 1; }
   PULL_SECRETS_JSON="[{\"name\":\"$IMAGE_PULL_SECRET\"}]"
 fi
 RELEASE_ID=$(date -u +%Y%m%d%H%M%S)
@@ -174,7 +212,7 @@ export PULL_SECRETS_JSON RELEASE_ID
 FILES=(base apps migration)
 if [[ "$DB_MODE" == bundled ]]; then FILES+=(local-infra); fi
 if [[ "$PROFILE" == local ]]; then
-  # Nginx serves HTTPS because the current frontend generates HTTPS app URLs.
+  # 当前前端生成 HTTPS 应用地址，因此 Nginx 提供 HTTPS 入口。
   if [[ ! -f "$STATE/tls.crt" || ! -f "$STATE/tls.key" || "$(cat "$STATE/tls-domain" 2>/dev/null || true)" != "$DOMAIN|$NODE_IP" ]]; then
     openssl req -x509 -nodes -newkey rsa:2048 -days 365 -keyout "$STATE/tls.key" -out "$STATE/tls.crt" \
       -subj "/CN=$DOMAIN" -addext "subjectAltName=IP:$NODE_IP,IP:127.0.0.1,DNS:$DOMAIN,DNS:*.$DOMAIN,DNS:*.apps.$DOMAIN,DNS:*.preview.apps.$DOMAIN,DNS:*.code.$DOMAIN,DNS:*.db.$DOMAIN" >/dev/null 2>&1
@@ -186,12 +224,12 @@ if [[ "$PROFILE" == local ]]; then
 else FILES+=(production-edge); fi
 TOKENS='${REGISTRY} ${TAG} ${DOMAIN} ${PORT_SUFFIX} ${DOMAIN_REGEX} ${PG_HOST} ${PG_PORT} ${PG_USER} ${BIFROST_DATABASE} ${PG_SSLMODE} ${PULL_SECRETS_JSON} ${RELEASE_ID} ${DATABASE_URL_B64} ${REDIS_URL_B64} ${PG_PASSWORD_B64} ${ADMIN_PASSWORD_B64} ${PROXY_CONTROL_TOKEN_B64} ${BIFROST_ENCRYPTION_KEY_B64} ${EXTERNAL_SERVICES_ENCRYPTION_KEY_B64} ${OIDC_PLUGIN_SECRET_B64} ${OPENAI_API_KEY_B64} ${ANTHROPIC_API_KEY_B64} ${TLS_CRT_B64} ${TLS_KEY_B64}'
 for file in "${FILES[@]}"; do envsubst "$TOKENS" < "$DIR/k8s/$file.yaml" > "$OUT/$file.yaml"; done
-[[ "$ACTION" == render ]] && { echo "YAML generated in $OUT"; exit 0; }
+[[ "$ACTION" == render ]] && { echo "YAML 已生成到：$OUT"; exit 0; }
 
-# Deploy only the selected profile. No StorageClass, ingress controller or network policy is installed.
+# 只部署所选环境，不安装 StorageClass、入口控制器或网络策略。
 k apply -f "$OUT/base.yaml"
 if [[ -n "$IMAGE_PULL_SECRET" ]]; then k get secret "$IMAGE_PULL_SECRET" -o name; fi
-# Fixed workloads inherit registry credentials; dynamic agents also use IMAGE_PULL_SECRETS above.
+# 固定工作负载继承镜像拉取凭据；动态 Agent 也使用上面的拉取凭据配置。
 if [[ -n "$IMAGE_PULL_SECRET" ]]; then
   for sa in default opsiforce-backend; do k patch serviceaccount "$sa" -p "{\"imagePullSecrets\":$PULL_SECRETS_JSON}"; done
 fi
@@ -202,7 +240,7 @@ if [[ "$DB_MODE" == bundled ]]; then
 fi
 old_job=$(k get job opsiforce-migrate --ignore-not-found -o 'jsonpath={.metadata.name}{" "}{.status.conditions[?(@.status=="True")].type}')
 if [[ -n "$old_job" && "$old_job" != *Complete* && "$old_job" != *Failed* ]]; then
-  echo 'An earlier migration is still running. Inspect it before retrying.' >&2; exit 1
+  echo '上一次数据库迁移尚未结束，请检查迁移任务后再重试。' >&2; exit 1
 fi
 if [[ -n "$(k get deployment opsiforce-backend --ignore-not-found -o name)" ]]; then
   k scale deployment/opsiforce-backend --replicas=0
@@ -217,8 +255,8 @@ for deployment in backend frontend proxy-agent proxy-app proxy-vscode proxy-db b
   k rollout status "deployment/opsiforce-$deployment" --timeout=900s
 done
 if [[ "$PROFILE" == local ]]; then
-  echo "Deployed: https://$NODE_IP:30443"
-  echo "Trust $STATE/tls.crt in your test browser. Use expose for temporary App/VS Code/DB ports."
+  echo "部署完成，访问地址：https://$NODE_IP:30443"
+  echo "请在测试浏览器中信任证书 $STATE/tls.crt；使用 expose 命令临时开放应用、VS Code 和数据库界面端口。"
 else
-  echo 'Production workloads are ready. The private opsiforce-edge:8080 Service awaits host-product authentication and routing integration.'
+  echo '生产工作负载已就绪；私有服务 opsiforce-edge:8080 还需要接入主体产品的认证和路由。'
 fi

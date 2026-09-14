@@ -217,7 +217,7 @@ The day-to-day commands you run *while* developing (type-check, lint, format, da
 
 ## Running in production
 
-For Dockerfiles, plain Kubernetes YAML, and a single build/deploy shell script, see **[deploy/README.md](deploy/README.md)**. Local mode uses the existing local-path storage class and Nginx; production mode provides a private integration endpoint for the host product and external PostgreSQL/Redis. Local testing supports an IP-based NodePort entry.
+For Dockerfiles, plain Kubernetes YAML, a Windows PowerShell build/push/export script, and a Linux deployment script, see **[deploy/README.md](deploy/README.md)**. Local mode uses the existing local-path storage class and Nginx; production mode provides a private integration endpoint for the host product and external PostgreSQL/Redis. Local testing supports an IP-based NodePort entry.
 
 The Quickstart targets local development. A production deployment uses the same components on infrastructure you operate:
 
