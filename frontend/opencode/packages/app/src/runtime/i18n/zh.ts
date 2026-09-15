@@ -3,6 +3,13 @@ import en from "./en"
 type Keys = keyof typeof en
 
 export const dict = {
+  "session.activity.title": "思考与执行过程",
+  "session.activity.running": "进行中",
+  "session.activity.finished": "已结束",
+  "session.activity.counts": "{{thoughts}} 段思考 · {{tools}} 次工具调用",
+  "session.activity.collapse": "全部收起",
+  "session.activity.expand": "展开过程",
+  "session.activity.scrollHint": "在区域内滚动查看过程，移到区域外滚动对话。",
   "desktop.menu.app": "OpenCode",
   "desktop.menu.file": "文件",
   "desktop.menu.edit": "编辑",

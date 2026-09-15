@@ -52,6 +52,13 @@ export namespace TimelineRow {
     spacing?: "tool" | "content"
   }> {}
 
+  // A presentation-only group; the source projection retains individual rows.
+  export class Activity extends Data.TaggedClass("Activity")<{
+    userMessageID: string
+    id: string
+    rows: TimelineRow[]
+  }> {}
+
   export class Thinking extends Data.TaggedClass("Thinking")<{
     userMessageID: string
     ref: PartRef
@@ -74,6 +81,7 @@ export namespace TimelineRow {
     | TurnDivider
     | AssistantPart
     | Thinking
+    | Activity
     | Error
     | Retry
 
@@ -94,6 +102,8 @@ export namespace TimelineRow {
       // The group key already carries the owning message and part IDs.
       case "AssistantPart":
         return `assistant-part:${row.group.type}:${row.group.key}`
+      case "Activity":
+        return row.id
       case "Thinking":
         return `thinking:${row.userMessageID}`
       case "Error":

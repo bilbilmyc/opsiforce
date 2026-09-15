@@ -1,6 +1,13 @@
 import { DESKTOP_NATIVE_ENGLISH } from "./desktop-native"
 
 export const dict = {
+  "session.activity.title": "Thinking and activity",
+  "session.activity.running": "In progress",
+  "session.activity.finished": "Finished",
+  "session.activity.counts": "{{thoughts}} thoughts · {{tools}} tools",
+  "session.activity.collapse": "Collapse all",
+  "session.activity.expand": "Expand process",
+  "session.activity.scrollHint": "Scroll inside this panel to view the process; scroll outside it to read the conversation.",
   ...DESKTOP_NATIVE_ENGLISH,
   "session.location.unavailable": "Session location unavailable",
   "session.location.description": "Choose another directory to continue this session.",

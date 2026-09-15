@@ -1,0 +1,46 @@
+[data-component="turn-activity"] {
+  border: 1px solid #dfe2e7;
+  border-radius: 10px;
+  background: #f8f9fb;
+  color: #525966;
+  overflow: hidden;
+  [data-slot="activity-toggle"] {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px;
+    text-align: start;
+    cursor: pointer;
+    font-size: 12px;
+    &:hover { background: #eef0f4; }
+    &:focus-visible { outline: 2px solid #6883ba; outline-offset: -3px; }
+  }
+  [data-slot="activity-title"] { color: #303642; font-weight: 600; }
+  [data-slot="activity-state"] { white-space: nowrap; }
+  [data-running="true"] { color: #365f9b; }
+  [data-slot="activity-counts"] { color: #737b89; }
+  [data-slot="activity-action"] { margin-inline-start: auto; white-space: nowrap; color: #365f9b; }
+  [data-slot="activity-hint"] { padding: 0 12px 10px; font-size: 11px; color: #737b89; }
+  [data-slot="activity-scroll"] {
+    max-height: min(420px, 50vh);
+    overflow-y: scroll;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: #8c96a6 #e8ebef;
+    border-top: 1px solid #dfe2e7;
+    padding: 12px 0;
+    background: #fff;
+    &:focus-visible { outline: 2px solid #6883ba; outline-offset: -2px; }
+    &::-webkit-scrollbar { width: 9px; }
+    &::-webkit-scrollbar-track { background: #e8ebef; }
+    &::-webkit-scrollbar-thumb { background: #8c96a6; border-radius: 8px; border: 2px solid #e8ebef; }
+  }
+  /* One process scrollbar, rather than a separate nested scroll area per thought. */
+  [data-slot="reasoning-content"] { max-height: none; overflow: visible; }
+  @media (max-width: 600px) {
+    [data-slot="activity-counts"] { display: none; }
+    [data-slot="activity-toggle"] { gap: 5px; padding: 10px; }
+  }
+}

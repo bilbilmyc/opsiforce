@@ -33,6 +33,8 @@ import { useSettings } from "@/settings/model"
 import { SessionProjectMenu, SessionTitleHeader } from "../session-identity-header"
 import { SessionHeader } from "@/session/header/session-header"
 import { turnProgress } from './turn-progress'
+import { groupActivity } from './activity'
+import { ActivityPanel } from './activity-panel'
 
 type BackgroundTask = {
   id: string
@@ -451,10 +453,22 @@ function MessageTimelineView(
   const showHeader = createMemo(() => !props.hideHeader && (props.data.showHeader() || workspaceSession()))
   const pinned = createMemo(() => props.pinned)
   const messageByID = projection.messageByID
+  const activityRows = createMemo((previous: TimelineRow.TimelineRow[] | undefined) => groupActivity(projection.rows(), messageByID(), previous))
+  const activityProjection = {
+    ...projection,
+    rows: activityRows,
+    rowByKey: createMemo(() => new Map(activityRows().map(row => [TimelineRow.key(row), row]))),
+    messageRowIndex: createMemo(() => {
+      const indexes = new Map<string, number>()
+      activityRows().forEach((row, index) => { if (!indexes.has(row.userMessageID)) indexes.set(row.userMessageID, index) })
+      return indexes
+    }),
+    messageLastRowIndex: createMemo(() => new Map(activityRows().map((row, index) => [row.userMessageID, index]))),
+  }
   const virtualized = createTimelineVirtualizer({
     sessionKey: () => `${server.key}/${props.data.sessionID()}`,
-    presentationKey: () => JSON.stringify(props.data.timelineDetail()),
-    projection,
+    presentationKey: () => `activity-v1:${JSON.stringify(props.data.timelineDetail())}`,
+    projection: activityProjection,
     showHeader,
     pinned,
     scroll: () => props.scroll,
@@ -675,7 +689,16 @@ function MessageTimelineView(
         const content = Timeline.resolveContent(messageByID().get(row.group.ref.messageID), row.group.ref.partID)
         return content?.type === "tool" && ["edit", "write"].includes(content.name)
       }}
-      renderRow={(row, onSizeChange) => <rowRenderer.Row row={row} onSizeChange={onSizeChange} />}
+      renderRow={(row, onSizeChange) => {
+        const activity = () => { const value = row(); return value._tag === "Activity" ? value : undefined }
+        const running = () => activity()?.userMessageID === projection.activeMessageID() && sessionStatus().type !== "idle"
+        const open = () => virtualized.disclosure.value(TimelineRow.key(row())) ?? running()
+        return <Show when={activity()} fallback={<rowRenderer.Row row={row} onSizeChange={onSizeChange} />}>
+          <ActivityPanel rows={activity()!.rows} messages={messageByID()} running={running()} open={open()} centered={props.centered}
+            onToggle={() => { virtualized.disclosure.set(TimelineRow.key(row()), !open()); onSizeChange?.() }}
+            render={child => <rowRenderer.Row row={() => child} onSizeChange={onSizeChange} />} />
+        </Show>
+      }}
       header={
         <Show when={!props.hideHeader}>
           <SessionTitleHeader>
