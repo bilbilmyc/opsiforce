@@ -42,7 +42,7 @@ const base=process.env.CHAT_TEST_BASE||upstream;
    if(path.endsWith('/api/event')||path.endsWith('/events'))return route.fulfill({status:200,contentType:'text/event-stream',body:': fixture\n\n'});
    if(path.endsWith('/api/session/active'))return route.fulfill({json:{data:finished?{}:{[session]:{type:'running'}}}});
    if(path.endsWith('/api/session/'+session+'/message')){
-    const data=structuredClone(message);for(const m of data.data)if(m.type==='assistant'){m.content=[{type:'reasoning',text:content,time:{created:Date.now()-2000}}];if(finished){m.finish='stop';m.time.completed=Date.now();m.content.push({type:'text',text:'FINAL_ANSWER_VISIBLE'});}}
+    const data=structuredClone(message);for(const m of data.data)if(m.type==='assistant'){m.content=[{type:'reasoning',text:content,time:{created:Date.now()-2000}}];if(finished){m.content.unshift({type:'text',text:'INTERMEDIATE_FORMAL_OUTPUT'});m.finish='stop';m.time.completed=Date.now();m.content.push({type:'text',text:'FINAL_ANSWER_VISIBLE'});}}
     return route.fulfill({json:data});
    }
    if(req.method()==='PATCH' && path==='/api/projects/'+project+'/environments/'+project+'/session')return route.fulfill({json:{ok:true}});
@@ -105,6 +105,8 @@ const base=process.env.CHAT_TEST_BASE||upstream;
   finished=true;content='Completed reasoning';await page.setViewportSize({width:1600,height:1000});await page.reload();
   await page.getByText('This turn is complete',{exact:true}).waitFor();
   await page.getByText('FINAL_ANSWER_VISIBLE',{exact:true}).waitFor();
+  await page.getByText('INTERMEDIATE_FORMAL_OUTPUT',{exact:true}).waitFor();
+  assert.equal(await page.getByText('INTERMEDIATE_FORMAL_OUTPUT',{exact:true}).evaluate(e=>!!e.closest('[data-component="turn-activity"]')),false,'intermediate formal output stays outside the collapsed process');
   assert.equal(await page.locator('[data-slot="activity-toggle"]').getAttribute('aria-expanded'),'false','finished process collapsed by default');
   assert.equal(await page.locator('[data-slot="activity-scroll"]').count(),0);
   await page.locator('[data-slot="activity-toggle"]').click();

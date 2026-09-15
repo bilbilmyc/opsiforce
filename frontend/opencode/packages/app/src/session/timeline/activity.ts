@@ -1,25 +1,8 @@
 import { Timeline, TimelineRow } from "@opencode-ai/session-ui/timeline/projection"
 import type { SessionMessageInfo } from "@opencode-ai/client/promise"
 
-/** Keep the latest answer and actionable errors outside the process disclosure. */
+/** Keep every formal text output and actionable error outside process disclosures. */
 export function groupActivity(rows: TimelineRow.TimelineRow[], messages: Map<string, SessionMessageInfo>, previous: TimelineRow.TimelineRow[] = []) {
-  const finalParts = new Set<string>()
-  const lastAssistant = new Map<string, string>()
-  for (const row of rows) {
-    if (row._tag === "AssistantPart") {
-      for (const ref of row.group.type === "part" ? [row.group.ref] : row.group.refs)
-        if (messages.get(ref.messageID)?.type === "assistant") lastAssistant.set(row.userMessageID, ref.messageID)
-    }
-    if (row._tag === "Thinking") lastAssistant.set(row.userMessageID, row.ref.messageID)
-  }
-  for (const id of lastAssistant.values()) {
-    const message = messages.get(id)
-    if (message?.type !== "assistant") continue
-    for (const entry of Timeline.contentEntries(message).toReversed()) {
-      if (entry.content.type !== "text") break
-      finalParts.add(entry.id)
-    }
-  }
   const result: TimelineRow.TimelineRow[] = []
   const segments = new Map<string, number>()
   const used = new Set<string>()
@@ -41,7 +24,7 @@ export function groupActivity(rows: TimelineRow.TimelineRow[], messages: Map<str
   for (const row of rows) {
     const activity = row._tag === "Thinking" || (row._tag === "AssistantPart" &&
       (pending.length > 0 || (row.group.type === "part" ? [row.group.ref] : row.group.refs).some(ref => messages.get(ref.messageID)?.type === "assistant")) &&
-      !(row.group.type === "part" && finalParts.has(row.group.ref.partID)))
+      !(row.group.type === "part" && Timeline.resolveContent(messages.get(row.group.ref.messageID), row.group.ref.partID)?.type === "text"))
     if (!activity || (pending.length && pending[0].userMessageID !== row.userMessageID)) flush()
     if (activity) pending.push(row)
     else result.push(row)

@@ -11,12 +11,12 @@ function project(messages: SessionMessageInfo[], busy = false) {
 const user = { id: "msg_user", type: "user" as const, text: "Question", time: { created: 1 } }
 const assistant = (id: string, content: any[], completed?: number): SessionMessageInfo => ({ id, type: "assistant", agent: "build", model: { id: "m", providerID: "p" }, time: { created: 2, completed }, content })
 
-test("a whole process folds together while trailing answer parts remain outside", () => {
+test("every formal output stays outside process groups in chronological order", () => {
   const { rows, source } = project([user, assistant("msg_a", [{ type: "reasoning", text: "first" }, { type: "text", text: "Checking..." }], 3), assistant("msg_b", [{ type: "reasoning", text: "second" }, { type: "text", text: "Answer" }, { type: "text", text: "More answer" }], 5)])
-  expect(rows.map(r => r._tag)).toEqual(["UserMessage", "Activity", "AssistantPart", "AssistantPart"])
+  expect(rows.map(r => r._tag)).toEqual(["UserMessage", "Activity", "AssistantPart", "Activity", "AssistantPart", "AssistantPart"])
   const activity = rows[1] as TimelineRow.Activity
-  expect(activityCounts(activity.rows, source.messageByID).thoughts).toBe(2)
-  expect(activity.rows.some(r => r._tag === "AssistantPart" && r.group.type === "part" && r.group.ref.partID === "msg_a:text:0")).toBe(true)
+  expect(activityCounts(activity.rows, source.messageByID).thoughts).toBe(1)
+  expect(activity.rows.some(r => r._tag === "AssistantPart" && r.group.type === "part" && r.group.ref.partID === "msg_a:text:0")).toBe(false)
 })
 test("activity identity survives active reasoning becoming completed", () => {
   const running = project([user, assistant("msg_a", [{ type: "reasoning", text: "" }])], true)
