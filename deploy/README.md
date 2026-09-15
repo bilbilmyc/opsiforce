@@ -99,6 +99,23 @@ bash deploy.sh import
 
 ## 需要时再改的配置
 
+### 40 虚拟机的 HTTP 预览与发布测试
+
+平台入口可使用 `http://12.2.40.40`。应用预览和发布使用不同的子域名；测试时使用自动解析到该 IP 的 `opsiforce.12.2.40.40.sslip.io`，无需购买域名或逐个添加 hosts。访问电脑必须能连接 `12.2.40.40`，且 DNS 能解析这些测试域名。
+
+后续重新部署到 40 时，在同一终端先设置以下变量，再执行部署命令，避免恢复到默认的 `opsiforce.localtest.me`：
+
+```bash
+export DOMAIN=opsiforce.12.2.40.40.sslip.io
+export PUBLIC_SCHEME=http
+```
+
+- 平台：`http://12.2.40.40` 或 `http://opsiforce.12.2.40.40.sslip.io`。
+- 预览：`http://<环境ID>.preview.apps.opsiforce.12.2.40.40.sslip.io/`。
+- 发布：`http://<环境ID>-<环境slug>.apps.opsiforce.12.2.40.40.sslip.io/`，以界面实际生成的地址为准。
+
+Traefik 的 HTTP 入口转发至 `opsiforce-edge:8080`，由入口按域名分发到运行时代理。静态页面也需完成生成、启动，并登记 `app/app.meta.json`，平台才会显示应用预览和发布入口。这里的 Production 是测试集群内的发布目标，不代表已经具备公网生产环境。
+
 - 仓库：Windows 使用 `-Registry 主机:端口/命名空间`；Linux 使用 `--registry 主机:端口/命名空间`，构建和部署保持一致。
 - 镜像版本：默认 `local`。Windows 可用 `-Tag v2`；Linux 构建、推送、导入和部署都使用 `--tag v2`，例如 `bash deploy.sh deploy --tag v2`。兼容原有 `TAG=v2` 环境变量，命令行选项优先。
 - 架构：Windows 可用 `-Platform linux/arm64`；Linux 可用 `PLATFORM=linux/arm64`，基础镜像也必须支持该架构。
@@ -186,3 +203,7 @@ bash deploy/install-ingress.sh
 后续可在公司 CDN/反向代理终止 HTTPS，集群内继续使用 HTTP 和 Service DNS。HTTPS 主站中的 iframe 和 WebSocket 也必须使用相容的 HTTPS/WSS 地址，避免混合内容。增加 HTTPS 不要求搬迁数据库或项目文件。
 
 注意区分 HTTPS 与重新部署的影响：当前运行环境经过定向更新，保留了手动配置。仓库的全量部署模板仍将 Bifrost Service 定义为 ClusterIP，直接重跑 `deploy` 会覆盖手动开放的 `38080`；模板的默认租户/权限映射也不等同于当前集群的全部配置。全量发布前应先渲染并核对这些差异，复用 `/root/opsiforce/deploy/.state/local/secrets.env`；当前 HTTP 环境需明确设置 `PUBLIC_SCHEME=http`。本轮代码推送不执行这一步。
+
+## 中文渠道接入
+
+40 测试环境的 Bifrost 提供中文快速添加渠道、模型能力模板和目录自动创建。操作与独立构建部署方法见 [Bifrost 渠道指南](../docs/operations/bifrost-channels-zh.md)。

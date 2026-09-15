@@ -1,3 +1,17 @@
+# Build the patched runtime from the same source as the embedded chat UI.
+FROM node:24.18.0-slim AS opencode-builder
+RUN apt-get update && apt-get install -y --no-install-recommends git python3 make g++ ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN npm install -g bun@1.4.2
+WORKDIR /src
+COPY frontend/opencode/ ./
+RUN bun install --frozen-lockfile
+ARG TARGETARCH=amd64
+ENV OPENCODE_CHANNEL=opsiforce OPENCODE_VERSION=0.0.0-opsiforce-model-policy-2
+RUN case "$TARGETARCH" in amd64) target=linux-x64-baseline;; arm64) target=linux-arm64;; *) exit 1;; esac \
+    && cd packages/cli \
+    && bun run script/build.ts --target=opencode2-$target --skip-install --skip-web-ui \
+    && mkdir -p /out && cp dist/cli-$target/bin/opencode2 /out/opencode2
+
 FROM golang:1.26.2-alpine AS log-writer-builder
 
 WORKDIR /src
@@ -36,7 +50,8 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     requests Pillow datasette==1.0a28 datasette-write-ui==0.0.1a14 \
     openpyxl==3.1.5 reportlab==5.0.1 pypdf==6.16.1
 
-RUN npm install -g bun @opencode-ai/cli@0.0.0-beta-19059 agent-browser
+RUN npm install -g bun@1.4.2 agent-browser
+COPY --from=opencode-builder /out/opencode2 /usr/local/bin/opencode2
 
 RUN mkdir -p /opt/doc-tools \
     && npm install --prefix /opt/doc-tools --no-audit --no-fund \
@@ -77,7 +92,7 @@ RUN chmod +x /usr/local/bin/log-writer /usr/local/bin/agent-control
 
 ARG EXA_API_KEY=""
 ENV EXA_API_KEY=$EXA_API_KEY
-ENV NODE_OPTIONS=--max-http-header-size=131072
+ENV NODE_OPTIONS=--max-http-header-size=131072 OPENCODE_DISABLE_CHANNEL_DB=true
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s \
   CMD wget -q --spider http://localhost:4096/api/health || exit 1

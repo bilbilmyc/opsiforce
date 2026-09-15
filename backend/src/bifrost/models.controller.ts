@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Put } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Put } from '@nestjs/common';
 import { BifrostService } from './bifrost.service';
 import { RequirePermission } from '../permission/permission.guard';
 import { Perms } from '../permission/permission.constants';
@@ -9,6 +9,16 @@ export class ModelsController {
 
   @Get()
   list() { return this.bifrost.modelCatalog(); }
+
+  @Put('capabilities')
+  @RequirePermission(Perms.managePlatformDefaults)
+  setCapabilities() { throw new BadRequestException('模型能力已迁至 Bifrost Model Catalog，请在那里修改；Opsiforce 仅保存运行策略。'); }
+
+  @Put('runtime-policy')
+  @RequirePermission(Perms.managePlatformDefaults)
+  setRuntimePolicy(@Body() body: { provider?: unknown; model?: unknown; policy?: unknown }) {
+    return this.bifrost.setModelPolicy(body.provider, body.model, body.policy);
+  }
 
   @Post('refresh')
   @RequirePermission(Perms.managePlatformDefaults)

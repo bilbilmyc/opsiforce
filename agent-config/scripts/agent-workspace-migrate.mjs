@@ -115,15 +115,17 @@ async function copyAgentOwnedFiles() {
   await mkdir(path.join(workspace, ".opencode", "agents"), { recursive: true })
   await cp(path.join(opencodeRoot, "opencode.json"), opencodeConfigPath)
   await applyOpenCodeConfig(model, variant)
-  const dynamic = process.env.OPSIFORCE_MODEL_CONFIG || (
+  // Backend-synced snapshot survives container restart; Pod env is only a bootstrap fallback.
+  const snapshot = await readJson(path.join(workspace, '.opsiforce', 'model-config.json'), null)
+  const dynamic = (snapshot ? JSON.stringify(snapshot) : '') || process.env.OPSIFORCE_MODEL_CONFIG || (
     currentConfig.plugins?.includes('-opencode.models.dev')
       ? JSON.stringify({ model: currentConfig.model, providers: currentConfig.providers, plugins: currentConfig.plugins }) : ''
   )
   if (dynamic) {
     const runtime = JSON.parse(dynamic)
     const config = await readJson(opencodeConfigPath, {})
-    await writeJson(opencodeConfigPath, { ...config, ...runtime, agents: {
-      ...config.agents, [agentName]: { ...config.agents?.[agentName], model: `${runtime.model}#default` },
+    await writeJson(opencodeConfigPath, { ...config, ...runtime, model: currentConfig.model || runtime.model, agents: {
+      ...config.agents, [agentName]: { ...config.agents?.[agentName], model: currentConfig.agents?.[agentName]?.model || `${runtime.model}#default` },
     } })
   }
   await cp(path.join(agentRoot, "agent.md"), path.join(workspace, ".opencode", "agents", `${agentName}.md`))

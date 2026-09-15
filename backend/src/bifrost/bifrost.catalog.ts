@@ -1,3 +1,5 @@
+import { resolveModelPolicy, type ModelPolicy } from './model-policy';
+
 export interface Channel {
   name: string;
   provider_status?: string;
@@ -11,11 +13,16 @@ export interface ChannelKey {
   aliases?: Record<string, string>;
 }
 export interface ChannelModel {
+  additional_attributes?: Record<string, string>;
   provider: string;
   name: string;
   context_length?: number;
   max_input_tokens?: number;
   max_output_tokens?: number;
+  supports_function_calling?: boolean;
+  supports_streaming?: boolean;
+  supports_vision?: boolean;
+  policy?: ModelPolicy;
 }
 
 // Preserve the exact channel ID, including case and model names containing slashes.
@@ -49,17 +56,6 @@ export function providerGrants(models: ChannelModel[]) {
   }));
 }
 
-function modelLimits(model: ChannelModel) {
-  const positive = (value: number | undefined) => Number.isSafeInteger(value) && value! > 0 ? value : undefined;
-  // Deployment owner confirmed the GLM 5.3 family has a 1M context window.
-  // Prefer gateway metadata whenever supplied; never invent an output ceiling.
-  const context = positive(model.context_length) ?? (/^glm-5\.3(?:-flash)?$/i.test(model.name) ? 1_000_000 : undefined);
-  const input = positive(model.max_input_tokens);
-  const output = positive(model.max_output_tokens);
-  if (context === undefined && input === undefined && output === undefined) return {};
-  return { limit: { ...(context ? { context } : {}), ...(input ? { input } : {}), ...(output ? { output } : {}) } };
-}
-
 export function runtimeModelConfig(models: ChannelModel[], selected: string | null) {
   const model = models.some(m => `${m.provider}/${m.name}` === selected) ? selected! : models[0] && `${models[0].provider}/${models[0].name}`;
   if (!model) throw new Error('Bifrost 尚无可用聊天模型，请先配置启用的渠道 Key 和模型。');
@@ -70,13 +66,18 @@ export function runtimeModelConfig(models: ChannelModel[], selected: string | nu
       package: '@opencode-ai/ai/providers/openai-compatible',
       env: ['OPENAI_API_KEY'],
       settings: { baseURL: '{env:OPENAI_BASE_URL}' },
-      models: Object.fromEntries(models.filter(m => m.provider === provider).map(m => [m.name, {
+      models: Object.fromEntries(models.filter(m => m.provider === provider).map(m => {
+        const p = resolveModelPolicy(m, m.policy);
+        return [m.name, {
         name: m.name, modelID: `${provider}/${m.name}`,
-        capabilities: { tools: true, input: ['text'], output: ['text'] },
+        capabilities: { tools: p.tools ?? false, input: p.vision ? ['text', 'image'] : ['text'], output: ['text'] },
         // OpenCode adds the default choice itself; only additional variants belong here.
-        variants: [],
-        ...modelLimits(m),
-      }])),
+        variants: (p.reasoningEfforts ?? []).map(id => ({ id, body: { reasoning_effort: id } })),
+        ...(p.reasoningEffort ? { body: { reasoning_effort: p.reasoningEffort } } : {}),
+        compatibility: { maxTokensField: p.maxTokensField ?? 'max_tokens' },
+        limit: { context: p.context ?? 0, output: p.maxOutput ?? 0, ...(p.maxInput ? { input: p.maxInput } : {}) },
+        generationPolicy: { ready: p.ready, outputBudget: p.outputBudget ?? 0, reasoningReserve: p.reasoningAccounting === 'separate' ? p.reasoningBudget ?? 0 : 0 },
+      }]; })),
     };
   }
   return { model, providers, plugins: ['-opencode.models.dev', '-opencode.provider.openai', '-opencode.provider.anthropic', '-opencode.provider.opencode'] };

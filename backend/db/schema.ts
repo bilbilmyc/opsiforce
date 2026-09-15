@@ -694,3 +694,18 @@ export const agentModelDefaults = pgTable("agent_model_defaults", {
   model: text("model").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
 });
+
+export const modelCapabilityProfiles = pgTable("model_capability_profiles", {
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  policy: jsonb("policy").$type<import('../src/bifrost/model-policy').ModelPolicy>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, table => [primaryKey({ columns: [table.provider, table.model] })]);
+
+// Capability facts live in Bifrost; this table contains Agent request preferences only.
+export const modelRuntimePolicies = pgTable("model_runtime_policies", {
+  provider: text("provider").notNull(),
+  model: text("model").notNull(),
+  policy: jsonb("policy").$type<import('../src/bifrost/model-policy').RuntimePolicy>().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [primaryKey({ columns: [table.provider, table.model] })]);

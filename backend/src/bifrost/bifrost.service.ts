@@ -18,8 +18,9 @@ import type {
   CreateTeamResponse,
 } from './bifrost.types';
 import { availableModels, providerGrants, runtimeModelConfig, type Channel, type ChannelKey, type ChannelModel } from './bifrost.catalog';
-import { agentModelDefaults } from '../../db/schema';
-import { readFile, writeFile, rename } from 'node:fs/promises';
+import { agentModelDefaults, modelRuntimePolicies } from '../../db/schema';
+import { resolveModelPolicy, validateRuntimePolicy, preserveModelSelection } from './model-policy';
+import { readFile, writeFile, rename, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
 @Injectable()
@@ -103,9 +104,32 @@ export class BifrostService implements OnModuleInit, OnModuleDestroy {
   }
 
   async modelCatalog() {
-    const models = await this.getModels();
+    const rawModels = await this.getModels();
+    const profiles = await db.select().from(modelRuntimePolicies);
+    const models = rawModels.map(m => {
+      const profile = profiles.find(p => p.provider === m.provider && p.model === m.name);
+      const policy = profile?.policy ?? {};
+      return { ...m, policy, effective: resolveModelPolicy(m, policy), policyUpdatedAt: profile?.updatedAt ?? null };
+    });
     const [defaults] = await db.select().from(agentModelDefaults).where(eq(agentModelDefaults.id, 'default'));
-    return { models, defaultModel: models.length ? runtimeModelConfig(models, defaults?.model ?? null).model : null };
+    return { models, consoleUrl: this.configService.get<string>('bifrostConsoleUrl', '') || null, defaultModel: models.length ? runtimeModelConfig(models, defaults?.model ?? null).model : null };
+  }
+
+  async setModelPolicy(provider: unknown, name: unknown, value: unknown) {
+    const models = await this.getModels(true);
+    const model = models.find(m => m.provider === provider && m.name === name);
+    if (!model) throw new BadRequestException('请选择当前可用的渠道和模型');
+    let policy;
+    try {
+      policy = validateRuntimePolicy(value);
+      const resolved = resolveModelPolicy(model, policy);
+      if (resolved.errors.some(e => !e.startsWith('模型不支持'))) throw new Error(resolved.errors.join('；'));
+    } catch (error) { throw new BadRequestException((error as Error).message); }
+    await db.insert(modelRuntimePolicies).values({ provider: model.provider, model: model.name, policy })
+      .onConflictDoUpdate({ target: [modelRuntimePolicies.provider, modelRuntimePolicies.model], set: { policy, updatedAt: new Date() } });
+    if (this.syncPending) await this.syncPending;
+    await this.syncModels();
+    return this.modelCatalog();
   }
 
   async setDefaultModel(model: unknown) {
@@ -148,9 +172,17 @@ export class BifrostService implements OnModuleInit, OnModuleDestroy {
           let current;
           try { current = JSON.parse(await readFile(file, 'utf8')); }
           catch (err) { if ((err as NodeJS.ErrnoException).code === 'ENOENT') continue; throw err; }
+          const snapshot = path.resolve(root, env.directory, '.opsiforce/model-config.json');
+          await mkdir(path.dirname(snapshot), { recursive: true });
+          const snapshotTemp = `${snapshot}.${crypto.randomUUID()}.tmp`;
+          await writeFile(snapshotTemp, JSON.stringify(config, null, 2) + '\n');
+          await rename(snapshotTemp, snapshot);
           const agentName = current.default_agent || 'app-builder';
-          const next = { ...current, ...config, agents: { ...current.agents,
-            [agentName]: { ...current.agents?.[agentName], model: `${config.model}#default` },
+          const available = Object.entries(config.providers).flatMap(([p, v]) => Object.keys((v as { models: Record<string, unknown> }).models).map(m => `${p}/${m}`));
+          const next = { ...current, ...config,
+            model: preserveModelSelection(current.model, available, config.model),
+            agents: { ...current.agents,
+            [agentName]: { ...current.agents?.[agentName], model: preserveModelSelection(current.agents?.[agentName]?.model, available, `${config.model}#default`) },
           } };
           if (JSON.stringify(current) === JSON.stringify(next)) continue;
           const temp = `${file}.${crypto.randomUUID()}.tmp`;

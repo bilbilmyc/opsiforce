@@ -19,6 +19,7 @@ import { SessionSchema } from "./schema.js"
 import { SessionSystemPrompt } from "./system-prompt.js"
 import { toLLMMessages } from "./runner/to-llm-message.js"
 import type { SessionMessage } from "./message.js"
+import { generationBudget, estimateRequestTokens } from './generation-budget.js'
 
 const IMAGE_BYTES_TRIGGER = 25 * 1024 * 1024 // 25 MiB
 const IMAGE_BYTES_TARGET = 15 * 1024 * 1024 // 15 MiB
@@ -312,6 +313,10 @@ export const layer = Layer.effect(
         providerOptions: {},
       }
       if (input.contextHooks !== false) yield* hooks.trigger("session", "context", context)
+      if (resolved.generationPolicy) {
+        const budget = generationBudget(resolved.limit, resolved.generationPolicy, estimateRequestTokens({ system: context.system, messages: context.messages, tools: context.tools }))
+        context.generation.maxTokens = Math.min(context.generation.maxTokens ?? budget, budget)
+      }
       // Match each surviving entry back to its tool, by recognizing a moved definition or
       // by key. Identity wins so a definition moved onto another tool's name still executes
       // the tool it describes. Entries matching neither were invented by a hook and dropped.

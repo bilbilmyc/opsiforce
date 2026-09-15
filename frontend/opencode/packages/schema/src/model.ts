@@ -97,6 +97,11 @@ export const Variant = Schema.Struct({
 }).annotate({ identifier: "Model.Variant" })
 
 export interface Info extends Schema.Schema.Type<typeof Info> {}
+export const GenerationPolicy = Schema.Struct({
+  ready: Schema.Boolean,
+  outputBudget: Schema.Int,
+  reasoningReserve: Schema.Int,
+})
 export const Info = Schema.Struct({
   id: ID,
   modelID: ID,
@@ -115,6 +120,7 @@ export const Info = Schema.Struct({
   cost: Schema.Array(Cost),
   status: Schema.Literals(["alpha", "beta", "deprecated", "active"]),
   enabled: Schema.Boolean,
+  generationPolicy: GenerationPolicy.pipe(optional),
   limit: Schema.Struct({
     context: Schema.Int,
     input: Schema.Int.pipe(optional),

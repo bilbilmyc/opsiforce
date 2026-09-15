@@ -32,6 +32,7 @@ import { useCommand } from "@/shell/commands/command"
 import { useSettings } from "@/settings/model"
 import { SessionProjectMenu, SessionTitleHeader } from "../session-identity-header"
 import { SessionHeader } from "@/session/header/session-header"
+import { turnProgress } from './turn-progress'
 
 type BackgroundTask = {
   id: string
@@ -397,6 +398,15 @@ function MessageTimelineView(
   const parentTitle = props.data.parentTitle
   const childTitle = props.data.childTitle
   const projection = props.data.projection
+  const progress = createMemo(() => {
+    const active = projection.activeMessageID()
+    const assistant = active ? projection.assistantMessagesByParent().get(active)?.at(-1) : undefined
+    const status = sessionStatus()
+    const id = sessionID()
+    if (status.type === 'busy' && assistant?.retry) return '请求暂时失败，正在等待重试…'
+    if (status.type !== 'idle' && id && (data.session.permission.list(id)?.length || data.session.form.list(id)?.length)) return '等待你的确认或补充信息…'
+    return turnProgress(status.type !== 'idle', assistant, props.session.data.info()?.outcome)
+  })
   const sessionDirectory = createMemo(() => props.session.data.info()?.location.directory ?? sdk().directory)
   const project = createMemo(() => {
     const session = props.session.data.info()
@@ -620,6 +630,10 @@ function MessageTimelineView(
     <VirtualizedTimeline
       workspaceSession={workspaceSession}
       bottomSpacer={
+        <>
+        <Show when={progress()}>
+          <div role="status" aria-live="polite" data-component="turn-completion-status" class={`py-3 text-[13px] text-v2-text-text-base ${turnPadding()}`}>{progress()}</div>
+        </Show>
         <Show when={showWorking() || backgroundHintPresence.present()}>
           <div
             classList={{
@@ -652,6 +666,7 @@ function MessageTimelineView(
             </div>
           </div>
         </Show>
+        </>
       }
       deferred={(row) => {
         if (row._tag !== "AssistantPart" || row.group.type !== "part") return false

@@ -28,6 +28,7 @@ import { SessionStep } from "./step.js"
 import { ToolOutput } from "../../tool-output.js"
 import { Plugin } from "../../plugin.js"
 import { MAX_STEPS_PROMPT } from "./max-steps.js"
+import { GenerationBudgetError } from '../generation-budget.js'
 
 const CONTINUE_AFTER_INCOMPLETE_STREAM =
   "The previous response was interrupted. Continue from where you left off without repeating completed content."
@@ -53,6 +54,7 @@ const layer = Layer.effect(
       let continuing = input.continuation !== undefined
       let step = input.continuation?.step ?? 1
       let entering = true
+      const truncations = { count: 0 }
       const promotable = input.promotable ?? "input"
       if (!force && !continuing) {
         const pending = yield* SessionInbox.nextPromotable(db, sessionID, "input")
@@ -160,7 +162,7 @@ const layer = Layer.effect(
                     yield* FiberMap.run(titles, sessionID, title.generate(sessionID), {
                       onlyIfMissing: true,
                     })
-                  if (promoted > 0) step = 1
+                  if (promoted > 0) { step = 1; truncations.count = 0 }
                   return { _tag: "Ready" as const, context: yield* context.load(selected) }
                 }),
               )
@@ -172,7 +174,7 @@ const layer = Layer.effect(
       while (true) {
         const next = yield* advanceToStep()
         if (next._tag !== "Ready") return next
-        continuing = yield* runStep(next.context, step)
+        continuing = yield* runStep(next.context, step, truncations)
         step++
         force = false
         entering = false
@@ -187,7 +189,7 @@ const layer = Layer.effect(
     })
 
     /** Owns logical Step policy; each attempt owns its streaming, tools, and durable settlement. */
-    const runStep = Effect.fn("SessionRunner.runStep")(function* (first: SessionContext.Loaded, step: number) {
+    const runStep = Effect.fn("SessionRunner.runStep")(function* (first: SessionContext.Loaded, step: number, truncations: { count: number }) {
       const sessionID = first.session.id
       let assistantMessageID = SessionMessage.ID.create()
       const retry = yield* SessionRunnerRetry.make(bus, sessionID)
@@ -208,6 +210,7 @@ const layer = Layer.effect(
           assistantMessageID = SessionMessage.ID.create()
           continue
         }
+        if (loaded.model.generationPolicy && step > 100) return yield* new StepFailedError({ error: { type: 'model.step-limit', message: '本轮已达到 100 步执行上限，任务尚未完成；请检查当前成果后继续。' } })
         const stepLimitReached = loaded.agent.info.steps !== undefined && step >= loaded.agent.info.steps
         const transcript = SessionModelRequest.baseTranscript({
           agent: loaded.agent.info,
@@ -216,7 +219,7 @@ const layer = Layer.effect(
           initial: loaded.initial,
           messages: loaded.messages,
         })
-        const prepared = yield* context.prepare({
+        const preparation = yield* context.prepare({
           scope: { session: loaded.session, agentID: loaded.agent.id, model: loaded.model, tools: loaded.tools },
           transcript: {
             system: transcript.system,
@@ -227,7 +230,27 @@ const layer = Layer.effect(
           // Keep tool definitions on the final Step to preserve the provider's cached prefix.
           toolChoice: stepLimitReached ? "none" : undefined,
           webSocket: "session",
-        })
+        }).pipe(Effect.exit)
+        if (Exit.isFailure(preparation)) {
+          const error = Cause.squash(preparation.cause)
+          if (error instanceof GenerationBudgetError && error.kind === 'context' && recoverOverflow && compaction.enabled()) {
+            recoverOverflow = false
+            const compacted = yield* compaction.compact(compactionInput)
+            if (compacted.status === 'completed') { assistantMessageID = SessionMessage.ID.create(); continue }
+          }
+          if (error instanceof GenerationBudgetError) {
+            const failure = { type: `model.${error.kind}`, message: error.message }
+            // Preparation failed before the provider could create a message. Persist it so
+            // reconnecting clients can explain why the run stopped without another request.
+            yield* bus.publishAll([
+              [SessionEvent.Step.Started, { sessionID, assistantMessageID, agent: loaded.agent.id, model: loaded.model.ref }],
+              [SessionEvent.Step.Failed, { sessionID, assistantMessageID, error: failure }],
+            ])
+            return yield* new StepFailedError({ error: failure })
+          }
+          return yield* Effect.failCause(preparation.cause)
+        }
+        const prepared = preparation.value
         const outcome = yield* steps.attempt({
           sessionID,
           assistantMessageID,
@@ -251,6 +274,12 @@ const layer = Layer.effect(
           ),
         })
         const completed = yield* SessionStep.Outcome.$match(outcome, {
+          Truncated: Effect.fnUntraced(function* () {
+            if (truncations.count >= 2 || stepLimitReached) return yield* new StepFailedError({ error: { type: 'provider.output-limit', message: '模型输出达到上限，本轮任务尚未完成；已停止自动续接。请调整模型输出预算或缩小任务后继续。' } })
+            truncations.count++
+            yield* bus.publish(SessionEvent.Synthetic, { sessionID, text: `模型输出达到上限，正在续接（${truncations.count}/2）。Continue from the recorded partial response. Preserve completed tool results; do not repeat completed actions. Finish the pending task and provide a final answer.` })
+            assistantMessageID = SessionMessage.ID.create()
+          }),
           Completed: (outcome) => Effect.succeed(outcome.needsContinuation),
           Retry: (outcome) =>
             retry.wait({

@@ -1,5 +1,7 @@
 export * as ConfigProvider from "./provider.js"
 
+import { GenerationPolicy } from '../model.js'
+
 import { Schema } from "effect"
 import { Money } from "../money.js"
 import { Capabilities, Compatibility, Family, ID, VariantID } from "../model.js"
@@ -41,6 +43,7 @@ class Limit extends Schema.Class<Limit>("Config.Model.Limit")({
 }) {}
 
 class Model extends Schema.Class<Model>("Config.Model")({
+  generationPolicy: GenerationPolicy.pipe(optional),
   modelID: ID.pipe(optional),
   family: Family.pipe(optional),
   name: Schema.String.pipe(optional),

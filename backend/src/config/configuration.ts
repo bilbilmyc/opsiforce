@@ -91,6 +91,7 @@ export const configuration = () => {
     storageClaimBytes: parseQuantityEnv(process.env.STORAGE_CLAIM_SIZE),
     importChunkSize: parseInt(process.env.IMPORT_CHUNK_SIZE || '8388608', 10),
     gotenbergUrl: process.env.GOTENBERG_URL || 'http://opsiforce-gotenberg:3006',
+    bifrostConsoleUrl: process.env.BIFROST_CONSOLE_URL || '',
     bifrostProxyUrl: process.env.BIFROST_PROXY_URL || '',
     bifrostPodProxyUrl: process.env.BIFROST_POD_PROXY_URL || process.env.BIFROST_PROXY_URL || '',
     bifrostAdminUsername: process.env.BIFROST_ADMIN_USERNAME || '',

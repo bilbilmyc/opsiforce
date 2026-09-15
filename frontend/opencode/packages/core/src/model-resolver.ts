@@ -69,6 +69,7 @@ export interface Resolved {
   readonly cost: Info["cost"]
   /** Catalog token limits used by Core for context management. */
   readonly limit: Info["limit"]
+  readonly generationPolicy?: Info['generationPolicy']
 }
 
 export interface Interface {
@@ -296,6 +297,7 @@ export const layer = Layer.effect(
         capabilities: selected.capabilities,
         cost: selected.cost,
         limit: selected.limit,
+        generationPolicy: selected.generationPolicy,
       }
     })
     return Service.of({

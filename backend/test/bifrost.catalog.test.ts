@@ -34,7 +34,18 @@ test('model limits use catalog metadata and do not force every model into 32K/4K
     { provider: 'relay', name: 'large-model', context_length: 500000, max_output_tokens: 64000 } as any,
     { provider: 'relay', name: 'unknown-model' },
   ], 'Zai/glm-5.3-flash');
-  assert.equal((config.providers.Zai as any).models['glm-5.3-flash'].limit.context, 1000000);
+  assert.equal((config.providers.Zai as any).models['glm-5.3-flash'].limit.context, 0);
+  assert.equal((config.providers.Zai as any).models['glm-5.3-flash'].generationPolicy.ready, false);
   assert.deepEqual((config.providers.relay as any).models['large-model'].limit, { context: 500000, output: 64000 });
-  assert.equal((config.providers.relay as any).models['unknown-model'].limit, undefined);
+  assert.deepEqual((config.providers.relay as any).models['unknown-model'].limit, { context: 0, output: 0 });
+});
+
+test('Agent config consumes Bifrost attributes and keeps local preferences separate', () => {
+  const attributes = { 'opsiforce.context': '64000', 'opsiforce.maxOutput': '8192', 'opsiforce.tools': 'true', 'opsiforce.streaming': 'true', 'opsiforce.reasoningAccounting': 'shared', 'opsiforce.reasoningEfforts': '["low","high"]' };
+  const config = runtimeModelConfig([{ provider: 'CaseSensitive', name: 'org/model', additional_attributes: attributes, policy: { outputBudget: 4096, reasoningEffort: 'high', context: 999 } }], null);
+  const model = (config.providers.CaseSensitive as any).models['org/model'];
+  assert.deepEqual(model.limit, { context: 64000, output: 8192 });
+  assert.equal(model.generationPolicy.ready, true);
+  assert.equal(model.generationPolicy.outputBudget, 4096);
+  assert.deepEqual(model.variants.map((v: { id: string }) => v.id), ['low', 'high']);
 });

@@ -362,7 +362,7 @@ export function createComposerModel(adapter: ComposerAdapter, options?: { queue?
           : undefined
       },
       variant: {
-        options: () => variants().map((value) => ({ id: value, label: value })),
+        options: () => variants().map((value) => ({ id: value, label: language.locale().startsWith("zh") ? ({ default: "跟随模型默认", none: "关闭思考", minimal: "最低", low: "低", medium: "中", high: "高", max: "最高", xhigh: "极高" } as Record<string, string>)[value] ?? value : value })),
         current: () => adapter.controls().model.selection.variant.current() ?? "default",
         onSelect: (value) => adapter.controls().model.selection.variant.set(value === "default" ? undefined : value),
         keybind: () => command.keybindParts("model.variant.cycle"),

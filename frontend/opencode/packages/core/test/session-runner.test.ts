@@ -199,6 +199,7 @@ const makeRunnerState = () => {
     }).pipe(Effect.andThen(Deferred.succeed(barrier.release, undefined)), Effect.asVoid)
   return {
     currentModel: model,
+    generationPolicy: undefined as SessionRunnerModel.Resolved['generationPolicy'],
     modelResolveHook: Effect.void,
     systemBaseline: "Initial context",
     systemRemoved: false,
@@ -318,6 +319,7 @@ const layer = Layer.unwrap(
               cost: [],
               limit: modelLimits.get(String(selected.id)) ?? defaultModelLimit,
               variant: session.model?.variant,
+              generationPolicy: state.generationPolicy,
             })
           }),
         ),
@@ -926,6 +928,59 @@ const watchRename = Effect.fnUntraced(function* (sessionID: Session.ID) {
 })
 
 describe("SessionRunnerLLM", () => {
+  scenario('sends the computed budget in the actual OpenAI request body', function* (s) {
+    s.generationPolicy = { ready: true, outputBudget: 8192, reasoningReserve: 0 }
+    yield* s.llm.push(TestLLM.text('Done', 'budget-answer'))
+    yield* s.runPrompt('Use the configured budget')
+    expect(s.requests[0].generation?.maxTokens).toBe(8192)
+    const compiled = yield* compileRequest(LLMRequest.update(s.requests[0], { cache: 'none' }))
+    expect(compiled.body.max_tokens ?? compiled.body.max_completion_tokens).toBe(8192)
+  })
+  scenario('never sends a request when model capabilities are unknown', function* (s) {
+    s.generationPolicy = { ready: false, outputBudget: 0, reasoningReserve: 0 }
+    const result = yield* s.runPrompt('Run a tool').pipe(Effect.exit)
+    expect(Exit.isFailure(result)).toBe(true)
+    expect(s.requests).toHaveLength(0)
+    expect(requireAssistant(yield* s.context).error).toMatchObject({ type: 'model.capability', message: expect.stringContaining('能力') })
+  })
+  scenario('does not replay a completed tool after length truncation', function* (s) {
+    yield* s.llm.push(
+      TestLLM.complete({ reason: { normalized: 'length' } }, LLMEvent.toolCall({ id: 'once', name: 'echo', input: { text: 'once' } })),
+      TestLLM.text('Done', 'finished'),
+    )
+    yield* s.runPrompt('Execute once and finish')
+    expect(s.executions).toEqual(['once'])
+    expect(s.requests).toHaveLength(2)
+  })
+  scenario('never executes incomplete tool arguments at a length boundary', function* (s) {
+    yield* s.llm.push(
+      TestLLM.complete({ reason: { normalized: 'length' } },
+        LLMEvent.toolInputStart({ id: 'partial-tool', name: 'echo' }),
+        LLMEvent.toolInputDelta({ id: 'partial-tool', name: 'echo', text: '{"text":"unfinished' })),
+      TestLLM.text('Unable to complete the tool; no action taken.', 'safe-final'),
+    )
+    yield* s.runPrompt('Execute safely').pipe(Effect.exit)
+    expect(s.executions).toEqual([])
+  })
+  scenario('continues length-limited reasoning and reaches a final answer', function* (s) {
+    yield* s.llm.push(
+      TestLLM.complete({ reason: { normalized: 'length', raw: 'length' } }, LLMEvent.reasoningStart({ id: 'r' }), LLMEvent.reasoningDelta({ id: 'r', text: 'partial' }), LLMEvent.reasoningEnd({ id: 'r' })),
+      TestLLM.text('Finished successfully', 'final'),
+    )
+    yield* s.runPrompt('Finish the task')
+    expect(s.requests).toHaveLength(2)
+    expect(JSON.stringify(yield* s.context)).toContain('Finished successfully')
+    expect(JSON.stringify(yield* s.context)).toContain('正在续接')
+  })
+
+  scenario('fails visibly after two length continuations instead of succeeding', function* (s) {
+    yield* s.llm.push(...[0, 1, 2].map(i => TestLLM.complete({ reason: { normalized: 'length', raw: 'length' } }, LLMEvent.textStart({ id: `p${i}` }), LLMEvent.textDelta({ id: `p${i}`, text: 'partial' }), LLMEvent.textEnd({ id: `p${i}` }))))
+    const exit = yield* s.runPrompt('Keep generating').pipe(Effect.exit)
+    expect(Exit.isFailure(exit)).toBe(true)
+    expect(s.requests).toHaveLength(3)
+    if (Exit.isFailure(exit)) expect(String(Cause.squash(exit.cause))).toContain('任务尚未完成')
+  })
+
   scenario("generates the title while the first model step is still running", function* (s) {
     yield* prepareTitleGeneration
 

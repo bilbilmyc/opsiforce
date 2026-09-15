@@ -114,6 +114,7 @@ export const Plugin = define({
             }
             if (config.disabled !== undefined) model.enabled = !config.disabled
             if (config.limit !== undefined) model.limit = { ...model.limit, ...config.limit }
+            if (config.generationPolicy !== undefined) model.generationPolicy = config.generationPolicy
           })
         }
       }

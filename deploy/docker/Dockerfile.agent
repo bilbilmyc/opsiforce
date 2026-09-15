@@ -1,3 +1,17 @@
+# Build the patched runtime from the same source as the embedded chat UI.
+FROM registry.cn-beijing.aliyuncs.com/mayc/node:24.18.0-bookworm-slim AS opencode-builder
+RUN apt-get update && apt-get install -y --no-install-recommends git python3 make g++ ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN npm install -g bun@1.4.2
+WORKDIR /src
+COPY frontend/opencode/ ./
+RUN bun install --frozen-lockfile
+ARG TARGETARCH=amd64
+ENV OPENCODE_CHANNEL=opsiforce OPENCODE_VERSION=0.0.0-opsiforce-model-policy-2
+RUN case "$TARGETARCH" in amd64) target=linux-x64-baseline;; arm64) target=linux-arm64;; *) exit 1;; esac \
+    && cd packages/cli \
+    && bun run script/build.ts --target=opencode2-$target --skip-install --skip-web-ui \
+    && mkdir -p /out && cp dist/cli-$target/bin/opencode2 /out/opencode2
+
 FROM registry.cn-beijing.aliyuncs.com/mayc/golang:1.26.2-alpine AS log-writer-builder
 ENV GOPROXY=https://goproxy.cn \
     GOSUMDB="sum.golang.org https://goproxy.cn/sumdb/sum.golang.org"
@@ -62,10 +76,8 @@ RUN pip3 install --no-cache-dir --break-system-packages \
     requests Pillow datasette==1.0a28 datasette-write-ui==0.0.1a14 \
     openpyxl==3.1.5 reportlab==5.0.1 pypdf==6.16.1
 
-# 国内源缺少此固定版本的 Linux x64 平台包，OpenCode 单独使用官方源。
-# 通过环境变量传递，确保 postinstall 启动的子 npm 进程也使用同一源。
-RUN npm install -g bun agent-browser \
-    && npm_config_registry=https://registry.npmjs.org npm install -g @opencode-ai/cli@0.0.0-beta-19059
+RUN npm install -g bun@1.4.2 agent-browser
+COPY --from=opencode-builder /out/opencode2 /usr/local/bin/opencode2
 
 RUN mkdir -p /opt/doc-tools \
     && npm install --prefix /opt/doc-tools --no-audit --no-fund \
@@ -134,7 +146,7 @@ COPY --from=log-writer-builder /out/log-writer /usr/local/bin/log-writer
 COPY --from=log-writer-builder /out/agent-control /usr/local/bin/agent-control
 RUN chmod +x /usr/local/bin/log-writer /usr/local/bin/agent-control
 
-ENV NODE_OPTIONS=--max-http-header-size=131072
+ENV NODE_OPTIONS=--max-http-header-size=131072 OPENCODE_DISABLE_CHANNEL_DB=true
 
 HEALTHCHECK --interval=10s --timeout=3s --start-period=30s \
   CMD wget -q --spider http://localhost:4096/api/health || exit 1

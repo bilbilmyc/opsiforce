@@ -124,6 +124,7 @@ data:
   AGENT_WORKSPACE_UPDATE_ON_STARTUP: 'true'
   AGENT_UPDATE_JOB_TIMEOUT_MS: '1800000'
   GOTENBERG_URL: http://opsiforce-gotenberg:3006
+  BIFROST_CONSOLE_URL: '${BIFROST_CONSOLE_URL}'
   BIFROST_PROXY_URL: http://opsiforce-bifrost:8080/v1
   BIFROST_POD_PROXY_URL: http://opsiforce-bifrost:8080/v1
   SERVICE_GATEWAY_URL: http://opsiforce-backend:3001/api/gateway
