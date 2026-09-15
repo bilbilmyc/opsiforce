@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show, createSignal, type JSX } from 'solid-js';
 import { useDraggable, useDroppable } from '@dnd-kit/solid';
 import { toast } from 'solid-sonner';
@@ -32,9 +33,9 @@ import { SidebarCreateButton } from './sidebar-create-button';
 import SidebarDraggableProjectRow from './sidebar-draggable-project-row';
 
 function deleteFolderDescription(folder: Folder): string {
-  if (folder.projectCount === 0) return `"${folder.name}" is empty and will be deleted.`;
-  const projectsLabel = folder.projectCount === 1 ? '1 project' : `${folder.projectCount} projects`;
-  return `${projectsLabel} will move back to the workspace root. No projects will be deleted.`;
+  if (folder.projectCount === 0) return t("\"{0}\" is empty and will be deleted.", { "0": folder.name });
+  const projectsLabel = folder.projectCount === 1 ? '1 project' : t("{0} projects", { "0": folder.projectCount });
+  return t("{0} will move back to the workspace root. No projects will be deleted.", { "0": projectsLabel });
 }
 
 export function SidebarFolderGroup(props: {
@@ -80,8 +81,8 @@ export function SidebarFolderGroup(props: {
     deleteFolder.mutate(
       { workspaceId: props.folder.workspaceId, folderId: props.folder.id },
       {
-        onSuccess: () => toast.success('Folder deleted'),
-        onError: () => toast.error('Failed to delete folder'),
+        onSuccess: () => toast.success(t("Folder deleted")),
+        onError: () => toast.error(t("Failed to delete folder")),
       }
     );
 
@@ -101,7 +102,7 @@ export function SidebarFolderGroup(props: {
           ref={draggable.handleRef}
           class="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/folderrow:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
           onClick={(e) => e.stopPropagation()}
-          title="Drag to move folder"
+          title={t("Drag to move folder")}
         >
           <GripVertical class="w-3 h-3" />
         </button>
@@ -116,32 +117,28 @@ export function SidebarFolderGroup(props: {
           <DropdownMenuTrigger
             class="opacity-0 group-hover/folderrow:opacity-100 data-[expanded]:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-1 rounded-sm hover:bg-accent"
             onClick={(e: MouseEvent) => e.stopPropagation()}
-            aria-label="Folder actions"
+            aria-label={t("Folder actions")}
           >
             <EllipsisVertical class="w-3.5 h-3.5" />
           </DropdownMenuTrigger>
           <DropdownMenuContent onClick={(e: MouseEvent) => e.stopPropagation()}>
             <DropdownMenuItem onSelect={() => setRenameOpen(true)}>
-              <Pencil class="w-3.5 h-3.5 text-muted-foreground" />
-              Rename
-            </DropdownMenuItem>
+              <Pencil class="w-3.5 h-3.5 text-muted-foreground" />{t("Rename")}</DropdownMenuItem>
             <DropdownMenuItem
               class="text-destructive data-[highlighted]:text-destructive"
               onSelect={() => setConfirmDeleteOpen(true)}
             >
-              <Trash2 class="w-3.5 h-3.5" />
-              Delete
-            </DropdownMenuItem>
+              <Trash2 class="w-3.5 h-3.5" />{t("Delete")}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <SidebarCreateButton title="New project in this folder" variant="folder" renderCreate={props.renderCreate} />
+        <SidebarCreateButton title={t("New project in this folder")} variant="folder" renderCreate={props.renderCreate} />
       </div>
 
       <Show when={props.expanded}>
         <div class="flex flex-col gap-0.5 pl-4">
           <Show
             when={props.projects.length > 0}
-            fallback={<p class="text-xs text-muted-foreground/50 py-1 px-2 italic">No projects yet.</p>}
+            fallback={<p class="text-xs text-muted-foreground/50 py-1 px-2 italic">{t("No projects yet.")}</p>}
           >
             <For each={props.projects}>
               {(project) => (
@@ -171,9 +168,9 @@ export function SidebarFolderGroup(props: {
       <ConfirmDialog
         open={confirmDeleteOpen()}
         onOpenChange={setConfirmDeleteOpen}
-        title={`Delete folder "${props.folder.name}"?`}
+        title={t("Delete folder \"{0}\"?", { "0": props.folder.name })}
         description={deleteFolderDescription(props.folder)}
-        confirmLabel="Delete"
+        confirmLabel={t("Delete")}
         variant="destructive"
         onConfirm={handleDelete}
       />

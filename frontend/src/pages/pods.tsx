@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMemo, createSignal, For, Show, type JSX } from 'solid-js';
 import { Link } from '@tanstack/solid-router';
 import { usePods, type PodRow } from '~/api/pods';
@@ -49,7 +50,7 @@ export function PodsPage() {
     <div class="w-full overflow-y-auto h-full px-4 py-6">
       <div class="flex items-center gap-3 mb-1">
         <Boxes class="w-5 h-5 text-muted-foreground" />
-        <h1 class="text-xl font-semibold">Pods</h1>
+        <h1 class="text-xl font-semibold">{t("Pods")}</h1>
         <Show when={!pods.isPending}>
           <Badge variant="secondary" class="text-[10px] px-1.5 py-0">
             {totalRunning()}
@@ -65,20 +66,14 @@ export function PodsPage() {
         </div>
       </div>
 
-      <p class="text-xs text-muted-foreground mb-3 ml-8">
-        Running environment pods across this organization, grouped by project. Refreshes automatically.
-      </p>
+      <p class="text-xs text-muted-foreground mb-3 ml-8">{t("Running environment pods across this organization, grouped by project. Refreshes automatically.")}</p>
 
       <div class="ml-8 mb-5 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
         <span class="inline-flex items-center gap-1.5">
-          <span class="size-1.5 rounded-full bg-indigo-500" />
-          Agent activity
-        </span>
+          <span class="size-1.5 rounded-full bg-indigo-500" />{t("Agent activity")}</span>
         <span class="inline-flex items-center gap-1.5">
-          <span class="size-1.5 rounded-full bg-emerald-500" />
-          App activity
-        </span>
-        <span class="text-muted-foreground/70">A pod stays alive until both have been idle past their timeout.</span>
+          <span class="size-1.5 rounded-full bg-emerald-500" />{t("App activity")}</span>
+        <span class="text-muted-foreground/70">{t("A pod stays alive until both have been idle past their timeout.")}</span>
       </div>
 
       <Show when={pods.isPending}>
@@ -98,12 +93,12 @@ export function PodsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead class="min-w-48">Environment</TableHead>
-                <TableHead class="w-44">Status</TableHead>
-                <TableHead class="w-20">Age</TableHead>
-                <TableHead class="w-24">Resources</TableHead>
-                <TableHead class="min-w-56">Keep-alive</TableHead>
-                <TableHead class="w-28">Timeout</TableHead>
+                <TableHead class="min-w-48">{t("Environment")}</TableHead>
+                <TableHead class="w-44">{t("Status")}</TableHead>
+                <TableHead class="w-20">{t("Age")}</TableHead>
+                <TableHead class="w-24">{t("Resources")}</TableHead>
+                <TableHead class="min-w-56">{t("Keep-alive")}</TableHead>
+                <TableHead class="w-28">{t("Timeout")}</TableHead>
                 <TableHead class="w-10" />
               </TableRow>
             </TableHeader>
@@ -128,7 +123,7 @@ export function PodsPage() {
                             />
                             <FolderKanban class="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                             <span class="font-medium text-sm truncate">
-                              {group.projectTitle?.trim() || 'Untitled project'}
+                              {group.projectTitle?.trim() || t("Untitled project")}
                             </span>
                             <Badge variant="secondary" class="text-[10px] px-1.5 py-0 shrink-0">
                               {group.environments.length}
@@ -141,19 +136,18 @@ export function PodsPage() {
                                 params={{ projectId: group.projectId }}
                                 search={{ prompt: undefined }}
                                 class="inline-flex items-center justify-center w-6 h-6 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-                                aria-label="Open project"
+                                aria-label={t("Open project")}
                               >
                                 <ExternalLink class="w-3.5 h-3.5" />
                               </Link>
                             </TooltipTrigger>
-                            <TooltipContent>Open project</TooltipContent>
+                            <TooltipContent>{t("Open project")}</TooltipContent>
                           </Tooltip>
                           <Show when={group.ghostCount > 0}>
                             <span class="inline-flex items-center gap-1 text-[11px] text-amber-600 shrink-0">
                               <AlertTriangle class="w-3 h-3" />
-                              {group.ghostCount} active{' '}
-                              {group.ghostCount === 1 ? 'environment has' : 'environments have'} no pod
-                            </span>
+                              {group.ghostCount}{t(" active")}{' '}
+                              {group.ghostCount === 1 ? t("environment has") : t("environments have")}{t(" no pod")}</span>
                           </Show>
                         </div>
                       </TableCell>
@@ -212,8 +206,7 @@ function PodEnvRow(props: {
               {formatDuration(liveAgeMs())}
             </TooltipTrigger>
             <TooltipContent>
-              <Show when={props.row.detail.startedAtMs !== null} fallback="Start time unknown">
-                Started {formatClock(props.row.detail.startedAtMs ?? 0)}
+              <Show when={props.row.detail.startedAtMs !== null} fallback={t("Start time unknown")}>{t("Started ")}{formatClock(props.row.detail.startedAtMs ?? 0)}
               </Show>
             </TooltipContent>
           </Tooltip>
@@ -228,8 +221,7 @@ function PodEnvRow(props: {
             </TooltipTrigger>
             <TooltipContent>
               {formatCores(props.row.resources.cpuMillicores)} · {formatGib(props.row.resources.memoryRequestMib)}–
-              {formatGib(props.row.resources.memoryLimitMib)} memory
-            </TooltipContent>
+              {formatGib(props.row.resources.memoryLimitMib)}{t(" memory")}</TooltipContent>
           </Tooltip>
         </TableCell>
 
@@ -249,8 +241,7 @@ function PodEnvRow(props: {
               <span class="px-1 text-muted-foreground/40">/</span>
               {formatDuration(props.row.timeout.appIdleMs)}
             </TooltipTrigger>
-            <TooltipContent>
-              Agent idle {formatDuration(props.row.timeout.agentIdleMs)} · App idle{' '}
+            <TooltipContent>{t("Agent idle ")}{formatDuration(props.row.timeout.agentIdleMs)}{t(" · App idle")}{' '}
               {formatDuration(props.row.timeout.appIdleMs)}
             </TooltipContent>
           </Tooltip>
@@ -267,11 +258,11 @@ function PodEnvRow(props: {
         <TableRow class="hover:bg-transparent">
           <TableCell colspan={COLUMN_COUNT} class="bg-muted/30">
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-2.5 py-1">
-              <DetailField label="Pod" mono value={props.row.podName} />
-              <DetailField label="Pod IP" mono value={props.row.detail.podIp ?? '—'} />
-              <DetailField label="Restarts" value={String(props.row.status.restartCount)} />
+              <DetailField label={t("Pod")} mono value={props.row.podName} />
+              <DetailField label={t("Pod IP")} mono value={props.row.detail.podIp ?? '—'} />
+              <DetailField label={t("Restarts")} value={String(props.row.status.restartCount)} />
               <DetailField
-                label="Started"
+                label={t("Started")}
                 value={props.row.detail.startedAtMs !== null ? formatClock(props.row.detail.startedAtMs) : '—'}
               />
             </div>
@@ -309,12 +300,12 @@ function LiveIndicator(props: {
         <span class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping motion-reduce:hidden" />
         <span class="relative inline-flex size-2 rounded-full bg-emerald-500" />
       </span>
-      <Show when={ago()}>{(text) => <span class="tabular-nums">Updated {text()}</span>}</Show>
+      <Show when={ago()}>{(text) => <span class="tabular-nums">{t("Updated ")}{text()}</span>}</Show>
       <button
         type="button"
         onClick={() => props.onRefresh()}
         class="inline-flex items-center justify-center rounded-md w-7 h-7 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-        aria-label="Refresh pods"
+        aria-label={t("Refresh pods")}
       >
         <RefreshCw class={cn('w-3.5 h-3.5', props.fetching && 'animate-spin')} />
       </button>
@@ -343,16 +334,14 @@ function ErrorState(props: { onRetry: () => void }): JSX.Element {
   return (
     <div class="rounded-lg border border-dashed border-border text-center py-16 text-muted-foreground">
       <AlertTriangle class="w-10 h-10 mx-auto mb-3 text-amber-500 opacity-70" />
-      <p class="text-sm font-medium text-foreground">Couldn't load pods</p>
-      <p class="text-xs mt-1">The pod list is temporarily unavailable.</p>
+      <p class="text-sm font-medium text-foreground">{t("Couldn't load pods")}</p>
+      <p class="text-xs mt-1">{t("The pod list is temporarily unavailable.")}</p>
       <button
         type="button"
         onClick={() => props.onRetry()}
         class="mt-4 inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-accent transition-colors"
       >
-        <RefreshCw class="w-3.5 h-3.5" />
-        Try again
-      </button>
+        <RefreshCw class="w-3.5 h-3.5" />{t("Try again")}</button>
     </div>
   );
 }
@@ -361,8 +350,8 @@ function EmptyState(): JSX.Element {
   return (
     <div class="rounded-lg border border-dashed border-border text-center py-16 text-muted-foreground">
       <Boxes class="w-10 h-10 mx-auto mb-3 opacity-40" />
-      <p class="text-sm font-medium">No running pods</p>
-      <p class="text-xs mt-1">Environments spin up when someone opens a project or its app receives traffic.</p>
+      <p class="text-sm font-medium">{t("No running pods")}</p>
+      <p class="text-xs mt-1">{t("Environments spin up when someone opens a project or its app receives traffic.")}</p>
     </div>
   );
 }

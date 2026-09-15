@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMemo, Index, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useExternalServices } from '~/api/external-services';
@@ -20,26 +21,23 @@ export function ExternalServicesAdminPage() {
     <div class="h-full w-full overflow-y-auto px-4 py-6">
       <div class="mb-1 flex items-center gap-3">
         <Cable class="h-5 w-5 text-muted-foreground" />
-        <h1 class="text-xl font-semibold">External services</h1>
+        <h1 class="text-xl font-semibold">{t("External services")}</h1>
         <button
           type="button"
           onClick={() => services.refetch()}
           class="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          aria-label="Refresh external services"
+          aria-label={t("Refresh external services")}
         >
           <RefreshCw class={cn('h-3.5 w-3.5', services.isFetching && 'animate-spin')} />
         </button>
       </div>
 
-      <p class="mb-5 ml-8 text-xs text-muted-foreground">
-        Platform-wide resources shared by every environment. Per-environment wiring lives on the project page, in the
-        environment dropdown.
-      </p>
+      <p class="mb-5 ml-8 text-xs text-muted-foreground">{t("Platform-wide resources shared by every environment. Per-environment wiring lives on the project page, in the environment dropdown.")}</p>
 
       <Show when={!services.isPending} fallback={<Skeleton class="h-24 w-full" />}>
         <Show
           when={!services.isError}
-          fallback={<p class="text-sm text-muted-foreground">Could not load the external services list.</p>}
+          fallback={<p class="text-sm text-muted-foreground">{t("Could not load the external services list.")}</p>}
         >
           <div class="space-y-6">
             <Index each={sections()}>

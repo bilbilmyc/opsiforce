@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMemo, createSignal, For, Show, type JSX } from 'solid-js';
 import { Popover, PopoverTrigger, PopoverContent } from '~/components/ui/popover';
 import { Check, ChevronDown } from '~/components/icons';
@@ -25,7 +26,7 @@ export function reconcileDictationLanguage(supportedCodes: readonly string[]) {
 
 function selectionLabel(): string {
   const code = dictationLanguage();
-  return code ? dictationLanguageName(code) : 'Auto';
+  return code ? dictationLanguageName(code) : t("Auto");
 }
 
 function LanguageOption(props: { selected: boolean; onSelect: () => void; children: JSX.Element }) {
@@ -66,8 +67,8 @@ export function DictationLanguageMenu(props: { languages: readonly string[] }) {
   return (
     <Popover placement="top-end" open={open()} onOpenChange={onOpenChange}>
       <PopoverTrigger
-        aria-label="Dictation language"
-        title={`Dictation language: ${selectionLabel()}`}
+        aria-label={t("Dictation language")}
+        title={t("Dictation language: {0}", { "0": selectionLabel() })}
         class={cn(
           'flex h-8 min-w-4 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[expanded]:bg-accent data-[expanded]:text-foreground',
           dictationLanguage() ? 'ml-0.5' : '-ml-1'
@@ -84,7 +85,7 @@ export function DictationLanguageMenu(props: { languages: readonly string[] }) {
       <PopoverContent class="w-56 p-1">
         <input
           type="text"
-          aria-label="Search languages"
+          aria-label={t("Search languages")}
           value={query()}
           onInput={(e) => setQuery(e.currentTarget.value)}
           onKeyDown={(e) => {
@@ -92,18 +93,16 @@ export function DictationLanguageMenu(props: { languages: readonly string[] }) {
             const first = filtered()[0];
             if (first) select(first.code);
           }}
-          placeholder="Search languages"
+          placeholder={t("Search languages")}
           class="mb-1 flex h-8 w-full rounded-md border border-input bg-background px-2 text-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
         <div class="max-h-64 overflow-y-auto">
           <Show when={!query().trim()}>
-            <LanguageOption selected={!dictationLanguage()} onSelect={() => select(undefined)}>
-              Auto
-            </LanguageOption>
+            <LanguageOption selected={!dictationLanguage()} onSelect={() => select(undefined)}>{t("Auto")}</LanguageOption>
           </Show>
           <For
             each={filtered()}
-            fallback={<div class="px-2 py-1.5 text-xs text-muted-foreground">No languages found</div>}
+            fallback={<div class="px-2 py-1.5 text-xs text-muted-foreground">{t("No languages found")}</div>}
           >
             {(language) => (
               <LanguageOption selected={dictationLanguage() === language.code} onSelect={() => select(language.code)}>

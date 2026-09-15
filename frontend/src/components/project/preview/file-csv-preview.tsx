@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Match, Switch } from 'solid-js';
 import { FileDownloadCard } from './file-download-card';
 import { createFileFetch, type FileFetchState } from './file-fetch';
@@ -28,21 +29,21 @@ export function FileCsvPreview(props: FileCsvPreviewProps) {
   return (
     <Switch>
       <Match when={state().status === 'loading'}>
-        <FilePreviewNotice title="Loading preview…" loading />
+        <FilePreviewNotice title={t("Loading preview…")} loading />
       </Match>
       <Match when={state().status === 'missing'}>
-        <FilePreviewNotice title="File not found" detail="It may have been renamed, moved, or deleted." />
+        <FilePreviewNotice title={t("File not found")} detail={t("It may have been renamed, moved, or deleted.")} />
       </Match>
       <Match when={state().status === 'error'}>
-        <FilePreviewNotice title="Could not load this file" detail="Try again, or download it instead." />
+        <FilePreviewNotice title={t("Could not load this file")} detail={t("Try again, or download it instead.")} />
       </Match>
       <Match when={loadedTable(state())}>
-        {(loaded) => <FileValuesGrid rows={loaded().rows} note={loaded().note} emptyTitle="This file has no rows" />}
+        {(loaded) => <FileValuesGrid rows={loaded().rows} note={loaded().note} emptyTitle={t("This file has no rows")} />}
       </Match>
       <Match when={state().status === 'ready'}>
         <FileDownloadCard
           name={props.name}
-          detail="This file is not text, so it cannot be shown here."
+          detail={t("This file is not text, so it cannot be shown here.")}
           onDownload={props.onDownload}
         />
       </Match>

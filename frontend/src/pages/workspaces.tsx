@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { useCreateWorkspace, useWorkspaces } from '~/api/workspaces';
@@ -20,8 +21,8 @@ export function WorkspacesPage() {
     updateTenantConfig.mutate(
       { privateWorkspaceEnabled: enabled },
       {
-        onSuccess: () => toast.success(enabled ? 'Personal workspaces enabled' : 'Personal workspaces disabled'),
-        onError: () => toast.error('Failed to update setting'),
+        onSuccess: () => toast.success(enabled ? t("Personal workspaces enabled") : t("Personal workspaces disabled")),
+        onError: () => toast.error(t("Failed to update setting")),
       }
     );
   };
@@ -46,10 +47,10 @@ export function WorkspacesPage() {
         description: newDescription().trim() || null,
       });
       closeCreateDialog();
-      toast.success('Workspace created');
+      toast.success(t("Workspace created"));
       setOpenSettingsId(ws.id);
     } catch {
-      toast.error('Failed to create workspace');
+      toast.error(t("Failed to create workspace"));
     }
   };
 
@@ -57,24 +58,18 @@ export function WorkspacesPage() {
     <>
       <SettingsSection
         icon={FolderKanban}
-        title="Workspaces"
-        description="Group and share projects."
+        title={t("Workspaces")}
+        description={t("Group and share projects.")}
         action={
           <Button size="sm" onClick={() => setCreateDialogOpen(true)}>
-            <Plus class="w-4 h-4 mr-1.5" />
-            New workspace
-          </Button>
+            <Plus class="w-4 h-4 mr-1.5" />{t("New workspace")}</Button>
         }
       >
         <div class="rounded-xl border border-border bg-card p-4 mb-4 flex items-center gap-3">
           <Lock class="w-4 h-4 text-muted-foreground shrink-0" />
           <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium">Personal workspaces</div>
-            <div class="text-xs text-muted-foreground">
-              Give every member a private Personal workspace of their own. When off, existing personal workspaces and
-              their projects are hidden, and anyone can create new projects in Public — where the whole organization
-              sees them.
-            </div>
+            <div class="text-sm font-medium">{t("Personal workspaces")}</div>
+            <div class="text-xs text-muted-foreground">{t("Give every member a private Personal workspace of their own. When off, existing personal workspaces and their projects are hidden, and anyone can create new projects in Public — where the whole organization sees them.")}</div>
           </div>
           <Show when={tenantConfig.data} fallback={<Spinner size="sm" />}>
             {(config) => (
@@ -105,8 +100,8 @@ export function WorkspacesPage() {
               fallback={
                 <div class="rounded-xl border border-border bg-card p-10 text-center">
                   <FolderKanban class="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" stroke-width="1" />
-                  <p class="text-sm text-muted-foreground">No workspaces yet.</p>
-                  <p class="text-xs text-muted-foreground/60 mt-1">Create one to start grouping projects.</p>
+                  <p class="text-sm text-muted-foreground">{t("No workspaces yet.")}</p>
+                  <p class="text-xs text-muted-foreground/60 mt-1">{t("Create one to start grouping projects.")}</p>
                 </div>
               }
             >
@@ -132,9 +127,7 @@ export function WorkspacesPage() {
                         </span>
                       </div>
                       <Button size="sm" variant="outline" onClick={() => setOpenSettingsId(ws.id)}>
-                        <Settings class="w-3.5 h-3.5 mr-1.5" />
-                        Configure
-                      </Button>
+                        <Settings class="w-3.5 h-3.5 mr-1.5" />{t("Configure")}</Button>
                     </div>
                   )}
                 </For>
@@ -151,14 +144,12 @@ export function WorkspacesPage() {
         }}
       >
         <DialogContent>
-          <DialogTitle>Create new workspace</DialogTitle>
-          <DialogDescription>
-            A container for grouping projects and controlling which users can see them.
-          </DialogDescription>
+          <DialogTitle>{t("Create new workspace")}</DialogTitle>
+          <DialogDescription>{t("A container for grouping projects and controlling which users can see them.")}</DialogDescription>
 
           <div class="mt-4 space-y-3">
             <div>
-              <label class="text-xs text-muted-foreground mb-1 block">Name</label>
+              <label class="text-xs text-muted-foreground mb-1 block">{t("Name")}</label>
               <input
                 type="text"
                 value={newName()}
@@ -167,12 +158,12 @@ export function WorkspacesPage() {
                   if (e.key === 'Enter' && newName().trim()) handleCreate();
                 }}
                 class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="e.g. Internal tools"
+                placeholder={t("e.g. Internal tools")}
                 autofocus
               />
             </div>
             <div>
-              <label class="text-xs text-muted-foreground mb-1 block">Description (optional)</label>
+              <label class="text-xs text-muted-foreground mb-1 block">{t("Description (optional)")}</label>
               <textarea
                 rows={2}
                 value={newDescription()}
@@ -183,12 +174,8 @@ export function WorkspacesPage() {
           </div>
 
           <div class="mt-4 flex justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={closeCreateDialog}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleCreate} disabled={!newName().trim()} loading={createWorkspace.isPending}>
-              Create
-            </Button>
+            <Button size="sm" variant="outline" onClick={closeCreateDialog}>{t("Cancel")}</Button>
+            <Button size="sm" onClick={handleCreate} disabled={!newName().trim()} loading={createWorkspace.isPending}>{t("Create")}</Button>
           </div>
         </DialogContent>
       </Dialog>

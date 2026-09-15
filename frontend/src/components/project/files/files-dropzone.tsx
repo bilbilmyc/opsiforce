@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show } from 'solid-js';
 import { Folder, Upload } from '~/components/icons';
 import { cn } from '~/lib/cn';
@@ -42,7 +43,7 @@ export function FilesDropzone(props: FilesDropzoneProps) {
             <span class="shrink-0 text-[11px] text-muted-foreground tabular-nums">
               <Show
                 when={props.upload.totalBytes() > 0}
-                fallback={`${props.upload.preparedFiles()} / ${props.upload.totalFiles()} files`}
+                fallback={t("{0} / {1} files", { "0": props.upload.preparedFiles(), "1": props.upload.totalFiles() })}
               >
                 {formatBytes(props.upload.sentBytes())} / {formatBytes(props.upload.totalBytes())}
               </Show>
@@ -51,30 +52,24 @@ export function FilesDropzone(props: FilesDropzoneProps) {
               type="button"
               class="inline-flex h-6 shrink-0 items-center rounded-md border border-border px-2 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
               onClick={() => props.upload.cancel()}
-            >
-              Cancel
-            </button>
+            >{t("Cancel")}</button>
           </>
         }
       >
         <button
           type="button"
           class="absolute inset-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="Choose files to upload"
+          aria-label={t("Choose files to upload")}
           onClick={() => fileInputRef?.click()}
         />
         <Upload class="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-        <span class="pointer-events-none flex-1 min-w-0 truncate text-center text-xs text-muted-foreground">
-          Drop files here or click to upload
-        </span>
+        <span class="pointer-events-none flex-1 min-w-0 truncate text-center text-xs text-muted-foreground">{t("Drop files here or click to upload")}</span>
         <button
           type="button"
           class="relative inline-flex h-6 shrink-0 items-center gap-1.5 rounded-md border border-border px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           onClick={() => folderInputRef?.click()}
         >
-          <Folder class="w-3 h-3" />
-          Folder
-        </button>
+          <Folder class="w-3 h-3" />{t("Folder")}</button>
         <span
           class="pointer-events-none shrink-0 max-w-1/3 truncate text-[11px] text-muted-foreground"
           title={props.hint}

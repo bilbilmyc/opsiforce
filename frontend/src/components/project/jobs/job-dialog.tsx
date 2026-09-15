@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMemo, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog';
@@ -20,7 +21,7 @@ export function JobDialog(props: JobDialogProps) {
   const isDone = () => display().phase === 'done';
   const isFailed = () => display().phase === 'failed';
   const isRunning = () => display().phase === 'running';
-  const dismissLabel = () => display().dismissLabel ?? (isDone() ? 'Done' : 'Close');
+  const dismissLabel = () => display().dismissLabel ?? (isDone() ? t("Done") : t("Close"));
 
   const runAction = (action: JobActionDescriptor) => {
     if (action.href) window.open(action.href, '_blank', 'noopener,noreferrer');
@@ -65,9 +66,7 @@ export function JobDialog(props: JobDialogProps) {
 
         <div class="mt-5 flex justify-end gap-2">
           <Show when={isRunning()}>
-            <Button size="sm" variant="outline" onClick={() => props.onMinimize()}>
-              Minimize
-            </Button>
+            <Button size="sm" variant="outline" onClick={() => props.onMinimize()}>{t("Minimize")}</Button>
           </Show>
           <Show when={!isRunning() || display().dismissWhileRunning}>
             <Button size="sm" variant="outline" onClick={() => props.onDismiss()}>

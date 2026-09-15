@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show } from 'solid-js';
 import { Download, RefreshCw } from '~/components/icons';
 import { Button } from '~/components/ui/button';
@@ -30,15 +31,11 @@ export function FileDownloadCard(props: FileDownloadCardProps) {
         </Show>
         <div class="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={props.onDownload}>
-            <Download class="w-3.5 h-3.5" />
-            Download
-          </Button>
+            <Download class="w-3.5 h-3.5" />{t("Download")}</Button>
           <Show when={props.onRetry}>
             {(retry) => (
               <Button size="sm" variant="ghost" onClick={retry()}>
-                <RefreshCw class="w-3.5 h-3.5" />
-                Try again
-              </Button>
+                <RefreshCw class="w-3.5 h-3.5" />{t("Try again")}</Button>
             )}
           </Show>
         </div>

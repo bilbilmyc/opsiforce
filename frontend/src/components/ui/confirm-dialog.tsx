@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, type ParentProps } from 'solid-js';
 import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogFooter } from './dialog';
 import { Button } from './button';
@@ -22,7 +23,7 @@ export default function ConfirmDialog(props: ConfirmDialogProps) {
         {props.children}
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={() => props.onOpenChange(false)}>
-            {props.cancelLabel ?? 'Cancel'}
+            {props.cancelLabel ?? t("Cancel")}
           </Button>
           <Button
             variant={props.variant ?? 'default'}

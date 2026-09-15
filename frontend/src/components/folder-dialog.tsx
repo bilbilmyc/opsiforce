@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { ApiError, type Folder } from '~/api/client';
@@ -37,7 +38,7 @@ export function FolderDialog(props: {
       const folder = existing
         ? await renameFolder.mutateAsync({ workspaceId: props.workspaceId, folderId: existing.id, name: trimmed })
         : await createFolder.mutateAsync({ workspaceId: props.workspaceId, name: trimmed });
-      toast.success(existing ? 'Folder renamed' : 'Folder created');
+      toast.success(existing ? t("Folder renamed") : t("Folder created"));
       close();
       props.onSaved?.(folder);
     } catch (err) {
@@ -45,7 +46,7 @@ export function FolderDialog(props: {
         setConflictError(err.message);
         return;
       }
-      toast.error(isRename() ? 'Failed to rename folder' : 'Failed to create folder');
+      toast.error(isRename() ? t("Failed to rename folder") : t("Failed to create folder"));
     }
   };
 
@@ -57,11 +58,11 @@ export function FolderDialog(props: {
       }}
     >
       <DialogContent>
-        <DialogTitle>{isRename() ? 'Rename folder' : 'Create new folder'}</DialogTitle>
+        <DialogTitle>{isRename() ? t("Rename folder") : t("Create new folder")}</DialogTitle>
         <DialogDescription>{FOLDER_DESCRIPTION}</DialogDescription>
 
         <div class="mt-4">
-          <label class="text-xs text-muted-foreground mb-1 block">Name</label>
+          <label class="text-xs text-muted-foreground mb-1 block">{t("Name")}</label>
           <input
             type="text"
             value={name()}
@@ -73,7 +74,7 @@ export function FolderDialog(props: {
               if (e.key === 'Enter' && name().trim()) handleSave();
             }}
             class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            placeholder="e.g. Prototypes"
+            placeholder={t("e.g. Prototypes")}
             autofocus
           />
           <Show when={conflictError()}>
@@ -82,11 +83,9 @@ export function FolderDialog(props: {
         </div>
 
         <div class="mt-4 flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={close}>
-            Cancel
-          </Button>
+          <Button size="sm" variant="outline" onClick={close}>{t("Cancel")}</Button>
           <Button size="sm" onClick={handleSave} disabled={!name().trim() || isPending()}>
-            {isRename() ? 'Rename' : 'Create'}
+            {isRename() ? t("Rename") : t("Create")}
           </Button>
         </div>
       </DialogContent>

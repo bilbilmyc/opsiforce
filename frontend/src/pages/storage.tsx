@@ -1,3 +1,5 @@
+import { intlLocale } from '~/i18n';
+import { t } from '~/i18n';
 import { createMemo, createSignal, For, Show, type Component, type JSX } from 'solid-js';
 import { toast } from 'solid-sonner';
 import {
@@ -61,7 +63,7 @@ function tenantColor(index: number): string {
 function formatSnapshotClock(iso: string): string {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return '—';
-  return at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return at.toLocaleTimeString(intlLocale(), { hour: '2-digit', minute: '2-digit' });
 }
 
 interface BucketRow {
@@ -74,22 +76,22 @@ interface BucketRow {
 
 function bucketRows(buckets: PlatformStorageBuckets): BucketRow[] {
   return [
-    { label: 'Pool (unclaimed projects)', bytes: buckets.pool.bytes, error: buckets.pool.error, icon: Inbox },
+    { get label() { return t("Pool (unclaimed projects)"); }, bytes: buckets.pool.bytes, error: buckets.pool.error, icon: Inbox },
     {
-      label: 'Tombstoned (deleted pool projects)',
+      get label() { return t("Tombstoned (deleted pool projects)"); },
       bytes: buckets.tombstoned.bytes,
       error: buckets.tombstoned.error,
       icon: Trash2,
     },
     {
-      label: 'Orphaned directories',
+      get label() { return t("Orphaned directories"); },
       bytes: buckets.orphaned.bytes,
       error: buckets.orphaned.error,
       detail: `${buckets.orphaned.count} ${buckets.orphaned.count === 1 ? 'directory' : 'directories'}`,
       icon: Layers,
     },
-    { label: 'Exports', bytes: buckets.exports.bytes, error: buckets.exports.error, icon: Download },
-    { label: 'Imports', bytes: buckets.imports.bytes, error: buckets.imports.error, icon: Upload },
+    { get label() { return t("Exports"); }, bytes: buckets.exports.bytes, error: buckets.exports.error, icon: Download },
+    { get label() { return t("Imports"); }, bytes: buckets.imports.bytes, error: buckets.imports.error, icon: Upload },
   ];
 }
 
@@ -132,23 +134,20 @@ export function StoragePage() {
     <div class="w-full overflow-y-auto h-full px-4 py-6">
       <div class="flex items-center gap-3 mb-1">
         <Database class="w-5 h-5 text-muted-foreground" />
-        <h1 class="text-xl font-semibold">Storage</h1>
+        <h1 class="text-xl font-semibold">{t("Storage")}</h1>
         <Show when={snapshot()}>{(view) => <CapacityBadge snapshot={view()} />}</Show>
         <Show when={snapshot()}>
           {(view) => (
             <div class="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
               <Clock class="w-3.5 h-3.5" />
-              <span class="tabular-nums">
-                Snapshot {formatSnapshotClock(view().computedAt)} · {STALENESS_NOTE}
+              <span class="tabular-nums">{t("Snapshot ")}{formatSnapshotClock(view().computedAt)} · {STALENESS_NOTE}
               </span>
             </div>
           )}
         </Show>
       </div>
 
-      <p class="text-xs text-muted-foreground mb-4 ml-8">
-        Disk usage on the shared storage volume, across all organizations.
-      </p>
+      <p class="text-xs text-muted-foreground mb-4 ml-8">{t("Disk usage on the shared storage volume, across all organizations.")}</p>
 
       <Show when={storage.isPending}>
         <LoadingState />
@@ -182,10 +181,8 @@ function CapacityBadge(props: { snapshot: PlatformStorageView }) {
             as="span"
             class={cn(badgeVariants({ variant: 'warning' }), 'text-[10px] px-2 py-0 gap-1 cursor-default')}
           >
-            <AlertTriangle class="w-3 h-3" />
-            Capacity unverified
-          </TooltipTrigger>
-          <TooltipContent>{CAPACITY_SUSPECT_NOTE}</TooltipContent>
+            <AlertTriangle class="w-3 h-3" />{t("Capacity unverified")}</TooltipTrigger>
+          <TooltipContent>{t(CAPACITY_SUSPECT_NOTE)}</TooltipContent>
         </Tooltip>
       }
     >
@@ -229,32 +226,30 @@ function CapacityBar(props: { snapshot: PlatformStorageView }) {
           <div
             class={cn('h-full', UNATTRIBUTED_COLOR)}
             style={{ width: `${width(unattributedBytes())}%` }}
-            title={`Unattributed · ${formatBytes(unattributedBytes())}`}
+            title={t("Unattributed · {0}", { "0": formatBytes(unattributedBytes()) })}
           />
         </Show>
         <Show when={unaccountedBytes() > 0}>
           <div
             class={cn('h-full', UNACCOUNTED_COLOR)}
             style={{ width: `${width(unaccountedBytes())}%` }}
-            title={`Unaccounted · ${formatBytes(unaccountedBytes())}`}
+            title={t("Unaccounted · {0}", { "0": formatBytes(unaccountedBytes()) })}
           />
         </Show>
       </div>
 
       <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[11px] text-muted-foreground">
-        <LegendItem color={TENANT_SEGMENT_COLORS[0]} label="Organizations" />
-        <LegendItem color={UNATTRIBUTED_COLOR} label="Unattributed" />
+        <LegendItem color={TENANT_SEGMENT_COLORS[0]} label={t("Organizations")} />
+        <LegendItem color={UNATTRIBUTED_COLOR} label={t("Unattributed")} />
         <Show when={!props.snapshot.capacitySuspect}>
-          <LegendItem color={UNACCOUNTED_COLOR} label="Unaccounted" />
-          <span class="text-muted-foreground/70 tabular-nums">{formatBytes(freeBytes())} free</span>
+          <LegendItem color={UNACCOUNTED_COLOR} label={t("Unaccounted")} />
+          <span class="text-muted-foreground/70 tabular-nums">{formatBytes(freeBytes())}{t(" free")}</span>
         </Show>
         <Show when={props.snapshot.capacitySuspect}>
           <Tooltip>
             <TooltipTrigger as="span" class="inline-flex items-center gap-1 text-amber-600 cursor-default">
-              <AlertTriangle class="w-3 h-3" />
-              Claim capacity unverified — showing the composition of measured storage only
-            </TooltipTrigger>
-            <TooltipContent>{CAPACITY_SUSPECT_NOTE}</TooltipContent>
+              <AlertTriangle class="w-3 h-3" />{t("Claim capacity unverified — showing the composition of measured storage only")}</TooltipTrigger>
+            <TooltipContent>{t(CAPACITY_SUSPECT_NOTE)}</TooltipContent>
           </Tooltip>
         </Show>
       </div>
@@ -291,9 +286,9 @@ function RollupTable(props: { snapshot: PlatformStorageView }) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead class="min-w-64">Name</TableHead>
-            <TableHead class="w-32 text-right">Size</TableHead>
-            <TableHead class="w-24 text-right">Share</TableHead>
+            <TableHead class="min-w-64">{t("Name")}</TableHead>
+            <TableHead class="w-32 text-right">{t("Size")}</TableHead>
+            <TableHead class="w-24 text-right">{t("Share")}</TableHead>
             <TableHead class="min-w-40" />
           </TableRow>
         </TableHeader>
@@ -359,9 +354,9 @@ function RollupTable(props: { snapshot: PlatformStorageView }) {
             <TableCell colspan={COLUMN_COUNT} class="bg-muted/40 py-2">
               <div class="flex items-center gap-2">
                 <Layers class="w-3.5 h-3.5 shrink-0 text-muted-foreground ml-5" />
-                <span class="font-medium text-sm">Unattributed</span>
+                <span class="font-medium text-sm">{t("Unattributed")}</span>
                 <Show when={bucketsErrored(props.snapshot.buckets)}>
-                  <MeasurementError label="Some directories could not be measured; this total is incomplete." />
+                  <MeasurementError label={t("Some directories could not be measured; this total is incomplete.")} />
                 </Show>
                 <span class="ml-auto text-sm tabular-nums font-medium">{formatBytes(unattributedBytes())}</span>
                 <span class="w-20 text-right text-xs tabular-nums text-muted-foreground">
@@ -383,7 +378,7 @@ function RollupTable(props: { snapshot: PlatformStorageView }) {
                       <span class="text-xs text-muted-foreground shrink-0">· {bucket.detail}</span>
                     </Show>
                     <Show when={bucket.error}>
-                      <MeasurementError label="Some directories could not be measured; this total is incomplete." />
+                      <MeasurementError label={t("Some directories could not be measured; this total is incomplete.")} />
                     </Show>
                   </div>
                 </TableCell>
@@ -412,17 +407,15 @@ function UnaccountedRow(props: { snapshot: PlatformStorageView }) {
     <TableRow class="hover:bg-transparent">
       <TableCell>
         <div class="flex items-center gap-2 pl-6">
-          <span class="text-sm text-muted-foreground">Unaccounted residual</span>
+          <span class="text-sm text-muted-foreground">{t("Unaccounted residual")}</span>
           <Tooltip>
             <TooltipTrigger
               as="span"
               class="text-xs text-muted-foreground underline decoration-dotted cursor-default shrink-0"
-            >
-              what's this?
-            </TooltipTrigger>
+            >{t("what's this?")}</TooltipTrigger>
             <TooltipContent>
-              {UNACCOUNTED_NOTE}
-              <Show when={props.snapshot.capacitySuspect}> {CAPACITY_SUSPECT_NOTE}</Show>
+              {t(UNACCOUNTED_NOTE)}
+              <Show when={props.snapshot.capacitySuspect}> {t(CAPACITY_SUSPECT_NOTE)}</Show>
             </TooltipContent>
           </Tooltip>
         </div>
@@ -436,16 +429,14 @@ function UnaccountedRow(props: { snapshot: PlatformStorageView }) {
                 as="span"
                 class="inline-flex items-center gap-1 text-[11px] text-amber-600 cursor-default"
               >
-                <AlertTriangle class="w-3 h-3" />
-                Unverified
-              </TooltipTrigger>
-              <TooltipContent>{CAPACITY_SUSPECT_NOTE}</TooltipContent>
+                <AlertTriangle class="w-3 h-3" />{t("Unverified")}</TooltipTrigger>
+              <TooltipContent>{t(CAPACITY_SUSPECT_NOTE)}</TooltipContent>
             </Tooltip>
           }
         >
           <span class="inline-flex items-center gap-1.5">
             <Show when={props.snapshot.incomplete}>
-              <MeasurementError label="Some directories could not be measured, so their bytes are missing from the rollup above and inflate this residual." />
+              <MeasurementError label={t("Some directories could not be measured, so their bytes are missing from the rollup above and inflate this residual.")} />
             </Show>
             {formatBytes(displayBytes())}
           </span>
@@ -483,7 +474,7 @@ function TenantRow(props: {
           </Badge>
           <PendingDeletionBadge tenant={props.tenant} />
           <Show when={props.tenant.error}>
-            <MeasurementError label="Some directories could not be measured; this total is incomplete." />
+            <MeasurementError label={t("Some directories could not be measured; this total is incomplete.")} />
           </Show>
           <span class="ml-auto text-sm tabular-nums font-medium">{formatBytes(props.tenant.totalBytes)}</span>
           <span class="w-20 text-right text-xs tabular-nums text-muted-foreground">
@@ -516,8 +507,8 @@ function PendingDeletionBadge(props: { tenant: PlatformStorageTenant }) {
   const badgeBody = () => (
     <>
       <Trash2 class="w-2.5 h-2.5" />
-      <Show when={!pending().error} fallback={<>pending deletion unmeasured</>}>
-        <span class="tabular-nums">{formatBytes(pending().bytes)}</span> pending deletion ·{' '}
+      <Show when={!pending().error} fallback={<>{t("pending deletion unmeasured")}</>}>
+        <span class="tabular-nums">{formatBytes(pending().bytes)}</span>{t(" pending deletion ·")}{' '}
         <span class="tabular-nums">{pending().count}</span>
       </Show>
     </>
@@ -526,17 +517,16 @@ function PendingDeletionBadge(props: { tenant: PlatformStorageTenant }) {
   const summary = () => (
     <Show
       when={!pending().error}
-      fallback="Some pending-deletion directories could not be measured; this aggregate is incomplete."
+      fallback={t("Some pending-deletion directories could not be measured; this aggregate is incomplete.")}
     >
-      {pending().count} {pending().count === 1 ? 'directory' : 'directories'} of deleted project environments still
-      on disk for the recovery window. Cleanup will reclaim {formatBytes(pending().bytes)}.
+      {pending().count} {pending().count === 1 ? 'directory' : 'directories'}{t(" of deleted project environments still on disk for the recovery window. Cleanup will reclaim ")}{formatBytes(pending().bytes)}.
     </Show>
   );
 
   const startCleanup = () => {
     cleanup.mutate(props.tenant.id, {
-      onSuccess: () => toast.success('Cleanup started in the background — space will be reclaimed shortly'),
-      onError: () => toast.error('Failed to start cleanup'),
+      onSuccess: () => toast.success(t("Cleanup started in the background — space will be reclaimed shortly")),
+      onError: () => toast.error(t("Failed to start cleanup")),
     });
   };
 
@@ -560,19 +550,15 @@ function PendingDeletionBadge(props: { tenant: PlatformStorageTenant }) {
           </PopoverTrigger>
           <PopoverContent class="w-72 space-y-2 p-3 text-xs" onClick={(event: MouseEvent) => event.stopPropagation()}>
             <p>{summary()}</p>
-            <Button variant="destructive" size="sm" class="w-full" onClick={() => setConfirmOpen(true)}>
-              Clean up now
-            </Button>
+            <Button variant="destructive" size="sm" class="w-full" onClick={() => setConfirmOpen(true)}>{t("Clean up now")}</Button>
           </PopoverContent>
         </Popover>
         <ConfirmDialog
           open={confirmOpen()}
           onOpenChange={setConfirmOpen}
-          title={`Clean up ${props.tenant.name} storage now?`}
-          description={`${pending().count} ${
-            pending().count === 1 ? 'directory' : 'directories'
-          } (${formatBytes(pending().bytes)}) will be removed immediately, skipping the remaining recovery window. This cannot be undone.`}
-          confirmLabel="Clean up now"
+          title={t("Clean up {0} storage now?", { "0": props.tenant.name })}
+          description={t("{0} {1} ({2}) will be removed immediately, skipping the remaining recovery window. This cannot be undone.", { "0": pending().count, "1": pending().count === 1 ? 'directory' : 'directories', "2": formatBytes(pending().bytes) })}
+          confirmLabel={t("Clean up now")}
           variant="destructive"
           onConfirm={startCleanup}
         />
@@ -596,12 +582,12 @@ function ProjectRow(props: {
             class={cn('w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform', props.expanded && 'rotate-90')}
           />
           <FolderKanban class="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
-          <span class="text-sm truncate">{props.project.title?.trim() || 'Untitled project'}</span>
+          <span class="text-sm truncate">{props.project.title?.trim() || t("Untitled project")}</span>
           <Badge variant="secondary" class="text-[10px] px-1.5 py-0 shrink-0">
             {props.project.environments.length}
           </Badge>
           <Show when={props.project.error}>
-            <MeasurementError label="Some environment directories could not be measured; this total is incomplete." />
+            <MeasurementError label={t("Some environment directories could not be measured; this total is incomplete.")} />
           </Show>
         </div>
       </TableCell>
@@ -620,7 +606,7 @@ function SizeValue(props: { bytes: number | null; error: boolean }) {
   return (
     <Show
       when={!props.error && props.bytes !== null}
-      fallback={<MeasurementError label="This directory could not be measured — the size is unknown, not zero." />}
+      fallback={<MeasurementError label={t("This directory could not be measured — the size is unknown, not zero.")} />}
     >
       {formatBytes(props.bytes ?? 0)}
     </Show>
@@ -634,9 +620,7 @@ function MeasurementError(props: { label: string }) {
         as="span"
         class="inline-flex items-center gap-1 text-[11px] text-amber-600 shrink-0 cursor-default"
       >
-        <AlertTriangle class="w-3 h-3" />
-        Unmeasured
-      </TooltipTrigger>
+        <AlertTriangle class="w-3 h-3" />{t("Unmeasured")}</TooltipTrigger>
       <TooltipContent>{props.label}</TooltipContent>
     </Tooltip>
   );
@@ -672,12 +656,10 @@ function ErrorState(props: { onRetry: () => void }): JSX.Element {
   return (
     <div class="rounded-lg border border-dashed border-border text-center py-16 text-muted-foreground">
       <AlertTriangle class="w-10 h-10 mx-auto mb-3 text-amber-500 opacity-70" />
-      <p class="text-sm font-medium text-foreground">Couldn't load the storage snapshot</p>
-      <p class="text-xs mt-1">The request failed — the volume may be unreachable.</p>
+      <p class="text-sm font-medium text-foreground">{t("Couldn't load the storage snapshot")}</p>
+      <p class="text-xs mt-1">{t("The request failed — the volume may be unreachable.")}</p>
       <Button variant="outline" size="sm" class="mt-4" onClick={() => props.onRetry()}>
-        <RefreshCw class="w-3.5 h-3.5" />
-        Try again
-      </Button>
+        <RefreshCw class="w-3.5 h-3.5" />{t("Try again")}</Button>
     </div>
   );
 }
@@ -686,8 +668,8 @@ function EmptyState(): JSX.Element {
   return (
     <div class="rounded-lg border border-dashed border-border text-center py-16 text-muted-foreground">
       <Database class="w-10 h-10 mx-auto mb-3 opacity-40" />
-      <p class="text-sm font-medium">No organization storage yet</p>
-      <p class="text-xs mt-1">Environment directories appear here once projects have been opened.</p>
+      <p class="text-sm font-medium">{t("No organization storage yet")}</p>
+      <p class="text-xs mt-1">{t("Environment directories appear here once projects have been opened.")}</p>
     </div>
   );
 }

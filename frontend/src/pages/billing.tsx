@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, For, createSignal, createEffect } from 'solid-js';
 import { useQueryClient } from '@tanstack/solid-query';
 import { createAppQuery } from '~/lib/create-app-query';
@@ -77,7 +78,7 @@ export function BillingPage() {
       await qc.invalidateQueries({ queryKey: ['tenant', 'budget'] });
       setEditing(false);
     } catch {
-      toast.error('Failed to save budget');
+      toast.error(t("Failed to save budget"));
     } finally {
       setSaving(false);
     }
@@ -85,15 +86,13 @@ export function BillingPage() {
 
   return (
     <>
-      <SettingsSection icon={Wallet} title="Billing" description="This organization's spend and budget.">
+      <SettingsSection icon={Wallet} title={t("Billing")} description={t("This organization's spend and budget.")}>
         <div class="space-y-6">
           <div class="rounded-lg border border-border p-4 space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-sm font-medium">Budget</span>
+              <span class="text-sm font-medium">{t("Budget")}</span>
               <Show when={canManage() && !editing()}>
-                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>
-                  Edit
-                </Button>
+                <Button size="sm" variant="outline" onClick={() => setEditing(true)}>{t("Edit")}</Button>
               </Show>
             </div>
 
@@ -120,7 +119,7 @@ export function BillingPage() {
             </Show>
 
             <Show when={!hasBudget() && !editing()}>
-              <p class="text-xs text-muted-foreground">No budget set.</p>
+              <p class="text-xs text-muted-foreground">{t("No budget set.")}</p>
             </Show>
 
             <Show when={editing()}>
@@ -132,15 +131,15 @@ export function BillingPage() {
                   value={draftBudget()}
                   onChange={(v) => setDraftBudget(v)}
                 >
-                  <label class="text-xs text-muted-foreground mb-1 block">Max budget (USD)</label>
+                  <label class="text-xs text-muted-foreground mb-1 block">{t("Max budget (USD)")}</label>
                   <NumberFieldGroup>
-                    <NumberFieldInput placeholder="0 = unlimited" />
+                    <NumberFieldInput placeholder={t("0 = unlimited")} />
                     <NumberFieldIncrementTrigger />
                     <NumberFieldDecrementTrigger />
                   </NumberFieldGroup>
                 </NumberField>
                 <div class="w-28">
-                  <label class="text-xs text-muted-foreground mb-1 block">Period</label>
+                  <label class="text-xs text-muted-foreground mb-1 block">{t("Period")}</label>
                   <Select
                     options={DURATION_OPTIONS}
                     optionValue="value"
@@ -163,23 +162,21 @@ export function BillingPage() {
                 </div>
               </div>
               <div class="flex justify-end gap-2 pt-1">
-                <Button size="sm" variant="outline" onClick={() => setEditing(false)}>
-                  Cancel
-                </Button>
+                <Button size="sm" variant="outline" onClick={() => setEditing(false)}>{t("Cancel")}</Button>
                 <Button size="sm" disabled={saving()} onClick={handleSave}>
-                  {saving() ? 'Saving...' : 'Save'}
+                  {saving() ? t("Saving...") : t("Save")}
                 </Button>
               </div>
             </Show>
           </div>
 
           <div class="space-y-2">
-            <span class="text-sm font-medium">Projects</span>
+            <span class="text-sm font-medium">{t("Projects")}</span>
             <Show
               when={projectList.data && projectList.data.length > 0}
               fallback={
                 <div class="rounded-lg border border-dashed border-border p-6 text-center">
-                  <p class="text-xs text-muted-foreground">No projects yet.</p>
+                  <p class="text-xs text-muted-foreground">{t("No projects yet.")}</p>
                 </div>
               }
             >
@@ -187,8 +184,8 @@ export function BillingPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead class="text-right">Usage</TableHead>
+                      <TableHead>{t("Name")}</TableHead>
+                      <TableHead class="text-right">{t("Usage")}</TableHead>
                       <TableHead class="w-10" />
                     </TableRow>
                   </TableHeader>
@@ -231,7 +228,7 @@ function ProjectRow(props: { project: Project; canSeeSettings: boolean; onSettin
     queryFn: () => api.get<BudgetConfig & { currentUsage: number }>(`/usage/projects/${props.project.id}/budget`),
   }));
 
-  const name = () => props.project.title ?? `Project ${props.project.id.slice(0, 8)}`;
+  const name = () => props.project.title ?? t("Project {0}", { "0": props.project.id.slice(0, 8) });
   const maxBudget = () => budget.data?.maxBudget ?? null;
   const currentUsage = () => budget.data?.currentUsage ?? 0;
   const hasBudget = () => {
@@ -256,7 +253,7 @@ function ProjectRow(props: { project: Project; canSeeSettings: boolean; onSettin
             size="icon"
             class="w-6 h-6 text-muted-foreground hover:text-foreground"
             onClick={props.onSettings}
-            aria-label="Project settings"
+            aria-label={t("Project settings")}
           >
             <Settings class="w-3.5 h-3.5" />
           </Button>

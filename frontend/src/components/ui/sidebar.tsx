@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import {
   createRoot,
   createSignal,
@@ -290,7 +291,7 @@ export function SidebarTrigger(props: { class?: string }) {
   return (
     <Button variant="ghost" size="icon" class={cn('h-7 w-7', props.class)} onClick={toggleSidebar}>
       <PanelLeft class="h-4 w-4" />
-      <span class="sr-only">Toggle sidebar</span>
+      <span class="sr-only">{t("Toggle sidebar")}</span>
     </Button>
   );
 }

@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { publicDomain } from '~/lib/public-url';
 import { For, Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
@@ -49,8 +50,8 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
   const slugTaken = () => environments.data?.some((env) => env.slug === slug()) === true;
   const slugError = () => {
     if (!slug()) return 'A URL slug is required';
-    if (!slugValid()) return 'Lowercase letters, digits, and dashes only; no leading or trailing dash';
-    if (slugTaken()) return `'${slug()}' is already used by another environment`;
+    if (!slugValid()) return t("Lowercase letters, digits, and dashes only; no leading or trailing dash");
+    if (slugTaken()) return t("'{0}' is already used by another environment", { "0": slug() });
     return null;
   };
   const canSubmit = () => name().trim().length > 0 && slugError() === null && isEnvironmentShortNameValid(shortName());
@@ -65,10 +66,10 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
         description: description().trim() || undefined,
         color: colorEdited() ? color() : undefined,
       });
-      toast.success('Environment created');
+      toast.success(t("Environment created"));
       resetForm();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create environment');
+      toast.error(err instanceof Error ? err.message : t("Failed to create environment"));
     }
   };
 
@@ -76,8 +77,8 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
     const env = pendingDelete();
     if (!env) return;
     remove.mutate(env.id, {
-      onSuccess: () => toast.success(`${env.name} deleted`),
-      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to delete environment'),
+      onSuccess: () => toast.success(t("{0} deleted", { "0": env.name })),
+      onError: (err) => toast.error(err instanceof Error ? err.message : t("Failed to delete environment")),
     });
   };
 
@@ -102,9 +103,7 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
           when={creating()}
           fallback={
             <Button size="sm" variant="outline" class="w-full" onClick={() => setCreating(true)}>
-              <Plus class="h-3.5 w-3.5" />
-              Add environment
-            </Button>
+              <Plus class="h-3.5 w-3.5" />{t("Add environment")}</Button>
           }
         >
           <div class="space-y-2 rounded-md border border-dashed border-border p-2.5">
@@ -116,7 +115,7 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
                 if (e.key === 'Enter' && canSubmit()) submitCreate();
               }}
               class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              placeholder="e.g. Staging"
+              placeholder={t("e.g. Staging")}
               autofocus
             />
             <div class="space-y-1">
@@ -132,7 +131,7 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
                   if (e.key === 'Enter' && canSubmit()) submitCreate();
                 }}
                 class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 font-mono text-xs shadow-sm transition-colors placeholder:font-sans placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                placeholder="URL slug, e.g. staging"
+                placeholder={t("URL slug, e.g. staging")}
               />
               <Show
                 when={slug() && slugError() === null}
@@ -142,28 +141,22 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
                   </Show>
                 }
               >
-                <p class="break-all text-xs text-muted-foreground">
-                  App URLs will look like{' '}
+                <p class="break-all text-xs text-muted-foreground">{t("App URLs will look like")}{' '}
                   <span class="font-mono">
-                    {'<app-id>'}-{slug()}.{publicDomain('apps')}
+                    {t("<app-id>")}-{slug()}.{publicDomain('apps')}
                   </span>
                 </p>
               </Show>
-              <p class="text-xs text-muted-foreground">
-                The slug becomes part of every app URL in this environment and cannot be changed later.
-              </p>
+              <p class="text-xs text-muted-foreground">{t("The slug becomes part of every app URL in this environment and cannot be changed later.")}</p>
             </div>
             <BadgeLabelInput
               value={shortName()}
               onInput={setShortName}
               onEnter={submitCreate}
-              placeholder="Badge label (optional)"
+              placeholder={t("Badge label (optional)")}
               hint={
-                <p class="text-xs text-muted-foreground">
-                  Shown on project cards
-                  <Show when={!shortName().trim() && slug()}>
-                    {' '}
-                    — defaults to <span class="font-mono">{deriveEnvironmentShortName(slug())}</span>
+                <p class="text-xs text-muted-foreground">{t("Shown on project cards")}<Show when={!shortName().trim() && slug()}>
+                    {' '}{t("— defaults to ")}<span class="font-mono">{deriveEnvironmentShortName(slug())}</span>
                   </Show>
                   .
                 </p>
@@ -174,10 +167,10 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
               value={description()}
               onInput={(e) => setDescription(e.currentTarget.value)}
               class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              placeholder="Description (optional)"
+              placeholder={t("Description (optional)")}
             />
             <div class="space-y-1">
-              <span class="text-xs text-muted-foreground">Color</span>
+              <span class="text-xs text-muted-foreground">{t("Color")}</span>
               <ColorPicker
                 value={color()}
                 onChange={(hex) => {
@@ -186,18 +179,12 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
                 }}
               />
               <Show when={!colorEdited()}>
-                <p class="text-xs text-muted-foreground">
-                  A distinct color is assigned automatically; adjust it here if you like.
-                </p>
+                <p class="text-xs text-muted-foreground">{t("A distinct color is assigned automatically; adjust it here if you like.")}</p>
               </Show>
             </div>
             <div class="flex justify-end gap-2">
-              <Button size="sm" variant="outline" onClick={resetForm}>
-                Cancel
-              </Button>
-              <Button size="sm" onClick={submitCreate} loading={create.isPending} disabled={!canSubmit()}>
-                Create
-              </Button>
+              <Button size="sm" variant="outline" onClick={resetForm}>{t("Cancel")}</Button>
+              <Button size="sm" onClick={submitCreate} loading={create.isPending} disabled={!canSubmit()}>{t("Create")}</Button>
             </div>
           </div>
         </Show>
@@ -208,9 +195,9 @@ export function TenantEnvironmentsSection(props: { active: boolean }) {
         onOpenChange={(open) => {
           if (!open) setPendingDelete(null);
         }}
-        title="Delete environment"
-        description={`This deletes the ${pendingDelete()?.name ?? ''} environment from the organization. Projects can no longer publish to it. This action cannot be undone.`}
-        confirmLabel="Delete"
+        title={t("Delete environment")}
+        description={t("This deletes the {0} environment from the organization. Projects can no longer publish to it. This action cannot be undone.", { "0": pendingDelete()?.name ?? '' })}
+        confirmLabel={t("Delete")}
         variant="destructive"
         onConfirm={confirmDelete}
       />

@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { LayoutGrid, List } from '~/components/icons';
 import { cn } from '~/lib/cn';
 
@@ -20,7 +21,7 @@ export function FilesViewToggle(props: FilesViewToggleProps) {
       <button
         type="button"
         class={buttonClass('table')}
-        title="Table view"
+        title={t("Table view")}
         aria-pressed={props.mode === 'table'}
         onClick={() => props.onChange('table')}
       >
@@ -29,7 +30,7 @@ export function FilesViewToggle(props: FilesViewToggleProps) {
       <button
         type="button"
         class={buttonClass('cards')}
-        title="Card view"
+        title={t("Card view")}
         aria-pressed={props.mode === 'cards'}
         onClick={() => props.onChange('cards')}
       >

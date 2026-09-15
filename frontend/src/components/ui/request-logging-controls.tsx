@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show } from 'solid-js';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '~/components/ui/select';
 import {
@@ -18,18 +19,18 @@ interface LogModeOption {
 const LOG_MODES: LogModeOption[] = [
   {
     value: 'off',
-    label: 'Off',
-    description: 'No request logging. Lowest overhead — best for high-traffic apps.',
+    get label() { return t("Off"); },
+    get description() { return t("No request logging. Lowest overhead — best for high-traffic apps."); },
   },
   {
     value: 'metadata',
-    label: 'Metadata only',
-    description: 'Log method, path, status, latency and size. No request or response bodies.',
+    get label() { return t("Metadata only"); },
+    get description() { return t("Log method, path, status, latency and size. No request or response bodies."); },
   },
   {
     value: 'full',
-    label: 'Full',
-    description: 'Log metadata plus truncated request and response bodies.',
+    get label() { return t("Full"); },
+    get description() { return t("Log metadata plus truncated request and response bodies."); },
   },
 ];
 
@@ -46,7 +47,7 @@ export function RequestLoggingControls(props: {
   return (
     <div class="rounded-lg border border-border p-3 space-y-3">
       <div class="space-y-2.5">
-        <span class="text-xs font-medium text-foreground block">Logging Level</span>
+        <span class="text-xs font-medium text-foreground block">{t("Logging Level")}</span>
         <Select
           options={LOG_MODES}
           optionValue="value"
@@ -69,11 +70,8 @@ export function RequestLoggingControls(props: {
 
       <Show when={props.mode === 'full'}>
         <div class="space-y-2.5 border-t border-border pt-3">
-          <span class="text-xs font-medium text-foreground block">Body Capture Limit (KB)</span>
-          <p class="text-xs text-muted-foreground/70">
-            Maximum size of each request and response body kept in the log. Larger bodies are truncated at capture time,
-            so they never buffer in the proxy. Max 3 MB.
-          </p>
+          <span class="text-xs font-medium text-foreground block">{t("Body Capture Limit (KB)")}</span>
+          <p class="text-xs text-muted-foreground/70">{t("Maximum size of each request and response body kept in the log. Larger bodies are truncated at capture time, so they never buffer in the proxy. Max 3 MB.")}</p>
           <NumberField
             class="w-32"
             minValue={0}

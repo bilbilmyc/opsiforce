@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, type JSX } from 'solid-js';
 import type { ProjectAuthMode } from '~/api/client';
 import { config } from '~/config/config';
@@ -15,8 +16,8 @@ function options(): ModeOption[] {
   const opts: ModeOption[] = [
     {
       value: 'public',
-      title: 'Public',
-      description: "Anyone can access this project's preview URL without signing in.",
+      get title() { return t("Public"); },
+      get description() { return t("Anyone can access this project's preview URL without signing in."); },
       icon: Globe,
     },
   ];
@@ -30,8 +31,8 @@ function options(): ModeOption[] {
   }
   opts.push({
     value: 'manual',
-    title: 'Manual',
-    description: 'Require login via a custom auth provider before the preview loads.',
+    get title() { return t("Manual"); },
+    get description() { return t("Require login via a custom auth provider before the preview loads."); },
     icon: Lock,
   });
   return opts;

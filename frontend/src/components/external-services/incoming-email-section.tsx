@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createSignal, Show } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { ApiError } from '~/api/client';
@@ -23,13 +24,13 @@ export function IncomingEmailSection(props: EnvironmentSectionProps) {
     const value = address.data?.address;
     if (!value) return;
     await navigator.clipboard.writeText(value);
-    toast.success('Address copied');
+    toast.success(t("Address copied"));
   };
 
   const confirmRegenerate = () => {
     regenerate.mutate(props.projectEnvironmentId, {
-      onSuccess: (result) => toast.success(`This environment now receives mail at ${result.address}`),
-      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to regenerate the address'),
+      onSuccess: (result) => toast.success(t("This environment now receives mail at {0}", { "0": result.address })),
+      onError: (err) => toast.error(err instanceof Error ? err.message : t("Failed to regenerate the address")),
     });
   };
 
@@ -41,10 +42,10 @@ export function IncomingEmailSection(props: EnvironmentSectionProps) {
           fallback={
             <p class="text-xs text-muted-foreground">
               {unconfigured()
-                ? "Incoming email isn't configured on this platform."
+                ? t("Incoming email isn't configured on this platform.")
                 : address.error instanceof Error
                   ? address.error.message
-                  : 'Could not load the incoming email address.'}
+                  : t("Could not load the incoming email address.")}
             </p>
           }
         >
@@ -56,27 +57,23 @@ export function IncomingEmailSection(props: EnvironmentSectionProps) {
               type="button"
               onClick={copy}
               class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              aria-label="Copy the incoming email address"
+              aria-label={t("Copy the incoming email address")}
             >
               <Copy class="h-3.5 w-3.5" />
             </button>
             <Button size="sm" variant="outline" onClick={() => setConfirming(true)} loading={regenerate.isPending}>
-              <RotateCcw class="h-3.5 w-3.5" />
-              Regenerate
-            </Button>
+              <RotateCcw class="h-3.5 w-3.5" />{t("Regenerate")}</Button>
           </div>
-          <p class="text-xs text-muted-foreground">
-            Mail sent here is stored for this environment and the app is notified.
-          </p>
+          <p class="text-xs text-muted-foreground">{t("Mail sent here is stored for this environment and the app is notified.")}</p>
         </Show>
       </Show>
 
       <ConfirmDialog
         open={confirming()}
         onOpenChange={setConfirming}
-        title="Regenerate address"
-        description="A new address is issued and the current one stops receiving mail immediately. Anyone who saved the old address has to be told the new one."
-        confirmLabel="Regenerate"
+        title={t("Regenerate address")}
+        description={t("A new address is issued and the current one stops receiving mail immediately. Anyone who saved the old address has to be told the new one.")}
+        confirmLabel={t("Regenerate")}
         variant="destructive"
         onConfirm={confirmRegenerate}
       />

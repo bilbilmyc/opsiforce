@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import type { Options, Unit } from './types';
 import { units } from './units';
 import { assertValidArray, dedup, defaultOptions, flatten, parseNumber, range, sort } from './utils';
@@ -14,25 +15,25 @@ export const arrayToStringPart = (arr: number[], unit: Unit, options: Options) =
       fixSunday(
         arr.map((value) => {
           const parsedValue = parseNumber(value);
-          if (parsedValue === undefined) throw getError(`Invalid value "${value}"`, unit);
+          if (parsedValue === undefined) throw getError(t("Invalid value \"{0}\"", { "0": value }), unit);
           return parsedValue;
         }),
         unit
       )
     )
   );
-  if (!values.length) throw getError('Empty interval value', unit);
+  if (!values.length) throw getError(t("Empty interval value"), unit);
   assertInRange(values, unit);
   return toString(values, unit, options);
 };
 
 export function stringToArray(str: string) {
   if (typeof str !== 'string') {
-    throw new Error('Invalid cron expression, make sure you have spaces in between each expression');
+    throw new Error(t("Invalid cron expression, make sure you have spaces in between each expression"));
   }
   const parts = str.replace(/\s+/g, ' ').trim().split(' ');
   if (parts.length !== 5) {
-    throw new Error('Invalid cron string format');
+    throw new Error(t("Invalid cron string format"));
   }
   return parts.map((s, idx) => stringToArrayPart(s, units[idx]));
 }
@@ -46,7 +47,7 @@ export const stringToArrayPart = (str: string, unit: Unit) => {
             .split(',')
             .map((value: string) => {
               const valueParts = value.split('/');
-              if (valueParts.length > 2) throw getError(`Invalid value "${str}"`, unit);
+              if (valueParts.length > 2) throw getError(t("Invalid value \"{0}\"", { "0": str }), unit);
               let parsedValues: number[];
               const left = valueParts[0];
               const right = valueParts[1];
@@ -85,7 +86,7 @@ const toRanges = (values: number[]) => {
 const toString = (values: number[], unit: Unit, options: Options) => {
   let retval = '';
   if (isFull(values, unit)) {
-    retval = options.outputHashes ? 'H' : '*';
+    retval = options.outputHashes ? t("H") : '*';
   } else {
     const step = getStep(values);
     if (step && isInterval(values, step)) {
@@ -116,28 +117,28 @@ const formatValue = (value: number, unit: Unit, options: Options) => {
   return value;
 };
 
-export const getError = (error: string, unit: Unit) => new Error(`${error} for ${unit.name}`);
+export const getError = (error: string, unit: Unit) => new Error(t("{0} for {1}", { "0": error, "1": unit.name }));
 
 const parseRange = (rangeString: string, context: string, unit: Unit) => {
   const subparts = rangeString.split('-');
   if (subparts.length === 1) {
     const value = parseNumber(subparts[0]);
-    if (value === undefined) throw getError(`Invalid value "${context}"`, unit);
+    if (value === undefined) throw getError(t("Invalid value \"{0}\"", { "0": context }), unit);
     return [value];
   } else if (subparts.length === 2) {
     const minValue = parseNumber(subparts[0]);
     const maxValue = parseNumber(subparts[1]);
-    if (minValue === undefined || maxValue === undefined) throw getError(`Invalid value "${context}"`, unit);
-    if (maxValue < minValue) throw getError(`Max range is less than min range in "${rangeString}"`, unit);
+    if (minValue === undefined || maxValue === undefined) throw getError(t("Invalid value \"{0}\"", { "0": context }), unit);
+    if (maxValue < minValue) throw getError(t("Max range is less than min range in \"{0}\"", { "0": rangeString }), unit);
     return range(minValue, maxValue);
   }
-  throw getError(`Invalid value "${rangeString}"`, unit);
+  throw getError(t("Invalid value \"{0}\"", { "0": rangeString }), unit);
 };
 
 const parseStep = (step: string, unit: Unit) => {
   if (step !== undefined) {
     const parsedStep = parseNumber(step);
-    if (parsedStep === undefined) throw getError(`Invalid interval step value "${step}"`, unit);
+    if (parsedStep === undefined) throw getError(t("Invalid interval step value \"{0}\"", { "0": step }), unit);
     return parsedStep;
   }
   return 0;
@@ -171,8 +172,8 @@ const replaceAlternatives = (str: string, unit: Unit) => {
 const assertInRange = (values: number[], unit: Unit) => {
   const first = values[0];
   const last = values[values.length - 1];
-  if (first < unit.min) throw getError(`Value "${first}" out of range`, unit);
-  if (last > unit.max) throw getError(`Value "${last}" out of range`, unit);
+  if (first < unit.min) throw getError(t("Value \"{0}\" out of range", { "0": first }), unit);
+  if (last > unit.max) throw getError(t("Value \"{0}\" out of range", { "0": last }), unit);
 };
 
 const isInterval = (values: number[], step: number) => {

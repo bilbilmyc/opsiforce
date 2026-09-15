@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { api, ApiError, currentTenant, parseErrorMessage, TENANT_HEADER } from './client';
 import { detectTimezone } from '~/lib/timezone';
 
@@ -118,7 +119,7 @@ export async function runImportUpload(run: ImportUploadRun): Promise<StartImport
     });
   } catch (err) {
     throw finalizeFailure(
-      err instanceof ApiError ? err : new ApiError(0, err instanceof Error ? err.message : 'The import failed.')
+      err instanceof ApiError ? err : new ApiError(0, err instanceof Error ? err.message : t("The import failed."))
     );
   }
 }
@@ -139,10 +140,10 @@ async function sendImportChunk(params: PutImportChunkParams): Promise<void> {
       return;
     } catch (err) {
       if (params.signal.aborted) throw cancelled();
-      const failure = err instanceof ApiError ? err : new ApiError(0, 'The connection dropped during upload.');
+      const failure = err instanceof ApiError ? err : new ApiError(0, t("The connection dropped during upload."));
       const delay = chunkRetryDelay(failure.status, attempt);
       if (delay === null) throw chunkRejection(failure);
-      if (attempt >= MAX_CHUNK_ATTEMPTS) throw new ImportUploadError('upload', 'Check your connection.', true);
+      if (attempt >= MAX_CHUNK_ATTEMPTS) throw new ImportUploadError('upload', t("Check your connection."), true);
       await sleep(delay, params.signal);
     }
   }
@@ -156,7 +157,7 @@ function chunkRetryDelay(status: number, attempt: number): number | null {
 
 function chunkRejection(err: ApiError): ImportUploadError {
   const message =
-    err.status === 404 ? 'The upload session is no longer available. Start the import again.' : err.message;
+    err.status === 404 ? t("The upload session is no longer available. Start the import again.") : err.message;
   return new ImportUploadError('upload', message, false);
 }
 
@@ -164,7 +165,7 @@ function finalizeFailure(err: ApiError): ImportUploadError {
   if (err.status === 404) {
     return new ImportUploadError(
       'finalize-rejected',
-      'The upload session is no longer available. It may already have been imported — check your projects before starting over.',
+      t("The upload session is no longer available. It may already have been imported \u2014 check your projects before starting over."),
       false
     );
   }
@@ -173,7 +174,7 @@ function finalizeFailure(err: ApiError): ImportUploadError {
 }
 
 function cancelled(): ImportUploadError {
-  return new ImportUploadError('upload', 'The upload was cancelled.', false);
+  return new ImportUploadError('upload', t("The upload was cancelled."), false);
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {
@@ -210,11 +211,11 @@ function putImportChunk(params: PutImportChunkParams): Promise<void> {
     xhr.upload.addEventListener('progress', (event) => params.onProgress(event.loaded));
     xhr.addEventListener('load', () => {
       if (xhr.status >= 200 && xhr.status < 300) resolve();
-      else reject(new ApiError(xhr.status, parseErrorMessage(xhr.responseText, `Chunk upload failed (${xhr.status})`)));
+      else reject(new ApiError(xhr.status, parseErrorMessage(xhr.responseText, t("Chunk upload failed ({0})", { "0": xhr.status }))));
     });
-    xhr.addEventListener('error', () => reject(new ApiError(0, 'The connection dropped during upload.')));
-    xhr.addEventListener('timeout', () => reject(new ApiError(0, 'The upload timed out.')));
-    xhr.addEventListener('abort', () => reject(new ApiError(0, 'The upload was cancelled.')));
+    xhr.addEventListener('error', () => reject(new ApiError(0, t("The connection dropped during upload."))));
+    xhr.addEventListener('timeout', () => reject(new ApiError(0, t("The upload timed out."))));
+    xhr.addEventListener('abort', () => reject(new ApiError(0, t("The upload was cancelled."))));
     xhr.send(params.chunk);
   });
 }

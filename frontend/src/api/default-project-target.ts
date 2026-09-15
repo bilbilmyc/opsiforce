@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMemo } from 'solid-js';
 import type { Project } from './client';
 import { useCurrentUser } from './user';
@@ -40,7 +41,7 @@ export function useCreateDefaultProject() {
 
   const createProject = (dto?: { agentId?: string }): Promise<Project> => {
     const destination = target();
-    if (destination.kind === 'unknown') return Promise.reject(new Error('No destination for new projects'));
+    if (destination.kind === 'unknown') return Promise.reject(new Error(t("No destination for new projects")));
     if (destination.kind === 'public') return createInPublic.mutateAsync(dto);
     return createInWorkspace.mutateAsync({ workspaceId: destination.workspaceId, dto });
   };

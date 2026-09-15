@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Dynamic } from 'solid-js/web';
 import { Show } from 'solid-js';
 import type { ExternalServiceSummary } from '~/api/external-services';
@@ -9,7 +10,7 @@ export function EnvironmentServiceSection(props: { service: ExternalServiceSumma
   return (
     <section class="space-y-2">
       <h3 class="text-sm font-semibold text-foreground">{props.service.displayName}</h3>
-      <Show when={section()} fallback={<p class="text-xs text-muted-foreground">No configuration UI here yet.</p>}>
+      <Show when={section()} fallback={<p class="text-xs text-muted-foreground">{t("No configuration UI here yet.")}</p>}>
         {(Component) => <Dynamic component={Component()} projectEnvironmentId={props.projectEnvironmentId} />}
       </Show>
     </section>

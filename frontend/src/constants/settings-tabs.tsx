@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import type { Component } from 'solid-js';
 import { FolderKanban, Layers, SlidersHorizontal, Wallet } from '~/components/icons';
 import { Permission } from '~/constants/permissions';
@@ -19,16 +20,16 @@ export const SETTINGS_GROUP_ORDER: SettingsGroup[] = ['Access', 'Configuration',
 export const SETTINGS_TABS: SettingsTab[] = [
   {
     to: '/settings/workspaces',
-    label: 'Workspaces',
-    description: 'Group and share projects.',
+    get label() { return t("Workspaces"); },
+    get description() { return t("Group and share projects."); },
     group: 'Access',
     icon: FolderKanban,
     isPermitted: (has) => has(Permission.manageWorkspaces),
   },
   {
     to: '/settings/environments',
-    label: 'Environments',
-    description: 'The publish targets every project can deploy to — Development, Production, and any you add.',
+    get label() { return t("Environments"); },
+    get description() { return t("The publish targets every project can deploy to — Development, Production, and any you add."); },
     group: 'Configuration',
     icon: Layers,
     isPermitted: (has) => has(Permission.manageEnvironments),
@@ -36,16 +37,16 @@ export const SETTINGS_TABS: SettingsTab[] = [
   ...PRIVATE_TABS,
   {
     to: '/settings/defaults',
-    label: 'Defaults',
-    description: 'Platform model default, timeouts and budgets.',
+    get label() { return t("Defaults"); },
+    get description() { return t("Platform model default, timeouts and budgets."); },
     group: 'Configuration',
     icon: SlidersHorizontal,
     isPermitted: (has) => has(Permission.managePlatformDefaults) || has(Permission.manageTenantDefaults),
   },
   {
     to: '/settings/billing',
-    label: 'Billing',
-    description: "This organization's spend and budget.",
+    get label() { return t("Billing"); },
+    get description() { return t("This organization's spend and budget."); },
     group: 'Billing',
     icon: Wallet,
     isPermitted: (has) => has(Permission.manageTenantBudget),

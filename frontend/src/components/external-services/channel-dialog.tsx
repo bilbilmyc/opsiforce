@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { useCreateWhatsappChannel, useUpdateWhatsappChannel, type WhatsappChannel } from '~/api/whatsapp-channels';
@@ -52,18 +53,18 @@ export function ChannelDialog(props: {
             label: label().trim() || null,
           },
         });
-        toast.success('Channel updated');
+        toast.success(t("Channel updated"));
       } else {
         await create.mutateAsync({
           channelId: channelId().trim(),
           apiToken: apiToken().trim(),
           label: label().trim() || null,
         });
-        toast.success('Channel registered');
+        toast.success(t("Channel registered"));
       }
       props.onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save channel');
+      toast.error(err instanceof Error ? err.message : t("Failed to save channel"));
     }
   };
 
@@ -71,11 +72,11 @@ export function ChannelDialog(props: {
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent class="max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEdit() ? 'Edit channel' : 'Register a WhatsApp channel'}</DialogTitle>
+          <DialogTitle>{isEdit() ? t("Edit channel") : t("Register a WhatsApp channel")}</DialogTitle>
           <DialogDescription>
             {isEdit()
-              ? 'Paste a new API token to rotate it, or change the label. The webhook secret stays the same.'
-              : 'Create the channel in the Whapi dashboard and link its number first, then register it here. Environments reference registered channels from their External services dialog.'}
+              ? t("Paste a new API token to rotate it, or change the label. The webhook secret stays the same.")
+              : t("Create the channel in the Whapi dashboard and link its number first, then register it here. Environments reference registered channels from their External services dialog.")}
           </DialogDescription>
         </DialogHeader>
 
@@ -84,45 +85,43 @@ export function ChannelDialog(props: {
             when={!isEdit()}
             fallback={
               <div class="space-y-1">
-                <span class="block text-xs text-muted-foreground">Channel</span>
+                <span class="block text-xs text-muted-foreground">{t("Channel")}</span>
                 <p class="font-mono text-xs">{props.channel?.channelId}</p>
               </div>
             }
           >
             <LabeledTextField
-              label="Whapi channel id"
+              label={t("Whapi channel id")}
               value={channelId()}
               onInput={setChannelId}
-              placeholder="e.g. DEADPL-HPHMZ"
+              placeholder={t("e.g. DEADPL-HPHMZ")}
               mono
               autofocus
             />
           </Show>
 
           <LabeledTextField
-            label={isEdit() ? 'New API token (optional)' : 'API token'}
+            label={isEdit() ? t("New API token (optional)") : t("API token")}
             value={apiToken()}
             onInput={setApiToken}
-            placeholder={isEdit() ? `Currently ${props.channel?.apiTokenPreview ?? ''}` : 'Paste the channel token'}
+            placeholder={isEdit() ? t("Currently {0}", { "0": props.channel?.apiTokenPreview ?? '' }) : t("Paste the channel token")}
             mono
-            hint="Used outbound only — chat enumeration, webhook configuration, and media fetches."
+            hint={t("Used outbound only — chat enumeration, webhook configuration, and media fetches.")}
           />
 
           <LabeledTextField
-            label="Label (optional)"
+            label={t("Label (optional)")}
             value={label()}
             onInput={setLabel}
-            placeholder="e.g. Night shift dispatch, Warehouse 4"
+            placeholder={t("e.g. Night shift dispatch, Warehouse 4")}
             onEnter={submit}
           />
         </div>
 
         <DialogFooter>
-          <Button size="sm" variant="outline" onClick={() => props.onOpenChange(false)}>
-            Cancel
-          </Button>
+          <Button size="sm" variant="outline" onClick={() => props.onOpenChange(false)}>{t("Cancel")}</Button>
           <Button size="sm" onClick={submit} disabled={!canSubmit()} loading={create.isPending || update.isPending}>
-            {isEdit() ? 'Save' : 'Register'}
+            {isEdit() ? t("Save") : t("Register")}
           </Button>
         </DialogFooter>
       </DialogContent>

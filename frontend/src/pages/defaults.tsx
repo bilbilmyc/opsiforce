@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createMemo, createSignal, type JSX } from 'solid-js';
 import { useQueryClient } from '@tanstack/solid-query';
 import { createAppQuery } from '~/lib/create-app-query';
@@ -25,14 +26,14 @@ export function DefaultsPage() {
 
   const scopeDescription = () =>
     scope() === 'global'
-      ? 'These seed every new organization created on the platform. Existing organizations keep their own values.'
-      : 'These seed every new project (and its LLM keys) in this organization. Existing projects keep their own values.';
+      ? t("These seed every new organization created on the platform. Existing organizations keep their own values.")
+      : t("These seed every new project (and its LLM keys) in this organization. Existing projects keep their own values.");
 
   return (
     <SettingsSection
       icon={SlidersHorizontal}
-      title="Defaults"
-      description="Manage the platform model default and the starting timeouts and budgets for organizations and projects."
+      title={t("Defaults")}
+      description={t("Manage the platform model default and the starting timeouts and budgets for organizations and projects.")}
     >
       <Show when={canPlatform()}>
         <PlatformModelSettings />
@@ -40,10 +41,10 @@ export function DefaultsPage() {
       <Tabs value={scope()} onChange={(v) => setScope(v as Scope)}>
         <TabsList>
           <Show when={canPlatform()}>
-            <TabsTrigger value="global">New organizations</TabsTrigger>
+            <TabsTrigger value="global">{t("New organizations")}</TabsTrigger>
           </Show>
           <Show when={canTenant()}>
-            <TabsTrigger value="tenant">New projects</TabsTrigger>
+            <TabsTrigger value="tenant">{t("New projects")}</TabsTrigger>
           </Show>
         </TabsList>
         <p class="mt-3 text-xs text-muted-foreground">{scopeDescription()}</p>
@@ -105,7 +106,7 @@ function TimeoutsSection(props: { base: string; data: TimeoutDefaults; onSaved: 
     const defaultTimeoutIdle = unitToMs(agentValue(), agentUnit(), props.data.defaultTimeoutIdle);
     const defaultAppTimeoutIdle = unitToMs(appValue(), appUnit(), props.data.defaultAppTimeoutIdle);
     if (defaultTimeoutIdle < MIN_IDLE_TIMEOUT_MS || defaultAppTimeoutIdle < MIN_IDLE_TIMEOUT_MS) {
-      toast.error(`Idle timeouts must be at least ${MIN_IDLE_TIMEOUT_LABEL}`);
+      toast.error(t("Idle timeouts must be at least {0}", { "0": t(MIN_IDLE_TIMEOUT_LABEL) }));
       return;
     }
 
@@ -114,9 +115,9 @@ function TimeoutsSection(props: { base: string; data: TimeoutDefaults; onSaved: 
       await api.patch(`${props.base}/timeouts`, { defaultTimeoutIdle, defaultAppTimeoutIdle });
       await props.onSaved();
       setDirty(false);
-      toast.success('Timeouts updated');
+      toast.success(t("Timeouts updated"));
     } catch {
-      toast.error('Failed to save timeouts');
+      toast.error(t("Failed to save timeouts"));
     } finally {
       setSaving(false);
     }
@@ -125,14 +126,14 @@ function TimeoutsSection(props: { base: string; data: TimeoutDefaults; onSaved: 
   return (
     <SectionCard
       icon={<Clock class="w-4 h-4 text-muted-foreground" />}
-      title="Timeouts"
+      title={t("Timeouts")}
       saving={saving()}
       dirty={dirty()}
       onSave={save}
     >
       <TimeoutRow
-        label="Agent Idle Timeout"
-        description={`Minimum ${MIN_IDLE_TIMEOUT_LABEL}.`}
+        label={t("Agent Idle Timeout")}
+        description={t("Minimum {0}.", { "0": t(MIN_IDLE_TIMEOUT_LABEL) })}
         placeholder="30"
         value={agentValue()}
         unit={agentUnit()}
@@ -146,8 +147,8 @@ function TimeoutsSection(props: { base: string; data: TimeoutDefaults; onSaved: 
         }}
       />
       <TimeoutRow
-        label="App Idle Timeout"
-        description={`Minimum ${MIN_IDLE_TIMEOUT_LABEL}.`}
+        label={t("App Idle Timeout")}
+        description={t("Minimum {0}.", { "0": t(MIN_IDLE_TIMEOUT_LABEL) })}
         placeholder="7"
         value={appValue()}
         unit={appUnit()}
@@ -191,9 +192,9 @@ function BudgetsSection(props: { base: string; data: BudgetDefaults; onSaved: ()
       });
       await props.onSaved();
       setDirty(false);
-      toast.success('Budgets updated');
+      toast.success(t("Budgets updated"));
     } catch {
-      toast.error('Failed to save budgets');
+      toast.error(t("Failed to save budgets"));
     } finally {
       setSaving(false);
     }
@@ -202,13 +203,13 @@ function BudgetsSection(props: { base: string; data: BudgetDefaults; onSaved: ()
   return (
     <SectionCard
       icon={<CircleDollarSign class="w-4 h-4 text-muted-foreground" />}
-      title="Budgets"
+      title={t("Budgets")}
       saving={saving()}
       dirty={dirty()}
       onSave={save}
     >
       <BudgetRow
-        label="Organization"
+        label={t("Organization")}
         draftBudget={tenantBudget()}
         draftDuration={tenantDuration()}
         onBudgetChange={(v) => {
@@ -221,7 +222,7 @@ function BudgetsSection(props: { base: string; data: BudgetDefaults; onSaved: ()
         }}
       />
       <BudgetRow
-        label="Project"
+        label={t("Project")}
         draftBudget={projectBudget()}
         draftDuration={projectDuration()}
         onBudgetChange={(v) => {
@@ -234,7 +235,7 @@ function BudgetsSection(props: { base: string; data: BudgetDefaults; onSaved: ()
         }}
       />
       <BudgetRow
-        label="Agent (Chat) Key"
+        label={t("Agent (Chat) Key")}
         draftBudget={chatBudget()}
         draftDuration={chatDuration()}
         onBudgetChange={(v) => {
@@ -247,7 +248,7 @@ function BudgetsSection(props: { base: string; data: BudgetDefaults; onSaved: ()
         }}
       />
       <BudgetRow
-        label="App Backend Key"
+        label={t("App Backend Key")}
         draftBudget={backendBudget()}
         draftDuration={backendDuration()}
         onBudgetChange={(v) => {
@@ -280,7 +281,7 @@ function SectionCard(props: {
       <div class="space-y-3">{props.children}</div>
       <div class="flex justify-end pt-1">
         <Button size="sm" disabled={!props.dirty || props.saving} onClick={props.onSave}>
-          {props.saving ? 'Saving...' : 'Save'}
+          {props.saving ? t("Saving...") : t("Save")}
         </Button>
       </div>
     </div>

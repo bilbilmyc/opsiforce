@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Match, Switch } from 'solid-js';
 import { FileDownloadCard } from './file-download-card';
 import { createFileProbe, type FileFetchState, type FileMetadata } from './file-fetch';
@@ -18,16 +19,16 @@ export function FileUnsupportedPreview(props: FileUnsupportedPreviewProps) {
         <FileDownloadCard
           name={props.name}
           size={probedSize(probe())}
-          detail="This format cannot be previewed."
+          detail={t("This format cannot be previewed.")}
           onDownload={props.onDownload}
         />
       }
     >
       <Match when={probe().status === 'loading'}>
-        <FilePreviewNotice title="Opening preview…" loading />
+        <FilePreviewNotice title={t("Opening preview…")} loading />
       </Match>
       <Match when={probe().status === 'missing'}>
-        <FilePreviewNotice title="File not found" detail="It may have been renamed, moved, or deleted." />
+        <FilePreviewNotice title={t("File not found")} detail={t("It may have been renamed, moved, or deleted.")} />
       </Match>
     </Switch>
   );

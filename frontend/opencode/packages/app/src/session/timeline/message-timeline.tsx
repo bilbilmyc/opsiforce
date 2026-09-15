@@ -403,9 +403,9 @@ function MessageTimelineView(
     const assistant = active ? projection.assistantMessagesByParent().get(active)?.at(-1) : undefined
     const status = sessionStatus()
     const id = sessionID()
-    if (status.type === 'busy' && assistant?.retry) return '请求暂时失败，正在等待重试…'
-    if (status.type !== 'idle' && id && (data.session.permission.list(id)?.length || data.session.form.list(id)?.length)) return '等待你的确认或补充信息…'
-    return turnProgress(status.type !== 'idle', assistant, props.session.data.info()?.outcome)
+    if (status.type === 'busy' && assistant?.retry) return language.locale().startsWith('zh') ? '请求暂时失败，正在等待重试…' : 'Request failed temporarily. Waiting to retry…'
+    if (status.type !== 'idle' && id && (data.session.permission.list(id)?.length || data.session.form.list(id)?.length)) return language.locale().startsWith('zh') ? '等待你的确认或补充信息…' : 'Waiting for your confirmation or input…'
+    return turnProgress(status.type !== 'idle', assistant, props.session.data.info()?.outcome, language.locale())
   })
   const sessionDirectory = createMemo(() => props.session.data.info()?.location.directory ?? sdk().directory)
   const project = createMemo(() => {

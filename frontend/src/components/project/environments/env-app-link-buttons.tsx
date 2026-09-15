@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createSignal } from 'solid-js';
 import { Check, Copy, ExternalLink } from '~/components/icons';
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
@@ -34,22 +35,22 @@ export default function EnvAppLinkButtons(props: EnvAppLinkButtonsProps) {
   return (
     <span class="flex items-center">
       <Tooltip>
-        <TooltipTrigger class={buttonClass()} aria-disabled={!props.enabled} aria-label="Open app" onClick={openApp}>
+        <TooltipTrigger class={buttonClass()} aria-disabled={!props.enabled} aria-label={t("Open app")} onClick={openApp}>
           <ExternalLink class="h-3.5 w-3.5" />
         </TooltipTrigger>
-        <TooltipContent>{props.enabled ? 'Open app' : props.disabledReason}</TooltipContent>
+        <TooltipContent>{props.enabled ? t("Open app") : props.disabledReason}</TooltipContent>
       </Tooltip>
       <Tooltip>
         <TooltipTrigger
           class={buttonClass()}
           aria-disabled={!props.enabled}
-          aria-label="Copy app URL"
+          aria-label={t("Copy app URL")}
           onClick={copyUrl}
         >
           {copied() ? <Check class="h-3.5 w-3.5 text-emerald-500" /> : <Copy class="h-3.5 w-3.5" />}
         </TooltipTrigger>
         <TooltipContent>
-          {props.enabled ? (copied() ? 'Copied!' : 'Copy app URL') : props.disabledReason}
+          {props.enabled ? (copied() ? t("Copied!") : t("Copy app URL")) : props.disabledReason}
         </TooltipContent>
       </Tooltip>
     </span>

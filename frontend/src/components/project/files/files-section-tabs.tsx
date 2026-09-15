@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For } from 'solid-js';
 import { cn } from '~/lib/cn';
 import type { FilesSectionKey } from '~/api/files';
@@ -5,9 +6,9 @@ import type { FilesSectionKey } from '~/api/files';
 export const FILES_SECTION_ORDER: FilesSectionKey[] = ['generated', 'uploads', 'other'];
 
 export const FILES_SECTION_LABELS: Record<FilesSectionKey, string> = {
-  uploads: 'User uploads',
-  generated: 'Generated files',
-  other: 'Other files',
+  get uploads() { return t('User uploads'); },
+  get generated() { return t('Generated files'); },
+  get other() { return t('Other files'); },
 };
 
 export interface FilesSectionTabsProps {

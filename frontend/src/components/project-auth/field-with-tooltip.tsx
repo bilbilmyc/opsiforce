@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { JSX, Show } from 'solid-js';
 import { Info } from '~/components/icons';
 import { Tooltip, TooltipTrigger, TooltipContent } from '~/components/ui/tooltip';
@@ -24,7 +25,7 @@ export function FieldWithTooltip(props: FieldWithTooltipProps) {
             <TooltipTrigger
               type="button"
               class="text-muted-foreground hover:text-foreground"
-              aria-label={`Help for ${props.label}`}
+              aria-label={t("Help for {0}", { "0": props.label })}
             >
               <Info class="w-3 h-3" />
             </TooltipTrigger>

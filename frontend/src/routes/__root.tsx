@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show } from 'solid-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { Outlet, createRootRoute, useRouter, useLocation } from '@tanstack/solid-router';
@@ -33,7 +34,7 @@ function MobileHeader() {
   return (
     <Show when={isMobile()}>
       <header class="flex items-center h-10 px-3 shrink-0 bg-background border-b border-border">
-        <Button variant="ghost" size="icon" class="h-8 w-8" onClick={toggleSidebar}>
+        <Button variant="ghost" size="icon" class="h-8 w-8" aria-label={t("Toggle sidebar")} onClick={toggleSidebar}>
           <Menu class="h-5 w-5" />
         </Button>
       </header>

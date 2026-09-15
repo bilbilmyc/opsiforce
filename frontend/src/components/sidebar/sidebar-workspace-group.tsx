@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show, createMemo, type JSX } from 'solid-js';
 import { useSortable } from '@dnd-kit/solid/sortable';
 import { useDroppable } from '@dnd-kit/solid';
@@ -119,7 +120,7 @@ export function SidebarWorkspaceGroup(props: {
           ref={sortable.handleRef}
           class="absolute left-0 top-1/2 -translate-y-1/2 opacity-0 group-hover/wsrow:opacity-100 transition-opacity cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
           onClick={(e) => e.stopPropagation()}
-          title="Drag to reorder"
+          title={t("Drag to reorder")}
         >
           <GripVertical class="w-3 h-3" />
         </button>
@@ -132,7 +133,7 @@ export function SidebarWorkspaceGroup(props: {
         >
           <Lock class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
         </Show>
-        <span class="flex-1 min-w-0 text-sm font-medium truncate text-foreground">{props.workspace.name}</span>
+        <span class="flex-1 min-w-0 text-sm font-medium truncate text-foreground">{props.workspace.type === 'private' ? t('Personal') : props.workspace.name}</span>
         <Show when={props.onOpenSettings}>
           <button
             class="opacity-0 group-hover/wsrow:opacity-100 transition-opacity text-muted-foreground hover:text-foreground p-1 rounded-sm hover:bg-accent"
@@ -140,12 +141,12 @@ export function SidebarWorkspaceGroup(props: {
               e.stopPropagation();
               props.onOpenSettings?.();
             }}
-            title="Workspace settings"
+            title={t("Workspace settings")}
           >
             <Settings class="w-3.5 h-3.5" />
           </button>
         </Show>
-        <SidebarCreateButton title="New project in this workspace" renderCreate={props.renderCreate} />
+        <SidebarCreateButton title={t("New project in this workspace")} renderCreate={props.renderCreate} />
       </div>
 
       <Show when={view().expanded}>
@@ -170,7 +171,7 @@ export function SidebarWorkspaceGroup(props: {
             when={view().loose.length > 0}
             fallback={
               <Show when={view().folders.length === 0}>
-                <p class="text-xs text-muted-foreground/50 py-1 px-2 italic">No projects yet.</p>
+                <p class="text-xs text-muted-foreground/50 py-1 px-2 italic">{t("No projects yet.")}</p>
               </Show>
             }
           >

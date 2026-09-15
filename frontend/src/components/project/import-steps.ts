@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import type { ImportJobStatus } from '~/api/import';
 
 export type ImportPhase = 'uploading' | ImportJobStatus;
@@ -9,11 +10,11 @@ export interface ImportStep {
 }
 
 export const IMPORT_STEPS: ImportStep[] = [
-  { key: 'uploading', label: 'Uploading', detail: 'Sending the export file' },
-  { key: 'queued', label: 'Queued', detail: 'Waiting to start' },
-  { key: 'unpacking', label: 'Unpacking', detail: 'Restoring the workspace files' },
-  { key: 'starting', label: 'Starting the app', detail: 'Launching the imported project' },
-  { key: 'completed', label: 'Ready', detail: 'The imported app is online' },
+  { key: 'uploading', get label() { return t("Uploading"); }, get detail() { return t("Sending the export file"); } },
+  { key: 'queued', get label() { return t("Queued"); }, get detail() { return t("Waiting to start"); } },
+  { key: 'unpacking', get label() { return t("Unpacking"); }, get detail() { return t("Restoring the workspace files"); } },
+  { key: 'starting', get label() { return t("Starting the app"); }, get detail() { return t("Launching the imported project"); } },
+  { key: 'completed', get label() { return t("Ready"); }, get detail() { return t("The imported app is online"); } },
 ];
 
 const IMPORT_STEP_ORDER: ImportPhase[] = ['uploading', 'queued', 'unpacking', 'starting', 'completed'];

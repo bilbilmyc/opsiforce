@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { format } from 'date-fns';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '~/components/ui/tabs';
@@ -65,7 +66,7 @@ export default function CronPicker(props: Props) {
 
   const activeSelectors = () => props.activeScheduleSelectors ?? DEFAULT_SELECTORS;
   const view = () => props.view ?? 'simple';
-  const selectorText = () => props.selectorText ?? 'Run every';
+  const selectorText = () => props.selectorText ?? t('Run every');
 
   const builder = () => (
     <Show when={!props.disableSelectors}>
@@ -93,13 +94,9 @@ export default function CronPicker(props: Props) {
         <Tabs defaultValue="builder">
           <TabsList>
             <TabsTrigger value="builder" class="gap-1.5">
-              <Calendar class="w-3.5 h-3.5" />
-              Schedule Builder
-            </TabsTrigger>
+              <Calendar class="w-3.5 h-3.5" />{t("Schedule Builder")}</TabsTrigger>
             <TabsTrigger value="string" class="gap-1.5">
-              <Code class="w-3.5 h-3.5" />
-              Cron String
-            </TabsTrigger>
+              <Code class="w-3.5 h-3.5" />{t("Cron String")}</TabsTrigger>
           </TabsList>
           <TabsContent value="builder">{builder()}</TabsContent>
           <TabsContent value="string">

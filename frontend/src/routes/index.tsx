@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createFileRoute, useNavigate } from '@tanstack/solid-router';
 import { createSignal, For, Show } from 'solid-js';
 import { toast } from 'solid-sonner';
@@ -60,10 +61,10 @@ function HomePage() {
     if (isSubmitting()) return;
     try {
       const project = await createDefaultProject.createProject();
-      toast.success('Project created');
+      toast.success(t("Project created"));
       goToProject(project);
     } catch {
-      toast.error('Failed to create project');
+      toast.error(t("Failed to create project"));
     }
   };
 
@@ -89,16 +90,12 @@ function HomePage() {
             <div class="flex flex-col items-center gap-5 text-center">
               <div class="relative">
                 <div class="w-11 h-11 rounded-2xl bg-foreground/5 border border-foreground/10 flex items-center justify-center shadow-sm">
-                  <img alt="Opsiforce" src="/assets/icons/brands/opsiforce.svg" class="w-6 h-6" />
+                  <img alt={t("Opsiforce")} src="/assets/icons/brands/opsiforce.svg" class="w-6 h-6" />
                 </div>
               </div>
               <div class="flex flex-col gap-2">
-                <h1 class="text-3xl font-semibold tracking-tight text-foreground leading-tight">
-                  What do you want to automate?
-                </h1>
-                <p class="text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto">
-                  Describe what you need and an AI agent will build it for you.
-                </p>
+                <h1 class="text-3xl font-semibold tracking-tight text-foreground leading-tight">{t("What do you want to automate?")}</h1>
+                <p class="text-sm text-muted-foreground leading-relaxed max-w-sm mx-auto">{t("Describe what you need and an AI agent will build it for you.")}</p>
               </div>
             </div>
 
@@ -109,7 +106,7 @@ function HomePage() {
               )}
             >
               <textarea
-                placeholder="e.g. Build a sales dashboard with monthly revenue charts, a top products table, and period-over-period comparison…"
+                placeholder={t("e.g. Build a sales dashboard with monthly revenue charts, a top products table, and period-over-period comparison…")}
                 value={prompt()}
                 onInput={(e) => setPrompt(e.currentTarget.value)}
                 onKeyDown={handleKeyDown}
@@ -119,9 +116,7 @@ function HomePage() {
                 class="w-full px-4 pt-4 pb-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 resize-none outline-none leading-relaxed"
               />
               <div class="flex items-center justify-between px-3.5 py-2.5">
-                <span class="text-xs text-muted-foreground/40 select-none tracking-tight">
-                  Enter to send · Shift+Enter for new line
-                </span>
+                <span class="text-xs text-muted-foreground/40 select-none tracking-tight">{t("Enter to send · Shift+Enter for new line")}</span>
                 <button
                   onClick={handleSubmit}
                   disabled={isSubmitting() || !createDefaultProject.hasDestination()}
@@ -135,11 +130,11 @@ function HomePage() {
                   {isSubmitting() ? (
                     <>
                       <LoaderCircle class="animate-spin" size={13} />
-                      <span>Creating…</span>
+                      <span>{t("Creating…")}</span>
                     </>
                   ) : (
                     <>
-                      <span>Apply</span>
+                      <span>{t("Apply")}</span>
                       <ArrowUp size={14} stroke-width={2.5} />
                     </>
                   )}
@@ -154,16 +149,14 @@ function HomePage() {
                   class="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Upload size={13} />
-                  <span>Import a project export file</span>
+                  <span>{t("Import a project export file")}</span>
                 </button>
               </div>
             </Show>
 
             <div>
               <div class="flex items-center gap-3 mb-4">
-                <span class="text-xs font-semibold text-muted-foreground/50 uppercase tracking-widest">
-                  Start from an example
-                </span>
+                <span class="text-xs font-semibold text-muted-foreground/50 uppercase tracking-widest">{t("Start from an example")}</span>
                 <div class="flex-1 h-px bg-border/60" />
               </div>
               <div class="grid grid-cols-2 gap-2.5">

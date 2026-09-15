@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show, type JSX } from 'solid-js';
 import { type Project } from '~/api/client';
 import { ChevronDown, ChevronRight, Globe } from '~/components/icons';
@@ -26,9 +27,9 @@ export function SidebarPublicGroup(props: {
           {props.expanded ? <ChevronDown class="w-3 h-3" /> : <ChevronRight class="w-3 h-3" />}
         </span>
         <Globe class="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-        <span class="flex-1 min-w-0 text-sm font-medium truncate text-muted-foreground">Public</span>
+        <span class="flex-1 min-w-0 text-sm font-medium truncate text-muted-foreground">{t("Public")}</span>
         <Show when={props.renderCreate}>
-          {(renderCreate) => <SidebarCreateButton title="New public project" renderCreate={renderCreate()} />}
+          {(renderCreate) => <SidebarCreateButton title={t("New public project")} renderCreate={renderCreate()} />}
         </Show>
       </div>
 
@@ -36,7 +37,7 @@ export function SidebarPublicGroup(props: {
         <SidebarDropZone workspaceId={null}>
           <Show
             when={props.projects.length > 0}
-            fallback={<p class="text-xs text-muted-foreground/50 py-1 px-2 italic">No public projects yet.</p>}
+            fallback={<p class="text-xs text-muted-foreground/50 py-1 px-2 italic">{t("No public projects yet.")}</p>}
           >
             <For each={props.projects}>
               {(project) => (

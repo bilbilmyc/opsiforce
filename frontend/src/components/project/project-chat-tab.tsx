@@ -1,4 +1,5 @@
-import { Show, createSignal, onCleanup, onMount, untrack, type Component } from 'solid-js';
+import { t } from '~/i18n';
+import { Show, createEffect, createSignal, onCleanup, onMount, untrack, type Component } from 'solid-js';
 import { render } from 'solid-js/web';
 import type { BaseRouterProps } from '@solidjs/router';
 import { AppBaseProviders, AppInterface, PlatformProvider, ServerConnection } from '@opencode-ai/app';
@@ -10,6 +11,18 @@ import Spinner from '~/components/ui/spinner';
 import { WorkspaceFileLinks } from './workspace-file-links';
 import OpencodeOverrides from './opencode-overrides';
 import { createProxyPlatform } from './platform';
+import { useLanguage } from '@opencode-ai/app/runtime/i18n/language';
+import { locale } from '~/i18n';
+
+function ChatLanguageBridge() {
+  const language = useLanguage();
+  createEffect(() => {
+    const next = locale() === 'zh-CN' ? 'zh' : 'en';
+    // Wait for the embedded app's saved preferences before applying the platform selection.
+    if (language.ready()) language.setLocale(next);
+  });
+  return null;
+}
 
 function OpenCodeEventBridge(props: {
   server: ServerConnection.Any;
@@ -97,7 +110,8 @@ export function ProjectChatTab(props: ProjectChatTabProps) {
     render(
       () => (
         <PlatformProvider value={platform}>
-          <AppBaseProviders>
+          <AppBaseProviders locale={locale() === 'zh-CN' ? 'zh' : 'en'}>
+            <ChatLanguageBridge />
             <AppInterface defaultServer={serverKey} servers={[server]} router={router}>
               <OpencodeOverrides />
               <OpenCodeEventBridge server={server} onIdle={() => props.onAgentIdle()} onTitle={onTitle} />
@@ -119,7 +133,7 @@ export function ProjectChatTab(props: ProjectChatTabProps) {
         onPreviewFile={props.onPreviewFile}
       />
       <Show when={booting()}>
-        <Spinner label="Connecting..." overlay />
+        <Spinner label={t("Connecting...")} overlay />
       </Show>
     </div>
   );

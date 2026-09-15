@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 const API_BASE = '/api';
 
 export class ApiError extends Error {
@@ -56,7 +57,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       window.location.href = '/permission-denied';
       throw new Error('Forbidden');
     }
-    const message = await extractErrorMessage(res, `Error: ${res.status}`);
+    const message = await extractErrorMessage(res, t("Error: {0}", { "0": res.status }));
     throw new ApiError(res.status, message);
   }
   const text = await res.text();

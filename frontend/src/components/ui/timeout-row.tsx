@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show } from 'solid-js';
 import { TIME_UNITS } from '~/lib/duration-units';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '~/components/ui/select';
@@ -49,7 +50,7 @@ export function TimeoutRow(props: {
           >
             <SelectTrigger>
               <SelectValue<(typeof TIME_UNITS)[0]>>
-                {(state) => <span>{state.selectedOption()?.label ?? 'Minutes'}</span>}
+                {(state) => <span>{state.selectedOption()?.label ?? t("Minutes")}</span>}
               </SelectValue>
             </SelectTrigger>
             <SelectContent />

@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import type { WhatsappChannel } from '~/api/whatsapp-channels';
 import { Badge } from '~/components/ui/badge';
 import { KeyRound, Pencil, Trash2 } from '~/components/icons';
@@ -11,7 +12,7 @@ export function ChannelCard(props: {
 }) {
   const referenceLabel = () => {
     const count = props.channel.referencedEnvironmentCount;
-    return `Referenced by ${count} ${count === 1 ? 'environment' : 'environments'}`;
+    return t("Referenced by {0} {1}", { "0": count, "1": count === 1 ? 'environment' : 'environments' });
   };
 
   return (
@@ -31,8 +32,8 @@ export function ChannelCard(props: {
             type="button"
             onClick={() => props.onRotateSecret()}
             class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label={`Rotate the webhook secret of ${props.channel.channelId}`}
-            title="Rotate webhook secret"
+            aria-label={t("Rotate the webhook secret of {0}", { "0": props.channel.channelId })}
+            title={t("Rotate webhook secret")}
           >
             <KeyRound class="h-3.5 w-3.5" />
           </button>
@@ -40,7 +41,7 @@ export function ChannelCard(props: {
             type="button"
             onClick={() => props.onEdit()}
             class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label={`Edit ${props.channel.channelId}`}
+            aria-label={t("Edit {0}", { "0": props.channel.channelId })}
           >
             <Pencil class="h-3.5 w-3.5" />
           </button>
@@ -48,7 +49,7 @@ export function ChannelCard(props: {
             type="button"
             onClick={() => props.onDelete()}
             class="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive"
-            aria-label={`Delete ${props.channel.channelId}`}
+            aria-label={t("Delete {0}", { "0": props.channel.channelId })}
           >
             <Trash2 class="h-3.5 w-3.5" />
           </button>
@@ -56,7 +57,7 @@ export function ChannelCard(props: {
       </div>
 
       <div class="flex flex-wrap items-center gap-3 px-3 pb-2.5 text-xs text-muted-foreground">
-        <span class="font-mono text-[11px]">token {props.channel.apiTokenPreview}</span>
+        <span class="font-mono text-[11px]">{t("token ")}{props.channel.apiTokenPreview}</span>
         <span class="truncate font-mono text-[11px]">
           {props.channel.webhookUrl || 'no webhook base URL configured'}
         </span>

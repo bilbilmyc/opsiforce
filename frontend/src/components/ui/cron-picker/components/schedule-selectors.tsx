@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '~/components/ui/select';
 import MultiSelect from './multi-select';
@@ -58,10 +59,10 @@ export default function ScheduleSelectors(props: Props) {
           value={selectedSchedule()}
           onChange={handleChangeSelector}
           options={activeOptions().map((o) => o.name)}
-          itemComponent={(itemProps) => <SelectItem item={itemProps.item}>{itemProps.item.rawValue}</SelectItem>}
+          itemComponent={(itemProps) => <SelectItem item={itemProps.item}>{t(itemProps.item.rawValue)}</SelectItem>}
         >
           <SelectTrigger class="w-28">
-            <SelectValue<ScheduleSelector>>{(state) => state.selectedOption()}</SelectValue>
+            <SelectValue<ScheduleSelector>>{(state) => t(state.selectedOption() ?? '')}</SelectValue>
           </SelectTrigger>
           <SelectContent />
         </Select>
@@ -71,7 +72,7 @@ export default function ScheduleSelectors(props: Props) {
           <For each={visibleSelectors()}>
             {(sel) => (
               <>
-                <span class="text-xs text-muted-foreground pb-1.5">{sel.prefix}</span>
+                <span class="text-xs text-muted-foreground pb-1.5">{t(sel.prefix)}</span>
                 <MultiSelect
                   options={sel.unit}
                   unitIndex={sel.unitIndex}

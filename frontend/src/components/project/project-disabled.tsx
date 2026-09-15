@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show } from 'solid-js';
 import { createMutation, useQueryClient } from '@tanstack/solid-query';
 import { usePermissions } from '~/api/permissions';
@@ -20,16 +21,14 @@ export default function ProjectDisabled(props: { projectId: string }) {
   return (
     <div class="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
       <Ban class="w-8 h-8" />
-      <p class="text-sm font-medium">This project is disabled</p>
+      <p class="text-sm font-medium">{t("This project is disabled")}</p>
       <Show when={canDisable()}>
         <Button
           size="sm"
           class="mt-1"
           loading={enableProject.isPending}
           onClick={() => enableProject.mutate(undefined as never)}
-        >
-          Enable Project
-        </Button>
+        >{t("Enable Project")}</Button>
       </Show>
     </div>
   );

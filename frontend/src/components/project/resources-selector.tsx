@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show } from 'solid-js';
 import type { PodClass, PodClassCatalog, PodResources } from '~/api/client';
 import { SlidersHorizontal } from '~/components/icons';
@@ -11,9 +12,9 @@ import {
 import { formatCores, formatGib, mibToGib, millicoresToCores, trimNumber } from '~/lib/pod-resources';
 
 const PRESET_META: Record<string, { title: string; description: string }> = {
-  small: { title: 'Small', description: 'Light apps and prototypes.' },
-  medium: { title: 'Medium', description: 'Heavier builds and dependencies.' },
-  large: { title: 'Large', description: 'Demanding or memory-hungry workloads.' },
+  small: { get title() { return t("Small"); }, get description() { return t("Light apps and prototypes."); } },
+  medium: { get title() { return t("Medium"); }, get description() { return t("Heavier builds and dependencies."); } },
+  large: { get title() { return t("Large"); }, get description() { return t("Demanding or memory-hungry workloads."); } },
 };
 
 export interface ResourcesSelectorProps {
@@ -44,7 +45,7 @@ interface CustomInput {
 export function ResourcesSelector(props: ResourcesSelectorProps) {
   const customInputs = (bounds: { min: PodResources; max: PodResources }): CustomInput[] => [
     {
-      label: 'CPU',
+      get label() { return t("CPU"); },
       unit: 'vCPU',
       range: `${trimNumber(millicoresToCores(bounds.min.cpuMillicores))}–${trimNumber(millicoresToCores(bounds.max.cpuMillicores))}`,
       step: 0.25,
@@ -54,7 +55,7 @@ export function ResourcesSelector(props: ResourcesSelectorProps) {
       onChange: props.onCpuChange,
     },
     {
-      label: 'Memory request',
+      get label() { return t("Memory request"); },
       unit: 'GiB',
       range: `${trimNumber(mibToGib(bounds.min.memoryRequestMib))}–${trimNumber(mibToGib(bounds.max.memoryRequestMib))}`,
       step: 0.5,
@@ -64,7 +65,7 @@ export function ResourcesSelector(props: ResourcesSelectorProps) {
       onChange: props.onMemRequestChange,
     },
     {
-      label: 'Memory limit',
+      get label() { return t("Memory limit"); },
       unit: 'GiB',
       range: `${trimNumber(mibToGib(bounds.min.memoryLimitMib))}–${trimNumber(mibToGib(bounds.max.memoryLimitMib))}`,
       step: 0.5,
@@ -121,9 +122,9 @@ export function ResourcesSelector(props: ResourcesSelectorProps) {
         >
           <div class="flex items-center gap-1.5">
             <SlidersHorizontal class="w-3.5 h-3.5" />
-            <span class="text-xs font-medium">Custom</span>
+            <span class="text-xs font-medium">{t("Custom")}</span>
           </div>
-          <p class="text-xs text-muted-foreground/70 leading-snug">Pick exact CPU and memory.</p>
+          <p class="text-xs text-muted-foreground/70 leading-snug">{t("Pick exact CPU and memory.")}</p>
         </button>
       </div>
 
@@ -159,7 +160,7 @@ export function ResourcesSelector(props: ResourcesSelectorProps) {
               </For>
             </div>
             <Show when={props.limitError}>
-              <p class="text-xs text-destructive">Memory limit must be greater than or equal to memory request.</p>
+              <p class="text-xs text-destructive">{t("Memory limit must be greater than or equal to memory request.")}</p>
             </Show>
           </div>
         )}

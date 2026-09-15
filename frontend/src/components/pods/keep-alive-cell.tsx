@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show } from 'solid-js';
 import type { KeepAliveSource, PodKeepAlive, PodTimeout } from '~/api/pods';
 import { elapsedSince } from '~/lib/use-now';
@@ -14,8 +15,8 @@ interface KeepAliveCellProps {
 const KINDS: readonly KeepAliveSource[] = ['agent', 'app'];
 
 const KIND_STYLES: Record<KeepAliveSource, { label: string; dot: string; bar: string; text: string }> = {
-  agent: { label: 'Agent', dot: 'bg-indigo-500', bar: 'bg-indigo-500', text: 'text-indigo-600' },
-  app: { label: 'App', dot: 'bg-emerald-500', bar: 'bg-emerald-500', text: 'text-emerald-600' },
+  agent: { get label() { return t("Agent"); }, dot: 'bg-indigo-500', bar: 'bg-indigo-500', text: 'text-indigo-600' },
+  app: { get label() { return t("App"); }, dot: 'bg-emerald-500', bar: 'bg-emerald-500', text: 'text-emerald-600' },
 };
 
 export function KeepAliveCell(props: KeepAliveCellProps) {
@@ -33,10 +34,9 @@ export function KeepAliveCell(props: KeepAliveCellProps) {
   return (
     <div class="min-w-56 space-y-1.5">
       <div class="text-xs">
-        <Show when={suspendsIn()} fallback={<span class="font-medium text-amber-600">Idle — suspending</span>}>
+        <Show when={suspendsIn()} fallback={<span class="font-medium text-amber-600">{t("Idle — suspending")}</span>}>
           {(value) => (
-            <span class="text-muted-foreground">
-              Suspends in <span class="font-semibold tabular-nums text-foreground">{formatDuration(value())}</span>
+            <span class="text-muted-foreground">{t("Suspends in ")}<span class="font-semibold tabular-nums text-foreground">{formatDuration(value())}</span>
             </span>
           )}
         </Show>

@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Boxes, Cable, ChartColumn, Database } from '~/components/icons';
 import { Permission } from '~/constants/permissions';
 import { firstPermittedRailTab, railTabForPath, type RailTab } from '~/constants/section-rail';
@@ -7,32 +8,32 @@ export const ADMIN_GROUP_ORDER = ['Operations'] as const;
 export const ADMIN_TABS: RailTab[] = [
   {
     to: '/admin/pods',
-    label: 'Pods',
-    description: 'Running environment pods and their live keep-alive activity.',
+    get label() { return t("Pods"); },
+    get description() { return t("Running environment pods and their live keep-alive activity."); },
     group: 'Operations',
     icon: Boxes,
     isPermitted: (has) => has(Permission.viewPods),
   },
   {
     to: '/admin/external-services/usage',
-    label: 'Usage',
-    description: 'Monthly inbound external-service message counts per organization.',
+    get label() { return t("Usage"); },
+    get description() { return t("Monthly inbound external-service message counts per organization."); },
     group: 'Operations',
     icon: ChartColumn,
     isPermitted: (has) => has(Permission.viewExternalServicesUsage),
   },
   {
     to: '/admin/external-services',
-    label: 'External services',
-    description: 'Platform-wide external-service resources, such as the registered WhatsApp channels.',
+    get label() { return t("External services"); },
+    get description() { return t("Platform-wide external-service resources, such as the registered WhatsApp channels."); },
     group: 'Operations',
     icon: Cable,
     isPermitted: (has) => has(Permission.manageExternalServices),
   },
   {
     to: '/admin/storage',
-    label: 'Storage',
-    description: 'Disk usage on the shared storage volume, across all organizations.',
+    get label() { return t("Storage"); },
+    get description() { return t("Disk usage on the shared storage volume, across all organizations."); },
     group: 'Operations',
     icon: Database,
     isPermitted: (has) => has(Permission.viewPlatformStorage),

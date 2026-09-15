@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMemo, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { cn } from '~/lib/cn';
@@ -113,7 +114,7 @@ export function JobCard(props: JobCardProps) {
         <Show when={isTerminal() || display().dismissWhileRunning}>
           <button
             class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            aria-label={display().dismissLabel ?? 'Dismiss'}
+            aria-label={display().dismissLabel ?? t("Dismiss")}
             onClick={(e) => {
               e.stopPropagation();
               props.onDismiss();

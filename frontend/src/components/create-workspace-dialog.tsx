@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { useCreateWorkspace } from '~/api/workspaces';
@@ -31,11 +32,11 @@ export default function CreateWorkspaceDialog(props: {
         name: trimmed,
         description: description().trim() || null,
       });
-      toast.success('Workspace created');
+      toast.success(t("Workspace created"));
       close();
       props.onCreated?.(ws.id);
     } catch {
-      toast.error('Failed to create workspace');
+      toast.error(t("Failed to create workspace"));
     }
   };
 
@@ -47,14 +48,12 @@ export default function CreateWorkspaceDialog(props: {
       }}
     >
       <DialogContent>
-        <DialogTitle>Create new workspace</DialogTitle>
-        <DialogDescription>
-          A container for grouping projects and controlling which users can see them.
-        </DialogDescription>
+        <DialogTitle>{t("Create new workspace")}</DialogTitle>
+        <DialogDescription>{t("A container for grouping projects and controlling which users can see them.")}</DialogDescription>
 
         <div class="mt-4 space-y-3">
           <div>
-            <label class="text-xs text-muted-foreground mb-1 block">Name</label>
+            <label class="text-xs text-muted-foreground mb-1 block">{t("Name")}</label>
             <input
               type="text"
               value={name()}
@@ -63,12 +62,12 @@ export default function CreateWorkspaceDialog(props: {
                 if (e.key === 'Enter' && name().trim()) handleCreate();
               }}
               class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              placeholder="e.g. Internal tools"
+              placeholder={t("e.g. Internal tools")}
               autofocus
             />
           </div>
           <div>
-            <label class="text-xs text-muted-foreground mb-1 block">Description (optional)</label>
+            <label class="text-xs text-muted-foreground mb-1 block">{t("Description (optional)")}</label>
             <textarea
               rows={2}
               value={description()}
@@ -79,12 +78,8 @@ export default function CreateWorkspaceDialog(props: {
         </div>
 
         <div class="mt-4 flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={close}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleCreate} disabled={!name().trim() || createWorkspace.isPending}>
-            Create
-          </Button>
+          <Button size="sm" variant="outline" onClick={close}>{t("Cancel")}</Button>
+          <Button size="sm" onClick={handleCreate} disabled={!name().trim() || createWorkspace.isPending}>{t("Create")}</Button>
         </div>
       </DialogContent>
     </Dialog>

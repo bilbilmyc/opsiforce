@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Index, Show } from 'solid-js';
 import { Plus, Trash2 } from '~/components/icons';
 import { Button } from '~/components/ui/button';
@@ -24,8 +25,8 @@ export function BypassPathsEditor(props: BypassPathsEditorProps) {
 
   return (
     <FieldWithTooltip
-      label="Bypass Auth Paths"
-      tooltip="Paths within your app that should skip authentication. Matches any request whose URL path starts with the given string (e.g. /api/webhooks bypasses /api/webhooks/anything)."
+      label={t("Bypass Auth Paths")}
+      tooltip={t("Paths within your app that should skip authentication. Matches any request whose URL path starts with the given string (e.g. /api/webhooks bypasses /api/webhooks/anything).")}
     >
       <div class="space-y-2">
         <Index each={props.value}>
@@ -38,7 +39,7 @@ export function BypassPathsEditor(props: BypassPathsEditorProps) {
                 variant="ghost"
                 onClick={() => removeAt(i)}
                 disabled={props.disabled}
-                aria-label={`Remove path ${path() || i + 1}`}
+                aria-label={t("Remove path {0}", { "0": path() || i + 1 })}
               >
                 <Trash2 class="w-4 h-4" />
               </Button>
@@ -46,12 +47,10 @@ export function BypassPathsEditor(props: BypassPathsEditorProps) {
           )}
         </Index>
         <Show when={props.value.length === 0}>
-          <p class="text-xs text-muted-foreground">No bypass paths configured. All requests require authentication.</p>
+          <p class="text-xs text-muted-foreground">{t("No bypass paths configured. All requests require authentication.")}</p>
         </Show>
         <Button type="button" size="sm" variant="outline" onClick={addRow} disabled={props.disabled}>
-          <Plus class="w-4 h-4 mr-1" />
-          Add path
-        </Button>
+          <Plus class="w-4 h-4 mr-1" />{t("Add path")}</Button>
       </div>
     </FieldWithTooltip>
   );

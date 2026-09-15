@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { useUpdateApp } from '~/api/projects';
@@ -11,9 +12,9 @@ const APP_DESCRIPTION_MAX_LENGTH = 500;
 
 function validateAppName(value: string): string | null {
   const trimmed = value.trim();
-  if (trimmed.length < APP_NAME_MIN_LENGTH) return 'Name is required';
+  if (trimmed.length < APP_NAME_MIN_LENGTH) return t("Name is required");
   if (trimmed.length > APP_NAME_MAX_LENGTH) {
-    return `Name must be at most ${APP_NAME_MAX_LENGTH} characters`;
+    return t("Name must be at most {0} characters", { "0": APP_NAME_MAX_LENGTH });
   }
   return null;
 }
@@ -21,7 +22,7 @@ function validateAppName(value: string): string | null {
 function validateAppDescription(value: string): string | null {
   const trimmed = value.trim();
   if (trimmed.length > APP_DESCRIPTION_MAX_LENGTH) {
-    return `Description must be at most ${APP_DESCRIPTION_MAX_LENGTH} characters`;
+    return t("Description must be at most {0} characters", { "0": APP_DESCRIPTION_MAX_LENGTH });
   }
   return null;
 }
@@ -75,10 +76,10 @@ export function EditAppDialog(props: EditAppDialogProps) {
 
     try {
       await updateApp.mutateAsync({ projectId: props.projectId, environmentId: props.environmentId, payload });
-      toast.success('App details updated');
+      toast.success(t("App details updated"));
       close();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update app details');
+      toast.error(err instanceof Error ? err.message : t("Failed to update app details"));
     }
   };
 
@@ -90,10 +91,10 @@ export function EditAppDialog(props: EditAppDialogProps) {
       }}
     >
       <DialogContent>
-        <DialogTitle>Edit app details</DialogTitle>
+        <DialogTitle>{t("Edit app details")}</DialogTitle>
         <div class="mt-4 space-y-3">
           <div>
-            <label class="text-xs text-muted-foreground mb-1 block">Name</label>
+            <label class="text-xs text-muted-foreground mb-1 block">{t("Name")}</label>
             <input
               type="text"
               value={name()}
@@ -102,7 +103,7 @@ export function EditAppDialog(props: EditAppDialogProps) {
                 if (e.key === 'Enter' && canSave()) handleSave();
               }}
               class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              placeholder="My App"
+              placeholder={t("My App")}
               maxLength={APP_NAME_MAX_LENGTH}
               autofocus
             />
@@ -111,14 +112,14 @@ export function EditAppDialog(props: EditAppDialogProps) {
             </Show>
           </div>
           <div>
-            <label class="text-xs text-muted-foreground mb-1 block">Description (optional)</label>
+            <label class="text-xs text-muted-foreground mb-1 block">{t("Description (optional)")}</label>
             <textarea
               rows={3}
               value={description()}
               onInput={(e) => setDescription(e.currentTarget.value)}
               maxLength={APP_DESCRIPTION_MAX_LENGTH}
               class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              placeholder="A short description of what the app does"
+              placeholder={t("A short description of what the app does")}
             />
             <Show when={descriptionError()}>
               <p class="mt-1 text-xs text-destructive">{descriptionError()}</p>
@@ -127,12 +128,8 @@ export function EditAppDialog(props: EditAppDialogProps) {
         </div>
 
         <div class="mt-4 flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={close}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={handleSave} disabled={!canSave()}>
-            Save
-          </Button>
+          <Button size="sm" variant="outline" onClick={close}>{t("Cancel")}</Button>
+          <Button size="sm" onClick={handleSave} disabled={!canSave()}>{t("Save")}</Button>
         </div>
       </DialogContent>
     </Dialog>

@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import type { DuplicateJobStatus } from '~/api/duplicate';
 
 export interface DuplicateStep {
@@ -7,12 +8,12 @@ export interface DuplicateStep {
 }
 
 export const DUPLICATE_STEPS: DuplicateStep[] = [
-  { key: 'queued', label: 'Queued', detail: 'Waiting to start' },
-  { key: 'committing', label: 'Saving changes', detail: 'Capturing the latest version' },
-  { key: 'cloning', label: 'Preparing copy', detail: 'Cloning the project' },
-  { key: 'copying', label: 'Copying data', detail: 'Copying databases and conversation history' },
-  { key: 'starting', label: 'Starting the app', detail: 'Launching the copied project' },
-  { key: 'completed', label: 'Ready', detail: 'The copied app is online' },
+  { key: 'queued', get label() { return t("Queued"); }, get detail() { return t("Waiting to start"); } },
+  { key: 'committing', get label() { return t("Saving changes"); }, get detail() { return t("Capturing the latest version"); } },
+  { key: 'cloning', get label() { return t("Preparing copy"); }, get detail() { return t("Cloning the project"); } },
+  { key: 'copying', get label() { return t("Copying data"); }, get detail() { return t("Copying databases and conversation history"); } },
+  { key: 'starting', get label() { return t("Starting the app"); }, get detail() { return t("Launching the copied project"); } },
+  { key: 'completed', get label() { return t("Ready"); }, get detail() { return t("The copied app is online"); } },
 ];
 
 const DUPLICATE_STEP_ORDER: DuplicateJobStatus[] = [

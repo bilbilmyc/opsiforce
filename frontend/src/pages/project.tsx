@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createEffect, createMemo, createSignal, on, onCleanup, untrack } from 'solid-js';
 import { useNavigate } from '@tanstack/solid-router';
 import { usePermissions } from '~/api/permissions';
@@ -153,7 +154,7 @@ export function ProjectView(props: { projectId: string; initialPrompt?: string }
         >
           <Show when={connectionStatus() !== 'disabled'} fallback={<ProjectDisabled projectId={props.projectId} />}>
             <Show when={connectionStatus() !== 'failed'} fallback={<ProjectFailed projectId={props.projectId} />}>
-              <Show when={connection.router()} fallback={<Spinner label="Connecting..." />}>
+              <Show when={connection.router()} fallback={<Spinner label={t("Connecting...")} />}>
                 {(router) => (
                   <ProjectChatTab
                     projectId={props.projectId}

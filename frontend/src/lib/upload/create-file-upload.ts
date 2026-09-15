@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMemo, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { currentTenant, TENANT_HEADER } from '~/api/client';
@@ -62,7 +63,7 @@ export function createFileUpload(options: CreateFileUploadOptions): FileUpload {
       lastProgressAt = now;
       const sent = Math.min(totalData, bytes);
       setSentBytes(sent);
-      setStatusLabel(sent >= totalData ? 'Finishing upload' : 'Sending files');
+      setStatusLabel(sent >= totalData ? t("Finishing upload") : t("Sending files"));
     };
   }
 
@@ -115,8 +116,8 @@ export function createFileUpload(options: CreateFileUploadOptions): FileUpload {
         }
       };
       xhr.onabort = () => reject(new Error(CANCELLED));
-      xhr.onerror = () => reject(new Error('Network error during upload'));
-      xhr.ontimeout = () => reject(new Error('Upload timed out'));
+      xhr.onerror = () => reject(new Error(t("Network error during upload")));
+      xhr.ontimeout = () => reject(new Error(t("Upload timed out")));
 
       xhr.open('POST', url);
       for (const [header, value] of Object.entries(uploadHeaders())) {
@@ -129,7 +130,7 @@ export function createFileUpload(options: CreateFileUploadOptions): FileUpload {
   async function upload(files: UploadFile[]) {
     if (files.length === 0) return;
     if (uploading()) {
-      toast.info('An upload is already in progress');
+      toast.info(t("An upload is already in progress"));
       return;
     }
 
@@ -166,7 +167,7 @@ export function createFileUpload(options: CreateFileUploadOptions): FileUpload {
       options.onUploaded?.(files, result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (message === CANCELLED) toast.info('Upload cancelled');
+      if (message === CANCELLED) toast.info(t("Upload cancelled"));
       else toast.error(message);
     } finally {
       cancelHandle = undefined;
@@ -202,15 +203,15 @@ function uploadHeaders(extra?: Record<string, string>): Record<string, string> {
 
 function showUploadResult(result: UploadResult) {
   if (result.failed === 0) {
-    toast.success(`${result.uploaded} file${result.uploaded !== 1 ? 's' : ''} uploaded`);
+    toast.success(t("{0} file{1} uploaded", { "0": result.uploaded, "1": result.uploaded !== 1 ? 's' : '' }));
   } else if (result.uploaded === 0) {
-    toast.error(`All ${result.failed} upload${result.failed !== 1 ? 's' : ''} failed`, {
+    toast.error(t("All {0} upload{1} failed", { "0": result.failed, "1": result.failed !== 1 ? 's' : '' }), {
       description: result.firstError ? `${result.firstError.path} - ${result.firstError.error}` : undefined,
     });
   } else {
-    toast.warning(`${result.uploaded} uploaded, ${result.failed} failed`, {
+    toast.warning(t("{0} uploaded, {1} failed", { "0": result.uploaded, "1": result.failed }), {
       description: result.firstError
-        ? `First error: ${result.firstError.path} - ${result.firstError.error}`
+        ? t("First error: {0} - {1}", { "0": result.firstError.path, "1": result.firstError.error })
         : undefined,
     });
   }

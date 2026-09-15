@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show, type JSX } from 'solid-js';
 import { type Agent } from '~/api/client';
 import {
@@ -30,17 +31,17 @@ export function CreateMenu(props: {
       <DropdownMenuTrigger as={props.trigger} />
       <DropdownMenuContent class="w-72">
         <Show when={canCreateProject()}>
-          <MenuDividerLabel class="mb-1 mt-1">Select an agent to build a project</MenuDividerLabel>
+          <MenuDividerLabel class="mb-1 mt-1">{t("Select an agent to build a project")}</MenuDividerLabel>
           <Show
             when={(props.agents ?? []).length > 0}
-            fallback={<div class="px-2 py-1.5 text-xs italic text-muted-foreground">No agents available</div>}
+            fallback={<div class="px-2 py-1.5 text-xs italic text-muted-foreground">{t("No agents available")}</div>}
           >
             <For each={props.agents}>
               {(agent) => (
                 <RichMenuItem
                   icon={<Bot class="w-4 h-4" />}
                   title={agent.displayName ?? agent.name}
-                  description={agent.description ?? 'Start a new project with this agent.'}
+                  description={agent.description ?? t("Start a new project with this agent.")}
                   disabled={props.disabled}
                   onSelect={() => props.onCreateProject(agent.id)}
                 />
@@ -48,15 +49,15 @@ export function CreateMenu(props: {
             </For>
           </Show>
           <Show when={hasSecondary()}>
-            <MenuDividerLabel>OR</MenuDividerLabel>
+            <MenuDividerLabel>{t("OR")}</MenuDividerLabel>
           </Show>
         </Show>
         <Show when={props.canCreateWorkspace}>
           <RichMenuItem
             compact
             icon={<Boxes class="w-3.5 h-3.5" />}
-            title="Create new workspace"
-            description="A shared space to group projects and manage access."
+            title={t("Create new workspace")}
+            description={t("A shared space to group projects and manage access.")}
             onSelect={() => props.onOpenCreateWorkspace?.()}
           />
         </Show>
@@ -64,7 +65,7 @@ export function CreateMenu(props: {
           <RichMenuItem
             compact
             icon={<FolderPlus class="w-3.5 h-3.5" />}
-            title="Create new folder"
+            title={t("Create new folder")}
             description={FOLDER_DESCRIPTION}
             onSelect={() => props.onOpenCreateFolder?.()}
           />
@@ -73,8 +74,8 @@ export function CreateMenu(props: {
           <RichMenuItem
             compact
             icon={<Package class="w-3.5 h-3.5" />}
-            title="Import project"
-            description="Stand up a project from an export file."
+            title={t("Import project")}
+            description={t("Stand up a project from an export file.")}
             onSelect={() => props.onOpenImport?.()}
           />
         </Show>

@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { toast } from 'solid-sonner';
 import {
@@ -34,8 +35,8 @@ export function WhatsappResourcesSection() {
     const channel = pendingDelete();
     if (!channel) return;
     remove.mutate(channel.channelId, {
-      onSuccess: () => toast.success('Channel deleted'),
-      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to delete the channel'),
+      onSuccess: () => toast.success(t("Channel deleted")),
+      onError: (err) => toast.error(err instanceof Error ? err.message : t("Failed to delete the channel")),
     });
   };
 
@@ -43,36 +44,28 @@ export function WhatsappResourcesSection() {
     const channel = pendingRotate();
     if (!channel) return;
     rotate.mutate(channel.channelId, {
-      onSuccess: () => toast.success('Webhook secret rotated and pushed to Whapi'),
-      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to rotate the webhook secret'),
+      onSuccess: () => toast.success(t("Webhook secret rotated and pushed to Whapi")),
+      onError: (err) => toast.error(err instanceof Error ? err.message : t("Failed to rotate the webhook secret")),
     });
   };
 
   return (
     <div class="space-y-2">
       <div class="flex items-center gap-2">
-        <p class="text-xs text-muted-foreground">
-          Whapi channels registered on this platform. Create and QR-link the channel in the Whapi dashboard first, then
-          register it here — the webhook is configured automatically. Chats are allowlisted per environment from the
-          project page.
-        </p>
+        <p class="text-xs text-muted-foreground">{t("Whapi channels registered on this platform. Create and QR-link the channel in the Whapi dashboard first, then register it here — the webhook is configured automatically. Chats are allowlisted per environment from the project page.")}</p>
         <Button size="sm" class="ml-auto shrink-0" onClick={openCreate}>
-          <Plus class="h-3.5 w-3.5" />
-          Add channel
-        </Button>
+          <Plus class="h-3.5 w-3.5" />{t("Add channel")}</Button>
       </div>
 
       <Show when={!channels.isPending} fallback={<Skeleton class="h-16 w-full" />}>
-        <Show when={!channels.isError} fallback={<p class="text-xs text-destructive">Could not load channels.</p>}>
+        <Show when={!channels.isError} fallback={<p class="text-xs text-destructive">{t("Could not load channels.")}</p>}>
           <Show
             when={rows().length > 0}
             fallback={
               <div class="flex flex-col items-center gap-2 rounded-lg border border-border bg-card p-8 text-center">
                 <MessageSquare class="h-6 w-6 text-muted-foreground" />
-                <p class="text-sm font-medium">No channels registered</p>
-                <p class="text-xs text-muted-foreground">
-                  Register a Whapi channel to start routing WhatsApp messages into environments.
-                </p>
+                <p class="text-sm font-medium">{t("No channels registered")}</p>
+                <p class="text-xs text-muted-foreground">{t("Register a Whapi channel to start routing WhatsApp messages into environments.")}</p>
               </div>
             }
           >
@@ -102,9 +95,9 @@ export function WhatsappResourcesSection() {
         onOpenChange={(open) => {
           if (!open) setPendingRotate(null);
         }}
-        title="Rotate webhook secret"
-        description={`Generates a new secret for ${pendingRotate()?.channelId ?? ''} and pushes it to Whapi in the same step. If the push fails, the old secret stays active.`}
-        confirmLabel="Rotate"
+        title={t("Rotate webhook secret")}
+        description={t("Generates a new secret for {0} and pushes it to Whapi in the same step. If the push fails, the old secret stays active.", { "0": pendingRotate()?.channelId ?? '' })}
+        confirmLabel={t("Rotate")}
         variant="destructive"
         onConfirm={confirmRotate}
       />
@@ -114,9 +107,9 @@ export function WhatsappResourcesSection() {
         onOpenChange={(open) => {
           if (!open) setPendingDelete(null);
         }}
-        title="Delete channel"
-        description={`This unregisters channel ${pendingDelete()?.channelId ?? ''}. Messages from it will no longer be stored. Environments still referencing it must drop it first.`}
-        confirmLabel="Delete"
+        title={t("Delete channel")}
+        description={t("This unregisters channel {0}. Messages from it will no longer be stored. Environments still referencing it must drop it first.", { "0": pendingDelete()?.channelId ?? '' })}
+        confirmLabel={t("Delete")}
         variant="destructive"
         onConfirm={confirmDelete}
       />

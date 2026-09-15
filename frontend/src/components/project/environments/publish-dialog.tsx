@@ -1,3 +1,5 @@
+import { environmentDisplayName } from '~/lib/environment-label';
+import { t } from '~/i18n';
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog';
@@ -25,7 +27,7 @@ export interface PublishDialogProps {
 export default function PublishDialog(props: PublishDialogProps) {
   const projectId = () => props.projectId;
   const targetId = () => props.target?.environmentId ?? null;
-  const targetName = () => props.target?.name ?? 'this environment';
+  const targetName = () => environmentDisplayName(props.target) || t('this environment');
 
   const [variables, setVariables] = createSignal<Record<string, string>>({});
   const [scheduleSelection, setScheduleSelection] = createSignal<Record<string, boolean>>({});
@@ -62,7 +64,7 @@ export default function PublishDialog(props: PublishDialogProps) {
 
   const isFirstPublish = createMemo(() => form.data?.isFirstPublish ?? !props.target?.projectEnvironmentId);
 
-  const submitLabel = () => (isFirstPublish() ? 'Publish' : 'Publish update');
+  const submitLabel = () => (isFirstPublish() ? t("Publish") : t("Publish update"));
 
   const formVariables = () => form.data?.variables ?? [];
   const formSchedules = () => form.data?.schedules ?? [];
@@ -71,26 +73,26 @@ export default function PublishDialog(props: PublishDialogProps) {
     [
       {
         id: 'fresh' as VariableGroupId,
-        name: `New in ${targetName()}`,
+        name: t("New in {0}", { "0": targetName() }),
         dot: 'bg-amber-500',
-        note: 'prefilled from Development',
-        hint: `Set real ${targetName()} values before publishing.`,
+        note: t("prefilled from Development"),
+        hint: t("Set real {0} values before publishing.", { "0": targetName() }),
         attention: true,
         variables: formVariables().filter((v) => v.isNew),
       },
       {
         id: 'custom' as VariableGroupId,
-        name: 'Different from Development',
+        name: t("Different from Development"),
         dot: 'bg-emerald-500',
-        note: 'kept as-is on publish',
+        note: t("kept as-is on publish"),
         attention: false,
         variables: formVariables().filter((v) => !v.isNew && v.value !== v.devValue),
       },
       {
         id: 'same' as VariableGroupId,
-        name: 'Same as Development',
+        name: t("Same as Development"),
         dot: 'bg-blue-500',
-        note: 'identical in both environments',
+        note: t("identical in both environments"),
         attention: false,
         variables: formVariables().filter((v) => !v.isNew && v.value === v.devValue),
       },
@@ -127,7 +129,7 @@ export default function PublishDialog(props: PublishDialogProps) {
       });
       close();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start publish');
+      toast.error(err instanceof Error ? err.message : t("Failed to start publish"));
     }
   };
 
@@ -147,11 +149,11 @@ export default function PublishDialog(props: PublishDialogProps) {
         value={variables()[variable.key] ?? ''}
         onInput={(e) => setVariables((prev) => ({ ...prev, [variable.key]: e.currentTarget.value }))}
         class="order-last h-8 w-full min-w-0 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring sm:order-none sm:flex-1"
-        placeholder="value"
-        aria-label={`${variable.key} value in ${targetName()}`}
+        placeholder={t("value")}
+        aria-label={t("{0} value in {1}", { "0": variable.key, "1": targetName() })}
       />
       <span class="w-11 shrink-0 text-right text-[10px] text-emerald-600">
-        <Show when={(variables()[variable.key] ?? '') !== variable.value}>edited</Show>
+        <Show when={(variables()[variable.key] ?? '') !== variable.value}>{t("edited")}</Show>
       </span>
     </div>
   );
@@ -171,7 +173,7 @@ export default function PublishDialog(props: PublishDialogProps) {
                 aria-expanded={openGroups()[group.id]}
                 onClick={() => toggleGroup(group.id)}
               >
-                {openGroups()[group.id] ? 'Hide' : 'Show'}
+                {openGroups()[group.id] ? t("Hide") : t("Show")}
               </button>
             </div>
             <Show when={openGroups()[group.id]}>
@@ -193,7 +195,7 @@ export default function PublishDialog(props: PublishDialogProps) {
 
   const schedulesPanel = () => (
     <div class="space-y-2">
-      <p class="text-xs text-muted-foreground">Choose which schedules run in this environment.</p>
+      <p class="text-xs text-muted-foreground">{t("Choose which schedules run in this environment.")}</p>
       <div class="space-y-1">
         <For each={formSchedules()}>
           {(schedule) => (
@@ -222,21 +224,17 @@ export default function PublishDialog(props: PublishDialogProps) {
       <DialogContent class="flex max-h-[90vh] w-[calc(100%-1.5rem)] max-w-2xl flex-col p-4 sm:w-full sm:p-6">
         <DialogTitle class="flex items-center gap-2">
           <Rocket class="h-4 w-4 shrink-0 text-primary" />
-          {isFirstPublish() ? `Publish to ${targetName()}` : `Publish update to ${targetName()}`}
+          {isFirstPublish() ? t("Publish to {0}", { "0": targetName() }) : t("Publish update to {0}", { "0": targetName() })}
         </DialogTitle>
         <DialogDescription>
           {isFirstPublish()
-            ? `Publish your Development app and run it in ${targetName()}.`
-            : `Publish your latest Development changes to the app running in ${targetName()}.`}
+            ? t("Publish your Development app and run it in {0}.", { "0": targetName() })
+            : t("Publish your latest Development changes to the app running in {0}.", { "0": targetName() })}
         </DialogDescription>
 
         <div class="-ml-1 -mr-2 mt-3 min-h-0 flex-1 space-y-4 overflow-y-auto overflow-x-hidden py-1 pl-1 pr-2">
           <Show when={devAuthIsManual()}>
-            <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-              Development uses manual OIDC auth, which the new environment inherits. After publishing, register the new
-              environment's callback URL (shown in its Auth dialog) with your identity provider, or sign-in there will
-              fail.
-            </p>
+            <p class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">{t("Development uses manual OIDC auth, which the new environment inherits. After publishing, register the new environment's callback URL (shown in its Auth dialog) with your identity provider, or sign-in there will fail.")}</p>
           </Show>
 
           <Show when={targetId()}>
@@ -247,9 +245,7 @@ export default function PublishDialog(props: PublishDialogProps) {
                     <Show when={formVariables().length > 0 && formSchedules().length > 0}>
                       <Tabs value={tab()} onChange={setTab}>
                         <TabsList>
-                          <TabsTrigger value="variables">
-                            Environment variables
-                            <Show
+                          <TabsTrigger value="variables">{t("Environment variables")}<Show
                               when={unreviewedKeys().length > 0}
                               fallback={
                                 <Badge variant="secondary" class="ml-1.5 rounded-full px-1.5 py-0 text-[10px]">
@@ -258,14 +254,11 @@ export default function PublishDialog(props: PublishDialogProps) {
                               }
                             >
                               <Badge variant="warning" class="ml-1.5 rounded-full px-1.5 py-0 text-[10px]">
-                                {unreviewedKeys().length} to review
-                              </Badge>
+                                {unreviewedKeys().length}{t(" to review")}</Badge>
                             </Show>
                           </TabsTrigger>
-                          <TabsTrigger value="schedules">
-                            Schedules
-                            <Badge variant="secondary" class="ml-1.5 rounded-full px-1.5 py-0 text-[10px]">
-                              {selectedScheduleCount()} of {formSchedules().length}
+                          <TabsTrigger value="schedules">{t("Schedules")}<Badge variant="secondary" class="ml-1.5 rounded-full px-1.5 py-0 text-[10px]">
+                              {selectedScheduleCount()}{t(" of ")}{formSchedules().length}
                             </Badge>
                           </TabsTrigger>
                         </TabsList>
@@ -278,17 +271,16 @@ export default function PublishDialog(props: PublishDialogProps) {
 
                     <Show when={formVariables().length === 0 && formSchedules().length > 0}>
                       <div class="space-y-2">
-                        <p class="text-xs font-medium text-foreground">Schedules</p>
+                        <p class="text-xs font-medium text-foreground">{t("Schedules")}</p>
                         {schedulesPanel()}
                       </div>
                     </Show>
 
                     <Show when={formVariables().length === 0 && formSchedules().length === 0}>
-                      <p class="rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">
-                        No variables or schedules to configure.{' '}
+                      <p class="rounded-md border border-border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground">{t("No variables or schedules to configure.")}{' '}
                         {data().isFirstPublish
-                          ? 'This is the first publish to this environment.'
-                          : 'Publishing again updates the running app.'}
+                          ? t("This is the first publish to this environment.")
+                          : t("Publishing again updates the running app.")}
                       </p>
                     </Show>
                   </>
@@ -303,15 +295,11 @@ export default function PublishDialog(props: PublishDialogProps) {
             <span class="mr-auto flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
               <span class="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
               <span class="truncate">
-                {unreviewedKeys().length} new{' '}
-                {unreviewedKeys().length === 1 ? 'variable still carries its' : 'variables still carry their'}{' '}
-                Development value
-              </span>
+                {unreviewedKeys().length}{t(" new")}{' '}
+                {unreviewedKeys().length === 1 ? t("variable still carries its") : t("variables still carry their")}{' '}{t("Development value")}</span>
             </span>
           </Show>
-          <Button size="sm" variant="outline" onClick={close}>
-            Cancel
-          </Button>
+          <Button size="sm" variant="outline" onClick={close}>{t("Cancel")}</Button>
           <Button
             size="sm"
             onClick={() => setConfirmOpen(true)}
@@ -327,9 +315,9 @@ export default function PublishDialog(props: PublishDialogProps) {
       <ConfirmDialog
         open={confirmOpen()}
         onOpenChange={setConfirmOpen}
-        title={isFirstPublish() ? `Publish to ${targetName()}?` : `Publish update to ${targetName()}?`}
+        title={isFirstPublish() ? t("Publish to {0}?", { "0": targetName() }) : t("Publish update to {0}?", { "0": targetName() })}
         description={
-          isFirstPublish() ? `This publishes your Development app to ${targetName()} and starts it there.` : undefined
+          isFirstPublish() ? t("This publishes your Development app to {0} and starts it there.", { "0": targetName() }) : undefined
         }
         confirmLabel={submitLabel()}
         variant={isFirstPublish() ? 'default' : 'destructive'}
@@ -338,9 +326,7 @@ export default function PublishDialog(props: PublishDialogProps) {
         <Show when={unreviewedKeys().length > 0}>
           <div class="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-700">
             <p class="font-medium">
-              {unreviewedKeys().length} new {unreviewedKeys().length === 1 ? 'variable' : 'variables'} will go live with
-              Development values:
-            </p>
+              {unreviewedKeys().length}{t(" new ")}{unreviewedKeys().length === 1 ? 'variable' : 'variables'}{t(" will go live with Development values:")}</p>
             <ul class="mt-1.5 space-y-0.5 font-mono text-[11px]">
               <For each={unreviewedKeys()}>{(key) => <li class="truncate">{key}</li>}</For>
             </ul>

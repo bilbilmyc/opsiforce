@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createEffect, createSignal, on } from 'solid-js';
 import { MarkedProvider } from '@opencode-ai/ui/context/marked';
 import { PanelRightOpen } from '~/components/icons';
@@ -65,7 +66,7 @@ export function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
           <button
             onClick={() => setOpen(true)}
             class="shrink-0 w-8 bg-sidebar border-l border-border flex items-center justify-center hover:bg-accent transition-colors"
-            title="Open panel"
+            title={t("Open panel")}
           >
             <PanelRightOpen class="w-4 h-4 text-muted-foreground" />
           </button>

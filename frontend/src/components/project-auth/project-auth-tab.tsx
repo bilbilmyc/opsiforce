@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createEffect, createMemo, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { Button } from '~/components/ui/button';
@@ -36,12 +37,12 @@ function validationError(
   serverHasExistingConfig: boolean
 ): string | null {
   if (mode !== 'manual') return null;
-  if (!config.clientId?.trim()) return 'Client Id is required';
+  if (!config.clientId?.trim()) return t("Client Id is required");
   if (!serverHasExistingConfig && !config.clientSecret?.trim()) {
-    return 'Client Secret is required';
+    return t("Client Secret is required");
   }
   if (!config.discoveryUrl?.trim()) {
-    return 'Discovery URL is required';
+    return t("Discovery URL is required");
   }
   return null;
 }
@@ -99,8 +100,8 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
         bypassAuthPaths: mode === 'public' ? undefined : draftBypassPaths(),
       },
       {
-        onSuccess: () => toast.success('Auth settings saved'),
-        onError: (e) => toast.error(`Failed to save: ${(e as Error).message}`),
+        onSuccess: () => toast.success(t("Auth settings saved")),
+        onError: (e) => toast.error(t("Failed to save: {0}", { "0": (e as Error).message })),
       }
     );
   };
@@ -108,14 +109,14 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
   const confirmDescription = createMemo(() => {
     const from = serverMode();
     const to = draftMode();
-    const transition = from === to ? `auth mode "${to}"` : `auth mode from "${from}" to "${to}"`;
+    const transition = from === to ? t("auth mode \"{0}\"", { "0": to }) : t("auth mode from \"{0}\" to \"{1}\"", { "0": from, "1": to });
     switch (to) {
       case 'public':
-        return `You're about to update ${transition}. The app will be accessible to anyone without signing in.`;
+        return t("You're about to update {0}. The app will be accessible to anyone without signing in.", { "0": transition });
       case 'managed':
-        return `You're about to update ${transition}. Visitors will be required to sign in with ${config.managedAuthLabel} before the app loads.`;
+        return t("You're about to update {0}. Visitors will be required to sign in with {1} before the app loads.", { "0": transition, "1": config.managedAuthLabel });
       case 'manual':
-        return `You're about to update ${transition}. Visitors will be required to sign in via the configured OIDC provider before the app loads.`;
+        return t("You're about to update {0}. Visitors will be required to sign in via the configured OIDC provider before the app loads.", { "0": transition });
     }
   });
 
@@ -131,7 +132,7 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
         when={!query.isLoading}
         fallback={
           <div class="py-6">
-            <Spinner label="Loading auth settings…" />
+            <Spinner label={t("Loading auth settings…")} />
           </div>
         }
       >
@@ -163,22 +164,18 @@ export function ProjectAuthTab(props: ProjectAuthTabProps) {
 
         <div class="flex items-center justify-end gap-2 pt-2 border-t border-border">
           <Show when={dirty()}>
-            <Button size="sm" variant="ghost" onClick={reset} disabled={mutation.isPending}>
-              Reset
-            </Button>
+            <Button size="sm" variant="ghost" onClick={reset} disabled={mutation.isPending}>{t("Reset")}</Button>
           </Show>
-          <Button size="sm" onClick={requestSave} disabled={props.disabled || !dirty()} loading={mutation.isPending}>
-            Save
-          </Button>
+          <Button size="sm" onClick={requestSave} disabled={props.disabled || !dirty()} loading={mutation.isPending}>{t("Save")}</Button>
         </div>
       </Show>
 
       <ConfirmDialog
         open={confirmOpen()}
         onOpenChange={setConfirmOpen}
-        title="Save auth settings?"
+        title={t("Save auth settings?")}
         description={confirmDescription() ?? ''}
-        confirmLabel="Save"
+        confirmLabel={t("Save")}
         onConfirm={confirmSave}
       />
     </div>

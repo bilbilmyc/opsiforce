@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Match, Switch, createEffect, createMemo, createSignal, on } from 'solid-js';
 import type { Range, WorkBook, WorkSheet } from 'xlsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '~/components/ui/select';
@@ -51,7 +52,7 @@ export function FileXlsxPreview(props: FileXlsxPreviewProps) {
     if (!loaded || loaded.sheetNames.length < 2) return undefined;
     return (
       <>
-        <span class="text-xs text-muted-foreground shrink-0">Sheet</span>
+        <span class="text-xs text-muted-foreground shrink-0">{t("Sheet")}</span>
         <Select
           options={loaded.sheetNames}
           value={sheetName()}
@@ -72,25 +73,25 @@ export function FileXlsxPreview(props: FileXlsxPreviewProps) {
   return (
     <Switch>
       <Match when={state().status === 'loading'}>
-        <FilePreviewNotice title="Loading workbook…" loading />
+        <FilePreviewNotice title={t("Loading workbook…")} loading />
       </Match>
       <Match when={state().status === 'missing'}>
-        <FilePreviewNotice title="File not found" detail="It may have been renamed, moved, or deleted." />
+        <FilePreviewNotice title={t("File not found")} detail={t("It may have been renamed, moved, or deleted.")} />
       </Match>
       <Match when={state().status === 'error'}>
-        <FilePreviewNotice title="Could not load this file" detail="Try again, or download it instead." />
+        <FilePreviewNotice title={t("Could not load this file")} detail={t("Try again, or download it instead.")} />
       </Match>
       <Match when={loadKindOf(state()) === 'too-large'}>
         <FileDownloadCard
           name={props.name}
-          detail="This workbook is too large to preview here."
+          detail={t("This workbook is too large to preview here.")}
           onDownload={props.onDownload}
         />
       </Match>
       <Match when={loadKindOf(state()) === 'unreadable'}>
         <FileDownloadCard
           name={props.name}
-          detail="This workbook could not be read, so it cannot be shown here."
+          detail={t("This workbook could not be read, so it cannot be shown here.")}
           onDownload={props.onDownload}
         />
       </Match>
@@ -99,7 +100,7 @@ export function FileXlsxPreview(props: FileXlsxPreviewProps) {
           <FileValuesGrid
             rows={sheet().rows}
             note={sheet().note}
-            emptyTitle="This sheet is empty"
+            emptyTitle={t("This sheet is empty")}
             toolbar={sheetSelector()}
           />
         )}

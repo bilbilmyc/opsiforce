@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMutation, useQueryClient } from '@tanstack/solid-query';
 import { createAppQuery } from '~/lib/create-app-query';
 import { toast } from 'solid-sonner';
@@ -174,10 +175,10 @@ export function useMoveProjectToFolder() {
     mutationFn: (params: { workspaceId: string; projectId: string; folderId: string | null }) =>
       assignProjectRequest(params.workspaceId, params.projectId, params.folderId),
     onSuccess: (_data, vars) => {
-      toast.success(vars.folderId ? 'Project moved into folder' : 'Project moved to workspace root');
+      toast.success(vars.folderId ? t("Project moved into folder") : t("Project moved to workspace root"));
       invalidateProjectPlacement(qc, vars.workspaceId);
     },
-    onError: () => toast.error('Failed to move project'),
+    onError: () => toast.error(t("Failed to move project")),
   }));
 }
 
@@ -207,7 +208,7 @@ export function useMoveProject() {
       return assignProjectRequest(params.toWorkspaceId, params.projectId, params.toFolderId ?? null);
     },
     onSuccess: (_data, vars) => {
-      toast.success(`Project moved from ${vars.fromName} to ${vars.toName}`);
+      toast.success(t("Project moved from {0} to {1}", { "0": vars.fromName, "1": vars.toName }));
       qc.invalidateQueries({ queryKey: ['projects'] });
       qc.invalidateQueries({ queryKey: workspaceKeys.all });
       if (vars.fromWorkspaceId) {
@@ -221,7 +222,7 @@ export function useMoveProject() {
         qc.invalidateQueries({ queryKey: workspaceKeys.folders(vars.toWorkspaceId) });
       }
     },
-    onError: () => toast.error('Failed to move project'),
+    onError: () => toast.error(t("Failed to move project")),
   }));
 }
 
@@ -251,10 +252,10 @@ export function useMoveFolder() {
         toWorkspaceId: params.toWorkspaceId,
       }),
     onSuccess: (_data, vars) => {
-      toast.success(`Folder moved from ${vars.fromName} to ${vars.toName}`);
+      toast.success(t("Folder moved from {0} to {1}", { "0": vars.fromName, "1": vars.toName }));
       invalidateWorkspaceMove(qc, vars.fromWorkspaceId, vars.toWorkspaceId);
     },
-    onError: (err) => toast.error(err instanceof ApiError ? err.message : 'Failed to move folder'),
+    onError: (err) => toast.error(err instanceof ApiError ? err.message : t("Failed to move folder")),
   }));
 }
 

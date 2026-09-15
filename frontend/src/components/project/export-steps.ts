@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import type { ExportJobStatus } from '~/api/export';
 
 export interface ExportStep {
@@ -7,11 +8,11 @@ export interface ExportStep {
 }
 
 export const EXPORT_STEPS: ExportStep[] = [
-  { key: 'queued', label: 'Queued', detail: 'Waiting to start' },
-  { key: 'committing', label: 'Saving changes', detail: 'Capturing the latest version' },
-  { key: 'staging', label: 'Preparing files', detail: 'Staging the workspace and its history' },
-  { key: 'archiving', label: 'Packaging', detail: 'Building the export file' },
-  { key: 'completed', label: 'Ready', detail: 'Export file is ready to download' },
+  { key: 'queued', get label() { return t("Queued"); }, get detail() { return t("Waiting to start"); } },
+  { key: 'committing', get label() { return t("Saving changes"); }, get detail() { return t("Capturing the latest version"); } },
+  { key: 'staging', get label() { return t("Preparing files"); }, get detail() { return t("Staging the workspace and its history"); } },
+  { key: 'archiving', get label() { return t("Packaging"); }, get detail() { return t("Building the export file"); } },
+  { key: 'completed', get label() { return t("Ready"); }, get detail() { return t("Export file is ready to download"); } },
 ];
 
 const EXPORT_STEP_ORDER: ExportJobStatus[] = ['queued', 'committing', 'staging', 'archiving', 'completed'];

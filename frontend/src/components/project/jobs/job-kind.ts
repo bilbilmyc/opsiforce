@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import type { Component } from 'solid-js';
 import type { QueryClient } from '@tanstack/solid-query';
 import { Copy, Download, ExternalLink, Layers, Package, Rocket, RotateCcw } from '~/components/icons';
@@ -91,13 +92,13 @@ function withByteDetail(
 ): ProgressStep[] {
   return source.map((step) =>
     step.key === byteKey && bytesTotal > 0
-      ? { label: step.label, detail: `${formatBytes(bytesProcessed)} of ${formatBytes(bytesTotal)}` }
+      ? { label: step.label, detail: t("{0} of {1}", { "0": formatBytes(bytesProcessed), "1": formatBytes(bytesTotal) }) }
       : { label: step.label, detail: step.detail }
   );
 }
 
 function runningStepLabel(steps: { label: string }[], index: number): string {
-  return `${steps[index]?.label ?? 'Working'} · step ${index + 1} of ${steps.length}`;
+  return t("{0} · step {1} of {2}", { "0": steps[index]?.label ?? t("Working"), "1": index + 1, "2": steps.length });
 }
 
 const publishAdapter: JobKindAdapter<TrackedPublish> = {
@@ -116,21 +117,21 @@ const publishAdapter: JobKindAdapter<TrackedPublish> = {
       headerIcon: Rocket,
       cardTitle:
         phase === 'done'
-          ? `${entry.title} is live`
+          ? t("{0} is live", { "0": entry.title })
           : phase === 'failed'
-            ? `Publish to ${entry.title} failed`
-            : `Publishing to ${entry.title}`,
+            ? t("Publish to {0} failed", { "0": entry.title })
+            : t("Publishing to {0}", { "0": entry.title }),
       dialogTitle:
         phase === 'done'
-          ? `${entry.title} is live`
+          ? t("{0} is live", { "0": entry.title })
           : phase === 'failed'
-            ? `Publish to ${entry.title} failed`
-            : `Publishing to ${entry.title}`,
-      dialogNote: 'Closing this keeps the publish running; a progress card stays in the corner.',
+            ? t("Publish to {0} failed", { "0": entry.title })
+            : t("Publishing to {0}", { "0": entry.title }),
+      get dialogNote() { return t("Closing this keeps the publish running; a progress card stays in the corner."); },
       steps: PUBLISH_STEPS.map((step) => ({ label: step.label, detail: step.detail })),
       currentIndex: phase === 'failed' ? publishStepIndex(entry.lastStep as PublishJobStatus) : runningIndex,
       totalSteps: PUBLISH_STEPS.length,
-      stepLabel: job ? runningStepLabel(PUBLISH_STEPS, runningIndex) : 'Starting',
+      stepLabel: job ? runningStepLabel(PUBLISH_STEPS, runningIndex) : t("Starting"),
       progressPercent: ((runningIndex + 1) / PUBLISH_STEPS.length) * 100,
       error: job?.error ?? null,
       notice: null,
@@ -142,13 +143,13 @@ const publishAdapter: JobKindAdapter<TrackedPublish> = {
     if (!job || job.status !== 'done') return [];
     return [
       {
-        label: 'Open app',
+        get label() { return t("Open app"); },
         icon: ExternalLink,
         variant: 'outline',
         href: appPublicUrl(job.projectEnvironmentId, entry.environmentSlug),
       },
       {
-        label: 'View environment',
+        get label() { return t("View environment"); },
         icon: Layers,
         variant: 'outline',
         onSelect: () => {
@@ -184,21 +185,21 @@ const duplicateAdapter: JobKindAdapter<TrackedDuplicate> = {
       headerIcon: Copy,
       cardTitle:
         phase === 'done'
-          ? `${entry.title} copied`
+          ? t("{0} copied", { "0": entry.title })
           : phase === 'failed'
-            ? 'Duplicate failed'
-            : `Duplicating ${entry.title}`,
+            ? t("Duplicate failed")
+            : t("Duplicating {0}", { "0": entry.title }),
       dialogTitle:
         phase === 'done'
-          ? `${entry.title} copied`
+          ? t("{0} copied", { "0": entry.title })
           : phase === 'failed'
-            ? 'Duplicate failed'
-            : `Duplicating ${entry.title}`,
-      dialogNote: 'Closing this keeps the duplicate running; a progress card stays in the corner.',
+            ? t("Duplicate failed")
+            : t("Duplicating {0}", { "0": entry.title }),
+      get dialogNote() { return t("Closing this keeps the duplicate running; a progress card stays in the corner."); },
       steps: withByteDetail(DUPLICATE_STEPS, 'copying', job?.bytesProcessed ?? 0, job?.bytesTotal ?? 0),
       currentIndex: phase === 'failed' ? duplicateStepIndex(entry.lastStep as DuplicateJobStatus) : runningIndex,
       totalSteps: DUPLICATE_STEPS.length,
-      stepLabel: job ? runningStepLabel(DUPLICATE_STEPS, runningIndex) : 'Starting',
+      stepLabel: job ? runningStepLabel(DUPLICATE_STEPS, runningIndex) : t("Starting"),
       progressPercent: ((runningIndex + 1) / DUPLICATE_STEPS.length) * 100,
       error: job?.error ?? null,
       notice: null,
@@ -209,7 +210,7 @@ const duplicateAdapter: JobKindAdapter<TrackedDuplicate> = {
     if (entry.job?.status !== 'completed') return [];
     return [
       {
-        label: 'Open project',
+        get label() { return t("Open project"); },
         icon: ExternalLink,
         variant: 'primary',
         onSelect: () => {
@@ -233,11 +234,10 @@ const exportAdapter: JobKindAdapter<TrackedExport> = {
     return {
       phase,
       headerIcon: Package,
-      cardTitle: phase === 'done' ? 'Export ready' : phase === 'failed' ? 'Export failed' : `Exporting ${entry.title}`,
+      cardTitle: phase === 'done' ? t("Export ready") : phase === 'failed' ? t("Export failed") : t("Exporting {0}", { "0": entry.title }),
       dialogTitle:
-        phase === 'done' ? 'Export ready' : phase === 'failed' ? 'Export failed' : `Exporting ${entry.title}`,
-      dialogNote:
-        'The export file contains live environment variable values and the full conversation — treat it as sensitive. Closing this keeps the export running; a progress card stays in the corner.',
+        phase === 'done' ? t("Export ready") : phase === 'failed' ? t("Export failed") : t("Exporting {0}", { "0": entry.title }),
+      get dialogNote() { return t("The export file contains live environment variable values and the full conversation — treat it as sensitive. Closing this keeps the export running; a progress card stays in the corner."); },
       steps: withByteDetail(EXPORT_STEPS, 'archiving', job.bytesProcessed, job.bytesTotal),
       currentIndex: phase === 'failed' ? exportStepIndex(entry.lastStep as ExportJobStatus) : runningIndex,
       totalSteps: EXPORT_STEPS.length,
@@ -253,7 +253,7 @@ const exportAdapter: JobKindAdapter<TrackedExport> = {
     if (job.status !== 'completed') return [];
     return [
       {
-        label: 'Download',
+        get label() { return t("Download"); },
         icon: Download,
         variant: 'primary',
         onSelect: () => {
@@ -276,29 +276,29 @@ function importSteps(entry: TrackedImport): ProgressStep[] {
         label: step.label,
         detail:
           upload.phase === 'uploading'
-            ? `${formatBytes(upload.bytesSent)} of ${formatBytes(upload.size)}`
-            : 'Assembling the export file',
+            ? t("{0} of {1}", { "0": formatBytes(upload.bytesSent), "1": formatBytes(upload.size) })
+            : t("Assembling the export file"),
       };
     }
     if (step.key === 'unpacking' && job && job.bytesTotal > 0) {
-      return { label: step.label, detail: `${formatBytes(job.bytesProcessed)} of ${formatBytes(job.bytesTotal)}` };
+      return { label: step.label, detail: t("{0} of {1}", { "0": formatBytes(job.bytesProcessed), "1": formatBytes(job.bytesTotal) }) };
     }
     return { label: step.label, detail: step.detail };
   });
 }
 
 function importFailureTitle(failure: ImportUploadFailure): string {
-  return failure.kind === 'upload' ? 'Upload interrupted' : 'Import failed';
+  return failure.kind === 'upload' ? t("Upload interrupted") : t("Import failed");
 }
 
 function importFailureMessage(failure: ImportUploadFailure): string {
-  return failure.kind === 'finalize-transient' ? `${failure.message} Your upload is safe.` : failure.message;
+  return failure.kind === 'finalize-transient' ? t("{0} Your upload is safe.", { "0": failure.message }) : failure.message;
 }
 
 function importDismissLabel(entry: TrackedImport): string | undefined {
   const failure = entry.upload.failure;
-  if (failure) return failure.kind === 'upload' ? 'Cancel' : 'Dismiss';
-  return entry.upload.phase === 'enqueued' ? undefined : 'Cancel upload';
+  if (failure) return failure.kind === 'upload' ? t("Cancel") : t("Dismiss");
+  return entry.upload.phase === 'enqueued' ? undefined : t("Cancel upload");
 }
 
 const importAdapter: JobKindAdapter<TrackedImport> = {
@@ -321,30 +321,30 @@ const importAdapter: JobKindAdapter<TrackedImport> = {
     const transferring = !job && upload.phase === 'uploading';
     const title =
       phase === 'done'
-        ? `${entry.title} imported`
+        ? t("{0} imported", { "0": entry.title })
         : phase === 'failed'
           ? failure
             ? importFailureTitle(failure)
-            : 'Import failed'
-          : `Importing ${entry.title}`;
+            : t("Import failed")
+          : t("Importing {0}", { "0": entry.title });
     return {
       phase,
       headerIcon: Package,
       cardTitle: title,
       dialogTitle: title,
       dialogNote: job
-        ? 'Closing this keeps the import running; a progress card stays in the corner.'
-        : 'Closing this keeps the upload running; a progress card stays in the corner. Reloading or closing the tab cancels it.',
+        ? t("Closing this keeps the import running; a progress card stays in the corner.")
+        : t("Closing this keeps the upload running; a progress card stays in the corner. Reloading or closing the tab cancels it."),
       steps: importSteps(entry),
       currentIndex: phase === 'failed' ? importStepIndex(entry.lastStep as ImportPhase) : runningIndex,
       totalSteps: IMPORT_STEPS.length,
       stepLabel: transferring
-        ? `Uploading ${formatBytes(upload.bytesSent)} of ${formatBytes(upload.size)} · step 1 of ${IMPORT_STEPS.length}`
+        ? t("Uploading {0} of {1} · step 1 of {2}", { "0": formatBytes(upload.bytesSent), "1": formatBytes(upload.size), "2": IMPORT_STEPS.length })
         : runningStepLabel(IMPORT_STEPS, runningIndex),
       progressPercent: transferring ? uploadFraction * stepShare : ((runningIndex + 1) / IMPORT_STEPS.length) * 100,
       error: failure ? importFailureMessage(failure) : (job?.error ?? null),
       notice: job?.agentFallbackFrom
-        ? `The export's agent "${job.agentFallbackFrom}" isn't available here, so the default agent was used instead.`
+        ? t("The export's agent \"{0}\" isn't available here, so the default agent was used instead.", { "0": job.agentFallbackFrom })
         : null,
       accentPulse: false,
       dismissLabel: importDismissLabel(entry),
@@ -355,13 +355,13 @@ const importAdapter: JobKindAdapter<TrackedImport> = {
     const failure = entry.upload.failure;
     if (failure) {
       if (!failure.resumable) return [];
-      return [{ label: 'Retry', icon: RotateCcw, variant: 'primary', onSelect: () => host.retry(entry.key) }];
+      return [{ get label() { return t("Retry"); }, icon: RotateCcw, variant: 'primary', onSelect: () => host.retry(entry.key) }];
     }
     const projectId = entry.projectId;
     if (!projectId || entry.job?.status !== 'completed') return [];
     return [
       {
-        label: 'Open project',
+        get label() { return t("Open project"); },
         icon: ExternalLink,
         variant: 'primary',
         onSelect: () => {

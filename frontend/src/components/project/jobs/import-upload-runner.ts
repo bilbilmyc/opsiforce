@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { cancelImportUploadSession, ImportUploadError, runImportUpload, type StartImportResult } from '~/api/import';
 import type { ImportUploadState, StartImportUploadInput } from './job-dock-context';
 
@@ -53,7 +54,7 @@ export function createImportUploadRunner(hooks: ImportUploadRunnerHooks): Import
           ? err.toFailure()
           : {
               kind: 'upload' as const,
-              message: err instanceof Error ? err.message : 'The import failed.',
+              message: err instanceof Error ? err.message : t("The import failed."),
               resumable: true,
             };
       hooks.patchUpload(key, { failure });

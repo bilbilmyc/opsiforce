@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { onCleanup, onMount } from 'solid-js';
 import { GENERATED_FILES_DIRECTORY, downloadFile } from '~/api/files';
 import { fileExtensionOf } from '~/lib/file-extension';
@@ -128,7 +129,7 @@ function createDownloadAction(name: string): HTMLElement {
   action.setAttribute(DOWNLOAD_ATTRIBUTE, '');
   action.setAttribute('role', 'button');
   action.setAttribute('tabindex', '0');
-  action.setAttribute('aria-label', `Download ${name}`);
+  action.setAttribute('aria-label', t("Download {0}", { "0": name }));
   action.title = 'Download';
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

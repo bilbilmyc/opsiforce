@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show, type JSX } from 'solid-js';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '~/components/ui/table';
 import { FilePreviewNotice } from './file-preview-notice';
@@ -22,7 +23,7 @@ export function FileValuesGrid(props: FileValuesGridProps) {
 
       <Show
         when={props.rows.length > 0}
-        fallback={<FilePreviewNotice title={props.emptyTitle} detail="There is nothing to show here." />}
+        fallback={<FilePreviewNotice title={props.emptyTitle} detail={t("There is nothing to show here.")} />}
       >
         <div class="flex-1 min-h-0 overflow-auto">
           <Table class="text-xs">
@@ -55,11 +56,11 @@ export function FileValuesGrid(props: FileValuesGridProps) {
 
 export function valuesGridNote(truncated: { rows: boolean; columns: boolean; bytes?: boolean }): string | undefined {
   const limits: string[] = [];
-  if (truncated.rows) limits.push(`the first ${MAX_TABLE_PREVIEW_ROWS} rows`);
-  if (truncated.columns) limits.push(`the first ${MAX_TABLE_PREVIEW_COLUMNS} columns`);
+  if (truncated.rows) limits.push(t("the first {0} rows", { "0": MAX_TABLE_PREVIEW_ROWS }));
+  if (truncated.columns) limits.push(t("the first {0} columns", { "0": MAX_TABLE_PREVIEW_COLUMNS }));
   if (truncated.bytes) limits.push('only part of the file');
   if (limits.length === 0) return undefined;
-  return `Showing ${limits.join(' and ')} — download the file to see all of it.`;
+  return t("Showing {0} — download the file to see all of it.", { "0": limits.join(' and ') });
 }
 
 function paddedRow(row: string[], width: number): string[] {

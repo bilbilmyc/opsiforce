@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import {
   add,
   sub,
@@ -33,7 +34,7 @@ export class Schedule {
     else if (typeof now === 'string') date = parseISO(now);
     else date = now;
 
-    if (!isValid(date)) throw new Error('Invalid reference date provided');
+    if (!isValid(date)) throw new Error(t("Invalid reference date provided"));
 
     if (date.getSeconds() > 0) date = add(date, { minutes: 1 });
 
@@ -86,7 +87,7 @@ const findDate = (arr: number[][], date: Date, reverse: boolean) => {
       }
     }
   }
-  if (!retry) throw new Error('Unable to find execution time for schedule');
+  if (!retry) throw new Error(t("Unable to find execution time for schedule"));
 
   return set(date, { seconds: 0, milliseconds: 0 });
 };

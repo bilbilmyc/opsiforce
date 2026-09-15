@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Match, Show, Switch, type JSX } from 'solid-js';
 import { Download, ExternalLink, X } from '~/components/icons';
 import { ToolbarButton } from '~/components/ui/toolbar-button';
@@ -33,15 +34,15 @@ export function FilePreviewPane(props: FilePreviewPaneProps) {
         </span>
         {props.switcher}
         <div class="flex items-center shrink-0">
-          <ToolbarButton onClick={download} tooltip="Download">
+          <ToolbarButton onClick={download} tooltip={t("Download")}>
             <Download class="w-3.5 h-3.5" />
           </ToolbarButton>
           <Show when={opensInNewTab(kind())}>
-            <ToolbarButton onClick={() => window.open(url(), '_blank', 'noopener')} tooltip="Open in new tab">
+            <ToolbarButton onClick={() => window.open(url(), '_blank', 'noopener')} tooltip={t("Open in new tab")}>
               <ExternalLink class="w-3.5 h-3.5" />
             </ToolbarButton>
           </Show>
-          <ToolbarButton onClick={props.onClose} tooltip="Close file">
+          <ToolbarButton onClick={props.onClose} tooltip={t("Close file")}>
             <X class="w-3.5 h-3.5" />
           </ToolbarButton>
         </div>

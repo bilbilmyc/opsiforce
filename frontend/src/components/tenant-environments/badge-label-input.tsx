@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, type JSX } from 'solid-js';
 import { ENVIRONMENT_SHORT_NAME_MAX_LENGTH, isEnvironmentShortNameValid } from '~/lib/environment-label';
 
@@ -20,11 +21,11 @@ export function BadgeLabelInput(props: {
         }}
         class="h-8 w-full rounded-md border border-input bg-background px-2.5 py-1.5 font-mono text-xs uppercase shadow-sm transition-colors placeholder:font-sans placeholder:normal-case placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         placeholder={props.placeholder}
-        aria-label="Badge label"
+        aria-label={t("Badge label")}
       />
       <Show
         when={isEnvironmentShortNameValid(props.value)}
-        fallback={<p class="text-xs text-destructive">2–5 letters or digits, or empty to derive from the slug</p>}
+        fallback={<p class="text-xs text-destructive">{t("2–5 letters or digits, or empty to derive from the slug")}</p>}
       >
         {props.hint}
       </Show>

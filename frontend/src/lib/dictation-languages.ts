@@ -1,13 +1,14 @@
+import { intlLocale } from '~/i18n';
 export interface DictationLanguage {
   code: string;
   name: string;
 }
 
-const languageDisplayNames = new Intl.DisplayNames(['en'], { type: 'language' });
+const displayNames = { 'en-US': new Intl.DisplayNames(['en'], { type: 'language' }), 'zh-CN': new Intl.DisplayNames(['zh-CN'], { type: 'language' }) };
 
 export function dictationLanguageName(code: string): string {
   try {
-    return languageDisplayNames.of(code) ?? code;
+    return displayNames[intlLocale()].of(code) ?? code;
   } catch {
     return code;
   }

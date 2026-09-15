@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Match, Switch, createEffect, createSignal, on, onCleanup } from 'solid-js';
 import { ApiError } from '~/api/client';
 import {
@@ -54,10 +55,10 @@ export function FileOfficePreview(props: FileOfficePreviewProps) {
   return (
     <Switch>
       <Match when={state().status === 'converting'}>
-        <FilePreviewNotice title="Converting to PDF…" detail="Large documents can take a moment." loading />
+        <FilePreviewNotice title={t("Converting to PDF…")} detail={t("Large documents can take a moment.")} loading />
       </Match>
       <Match when={state().status === 'missing'}>
-        <FilePreviewNotice title="File not found" detail="It may have been renamed, moved, or deleted." />
+        <FilePreviewNotice title={t("File not found")} detail={t("It may have been renamed, moved, or deleted.")} />
       </Match>
       <Match when={state().status === 'failed'}>
         <FileDownloadCard
@@ -95,7 +96,7 @@ async function convert(
       return;
     }
     if (err instanceof ApiError && err.status === 429) {
-      setState({ status: 'failed', failure: 'busy', message: 'The converter is busy. Try again in a moment.' });
+      setState({ status: 'failed', failure: 'busy', get message() { return t("The converter is busy. Try again in a moment."); } });
       return;
     }
     setState({ status: 'failed', failure: 'retryable' });
@@ -122,7 +123,7 @@ async function convert(
       return;
     }
     if (Date.now() >= deadline) {
-      setState({ status: 'failed', failure: 'busy', message: 'Converting is taking longer than expected.' });
+      setState({ status: 'failed', failure: 'busy', get message() { return t("Converting is taking longer than expected."); } });
       return;
     }
     await delay(POLL_INTERVAL_MS);
@@ -139,6 +140,6 @@ function readyJobId(state: ConversionState): string | null {
 
 function failureDetail(state: ConversionState): string {
   if (state.status !== 'failed') return '';
-  if (state.failure === 'unconvertible') return state.message ?? 'This document could not be converted for preview.';
-  return state.message ?? 'The converter is unavailable right now.';
+  if (state.failure === 'unconvertible') return state.message ?? t("This document could not be converted for preview.");
+  return state.message ?? t("The converter is unavailable right now.");
 }

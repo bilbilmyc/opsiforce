@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMutation, useQueryClient } from '@tanstack/solid-query';
 import { createAppQuery } from '~/lib/create-app-query';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
@@ -57,13 +58,13 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
         try {
           const payload = JSON.parse(data) as ProjectStatusErrorPayload;
           const status = statusForCode(payload.code);
-          setError(new ApiError(status, payload.message ?? `Error: ${status}`));
+          setError(new ApiError(status, payload.message ?? t("Error: {0}", { "0": status })));
           closed = true;
           events.close();
           return;
         } catch {}
       }
-      setError(new Error('Project status stream disconnected'));
+      setError(new Error(t("Project status stream disconnected")));
     });
 
     onCleanup(() => {

@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createSignal } from 'solid-js';
 import { isAgentWorking } from '~/api/agent-status';
 import type { Project } from '~/api/client';
@@ -74,7 +75,7 @@ export function ProjectCard(props: {
           >
             <div class="flex items-center gap-1 min-w-0">
               <Show when={isAgentWorking(props.project.id)}>
-                <span role="status" aria-label="Agent working" class="flex items-center shrink-0">
+                <span role="status" aria-label={t("Agent working")} class="flex items-center shrink-0">
                   <Spinner size="xs" />
                 </span>
               </Show>
@@ -91,7 +92,7 @@ export function ProjectCard(props: {
           <Show when={!editing()}>
             <div class="flex items-center gap-1.5 mt-0.5">
               <Show when={isDisabled()}>
-                <span class="text-xs text-sidebar-muted-foreground">Disabled</span>
+                <span class="text-xs text-sidebar-muted-foreground">{t("Disabled")}</span>
               </Show>
               <EnvironmentBadges environmentIds={props.project.environmentIds} dimmed={isDisabled()} />
             </div>

@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { useMatch, useNavigate } from '@tanstack/solid-router';
 import { DragDropProvider, type DragDropProviderProps } from '@dnd-kit/solid';
@@ -65,8 +66,8 @@ interface PendingMove {
 }
 
 const moveDescription = (move: PendingMove): string => {
-  const destination = move.toFolderName ? `${move.toName} / ${move.toFolderName}` : move.toName;
-  return `Move "${move.projectTitle}" from ${move.fromName} to ${destination}?`;
+  const destination = move.toFolderName ? t("{0} / {1}", { "0": move.toName, "1": move.toFolderName }) : move.toName;
+  return t("Move \"{0}\" from {1} to {2}?", { "0": move.projectTitle, "1": move.fromName, "2": destination });
 };
 
 interface PendingFolderMove {
@@ -79,7 +80,7 @@ interface PendingFolderMove {
 }
 
 const folderMoveDescription = (move: PendingFolderMove): string =>
-  `Move folder "${move.folderName}" and its projects from ${move.fromName} to ${move.toName}?`;
+  t("Move folder \"{0}\" and its projects from {1} to {2}?", { "0": move.folderName, "1": move.fromName, "2": move.toName });
 
 const onDragStart = (event: DragStartEvent) => {
   const type = event.operation.source?.type;
@@ -192,20 +193,20 @@ export function ProjectSidebar(props: { search: string }) {
     try {
       const project = await createInWs.mutateAsync({ workspaceId, folderId, dto: agentId ? { agentId } : undefined });
       if (folderId) setFolderExpanded((prev) => ({ ...prev, [folderId]: true }));
-      toast.success('Project created');
+      toast.success(t("Project created"));
       navigateToProject(project.id);
     } catch {
-      toast.error('Failed to create project');
+      toast.error(t("Failed to create project"));
     }
   };
 
   const handleCreateUnassigned = (agentId?: string) =>
     createUnassigned.mutate(agentId ? { agentId } : undefined, {
       onSuccess: (project) => {
-        toast.success('Project created');
+        toast.success(t("Project created"));
         navigateToProject(project.id);
       },
-      onError: () => toast.error('Failed to create project'),
+      onError: () => toast.error(t("Failed to create project")),
     });
 
   const handleWorkspaceReorder = (initialIndex: number, index: number) => {
@@ -243,7 +244,7 @@ export function ProjectSidebar(props: { search: string }) {
       fromName: workspaceLabel(from.workspaceId),
       toName: workspaceLabel(to.workspaceId),
       toFolderName: to.workspaceId && to.folderId ? folderLabel(to.workspaceId, to.folderId) : null,
-      projectTitle: project.title?.trim() || 'Untitled project',
+      projectTitle: project.title?.trim() || t("Untitled project"),
     });
   };
 
@@ -398,16 +399,14 @@ export function ProjectSidebar(props: { search: string }) {
             <Show when={(workspaces.data?.length ?? 0) === 0 && (projects.data?.length ?? 0) === 0}>
               <div class="flex flex-col items-center justify-center py-8 px-4 text-center">
                 <Boxes class="w-10 h-10 text-muted-foreground/30 mb-3" stroke-width="1" />
-                <p class="text-xs text-muted-foreground">No workspaces or projects yet</p>
+                <p class="text-xs text-muted-foreground">{t("No workspaces or projects yet")}</p>
                 <Show
                   when={canManageWorkspaces()}
                   fallback={
-                    <p class="text-xs text-muted-foreground/60 mt-0.5">Ask an admin to add you to a workspace.</p>
+                    <p class="text-xs text-muted-foreground/60 mt-0.5">{t("Ask an admin to add you to a workspace.")}</p>
                   }
                 >
-                  <p class="text-xs text-muted-foreground/60 mt-0.5">
-                    Create a workspace from settings to get started.
-                  </p>
+                  <p class="text-xs text-muted-foreground/60 mt-0.5">{t("Create a workspace from settings to get started.")}</p>
                 </Show>
               </div>
             </Show>
@@ -460,12 +459,12 @@ export function ProjectSidebar(props: { search: string }) {
         onOpenChange={(open) => {
           if (!open) setPendingMove(null);
         }}
-        title="Move project"
+        title={t("Move project")}
         description={(() => {
           const move = pendingMove();
           return move ? moveDescription(move) : '';
         })()}
-        confirmLabel="Move"
+        confirmLabel={t("Move")}
         onConfirm={confirmMove}
       />
 
@@ -474,12 +473,12 @@ export function ProjectSidebar(props: { search: string }) {
         onOpenChange={(open) => {
           if (!open) setPendingFolderMove(null);
         }}
-        title="Move folder"
+        title={t("Move folder")}
         description={(() => {
           const move = pendingFolderMove();
           return move ? folderMoveDescription(move) : '';
         })()}
-        confirmLabel="Move"
+        confirmLabel={t("Move")}
         onConfirm={confirmFolderMove}
       />
 

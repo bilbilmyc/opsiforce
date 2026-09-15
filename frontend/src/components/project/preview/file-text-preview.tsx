@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Match, Show, Switch } from 'solid-js';
 import { Markdown } from '@opencode-ai/session-ui/components/markdown';
 import { FileDownloadCard } from './file-download-card';
@@ -31,20 +32,20 @@ export function FileTextPreview(props: FileTextPreviewProps) {
   return (
     <Switch>
       <Match when={state().status === 'loading'}>
-        <FilePreviewNotice title="Loading preview…" loading />
+        <FilePreviewNotice title={t("Loading preview…")} loading />
       </Match>
       <Match when={state().status === 'missing'}>
-        <FilePreviewNotice title="File not found" detail="It may have been renamed, moved, or deleted." />
+        <FilePreviewNotice title={t("File not found")} detail={t("It may have been renamed, moved, or deleted.")} />
       </Match>
       <Match when={state().status === 'error'}>
-        <FilePreviewNotice title="Could not load this file" detail="Try again, or download it instead." />
+        <FilePreviewNotice title={t("Could not load this file")} detail={t("Try again, or download it instead.")} />
       </Match>
       <Match when={content()}>
         {(loaded) => (
           <div class="h-full overflow-auto p-4">
             <Markdown text={source()} />
             <Show when={loaded().truncated}>
-              <p class="mt-4 text-xs text-muted-foreground">Preview truncated — download the file to read all of it.</p>
+              <p class="mt-4 text-xs text-muted-foreground">{t("Preview truncated — download the file to read all of it.")}</p>
             </Show>
           </div>
         )}
@@ -52,7 +53,7 @@ export function FileTextPreview(props: FileTextPreviewProps) {
       <Match when={state().status === 'ready'}>
         <FileDownloadCard
           name={props.name}
-          detail="This file is not text, so it cannot be shown here."
+          detail={t("This file is not text, so it cannot be shown here.")}
           onDownload={props.onDownload}
         />
       </Match>

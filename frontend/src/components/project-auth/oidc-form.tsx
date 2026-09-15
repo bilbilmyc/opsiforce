@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show, createSignal } from 'solid-js';
 import type { ProjectAuthOidcConfig } from '~/api/client';
 import { Check, Copy } from '~/components/icons';
@@ -19,33 +20,33 @@ interface FieldDef {
 const FIELDS: FieldDef[] = [
   {
     key: 'clientId',
-    label: 'Client Id',
-    tooltip: 'The OAuth client ID provided by your identity provider',
+    get label() { return t("Client Id"); },
+    get tooltip() { return t("The OAuth client ID provided by your identity provider"); },
     required: true,
-    placeholder: 'Enter client id',
+    get placeholder() { return t("Enter client id"); },
     column: 'left',
   },
   {
     key: 'clientSecret',
-    label: 'Client Secret',
-    tooltip: 'The OAuth client secret provided by your identity provider (keep this confidential)',
+    get label() { return t("Client Secret"); },
+    get tooltip() { return t("The OAuth client secret provided by your identity provider (keep this confidential)"); },
     type: 'password',
-    placeholder: 'Enter client secret',
+    get placeholder() { return t("Enter client secret"); },
     column: 'right',
   },
   {
     key: 'discoveryUrl',
-    label: 'Discovery Url',
-    tooltip: 'OIDC discovery endpoint URL (if supported by your provider)',
+    get label() { return t("Discovery Url"); },
+    get tooltip() { return t("OIDC discovery endpoint URL (if supported by your provider)"); },
     type: 'url',
-    placeholder: 'Enter discovery url',
+    get placeholder() { return t("Enter discovery url"); },
     column: 'left',
   },
   {
     key: 'scope',
-    label: 'Scope',
-    tooltip: 'OAuth scopes (openid, email, profile are commonly used)',
-    placeholder: 'openid email profile',
+    get label() { return t("Scope"); },
+    get tooltip() { return t("OAuth scopes (openid, email, profile are commonly used)"); },
+    get placeholder() { return t("openid email profile"); },
     column: 'right',
   },
 ];
@@ -74,7 +75,7 @@ export function OidcForm(props: OidcFormProps) {
 
   const placeholderFor = (f: FieldDef): string | undefined => {
     if (f.key === 'clientSecret' && props.secretAlreadySet) {
-      return 'Leave blank to keep current';
+      return t("Leave blank to keep current");
     }
     return f.placeholder;
   };
@@ -104,8 +105,8 @@ export function OidcForm(props: OidcFormProps) {
 
       <Show when={props.callbackUrls?.length}>
         <FieldWithTooltip
-          label="Callback URLs"
-          tooltip="Add every redirect URI below to your identity provider's allowed redirect URIs — the app answers on each of these hostnames, and sign-in fails on any host whose callback is not registered."
+          label={t("Callback URLs")}
+          tooltip={t("Add every redirect URI below to your identity provider's allowed redirect URIs — the app answers on each of these hostnames, and sign-in fails on any host whose callback is not registered.")}
         >
           <div class="space-y-2">
             <For each={props.callbackUrls}>
@@ -121,7 +122,7 @@ export function OidcForm(props: OidcFormProps) {
                     type="button"
                     onClick={() => copyCallback(url)}
                     class="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-input text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    aria-label="Copy callback URL"
+                    aria-label={t("Copy callback URL")}
                   >
                     <Show when={copiedUrl() === url} fallback={<Copy class="h-3.5 w-3.5" />}>
                       <Check class="h-3.5 w-3.5 text-green-500" />

@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show, createMemo, createSignal } from 'solid-js';
 import { type Project } from '~/api/client';
 import { useProjects } from '~/api/projects';
@@ -51,7 +52,7 @@ export default function WorkspaceProjectsTab(props: {
     <div class="space-y-3">
       <Show
         when={props.projects.length > 0}
-        fallback={<p class="text-xs text-muted-foreground text-center py-6">No projects in this workspace yet.</p>}
+        fallback={<p class="text-xs text-muted-foreground text-center py-6">{t("No projects in this workspace yet.")}</p>}
       >
         <div class="flex flex-col gap-1">
           <For each={props.projects}>
@@ -65,7 +66,7 @@ export default function WorkspaceProjectsTab(props: {
                   class="text-muted-foreground hover:text-destructive p-1.5 rounded-md hover:bg-accent"
                   onClick={() => unassign(p.id)}
                   disabled={move.isPending}
-                  title="Remove from workspace"
+                  title={t("Remove from workspace")}
                 >
                   <Trash2 class="w-3.5 h-3.5" />
                 </button>
@@ -79,9 +80,7 @@ export default function WorkspaceProjectsTab(props: {
         <DropdownMenuTrigger
           as={(triggerProps: Record<string, unknown>) => (
             <Button {...triggerProps} size="sm" variant="outline" class="w-full">
-              <Plus class="w-3.5 h-3.5 mr-1.5" />
-              Add existing project
-              <ChevronDown class="w-3.5 h-3.5 ml-auto" />
+              <Plus class="w-3.5 h-3.5 mr-1.5" />{t("Add existing project")}<ChevronDown class="w-3.5 h-3.5 ml-auto" />
             </Button>
           )}
         />
@@ -92,7 +91,7 @@ export default function WorkspaceProjectsTab(props: {
               <Show
                 when={allProjects.isLoading}
                 fallback={
-                  <div class="px-2 py-6 text-xs text-center text-muted-foreground">No public projects available.</div>
+                  <div class="px-2 py-6 text-xs text-center text-muted-foreground">{t("No public projects available.")}</div>
                 }
               >
                 <div class="px-2 py-3">

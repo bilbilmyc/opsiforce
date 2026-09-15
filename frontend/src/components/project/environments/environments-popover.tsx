@@ -1,3 +1,5 @@
+import { environmentDisplayName } from '~/lib/environment-label';
+import { t } from '~/i18n';
 import { For, Match, Show, Switch, createMemo, createSignal } from 'solid-js';
 import { useNavigate } from '@tanstack/solid-router';
 import { toast } from 'solid-sonner';
@@ -94,7 +96,7 @@ export function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
 
   const description = () => {
     const tail = canSchedules() ? ', or open schedules' : '';
-    return `Click an environment to view it. Publish the app, manage auth and variables${tail}.`;
+    return t("Click an environment to view it. Publish the app, manage auth and variables{0}.", { "0": tail });
   };
 
   const openSchedules = (env: ProjectEnvironment) => {
@@ -112,8 +114,8 @@ export function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
     restart.mutate(
       { projectId: props.projectId, environmentId: env.id },
       {
-        onSuccess: () => toast.success(`Restarting ${env.name}`),
-        onError: () => toast.error(`Failed to restart ${env.name}`),
+        onSuccess: () => toast.success(t("Restarting {0}", { "0": env.name })),
+        onError: () => toast.error(t("Failed to restart {0}", { "0": env.name })),
         onSettled: () => setRestartingId(null),
       }
     );
@@ -126,10 +128,10 @@ export function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
       { projectId: props.projectId, environmentId: env.id },
       {
         onSuccess: () => {
-          toast.success(`${env.name} deleted`);
+          toast.success(t("{0} deleted", { "0": env.name }));
           props.onEnvironmentDeleted?.(env.id);
         },
-        onError: () => toast.error(`Failed to delete ${env.name}`),
+        onError: () => toast.error(t("Failed to delete {0}", { "0": env.name })),
       }
     );
   };
@@ -164,7 +166,7 @@ export function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
       <Popover open={open()} onOpenChange={setOpen} placement="bottom-start">
         <PopoverTrigger
           class="flex h-8 items-center gap-2 rounded-md border border-input bg-background px-2.5 text-xs transition-colors hover:bg-accent focus:outline-none focus:ring-1 focus:ring-ring"
-          aria-label="Environments"
+          aria-label={t("Environments")}
         >
           <Switch fallback={<Layers class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}>
             <Match when={publishIndicator() === 'running'}>
@@ -177,11 +179,11 @@ export function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
               <Check class="h-3.5 w-3.5 shrink-0 text-emerald-500" />
             </Match>
           </Switch>
-          <Show when={activeEnvironment()} fallback={<span class="font-medium text-foreground">Environments</span>}>
+          <Show when={activeEnvironment()} fallback={<span class="font-medium text-foreground">{t("Environments")}</span>}>
             {(env) => (
               <span class="flex min-w-0 items-center gap-2">
                 <EnvStatusDot status={env().status} />
-                <span class="truncate font-medium text-foreground">{env().name}</span>
+                <span class="truncate font-medium text-foreground">{environmentDisplayName(env())}</span>
               </span>
             )}
           </Show>
@@ -190,9 +192,7 @@ export function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
         <PopoverContent class="w-120 p-0">
           <div class="border-b border-border px-4 pb-3 pt-3.5">
             <p class="flex items-center gap-2 text-sm font-semibold text-foreground">
-              <Layers class="h-4 w-4 text-muted-foreground" />
-              Environments
-            </p>
+              <Layers class="h-4 w-4 text-muted-foreground" />{t("Environments")}</p>
             <p class="mt-1 text-xs text-muted-foreground">{description()}</p>
           </div>
 
@@ -236,7 +236,7 @@ export function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
       <ProjectAuthDialog
         projectId={props.projectId}
         environmentId={authEnv()?.id ?? ''}
-        environmentName={authEnv()?.name}
+        environmentName={environmentDisplayName(authEnv())}
         open={authEnv() !== null}
         onOpenChange={(value) => {
           if (!value) setAuthEnv(null);
@@ -274,9 +274,9 @@ export function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
         onOpenChange={(value) => {
           if (!value) setPendingRestart(null);
         }}
-        title="Restart environment"
-        description={`Are you sure you want to restart the ${pendingRestart()?.name ?? ''} environment? The running app will briefly go offline while it restarts.`}
-        confirmLabel="Restart"
+        title={t("Restart environment")}
+        description={t("Are you sure you want to restart the {0} environment? The running app will briefly go offline while it restarts.", { "0": pendingRestart()?.name ?? '' })}
+        confirmLabel={t("Restart")}
         variant="destructive"
         onConfirm={confirmRestart}
       />
@@ -286,9 +286,9 @@ export function EnvironmentsPopover(props: EnvironmentsPopoverProps) {
         onOpenChange={(value) => {
           if (!value) setPendingDelete(null);
         }}
-        title="Delete environment"
-        description={`This permanently deletes the ${pendingDelete()?.name ?? ''} environment and its running app. This action cannot be undone.`}
-        confirmLabel="Delete"
+        title={t("Delete environment")}
+        description={t("This permanently deletes the {0} environment and its running app. This action cannot be undone.", { "0": pendingDelete()?.name ?? '' })}
+        confirmLabel={t("Delete")}
         variant="destructive"
         onConfirm={confirmDelete}
       />

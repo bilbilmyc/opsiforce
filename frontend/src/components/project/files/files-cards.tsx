@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show } from 'solid-js';
 import { Download, Trash2 } from '~/components/icons';
 import { ToolbarButton } from '~/components/ui/toolbar-button';
@@ -22,7 +23,7 @@ export function FilesCards(props: FilesCardsProps) {
             <button
               type="button"
               class="absolute inset-0 rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label={entry.type === 'directory' ? `Open folder ${entry.name}` : `Open ${entry.name}`}
+              aria-label={entry.type === 'directory' ? t("Open folder {0}", { "0": entry.name }) : t("Open {0}", { "0": entry.name })}
               onClick={() => props.onOpen(entry)}
             />
             <div class="p-3 flex flex-col gap-2.5 pointer-events-none">
@@ -30,11 +31,11 @@ export function FilesCards(props: FilesCardsProps) {
                 <FileTypeBadge name={entry.name} type={entry.type} class="w-9 h-9 text-[10px]" />
                 <div class="relative flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 pointer-events-auto">
                   <Show when={entry.type === 'file'}>
-                    <ToolbarButton tooltip="Download" onClick={() => props.onDownload(entry)}>
+                    <ToolbarButton tooltip={t("Download")} onClick={() => props.onDownload(entry)}>
                       <Download class="w-3.5 h-3.5" />
                     </ToolbarButton>
                   </Show>
-                  <ToolbarButton tooltip="Delete" onClick={() => props.onDelete(entry)}>
+                  <ToolbarButton tooltip={t("Delete")} onClick={() => props.onDelete(entry)}>
                     <Trash2 class="w-3.5 h-3.5 text-destructive" />
                   </ToolbarButton>
                 </div>

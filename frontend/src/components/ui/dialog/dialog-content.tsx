@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Dialog as Kobalte } from '@kobalte/core/dialog';
 import { splitProps, Show, type ComponentProps, type ParentProps } from 'solid-js';
 import { X } from '~/components/icons';
@@ -40,7 +41,7 @@ export function DialogContent(props: DialogContentProps) {
                 'text-muted-foreground hover:bg-accent hover:text-foreground transition-colors',
                 'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring'
               )}
-              aria-label="Close"
+              aria-label={t("Close")}
             >
               <X class="w-4 h-4" />
             </Kobalte.CloseButton>

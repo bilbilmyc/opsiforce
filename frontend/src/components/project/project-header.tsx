@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show } from 'solid-js';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
@@ -44,24 +45,16 @@ export function ProjectHeader(props: ProjectHeaderProps) {
         <Tabs value={props.activeTab} onChange={(v) => props.onActiveTabChange(v as ProjectTab)} class="w-auto">
           <TabsList class="w-auto">
             <TabsTrigger value="chat" class="flex-none gap-1.5">
-              <MessageSquare class="w-3.5 h-3.5" />
-              Chat
-            </TabsTrigger>
+              <MessageSquare class="w-3.5 h-3.5" />{t("Chat")}</TabsTrigger>
             <TabsTrigger value="files" class="flex-none gap-1.5">
-              <Files class="w-3.5 h-3.5" />
-              Files
-            </TabsTrigger>
+              <Files class="w-3.5 h-3.5" />{t("Files")}</TabsTrigger>
             <Show when={props.showAgentTabs && canViewCode()}>
               <TabsTrigger value="code" class="flex-none gap-1.5">
-                <CodeIcon class="w-3.5 h-3.5" />
-                Code
-              </TabsTrigger>
+                <CodeIcon class="w-3.5 h-3.5" />{t("Code")}</TabsTrigger>
             </Show>
             <Show when={props.showAgentTabs && canViewDb()}>
               <TabsTrigger value="db" class="flex-none gap-1.5">
-                <Database class="w-3.5 h-3.5" />
-                DB
-              </TabsTrigger>
+                <Database class="w-3.5 h-3.5" />{t("DB")}</TabsTrigger>
             </Show>
           </TabsList>
         </Tabs>

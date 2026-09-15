@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createEffect, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { usePermissions } from '~/api/permissions';
@@ -62,27 +63,27 @@ export default function WorkspaceSettings(props: {
         dto: { name: name().trim(), description: description().trim() || null },
       });
       setDirty(false);
-      toast.success('Workspace updated');
+      toast.success(t("Workspace updated"));
     } catch {
-      toast.error('Failed to save');
+      toast.error(t("Failed to save"));
     }
   };
 
   const handleDelete = async () => {
     try {
       await remove.mutateAsync(props.workspaceId);
-      toast.success('Workspace deleted');
+      toast.success(t("Workspace deleted"));
       props.onOpenChange(false);
       props.onDeleted?.();
     } catch {
-      toast.error('Failed to delete');
+      toast.error(t("Failed to delete"));
     }
   };
 
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent>
-        <DialogTitle>Workspace Settings</DialogTitle>
+        <DialogTitle>{t("Workspace Settings")}</DialogTitle>
         <DialogDescription>
           <Show when={workspace.data?.name} fallback={<Skeleton class="h-4 w-32 inline-block" />}>
             {workspace.data?.name}
@@ -93,32 +94,26 @@ export default function WorkspaceSettings(props: {
           when={canManage()}
           fallback={
             <div class="mt-4 p-4 rounded-lg border border-border bg-muted/30 text-center">
-              <p class="text-sm text-muted-foreground">You do not have permission to manage workspaces.</p>
+              <p class="text-sm text-muted-foreground">{t("You do not have permission to manage workspaces.")}</p>
             </div>
           }
         >
           <Tabs defaultValue="general" class="mt-4" onChange={setActiveTab}>
             <TabsList>
               <TabsTrigger value="general">
-                <Settings class="w-3.5 h-3.5 mr-1.5" />
-                General
-              </TabsTrigger>
+                <Settings class="w-3.5 h-3.5 mr-1.5" />{t("General")}</TabsTrigger>
               <TabsTrigger value="members">
-                <Users class="w-3.5 h-3.5 mr-1.5" />
-                Members
-                <span class="ml-1.5 text-xs text-muted-foreground">{members.data?.length ?? 0}</span>
+                <Users class="w-3.5 h-3.5 mr-1.5" />{t("Members")}<span class="ml-1.5 text-xs text-muted-foreground">{members.data?.length ?? 0}</span>
               </TabsTrigger>
               <TabsTrigger value="projects">
-                <AppWindow class="w-3.5 h-3.5 mr-1.5" />
-                Projects
-                <span class="ml-1.5 text-xs text-muted-foreground">{projectsInWorkspace.data?.length ?? 0}</span>
+                <AppWindow class="w-3.5 h-3.5 mr-1.5" />{t("Projects")}<span class="ml-1.5 text-xs text-muted-foreground">{projectsInWorkspace.data?.length ?? 0}</span>
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="general">
               <div class="space-y-3">
                 <div>
-                  <label class="text-xs text-muted-foreground mb-1 block">Name</label>
+                  <label class="text-xs text-muted-foreground mb-1 block">{t("Name")}</label>
                   <input
                     type="text"
                     value={name()}
@@ -127,11 +122,11 @@ export default function WorkspaceSettings(props: {
                       setDirty(true);
                     }}
                     class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    placeholder="Workspace name"
+                    placeholder={t("Workspace name")}
                   />
                 </div>
                 <div>
-                  <label class="text-xs text-muted-foreground mb-1 block">Description</label>
+                  <label class="text-xs text-muted-foreground mb-1 block">{t("Description")}</label>
                   <textarea
                     rows={3}
                     value={description()}
@@ -140,7 +135,7 @@ export default function WorkspaceSettings(props: {
                       setDirty(true);
                     }}
                     class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                    placeholder="What's this workspace for?"
+                    placeholder={t("What's this workspace for?")}
                   />
                 </div>
 
@@ -152,9 +147,7 @@ export default function WorkspaceSettings(props: {
                     onClick={() => setConfirmDeleteOpen(true)}
                     loading={remove.isPending}
                   >
-                    <Trash2 class="w-3.5 h-3.5 mr-1.5" />
-                    Delete workspace
-                  </Button>
+                    <Trash2 class="w-3.5 h-3.5 mr-1.5" />{t("Delete workspace")}</Button>
                 </div>
               </div>
             </TabsContent>
@@ -173,13 +166,9 @@ export default function WorkspaceSettings(props: {
           </Tabs>
 
           <div class="mt-4 flex justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={() => props.onOpenChange(false)}>
-              Cancel
-            </Button>
+            <Button size="sm" variant="outline" onClick={() => props.onOpenChange(false)}>{t("Cancel")}</Button>
             <Show when={activeTab() === 'general'}>
-              <Button size="sm" disabled={!dirty() || !name().trim()} loading={update.isPending} onClick={handleSave}>
-                Save
-              </Button>
+              <Button size="sm" disabled={!dirty() || !name().trim()} loading={update.isPending} onClick={handleSave}>{t("Save")}</Button>
             </Show>
           </div>
         </Show>
@@ -188,9 +177,9 @@ export default function WorkspaceSettings(props: {
       <ConfirmDialog
         open={confirmDeleteOpen()}
         onOpenChange={setConfirmDeleteOpen}
-        title={`Delete "${workspace.data?.name ?? 'workspace'}"?`}
-        description="Projects move to the Public bucket — visible to everyone in the organization."
-        confirmLabel="Delete"
+        title={t("Delete \"{0}\"?", { "0": workspace.data?.name ?? 'workspace' })}
+        description={t("Projects move to the Public bucket — visible to everyone in the organization.")}
+        confirmLabel={t("Delete")}
         variant="destructive"
         onConfirm={handleDelete}
       />

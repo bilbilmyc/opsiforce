@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 // Mirrors MIN_IDLE_TIMEOUT_MS in backend/src/common/validation.ts, which rejects
 // anything shorter: an idle timeout must outlast several websocket keep-alive
 // touches or an open connection's pod can suspend mid-connection.
@@ -5,9 +6,9 @@ export const MIN_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 export const MIN_IDLE_TIMEOUT_LABEL = '5 minutes';
 
 export const TIME_UNITS = [
-  { value: 'minutes', label: 'Minutes', multiplier: 60 * 1000 },
-  { value: 'hours', label: 'Hours', multiplier: 60 * 60 * 1000 },
-  { value: 'days', label: 'Days', multiplier: 24 * 60 * 60 * 1000 },
+  { value: 'minutes', get label() { return t("Minutes"); }, multiplier: 60 * 1000 },
+  { value: 'hours', get label() { return t("Hours"); }, multiplier: 60 * 60 * 1000 },
+  { value: 'days', get label() { return t("Days"); }, multiplier: 24 * 60 * 60 * 1000 },
 ];
 
 export function msToUnit(ms: number): { value: string; unit: string } {

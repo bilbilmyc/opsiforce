@@ -1,3 +1,6 @@
+import { environmentDisplayName } from '~/lib/environment-label';
+import { intlLocale } from '~/i18n';
+import { t } from '~/i18n';
 import { Show, For, createSignal, createMemo, createEffect } from 'solid-js';
 import { createMutation, useQueryClient } from '@tanstack/solid-query';
 import { createAppQuery } from '~/lib/create-app-query';
@@ -29,16 +32,16 @@ function cronToHuman(expr: string): string {
   const parts = expr.trim().split(/\s+/);
   if (parts.length < 5) return expr;
   const [min, hour, , , dow] = parts;
-  if (min === '*' && hour === '*') return 'Every minute';
-  if (min.startsWith('*/')) return `Every ${min.slice(2)} min`;
-  if (hour === '*') return `Hourly at :${min.padStart(2, '0')}`;
+  if (min === '*' && hour === '*') return t("Every minute");
+  if (min.startsWith('*/')) return t("Every {0} min", { "0": min.slice(2) });
+  if (hour === '*') return t("Hourly at :{0}", { "0": min.padStart(2, '0') });
   const h = parseInt(hour);
-  const ampm = h >= 12 ? 'PM' : 'AM';
+  const ampm = h >= 12 ? t("PM") : t("AM");
   const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
   const time = `${h12}:${min.padStart(2, '0')} ${ampm}`;
-  if (dow === '1-5') return `Weekdays ${time}`;
+  if (dow === '1-5') return t("Weekdays {0}", { "0": time });
   if (dow !== '*') return `${dow} ${time}`;
-  return `Daily ${time}`;
+  return t("Daily {0}", { "0": time });
 }
 
 export default function SchedulesPage() {
@@ -156,14 +159,12 @@ export default function SchedulesPage() {
           search={{ environmentId: undefined, projectEnvironmentId: undefined, projectId: undefined }}
           class="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3"
         >
-          <ChevronLeft class="w-3.5 h-3.5" />
-          All schedules
-        </Link>
+          <ChevronLeft class="w-3.5 h-3.5" />{t("All schedules")}</Link>
       </Show>
 
       <div class="flex items-center gap-3 mb-1">
         <Calendar class="w-5 h-5 text-muted-foreground" />
-        <h1 class="text-xl font-semibold">Schedules</h1>
+        <h1 class="text-xl font-semibold">{t("Schedules")}</h1>
         <Show when={!schedules.isPending && (isScoped() || !!activeEnvId())}>
           <Badge variant="secondary" class="text-[10px] px-1.5 py-0">
             {count()}
@@ -174,16 +175,13 @@ export default function SchedulesPage() {
       <Show
         when={isScoped()}
         fallback={
-          <p class="text-xs text-muted-foreground mb-5 ml-8">
-            Automated tasks that run on a recurring schedule. Pick an environment to see its schedules.
-          </p>
+          <p class="text-xs text-muted-foreground mb-5 ml-8">{t("Automated tasks that run on a recurring schedule. Pick an environment to see its schedules.")}</p>
         }
       >
         <p class="text-xs text-muted-foreground mb-5 ml-8">
-          <Show when={scopedProjectTitle()} fallback="Automated tasks for this environment.">
+          <Show when={scopedProjectTitle()} fallback={t("Automated tasks for this environment.")}>
             {(title) => (
-              <>
-                Automated tasks for{' '}
+              <>{t("Automated tasks for")}{' '}
                 <Link
                   to="/projects/$projectId"
                   params={{ projectId: scopedProjectId() ?? '' }}
@@ -221,7 +219,7 @@ export default function SchedulesPage() {
               <For each={sortedEnvs()}>
                 {(env) => (
                   <TabsTrigger value={env.id} class="flex-none">
-                    {env.name}
+                    {environmentDisplayName(env)}
                   </TabsTrigger>
                 )}
               </For>
@@ -258,9 +256,9 @@ export default function SchedulesPage() {
         onOpenChange={(open) => {
           if (!open) setDeleteTarget(null);
         }}
-        title={`Delete schedule "${deleteTarget()?.name}"`}
-        description="This will permanently remove the schedule and all its execution history."
-        confirmLabel="Delete"
+        title={t("Delete schedule \"{0}\"", { "0": deleteTarget()?.name })}
+        description={t("This will permanently remove the schedule and all its execution history.")}
+        confirmLabel={t("Delete")}
         variant="destructive"
         onConfirm={() => {
           const t = deleteTarget();
@@ -273,12 +271,12 @@ export default function SchedulesPage() {
         onOpenChange={(open) => {
           if (!open) setRunTarget(null);
         }}
-        title={`Run "${runTarget()?.name}" now?`}
+        title={t("Run \"{0}\" now?", { "0": runTarget()?.name })}
         description={
-          `This triggers the schedule immediately, outside its normal cron window. ` +
-          `It will fire ${runTarget()?.targetPath ?? 'the configured target'} once and record the run in execution history.`
+          t("This triggers the schedule immediately, outside its normal cron window. ") +
+          t("It will fire {0} once and record the run in execution history.", { "0": runTarget()?.targetPath ?? t('the configured target') })
         }
-        confirmLabel="Run now"
+        confirmLabel={t("Run now")}
         onConfirm={() => {
           const t = runTarget();
           if (t) {
@@ -331,7 +329,7 @@ function ScheduleTableSection(props: {
       <Show when={!props.pending && count() === 0}>
         <div class="rounded-lg border border-dashed border-border text-center py-16 text-muted-foreground">
           <Calendar class="w-10 h-10 mx-auto mb-3 opacity-40" />
-          <p class="text-sm font-medium">No schedules in this environment</p>
+          <p class="text-sm font-medium">{t("No schedules in this environment")}</p>
         </div>
       </Show>
 
@@ -340,14 +338,14 @@ function ScheduleTableSection(props: {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead>{t("Name")}</TableHead>
                 <Show when={props.showProject}>
-                  <TableHead>Project</TableHead>
+                  <TableHead>{t("Project")}</TableHead>
                 </Show>
-                <TableHead>Schedule</TableHead>
-                <TableHead>Timezone</TableHead>
-                <TableHead>Active</TableHead>
-                <TableHead class="text-right pr-4">Actions</TableHead>
+                <TableHead>{t("Schedule")}</TableHead>
+                <TableHead>{t("Timezone")}</TableHead>
+                <TableHead>{t("Active")}</TableHead>
+                <TableHead class="text-right pr-4">{t("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -412,31 +410,23 @@ function RowActions(props: {
       <DropdownMenuTrigger
         class="inline-flex items-center justify-center rounded-md w-7 h-7 shrink-0 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
         disabled={props.disabled}
-        aria-label="Schedule actions"
+        aria-label={t("Schedule actions")}
       >
         <EllipsisVertical class="w-4 h-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         <DropdownMenuItem onSelect={() => props.onRun()}>
-          <Play class="w-3.5 h-3.5 text-emerald-600" />
-          Run now
-        </DropdownMenuItem>
+          <Play class="w-3.5 h-3.5 text-emerald-600" />{t("Run now")}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => props.onViewExecutions()}>
-          <Clock class="w-3.5 h-3.5 text-muted-foreground" />
-          View executions
-        </DropdownMenuItem>
+          <Clock class="w-3.5 h-3.5 text-muted-foreground" />{t("View executions")}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => props.onEdit()}>
-          <Pencil class="w-3.5 h-3.5 text-blue-600" />
-          Edit
-        </DropdownMenuItem>
+          <Pencil class="w-3.5 h-3.5 text-blue-600" />{t("Edit")}</DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           class="text-destructive data-[highlighted]:text-destructive"
           onSelect={() => props.onDelete()}
         >
-          <Trash2 class="w-3.5 h-3.5 text-destructive" />
-          Delete
-        </DropdownMenuItem>
+          <Trash2 class="w-3.5 h-3.5 text-destructive" />{t("Delete")}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -464,18 +454,14 @@ function EditScheduleDialog(props: {
       }}
     >
       <DialogContent class="max-w-lg">
-        <DialogTitle>Edit Schedule: {props.schedule?.name}</DialogTitle>
-        <DialogDescription>Change when this schedule runs</DialogDescription>
+        <DialogTitle>{t("Edit Schedule: ")}{props.schedule?.name}</DialogTitle>
+        <DialogDescription>{t("Change when this schedule runs")}</DialogDescription>
         <div class="space-y-3 mt-2">
           <CronPicker cronString={cron()} setCronString={setCron} view="advanced" />
         </div>
         <DialogFooter>
-          <Button variant="outline" size="sm" onClick={props.onClose}>
-            Cancel
-          </Button>
-          <Button size="sm" onClick={() => props.onSave({ cronPattern: cron() })}>
-            Save
-          </Button>
+          <Button variant="outline" size="sm" onClick={props.onClose}>{t("Cancel")}</Button>
+          <Button size="sm" onClick={() => props.onSave({ cronPattern: cron() })}>{t("Save")}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -498,8 +484,8 @@ function ExecutionsDialog(props: {
       }}
     >
       <DialogContent class="max-w-lg max-h-[80vh] overflow-y-auto">
-        <DialogTitle>Executions: {props.schedule?.name}</DialogTitle>
-        <DialogDescription>Recent execution history</DialogDescription>
+        <DialogTitle>{t("Executions: ")}{props.schedule?.name}</DialogTitle>
+        <DialogDescription>{t("Recent execution history")}</DialogDescription>
 
         <Show when={props.loading}>
           <div class="space-y-2 py-4">
@@ -510,7 +496,7 @@ function ExecutionsDialog(props: {
         </Show>
 
         <Show when={!props.loading && props.executions.length === 0}>
-          <p class="text-sm text-muted-foreground py-4">No executions yet.</p>
+          <p class="text-sm text-muted-foreground py-4">{t("No executions yet.")}</p>
         </Show>
 
         <Show when={!props.loading && props.executions.length > 0}>
@@ -525,9 +511,9 @@ function ExecutionsDialog(props: {
                     {exec.statusCode ?? 'ERR'}
                   </Badge>
                   <span class="text-muted-foreground">{exec.trigger}</span>
-                  <span class="flex-1 text-muted-foreground">{new Date(exec.firedAt).toLocaleString()}</span>
+                  <span class="flex-1 text-muted-foreground">{new Date(exec.firedAt).toLocaleString(intlLocale())}</span>
                   <Show when={exec.latencyMs != null}>
-                    <span class="text-muted-foreground">{exec.latencyMs}ms</span>
+                    <span class="text-muted-foreground">{exec.latencyMs}{t("ms")}</span>
                   </Show>
                   <Show when={exec.error}>
                     <span class="text-destructive truncate max-w-48" title={exec.error ?? ''}>

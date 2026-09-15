@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { publicDomain, publicScheme } from '~/lib/public-url';
 import { Show, createEffect, createSignal, on, onMount, type JSX } from 'solid-js';
 import { Check, Copy, LoaderCircle, PanelRightClose, Pencil, RefreshCw } from '~/components/icons';
@@ -60,14 +61,14 @@ export function AppPreviewPane(props: AppPreviewPaneProps) {
     <>
       <div class="h-8 flex items-center gap-2 px-1.5 bg-sidebar border-b border-border shrink-0">
         <div class="flex flex-1 min-w-0 items-center gap-1">
-          <ToolbarButton onClick={props.onCollapse} tooltip="Close panel">
+          <ToolbarButton onClick={props.onCollapse} tooltip={t("Close panel")}>
             <PanelRightClose class="w-3.5 h-3.5" />
           </ToolbarButton>
           <span class="text-xs font-medium text-muted-foreground truncate">
-            {activeEnv()?.appName || props.appName || 'App'}
+            {activeEnv()?.appName || props.appName || t("App")}
           </span>
           <Show when={showEditAction()}>
-            <ToolbarButton onClick={() => setEditAppOpen(true)} tooltip="Edit app details">
+            <ToolbarButton onClick={() => setEditAppOpen(true)} tooltip={t("Edit app details")}>
               <Pencil class="w-3 h-3" />
             </ToolbarButton>
           </Show>
@@ -77,10 +78,10 @@ export function AppPreviewPane(props: AppPreviewPaneProps) {
         </div>
         {props.switcher}
         <div class="flex items-center shrink-0">
-          <ToolbarButton onClick={copyUrl} tooltip={copied() ? 'Copied!' : 'Copy URL'}>
+          <ToolbarButton onClick={copyUrl} tooltip={copied() ? t("Copied!") : t("Copy URL")}>
             {copied() ? <Check class="w-3.5 h-3.5 text-green-500" /> : <Copy class="w-3.5 h-3.5" />}
           </ToolbarButton>
-          <ToolbarButton onClick={reload} tooltip="Reload app">
+          <ToolbarButton onClick={reload} tooltip={t("Reload app")}>
             <RefreshCw class="w-3.5 h-3.5" />
           </ToolbarButton>
         </div>
@@ -89,7 +90,7 @@ export function AppPreviewPane(props: AppPreviewPaneProps) {
         <iframe
           id="webapp-preview"
           src={previewUrl()}
-          title="App preview"
+          title={t("App preview")}
           class="w-full h-full border-0"
           allow="microphone; camera; clipboard-read; clipboard-write; geolocation; fullscreen; autoplay; display-capture; web-share"
           onLoad={() => setIframeLoading(false)}

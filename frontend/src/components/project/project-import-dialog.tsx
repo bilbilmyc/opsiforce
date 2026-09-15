@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createEffect, createMemo, createSignal, For, on, Show } from 'solid-js';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '~/components/ui/dialog';
 import { Button } from '~/components/ui/button';
@@ -87,7 +88,7 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
       });
       close();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start import');
+      setError(err instanceof Error ? err.message : t("Failed to start import"));
       setStarting(false);
     }
   };
@@ -102,26 +103,19 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
     >
       <DialogContent class="max-w-lg" hideClose={starting()}>
         <DialogTitle class="flex items-center gap-2">
-          <Package class="h-4 w-4 text-primary" />
-          Import project
-        </DialogTitle>
-        <DialogDescription>
-          Stand up a project from an export file as a new, independent project. The file may contain live environment
-          variable values and the full conversation — only import files you trust.
-        </DialogDescription>
+          <Package class="h-4 w-4 text-primary" />{t("Import project")}</DialogTitle>
+        <DialogDescription>{t("Stand up a project from an export file as a new, independent project. The file may contain live environment variable values and the full conversation — only import files you trust.")}</DialogDescription>
 
         <Show
           when={!starting()}
           fallback={
             <div class="mt-6 flex items-center gap-3 text-sm text-muted-foreground">
-              <LoaderCircle class="h-4 w-4 animate-spin text-primary" />
-              Starting import…
-            </div>
+              <LoaderCircle class="h-4 w-4 animate-spin text-primary" />{t("Starting import…")}</div>
           }
         >
           <div class="mt-4 space-y-3">
             <div>
-              <label class="text-xs text-muted-foreground mb-1 block">Export file</label>
+              <label class="text-xs text-muted-foreground mb-1 block">{t("Export file")}</label>
               <input
                 type="file"
                 accept=".zip,application/zip"
@@ -130,7 +124,7 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
               />
             </div>
             <div>
-              <label class="text-xs text-muted-foreground mb-1 block">Workspace</label>
+              <label class="text-xs text-muted-foreground mb-1 block">{t("Workspace")}</label>
               <select
                 value={workspaceId() ?? ''}
                 onChange={(e) => setWorkspaceId(e.currentTarget.value || null)}
@@ -144,21 +138,19 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
                   <p class="mt-1 text-xs text-muted-foreground">
                     <Show
                       when={folder()}
-                      fallback={`Imports into the workspace root — ${target().name} belongs to another workspace.`}
-                    >
-                      Imports into the {target().name} folder.
-                    </Show>
+                      fallback={t("Imports into the workspace root — {0} belongs to another workspace.", { "0": target().name })}
+                    >{t("Imports into the ")}{target().name}{t(" folder.")}</Show>
                   </p>
                 )}
               </Show>
             </div>
             <div>
-              <label class="text-xs text-muted-foreground mb-1 block">Title (optional)</label>
+              <label class="text-xs text-muted-foreground mb-1 block">{t("Title (optional)")}</label>
               <input
                 type="text"
                 value={title()}
                 onInput={(e) => setTitle(e.currentTarget.value)}
-                placeholder="Carried from the export file"
+                placeholder={t("Carried from the export file")}
                 class="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
               />
             </div>
@@ -171,13 +163,9 @@ export function ProjectImportDialog(props: ProjectImportDialogProps) {
 
         <Show when={!starting()}>
           <div class="mt-5 flex justify-end gap-2">
-            <Button size="sm" variant="outline" onClick={close}>
-              Cancel
-            </Button>
+            <Button size="sm" variant="outline" onClick={close}>{t("Cancel")}</Button>
             <Button size="sm" onClick={submit} disabled={!file()}>
-              <Upload class="h-3.5 w-3.5" />
-              Import
-            </Button>
+              <Upload class="h-3.5 w-3.5" />{t("Import")}</Button>
           </div>
         </Show>
       </DialogContent>

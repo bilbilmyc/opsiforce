@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createSignal } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { useNavigate } from '@tanstack/solid-router';
@@ -33,6 +34,7 @@ import { ProjectSidebar } from './project-sidebar';
 import CreateWorkspaceDialog from '~/components/create-workspace-dialog';
 import { CreateMenu } from './create-menu';
 import { ProjectImportDialog } from '~/components/project/project-import-dialog';
+import { LanguageSwitcher } from '~/components/language-switcher';
 import { Calendar, ChevronsUpDown, FolderKanban, LogOut, Plus, Search, Server, Settings, X } from '~/components/icons';
 
 export function AppSidebar() {
@@ -58,21 +60,21 @@ export function AppSidebar() {
   const handleCreateProject = async (agentId: string) => {
     try {
       const project = await createDefaultProject.createProject({ agentId });
-      toast.success('Project created');
+      toast.success(t("Project created"));
       navigate({
         to: '/projects/$projectId',
         params: { projectId: project.id },
         search: { prompt: undefined },
       });
     } catch {
-      toast.error('Failed to create project');
+      toast.error(t("Failed to create project"));
     }
   };
 
   const userName = () => currentUser.data?.displayName ?? '';
   const userInitial = () => {
     const name = userName();
-    return name ? name.charAt(0).toUpperCase() : 'U';
+    return name ? name.charAt(0).toUpperCase() : t("U");
   };
 
   return (
@@ -82,13 +84,11 @@ export function AppSidebar() {
           <div
             class="w-7 h-7 shrink-0 rounded-lg bg-foreground/5 border border-foreground/10 flex items-center justify-center cursor-pointer hover:bg-foreground/10 transition-colors"
             onClick={() => navigate({ to: '/' })}
-            title="Home"
+            title={t("Home")}
           >
-            <img alt="Opsiforce" src="/assets/icons/brands/opsiforce.svg" class="w-4 h-4" />
+            <img alt={t("Opsiforce")} src="/assets/icons/brands/opsiforce.svg" class="w-4 h-4" />
           </div>
-          <span class="font-semibold text-sm text-sidebar-foreground truncate group-data-[collapsible=icon]/sidebar:hidden">
-            Opsiforce
-          </span>
+          <span class="font-semibold text-sm text-sidebar-foreground truncate group-data-[collapsible=icon]/sidebar:hidden">{t("Opsiforce")}</span>
           <div class="ml-auto group-data-[collapsible=icon]/sidebar:hidden">
             <SidebarTrigger />
           </div>
@@ -103,7 +103,7 @@ export function AppSidebar() {
             <input
               ref={(el) => (searchRef = el)}
               type="text"
-              placeholder="Search..."
+              placeholder={t("Search...")}
               onInput={(e) => setSearch(e.currentTarget.value)}
               onBlur={(e) => {
                 if (!e.relatedTarget) {
@@ -147,7 +147,7 @@ export function AppSidebar() {
                 size="icon"
                 class="h-8 w-8 shrink-0"
                 disabled={menuDisabled()}
-                title="Create"
+                title={t("Create")}
               >
                 <Plus class="w-4 h-4" />
               </Button>
@@ -168,7 +168,7 @@ export function AppSidebar() {
                 {...triggerProps}
                 class="w-7 h-7 rounded-md flex items-center justify-center text-sidebar-muted-foreground hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
                 disabled={menuDisabled()}
-                title="Create"
+                title={t("Create")}
               >
                 <Plus class="w-4 h-4" />
               </button>
@@ -197,6 +197,7 @@ export function AppSidebar() {
       <SidebarSeparator />
 
       <SidebarFooter>
+        <LanguageSwitcher />
         <TenantSelector />
 
         <SidebarMenu>
@@ -225,30 +226,22 @@ export function AppSidebar() {
                 <DropdownMenuSeparator />
                 <Show when={canOpenSettings()}>
                   <DropdownMenuItem onSelect={() => navigate({ to: '/settings' })}>
-                    <Settings class="w-4 h-4 text-muted-foreground" />
-                    Settings
-                  </DropdownMenuItem>
+                    <Settings class="w-4 h-4 text-muted-foreground" />{t("Settings")}</DropdownMenuItem>
                 </Show>
                 <Show when={canOpenAdmin()}>
                   <DropdownMenuItem onSelect={() => navigate({ to: '/admin' })}>
-                    <Server class="w-4 h-4 text-muted-foreground" />
-                    Admin
-                  </DropdownMenuItem>
+                    <Server class="w-4 h-4 text-muted-foreground" />{t("Admin")}</DropdownMenuItem>
                 </Show>
                 <Show when={hasPermission(Permission.manageSchedules)}>
                   <DropdownMenuItem onSelect={() => navigate({ to: '/schedules' })}>
-                    <Calendar class="w-4 h-4 text-muted-foreground" />
-                    Schedules
-                  </DropdownMenuItem>
+                    <Calendar class="w-4 h-4 text-muted-foreground" />{t("Schedules")}</DropdownMenuItem>
                 </Show>
                 <DropdownMenuItem
                   onSelect={() => {
                     window.location.href = '/oauth2/sign_out';
                   }}
                 >
-                  <LogOut class="w-4 h-4 text-muted-foreground" />
-                  Log out
-                </DropdownMenuItem>
+                  <LogOut class="w-4 h-4 text-muted-foreground" />{t("Log out")}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenuItem>

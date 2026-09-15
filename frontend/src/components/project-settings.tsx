@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show, createSignal, createEffect, createMemo } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { useQueryClient } from '@tanstack/solid-query';
@@ -34,8 +35,8 @@ interface BudgetEntry {
 }
 
 const KEY_TYPE_LABELS: Record<string, string> = {
-  chat: 'Agent (Chat)',
-  backend: 'App Backend',
+  get chat() { return t('Agent (Chat)'); },
+  get backend() { return t('App Backend'); },
 };
 
 interface BudgetDraft {
@@ -202,21 +203,21 @@ export default function ProjectSettings(props: {
           qc.invalidateQueries({ queryKey: ['projects', props.projectId, 'budgets'] }),
           qc.invalidateQueries({ queryKey: ['projects', props.projectId, 'budget'] }),
         ]);
-        toast.success('Budgets updated');
+        toast.success(t("Budgets updated"));
       } else if (activeTab() === 'timeouts') {
         const projectData = project.data;
-        if (!projectData) throw new Error('Project not loaded');
+        if (!projectData) throw new Error(t("Project not loaded"));
 
         const timeoutIdle = unitToMs(agentValue(), agentUnit(), projectData.timeoutIdle);
         const appTimeoutIdle = unitToMs(appValue(), appUnit(), projectData.appTimeoutIdle);
         if (timeoutIdle < MIN_IDLE_TIMEOUT_MS || appTimeoutIdle < MIN_IDLE_TIMEOUT_MS) {
-          toast.error(`Idle timeouts must be at least ${MIN_IDLE_TIMEOUT_LABEL}`);
+          toast.error(t("Idle timeouts must be at least {0}", { "0": t(MIN_IDLE_TIMEOUT_LABEL) }));
           return;
         }
 
         await api.patch(`/projects/${props.projectId}`, { timeoutIdle, appTimeoutIdle });
         await qc.invalidateQueries({ queryKey: ['projects', props.projectId] });
-        toast.success('Timeouts updated');
+        toast.success(t("Timeouts updated"));
       } else if (activeTab() === 'logging') {
         const kb = parseFloat(loggingBodyLimitKb());
         const bodyLimit = Number.isFinite(kb) ? Math.max(0, Math.round(kb * 1024)) : undefined;
@@ -225,7 +226,7 @@ export default function ProjectSettings(props: {
           bodyLimit,
         });
         await qc.invalidateQueries({ queryKey: ['projects', props.projectId] });
-        toast.success('Request logging updated');
+        toast.success(t("Request logging updated"));
       } else {
         const podClass = podClassDraft();
         const dto: UpdateProjectPodClassDto =
@@ -240,10 +241,10 @@ export default function ProjectSettings(props: {
         await podClassApi.update(props.projectId, dto);
         await qc.invalidateQueries({ queryKey: ['projects', props.projectId] });
         setPodNeedsRestart(true);
-        toast.success('Resources updated');
+        toast.success(t("Resources updated"));
       }
     } catch {
-      toast.error('Failed to save settings');
+      toast.error(t("Failed to save settings"));
     } finally {
       setSaving(false);
     }
@@ -262,45 +263,35 @@ export default function ProjectSettings(props: {
     try {
       await restartEnvironment.mutateAsync({ projectId: props.projectId, environmentId: restartTargetEnvId() });
       setPodNeedsRestart(false);
-      toast.success('Restarting to apply new resources');
+      toast.success(t("Restarting to apply new resources"));
     } catch {
-      toast.error('Failed to restart');
+      toast.error(t("Failed to restart"));
     }
   }
 
   return (
     <Dialog open={props.open} onOpenChange={handleOpenChange}>
       <DialogContent align="top" class="flex max-h-[85vh] max-w-2xl flex-col">
-        <DialogTitle>Project Settings</DialogTitle>
-        <DialogDescription>
-          Configure budgets, timeouts, resources, and request logging for this project.
-        </DialogDescription>
+        <DialogTitle>{t("Project Settings")}</DialogTitle>
+        <DialogDescription>{t("Configure budgets, timeouts, resources, and request logging for this project.")}</DialogDescription>
 
         <Tabs defaultValue={defaultTab()} class="mt-4 flex min-h-0 flex-1 flex-col" onChange={setActiveTab}>
           <TabsList class="shrink-0">
             <Show when={canBudgets()}>
               <TabsTrigger value="budgets">
-                <CircleDollarSign class="w-3.5 h-3.5 mr-1.5" />
-                Budgets
-              </TabsTrigger>
+                <CircleDollarSign class="w-3.5 h-3.5 mr-1.5" />{t("Budgets")}</TabsTrigger>
             </Show>
             <Show when={canTimeouts()}>
               <TabsTrigger value="timeouts">
-                <Clock class="w-3.5 h-3.5 mr-1.5" />
-                Timeouts
-              </TabsTrigger>
+                <Clock class="w-3.5 h-3.5 mr-1.5" />{t("Timeouts")}</TabsTrigger>
             </Show>
             <Show when={canPod()}>
               <TabsTrigger value="resources">
-                <Cpu class="w-3.5 h-3.5 mr-1.5" />
-                Resources
-              </TabsTrigger>
+                <Cpu class="w-3.5 h-3.5 mr-1.5" />{t("Resources")}</TabsTrigger>
             </Show>
             <Show when={canLogging()}>
               <TabsTrigger value="logging">
-                <ScrollText class="w-3.5 h-3.5 mr-1.5" />
-                Logging
-              </TabsTrigger>
+                <ScrollText class="w-3.5 h-3.5 mr-1.5" />{t("Logging")}</TabsTrigger>
             </Show>
           </TabsList>
 
@@ -309,7 +300,7 @@ export default function ProjectSettings(props: {
               <TabsContent value="budgets" class="mt-0">
                 <div class="space-y-3">
                   <BudgetRow
-                    label="Project Budget"
+                    label={t("Project Budget")}
                     currentBudget={projectBudget.data?.maxBudget ?? null}
                     currentSpend={projectBudget.data?.currentUsage ?? 0}
                     draftBudget={projectBudgetDraft()}
@@ -328,7 +319,7 @@ export default function ProjectSettings(props: {
                     fallback={
                       <Show
                         when={budgets.isLoading}
-                        fallback={<p class="text-xs text-muted-foreground py-4 text-center">No API keys configured.</p>}
+                        fallback={<p class="text-xs text-muted-foreground py-4 text-center">{t("No API keys configured.")}</p>}
                       >
                         <div class="space-y-2 py-2">
                           <Skeleton class="h-8 w-full" />
@@ -359,8 +350,8 @@ export default function ProjectSettings(props: {
               <TabsContent value="timeouts" class="mt-0">
                 <div class="space-y-3">
                   <TimeoutRow
-                    label="Agent Idle Timeout"
-                    description={`How long the coding agent can be idle before pod suspends. Minimum ${MIN_IDLE_TIMEOUT_LABEL}.`}
+                    label={t("Agent Idle Timeout")}
+                    description={t("How long the coding agent can be idle before pod suspends. Minimum {0}.", { "0": t(MIN_IDLE_TIMEOUT_LABEL) })}
                     placeholder="30"
                     value={agentValue()}
                     unit={agentUnit()}
@@ -374,8 +365,8 @@ export default function ProjectSettings(props: {
                     }}
                   />
                   <TimeoutRow
-                    label="App Idle Timeout"
-                    description={`How long the webapp preview stays alive without visitors. Minimum ${MIN_IDLE_TIMEOUT_LABEL}.`}
+                    label={t("App Idle Timeout")}
+                    description={t("How long the webapp preview stays alive without visitors. Minimum {0}.", { "0": t(MIN_IDLE_TIMEOUT_LABEL) })}
                     placeholder="7"
                     value={appValue()}
                     unit={appUnit()}
@@ -423,13 +414,11 @@ export default function ProjectSettings(props: {
                   <Show
                     when={podNeedsRestart()}
                     fallback={
-                      <p class="text-xs text-muted-foreground/70">
-                        Resources apply the next time the environment restarts or resumes.
-                      </p>
+                      <p class="text-xs text-muted-foreground/70">{t("Resources apply the next time the environment restarts or resumes.")}</p>
                     }
                   >
                     <div class="flex items-center justify-between gap-2 rounded-lg border border-border bg-accent/30 p-3">
-                      <p class="text-xs text-muted-foreground">Restart the environment to apply the new size.</p>
+                      <p class="text-xs text-muted-foreground">{t("Restart the environment to apply the new size.")}</p>
                       <Button
                         size="sm"
                         variant="outline"
@@ -437,7 +426,7 @@ export default function ProjectSettings(props: {
                         onClick={handleRestartToApply}
                       >
                         <RotateCcw class="w-3.5 h-3.5 mr-1.5" />
-                        {restartEnvironment.isPending ? 'Restarting...' : 'Restart to apply'}
+                        {restartEnvironment.isPending ? t("Restarting...") : t("Restart to apply")}
                       </Button>
                     </div>
                   </Show>
@@ -448,10 +437,7 @@ export default function ProjectSettings(props: {
             <Show when={canLogging()}>
               <TabsContent value="logging" class="mt-0">
                 <div class="space-y-3">
-                  <p class="text-xs text-muted-foreground">
-                    Control how this app's HTTP requests are recorded. Lighter levels reduce proxy overhead and memory
-                    use for high-traffic apps.
-                  </p>
+                  <p class="text-xs text-muted-foreground">{t("Control how this app's HTTP requests are recorded. Lighter levels reduce proxy overhead and memory use for high-traffic apps.")}</p>
                   <RequestLoggingControls
                     mode={loggingMode()}
                     bodyLimitKb={loggingBodyLimitKb()}
@@ -471,11 +457,9 @@ export default function ProjectSettings(props: {
         </Tabs>
 
         <div class="mt-4 flex shrink-0 justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={handleCancel}>
-            Cancel
-          </Button>
+          <Button size="sm" variant="outline" onClick={handleCancel}>{t("Cancel")}</Button>
           <Button size="sm" disabled={!isDirty() || saving() || customLimitError()} onClick={handleSave}>
-            {saving() ? 'Saving...' : 'Save'}
+            {saving() ? t("Saving...") : t("Save")}
           </Button>
         </div>
       </DialogContent>

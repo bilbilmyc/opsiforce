@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createSignal, onMount, Show } from 'solid-js';
 import { createFileRoute } from '@tanstack/solid-router';
 import { Lock, LogOut } from '~/components/icons';
@@ -39,17 +40,15 @@ function PermissionDeniedPage() {
           <Lock class="w-8 h-8 text-destructive" stroke-width={1.5} />
         </div>
         <div class="flex flex-col gap-1">
-          <h1 class="text-2xl font-semibold text-foreground">No permission</h1>
-          <p class="text-sm text-muted-foreground">You don't have access to this system.</p>
+          <h1 class="text-2xl font-semibold text-foreground">{t("No permission")}</h1>
+          <p class="text-sm text-muted-foreground">{t("You don't have access to this system.")}</p>
           <Show when={username()}>
-            {(name) => <p class="text-sm font-medium text-muted-foreground">Username: {name()}</p>}
+            {(name) => <p class="text-sm font-medium text-muted-foreground">{t("Username: ")}{name()}</p>}
           </Show>
         </div>
       </div>
       <Button variant="outline" size="sm" class="gap-1.5" onClick={handleLogout}>
-        <LogOut class="w-3.5 h-3.5" />
-        Log out
-      </Button>
+        <LogOut class="w-3.5 h-3.5" />{t("Log out")}</Button>
     </div>
   );
 }

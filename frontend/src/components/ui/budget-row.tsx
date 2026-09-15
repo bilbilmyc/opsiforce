@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show } from 'solid-js';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '~/components/ui/select';
 import {
@@ -53,15 +54,15 @@ export function BudgetRow(props: BudgetRowProps) {
           value={props.draftBudget}
           onChange={(v) => props.onBudgetChange(v)}
         >
-          <label class="text-xs text-muted-foreground mb-1 block">Max budget (USD)</label>
+          <label class="text-xs text-muted-foreground mb-1 block">{t("Max budget (USD)")}</label>
           <NumberFieldGroup>
-            <NumberFieldInput placeholder="0 = unlimited" />
+            <NumberFieldInput placeholder={t("0 = unlimited")} />
             <NumberFieldIncrementTrigger />
             <NumberFieldDecrementTrigger />
           </NumberFieldGroup>
         </NumberField>
         <div class="w-28">
-          <label class="text-xs text-muted-foreground mb-1 block">Period</label>
+          <label class="text-xs text-muted-foreground mb-1 block">{t("Period")}</label>
           <Select
             options={DURATION_OPTIONS}
             optionValue="value"

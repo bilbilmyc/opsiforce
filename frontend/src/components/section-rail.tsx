@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useLocation, useNavigate } from '@tanstack/solid-router';
@@ -23,7 +24,7 @@ export function SectionRail(props: { tabs: RailTab[]; groupOrder: readonly strin
             return (
               <Show when={groupTabs().length > 0}>
                 <div class="px-2 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-wider text-sidebar-muted-foreground first:pt-1">
-                  {group}
+                  {t(group)}
                 </div>
                 <SidebarMenu>
                   <For each={groupTabs()}>

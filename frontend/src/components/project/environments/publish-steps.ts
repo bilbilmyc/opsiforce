@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import type { PublishJobStatus } from '~/api/publish';
 
 export interface PublishStep {
@@ -7,11 +8,11 @@ export interface PublishStep {
 }
 
 export const PUBLISH_STEPS: PublishStep[] = [
-  { key: 'queued', label: 'Queued', detail: 'Waiting to start' },
-  { key: 'committing', label: 'Saving changes', detail: 'Capturing the latest version from Development' },
-  { key: 'swapping', label: 'Preparing release', detail: 'Getting the new version ready to go live' },
-  { key: 'building', label: 'Starting the app', detail: 'Launching your app and getting it ready' },
-  { key: 'migrating', label: 'Bringing it online', detail: 'Waiting for your app to respond' },
+  { key: 'queued', get label() { return t("Queued"); }, get detail() { return t("Waiting to start"); } },
+  { key: 'committing', get label() { return t("Saving changes"); }, get detail() { return t("Capturing the latest version from Development"); } },
+  { key: 'swapping', get label() { return t("Preparing release"); }, get detail() { return t("Getting the new version ready to go live"); } },
+  { key: 'building', get label() { return t("Starting the app"); }, get detail() { return t("Launching your app and getting it ready"); } },
+  { key: 'migrating', get label() { return t("Bringing it online"); }, get detail() { return t("Waiting for your app to respond"); } },
 ];
 
 export const PUBLISH_STEP_ORDER: PublishJobStatus[] = [

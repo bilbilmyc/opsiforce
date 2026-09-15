@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createEffect, createSignal, on } from 'solid-js';
 import Spinner from '~/components/ui/spinner';
 
@@ -15,7 +16,7 @@ export default function ProjectDbTab(props: { environmentId: string }) {
   return (
     <div class="flex-1 min-w-0 flex flex-col relative">
       <Show when={loading()}>
-        <Spinner overlay label="Loading database viewer..." />
+        <Spinner overlay label={t("Loading database viewer...")} />
       </Show>
       <iframe
         src={url()}

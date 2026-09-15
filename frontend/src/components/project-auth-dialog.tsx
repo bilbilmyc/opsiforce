@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show } from 'solid-js';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
@@ -17,15 +18,15 @@ export default function ProjectAuthDialog(props: {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <DialogContent class="max-w-2xl">
-        <DialogTitle>App Auth{props.environmentName ? ` — ${props.environmentName}` : ''}</DialogTitle>
-        <DialogDescription>Configure how visitors sign in to this environment's app.</DialogDescription>
+        <DialogTitle>{t("App Auth")}{props.environmentName ? ` — ${props.environmentName}` : ''}</DialogTitle>
+        <DialogDescription>{t("Configure how visitors sign in to this environment's app.")}</DialogDescription>
         <div class="mt-4">
           <Show when={props.open}>
             <Show
               when={canManageAuth()}
               fallback={
                 <div class="rounded-lg border border-border bg-muted/30 p-4 text-center">
-                  <p class="text-sm text-muted-foreground">You do not have permission to manage project auth.</p>
+                  <p class="text-sm text-muted-foreground">{t("You do not have permission to manage project auth.")}</p>
                 </div>
               }
             >

@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, createEffect, createMemo, createSignal, on } from 'solid-js';
 import { toast } from 'solid-sonner';
 import ConfirmDialog from '~/components/ui/confirm-dialog';
@@ -144,9 +145,9 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
     try {
       await deleteProjectFile(props.projectId, props.environmentId, entry.path);
       props.onFileDeleted(entry.path);
-      toast.success(`${entry.name} deleted`);
+      toast.success(t("{0} deleted", { "0": entry.name }));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : `Could not delete ${entry.name}`);
+      toast.error(err instanceof Error ? err.message : t("Could not delete {0}", { "0": entry.name }));
     } finally {
       refresh();
     }
@@ -180,7 +181,7 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
       onDrop={drop}
     >
       <Show when={dragDepth() > 0}>
-        <FilesDropOverlay label={`Drop to upload into ${uploadTargetLabel()}`} />
+        <FilesDropOverlay label={t("Drop to upload into {0}", { "0": uploadTargetLabel() })} />
       </Show>
 
       <div class="flex items-center justify-between gap-2 px-4 pt-3 pb-2 shrink-0">
@@ -189,7 +190,7 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
       </div>
 
       <div class="px-4 pb-2 shrink-0">
-        <FilesDropzone upload={upload} hint={`Lands in ${uploadTargetLabel()}`} dragging={dragDepth() > 0} />
+        <FilesDropzone upload={upload} hint={t("Lands in {0}", { "0": uploadTargetLabel() })} dragging={dragDepth() > 0} />
       </div>
 
       <Show when={folderSegments().length > 0}>
@@ -203,14 +204,14 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
       </Show>
 
       <div class="flex-1 min-h-0 overflow-auto px-4 pb-4">
-        <Show when={!loading()} fallback={<Spinner label="Loading files..." />}>
+        <Show when={!loading()} fallback={<Spinner label={t("Loading files...")} />}>
           <Show
             when={!error()}
-            fallback={<div class="p-8 text-center text-xs text-destructive">Could not load files.</div>}
+            fallback={<div class="p-8 text-center text-xs text-destructive">{t("Could not load files.")}</div>}
           >
             <Show
               when={entries().length > 0}
-              fallback={<div class="p-8 text-center text-xs text-muted-foreground">Nothing here yet.</div>}
+              fallback={<div class="p-8 text-center text-xs text-muted-foreground">{t("Nothing here yet.")}</div>}
             >
               <Show
                 when={view() === 'table'}
@@ -242,13 +243,13 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
             onOpenChange={(isOpen) => {
               if (!isOpen) setPendingDelete(null);
             }}
-            title={entry().type === 'directory' ? `Delete folder "${entry().name}"?` : `Delete "${entry().name}"?`}
+            title={entry().type === 'directory' ? t("Delete folder \"{0}\"?", { "0": entry().name }) : t("Delete \"{0}\"?", { "0": entry().name })}
             description={
               entry().type === 'directory'
-                ? 'The folder and everything inside it will be permanently deleted.'
-                : 'This file will be permanently deleted.'
+                ? t("The folder and everything inside it will be permanently deleted.")
+                : t("This file will be permanently deleted.")
             }
-            confirmLabel="Delete"
+            confirmLabel={t("Delete")}
             variant="destructive"
             onConfirm={() => void remove(entry())}
           />

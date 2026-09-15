@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import type { JSX } from 'solid-js';
 import { cn } from '~/lib/cn';
 
@@ -15,7 +16,7 @@ export function ResizeHandle(props: {
         props.position === 'left' ? 'left-0' : 'right-0',
         props.class
       )}
-      title="Drag to resize"
+      title={t("Drag to resize")}
     >
       <div
         class={cn(

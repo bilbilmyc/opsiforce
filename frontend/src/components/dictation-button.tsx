@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createEffect, createSignal, onCleanup, onMount, Show, Switch, Match } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { toast } from 'solid-sonner';
@@ -68,12 +69,12 @@ export function DictationButton(props: { projectId: string; environmentId: strin
   const availability = useTranscriptionAvailability();
   const transcriptionAvailable = () => availability.data?.available === true;
   const idleTooltip = () => {
-    if (transcriptionAvailable()) return 'Dictate';
+    if (transcriptionAvailable()) return t("Dictate");
     if (availability.data) {
-      return 'Dictation is unavailable on this deployment. Configuring the OpenAI API-key option for the LLM gateway enables it.';
+      return t("Dictation is unavailable on this deployment. Configuring the OpenAI API-key option for the LLM gateway enables it.");
     }
-    if (availability.isError) return 'Dictation availability could not be determined';
-    return 'Checking dictation availability…';
+    if (availability.isError) return t("Dictation availability could not be determined");
+    return t("Checking dictation availability…");
   };
 
   createEffect(() => {
@@ -143,13 +144,13 @@ export function DictationButton(props: { projectId: string; environmentId: strin
     if (insertTranscript(text)) return;
     try {
       await navigator.clipboard.writeText(text);
-      toast.info('Transcript copied to clipboard', {
-        description: 'The prompt editor could not be found on the page.',
+      toast.info(t("Transcript copied to clipboard"), {
+        get description() { return t("The prompt editor could not be found on the page."); },
       });
     } catch {
-      toast.error('Could not insert the transcript into the prompt', {
+      toast.error(t("Could not insert the transcript into the prompt"), {
         duration: Number.POSITIVE_INFINITY,
-        action: { label: 'Try again', onClick: () => void deliverTranscript(text) },
+        action: { get label() { return t("Try again"); }, onClick: () => void deliverTranscript(text) },
       });
     }
   }
@@ -172,9 +173,9 @@ export function DictationButton(props: { projectId: string; environmentId: strin
 
   function reportTranscriptionFailure(blob: Blob, isRetry: boolean, status: number | undefined, message: string) {
     const budgetExhausted = status === 402;
-    const title = budgetExhausted ? 'Project AI budget exhausted' : 'Transcription failed';
+    const title = budgetExhausted ? t("Project AI budget exhausted") : t("Transcription failed");
     const description = budgetExhausted
-      ? 'The project has used up its AI budget, so the recording could not be transcribed. Increase the budget to keep dictating.'
+      ? t("The project has used up its AI budget, so the recording could not be transcribed. Increase the budget to keep dictating.")
       : message;
     if (isRetry) {
       toast.error(title, { description });
@@ -184,7 +185,7 @@ export function DictationButton(props: { projectId: string; environmentId: strin
     retryToastId = toast.error(title, {
       description,
       duration: Number.POSITIVE_INFINITY,
-      action: { label: 'Retry', onClick: () => retryTranscription(blob) },
+      action: { get label() { return t("Retry"); }, onClick: () => retryTranscription(blob) },
       onDismiss: () => {
         if (retainedBlob === blob) dropRetainedRecording();
       },
@@ -206,7 +207,7 @@ export function DictationButton(props: { projectId: string; environmentId: strin
         { method: 'POST', headers, body: form }
       );
       if (!response.ok) {
-        const message = await extractErrorMessage(response, `Transcription failed (${response.status})`);
+        const message = await extractErrorMessage(response, t("Transcription failed ({0})", { "0": response.status }));
         reportTranscriptionFailure(blob, isRetry, response.status, message);
         return;
       }
@@ -215,8 +216,8 @@ export function DictationButton(props: { projectId: string; environmentId: strin
       if (text) {
         await deliverTranscript(text);
       } else {
-        toast.info('Nothing recognized', {
-          description: 'The recording came back without any recognizable speech, so nothing was inserted.',
+        toast.info(t("Nothing recognized"), {
+          get description() { return t("The recording came back without any recognizable speech, so nothing was inserted."); },
         });
       }
     } catch (err) {
@@ -232,7 +233,7 @@ export function DictationButton(props: { projectId: string; environmentId: strin
 
     const mimeType = pickMimeType();
     if (!mimeType) {
-      toast.error('Recording is not supported in this browser');
+      toast.error(t("Recording is not supported in this browser"));
       return;
     }
 
@@ -243,12 +244,11 @@ export function DictationButton(props: { projectId: string; environmentId: strin
       });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'NotAllowedError') {
-        toast.error('Microphone access is blocked', {
-          description:
-            'Recording did not start because the browser denied microphone access. Allow the microphone for this site in your browser settings and try again.',
+        toast.error(t("Microphone access is blocked"), {
+          get description() { return t("Recording did not start because the browser denied microphone access. Allow the microphone for this site in your browser settings and try again."); },
         });
       } else {
-        toast.error('Could not start recording', {
+        toast.error(t("Could not start recording"), {
           description: err instanceof Error ? err.message : String(err),
         });
       }
@@ -279,7 +279,7 @@ export function DictationButton(props: { projectId: string; environmentId: strin
     });
     recorder.addEventListener('error', () => {
       finishRecording(true);
-      toast.error('Recording failed');
+      toast.error(t("Recording failed"));
     });
 
     dropRetainedRecording();
@@ -309,7 +309,7 @@ export function DictationButton(props: { projectId: string; environmentId: strin
               as="button"
               type="button"
               onClick={() => void startRecording()}
-              aria-label="Dictate"
+              aria-label={t("Dictate")}
               aria-disabled={!transcriptionAvailable() || undefined}
               class={cn(
                 'relative flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors',
@@ -331,7 +331,7 @@ export function DictationButton(props: { projectId: string; environmentId: strin
                 as="button"
                 type="button"
                 onClick={() => finishRecording(false)}
-                aria-label="Stop recording and transcribe"
+                aria-label={t("Stop recording and transcribe")}
                 class="flex h-8 items-center gap-1.5 rounded-md bg-destructive/10 px-2.5 text-destructive transition-colors hover:bg-destructive/20"
               >
                 <span class="relative flex h-2 w-2">
@@ -340,24 +340,24 @@ export function DictationButton(props: { projectId: string; environmentId: strin
                 </span>
                 <RecordingElapsed startedAt={startedAt()} />
               </TooltipTrigger>
-              <TooltipContent>Stop recording and transcribe</TooltipContent>
+              <TooltipContent>{t("Stop recording and transcribe")}</TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger
                 as="button"
                 type="button"
                 onClick={() => finishRecording(true)}
-                aria-label="Discard recording"
+                aria-label={t("Discard recording")}
                 class="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
                 <X class="h-4 w-4" />
               </TooltipTrigger>
-              <TooltipContent>Discard recording</TooltipContent>
+              <TooltipContent>{t("Discard recording")}</TooltipContent>
             </Tooltip>
           </div>
         </Match>
         <Match when={state() === 'transcribing'}>
-          <div aria-label="Transcribing" class="flex h-8 w-8 items-center justify-center text-muted-foreground">
+          <div aria-label={t("Transcribing")} class="flex h-8 w-8 items-center justify-center text-muted-foreground">
             <LoaderCircle class="h-4 w-4 animate-spin" />
           </div>
         </Match>

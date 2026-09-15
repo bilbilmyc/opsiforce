@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { type Options, ScheduleSelector, type ScheduleSelectorObject } from './types';
 
 export const defaultOptions: Options = {
@@ -21,7 +22,7 @@ export const parseNumber = (value: unknown) => {
 
 export const assertValidArray = (arr: unknown) => {
   if (arr === undefined || !Array.isArray(arr) || arr.length !== 5 || arr.some((element) => !Array.isArray(element))) {
-    throw new Error('Invalid cron array');
+    throw new Error(t("Invalid cron array"));
   }
 };
 

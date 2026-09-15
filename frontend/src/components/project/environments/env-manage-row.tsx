@@ -1,3 +1,5 @@
+import { environmentDisplayName } from '~/lib/environment-label';
+import { t } from '~/i18n';
 import { Show } from 'solid-js';
 import {
   Cable,
@@ -72,15 +74,15 @@ export function EnvManageRow(props: EnvManageRowProps) {
     >
       <span class="flex min-w-0 items-center gap-1.5">
         <Check class={cn('h-3.5 w-3.5 shrink-0 text-primary', !props.active && 'invisible')} />
-        <span class="truncate text-xs font-semibold text-foreground" title={env().name}>
-          {env().name}
+        <span class="truncate text-xs font-semibold text-foreground" title={environmentDisplayName(env())}>
+          {environmentDisplayName(env())}
         </span>
       </span>
       <span class="contents" onClick={(e) => e.stopPropagation()}>
         <EnvAppLinkButtons
           appUrl={appUrl()}
           enabled={appRunning()}
-          disabledReason={isDevelopment() ? 'No app is running here yet' : 'Publish first — no app is running here yet'}
+          disabledReason={isDevelopment() ? t("No app is running here yet") : t("Publish first — no app is running here yet")}
         />
       </span>
       <div class="flex min-w-0 items-center gap-2">
@@ -90,47 +92,37 @@ export function EnvManageRow(props: EnvManageRowProps) {
         <Show when={showPublish()}>
           <Button size="sm" variant="outline" class="h-7 px-2.5" onClick={() => props.onPublish()}>
             <Rocket class="h-3.5 w-3.5" />
-            {env().deployedCommitSha !== null ? 'Publish update' : 'Publish'}
+            {env().deployedCommitSha !== null ? t("Publish update") : t("Publish")}
           </Button>
         </Show>
         <DropdownMenu>
           <DropdownMenuTrigger
             class="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
             disabled={props.restarting}
-            aria-label="Environment actions"
+            aria-label={t("Environment actions")}
           >
             <EllipsisVertical class="h-4 w-4" />
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             <Show when={props.canManageAuth}>
               <DropdownMenuItem onSelect={() => props.onAuth()}>
-                <ShieldCheck class="h-3.5 w-3.5 text-muted-foreground" />
-                Auth
-              </DropdownMenuItem>
+                <ShieldCheck class="h-3.5 w-3.5 text-muted-foreground" />{t("Auth")}</DropdownMenuItem>
             </Show>
             <Show when={props.canManageVariables}>
               <DropdownMenuItem onSelect={() => props.onVariables()}>
-                <SlidersHorizontal class="h-3.5 w-3.5 text-muted-foreground" />
-                Environment variables
-              </DropdownMenuItem>
+                <SlidersHorizontal class="h-3.5 w-3.5 text-muted-foreground" />{t("Environment variables")}</DropdownMenuItem>
             </Show>
             <Show when={props.canSchedules}>
               <DropdownMenuItem onSelect={() => props.onSchedules()}>
-                <Calendar class="h-3.5 w-3.5 text-muted-foreground" />
-                Schedules
-              </DropdownMenuItem>
+                <Calendar class="h-3.5 w-3.5 text-muted-foreground" />{t("Schedules")}</DropdownMenuItem>
             </Show>
             <Show when={props.canManageExternalServices}>
               <DropdownMenuItem onSelect={() => props.onExternalServices()}>
-                <Cable class="h-3.5 w-3.5 text-muted-foreground" />
-                External services
-              </DropdownMenuItem>
+                <Cable class="h-3.5 w-3.5 text-muted-foreground" />{t("External services")}</DropdownMenuItem>
             </Show>
             <Show when={canRestartEnv()}>
               <DropdownMenuItem onSelect={() => props.onRestart()}>
-                <RotateCcw class="h-3.5 w-3.5 text-muted-foreground" />
-                Restart
-              </DropdownMenuItem>
+                <RotateCcw class="h-3.5 w-3.5 text-muted-foreground" />{t("Restart")}</DropdownMenuItem>
             </Show>
             <Show when={canDeleteEnv()}>
               <DropdownMenuSeparator />
@@ -138,9 +130,7 @@ export function EnvManageRow(props: EnvManageRowProps) {
                 class="text-destructive data-[highlighted]:text-destructive"
                 onSelect={() => props.onDelete()}
               >
-                <Trash2 class="h-3.5 w-3.5 text-destructive" />
-                Delete
-              </DropdownMenuItem>
+                <Trash2 class="h-3.5 w-3.5 text-destructive" />{t("Delete")}</DropdownMenuItem>
             </Show>
           </DropdownMenuContent>
         </DropdownMenu>

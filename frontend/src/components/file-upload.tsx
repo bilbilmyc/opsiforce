@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { Show, type Component } from 'solid-js';
 import {
   DropdownMenu,
@@ -46,9 +47,7 @@ export const FileUpload: Component<{ projectId: string; environmentId: string }>
                 <button
                   onClick={() => upload.cancel()}
                   class="inline-flex h-7 items-center rounded-md border border-border px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-                >
-                  Cancel
-                </button>
+                >{t("Cancel")}</button>
               </div>
               <div class="flex items-center justify-between gap-3 text-[11px] text-muted-foreground">
                 <span class="truncate" title={upload.statusLabel()}>
@@ -57,7 +56,7 @@ export const FileUpload: Component<{ projectId: string; environmentId: string }>
                 <span class="tabular-nums shrink-0">
                   <Show
                     when={upload.totalBytes() > 0}
-                    fallback={`${upload.preparedFiles()} / ${upload.totalFiles()} files`}
+                    fallback={t("{0} / {1} files", { "0": upload.preparedFiles(), "1": upload.totalFiles() })}
                   >
                     {formatBytes(upload.sentBytes())} / {formatBytes(upload.totalBytes())}
                   </Show>
@@ -69,19 +68,13 @@ export const FileUpload: Component<{ projectId: string; environmentId: string }>
           <div class="flex h-7 items-center">
             <DropdownMenu>
               <DropdownMenuTrigger class="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-background px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground data-[expanded]:bg-accent data-[expanded]:text-foreground">
-                <Upload class="h-3.5 w-3.5" />
-                Upload
-                <ChevronDown class="h-3 w-3 opacity-60" />
+                <Upload class="h-3.5 w-3.5" />{t("Upload")}<ChevronDown class="h-3 w-3 opacity-60" />
               </DropdownMenuTrigger>
               <DropdownMenuContent class="min-w-36">
                 <DropdownMenuItem onSelect={() => fileInputRef?.click()}>
-                  <File class="h-3.5 w-3.5" />
-                  Files
-                </DropdownMenuItem>
+                  <File class="h-3.5 w-3.5" />{t("Files")}</DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => folderInputRef?.click()}>
-                  <Folder class="h-3.5 w-3.5" />
-                  Folder
-                </DropdownMenuItem>
+                  <Folder class="h-3.5 w-3.5" />{t("Folder")}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

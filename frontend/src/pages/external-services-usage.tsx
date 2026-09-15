@@ -1,3 +1,5 @@
+import { intlLocale } from '~/i18n';
+import { t } from '~/i18n';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   useExternalServicesUsage,
@@ -26,7 +28,7 @@ function monthOptions(): string[] {
 }
 
 function formatMonth(month: string): string {
-  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString(undefined, {
+  return new Date(`${month}-01T00:00:00Z`).toLocaleDateString(intlLocale(), {
     month: 'long',
     year: 'numeric',
     timeZone: 'UTC',
@@ -34,12 +36,12 @@ function formatMonth(month: string): string {
 }
 
 function formatCount(count: number): string {
-  return count.toLocaleString();
+  return count.toLocaleString(intlLocale());
 }
 
 function projectLabel(project: UsageProjectBreakdown): string {
-  if (project.deleted) return 'Project (deleted)';
-  return project.projectTitle?.trim() || 'Untitled project';
+  if (project.deleted) return t("Project (deleted)");
+  return project.projectTitle?.trim() || t("Untitled project");
 }
 
 export function ExternalServicesUsagePage() {
@@ -62,7 +64,7 @@ export function ExternalServicesUsagePage() {
     <div class="w-full overflow-y-auto h-full px-4 py-6">
       <div class="flex items-center gap-3 mb-1">
         <ChartColumn class="w-5 h-5 text-muted-foreground" />
-        <h1 class="text-xl font-semibold">Usage</h1>
+        <h1 class="text-xl font-semibold">{t("Usage")}</h1>
         <Show when={!usage.isPending}>
           <Badge variant="secondary" class="text-[10px] px-1.5 py-0">
             {formatCount(total())}
@@ -77,7 +79,7 @@ export function ExternalServicesUsagePage() {
               <SelectItem item={itemProps.item}>{formatMonth(itemProps.item.rawValue)}</SelectItem>
             )}
           >
-            <SelectTrigger class="w-40" aria-label="Month">
+            <SelectTrigger class="w-40" aria-label={t("Month")}>
               <SelectValue<string>>{(state) => formatMonth(state.selectedOption())}</SelectValue>
             </SelectTrigger>
             <SelectContent />
@@ -86,17 +88,14 @@ export function ExternalServicesUsagePage() {
             type="button"
             onClick={() => usage.refetch()}
             class="inline-flex items-center justify-center rounded-md w-7 h-7 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            aria-label="Refresh usage"
+            aria-label={t("Refresh usage")}
           >
             <RefreshCw class={cn('w-3.5 h-3.5', usage.isFetching && 'animate-spin')} />
           </button>
         </div>
       </div>
 
-      <p class="text-xs text-muted-foreground mb-5 ml-8">
-        Inbound external-service messages stored in {formatMonth(month())} for your organization, per service. Counts
-        survive project and environment deletion.
-      </p>
+      <p class="text-xs text-muted-foreground mb-5 ml-8">{t("Inbound external-service messages stored in ")}{formatMonth(month())}{t(" for your organization, per service. Counts survive project and environment deletion.")}</p>
 
       <Show when={usage.isPending}>
         <LoadingState />
@@ -115,8 +114,8 @@ export function ExternalServicesUsagePage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead class="min-w-64">Service</TableHead>
-                <TableHead class="w-32 text-right">Messages</TableHead>
+                <TableHead class="min-w-64">{t("Service")}</TableHead>
+                <TableHead class="w-32 text-right">{t("Messages")}</TableHead>
                 <TableHead class="w-10" />
               </TableRow>
             </TableHeader>
@@ -186,7 +185,7 @@ function ProjectBreakdown(props: { project: UsageProjectBreakdown }) {
               <span
                 class={cn('text-xs truncate', environment.deleted ? 'text-muted-foreground italic' : 'text-foreground')}
               >
-                {environment.deleted ? 'Environment (deleted)' : environment.environmentName}
+                {environment.deleted ? t("Environment (deleted)") : environment.environmentName}
               </span>
               <span class="ml-auto text-xs tabular-nums text-muted-foreground shrink-0">
                 {formatCount(environment.count)}
@@ -210,15 +209,13 @@ function LoadingState() {
 function ErrorState(props: { onRetry: () => void }) {
   return (
     <div class="rounded-lg border border-border bg-card p-8 flex flex-col items-center gap-3 text-center">
-      <p class="text-sm text-muted-foreground">Could not load usage.</p>
+      <p class="text-sm text-muted-foreground">{t("Could not load usage.")}</p>
       <button
         type="button"
         onClick={() => props.onRetry()}
         class="inline-flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-accent transition-colors"
       >
-        <RefreshCw class="w-3.5 h-3.5" />
-        Try again
-      </button>
+        <RefreshCw class="w-3.5 h-3.5" />{t("Try again")}</button>
     </div>
   );
 }
@@ -227,10 +224,8 @@ function EmptyState(props: { month: string }) {
   return (
     <div class="rounded-lg border border-border bg-card p-8 flex flex-col items-center gap-2 text-center">
       <Inbox class="w-6 h-6 text-muted-foreground" />
-      <p class="text-sm font-medium">No inbound messages in {formatMonth(props.month)}</p>
-      <p class="text-xs text-muted-foreground">
-        Counters start filling as soon as an external service stores a message for an environment.
-      </p>
+      <p class="text-sm font-medium">{t("No inbound messages in ")}{formatMonth(props.month)}</p>
+      <p class="text-xs text-muted-foreground">{t("Counters start filling as soon as an external service stores a message for an environment.")}</p>
     </div>
   );
 }

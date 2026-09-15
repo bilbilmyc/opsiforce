@@ -1,3 +1,4 @@
+import { t } from '~/i18n';
 import { createMemo, For, Show } from 'solid-js';
 import {
   DropdownMenu,
@@ -43,8 +44,8 @@ export default function MultiSelect(props: Props) {
 
   const formatOption = (option: string) => {
     if (!props.options.alt) return option;
-    if (props.options.name === 'month') return props.options.alt[Number(option) - 1];
-    return props.options.alt[Number(option)];
+    if (props.options.name === 'month') return t(props.options.alt[Number(option) - 1]);
+    return t(props.options.alt[Number(option)]);
   };
 
   const badges = createMemo(() => {
@@ -58,11 +59,11 @@ export default function MultiSelect(props: Props) {
 
   return (
     <div class="flex flex-col gap-1 min-w-0 flex-1">
-      <div class="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{props.options.name}(s)</div>
+      <div class="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">{t(props.options.name)}</div>
       <DropdownMenu>
         <DropdownMenuTrigger class="flex h-8 w-full items-center justify-between rounded-md border border-input bg-background px-2 py-1 text-xs transition-colors hover:bg-accent/50">
           <div class="flex items-center gap-1 flex-wrap overflow-hidden min-w-0">
-            <Show when={badges()} fallback={<span class="text-xs text-muted-foreground">All</span>}>
+            <Show when={badges()} fallback={<span class="text-xs text-muted-foreground">{t("All")}</span>}>
               {(items) => (
                 <For each={items()}>
                   {(item) => (
@@ -98,9 +99,7 @@ export default function MultiSelect(props: Props) {
           </div>
           <DropdownMenuSeparator />
           <DropdownMenuItem closeOnSelect={false} onSelect={handleSelectAll} class="justify-center">
-            <Show when={!isSelectAll()} fallback="All selected">
-              Select All
-            </Show>
+            <Show when={!isSelectAll()} fallback={t("All selected")}>{t("Select All")}</Show>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
