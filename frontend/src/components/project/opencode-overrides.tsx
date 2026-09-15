@@ -3,7 +3,11 @@ import { useTheme } from '@opencode-ai/ui/theme/context';
 import { useSettings } from '@opencode-ai/app/settings/model';
 import { timelinePresets } from '@opencode-ai/session-ui/timeline/detail';
 
-const activityTimeline = timelinePresets.find((preset) => preset.id === 'compact')!.value;
+// Keep tool activity concise, but never bury reasoning inside a second disclosure.
+const activityTimeline = {
+  ...timelinePresets.find((preset) => preset.id === 'detailed')!.value,
+  thinking: { placement: 'separate' as const, details: 'expanded' as const },
+};
 
 export default function OpencodeOverrides() {
   const theme = useTheme();

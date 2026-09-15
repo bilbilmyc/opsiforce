@@ -631,8 +631,10 @@ function MessageTimelineView(
       workspaceSession={workspaceSession}
       bottomSpacer={
         <>
-        <Show when={progress()}>
-          <div role="status" aria-live="polite" data-component="turn-completion-status" class={`py-3 text-[13px] text-v2-text-text-base ${turnPadding()}`}>{progress()}</div>
+        <Show when={sessionStatus().type === "idle" && progress()}>
+          <div classList={{ "min-w-0 w-full max-w-full": true, "md:max-w-[1000px] md:mx-auto": props.centered }}>
+            <div role="status" aria-live="polite" data-component="turn-completion-status" class={`py-3 break-words text-[13px] text-v2-text-text-base ${turnPadding()}`}>{progress()}</div>
+          </div>
         </Show>
         <Show when={showWorking() || backgroundHintPresence.present()}>
           <div
@@ -646,7 +648,7 @@ function MessageTimelineView(
             >
               <Show when={showWorking()}>
                 <div data-component="session-working" role="status">
-                  <TextShimmer text={language.t("session.timeline.working")} active />
+                  <TextShimmer text={progress() || language.t("session.timeline.working")} active />
                 </div>
               </Show>
               <Show when={backgroundHintPresence.present()}>

@@ -225,6 +225,7 @@ const source = {
   "ui.message.copyResponse": "Copy response",
   "ui.message.copied": "Copied",
   "ui.message.thought": "Thought",
+  "ui.message.reasoning.waiting": "The model has not returned reasoning text yet. It will appear here as it arrives.",
   "ui.message.duration.seconds": "{{count}}s",
   "ui.message.duration.minutesSeconds": "{{minutes}}m {{seconds}}s",
   "ui.message.interrupted": "Interrupted",

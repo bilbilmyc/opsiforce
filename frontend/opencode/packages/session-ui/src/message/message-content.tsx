@@ -527,6 +527,7 @@ export function AssistantReasoningContent(props: {
         compact
         hasContent
         allowOpenWhilePending
+        locked={!props.content.text.trim()}
         hideDetails={!props.content.text.trim()}
         open={open()}
         onOpenChange={(value) => {
@@ -559,8 +560,15 @@ export function AssistantReasoningContent(props: {
           </div>
         }
       >
-        <PacedMarkdown text={props.content.text} cacheKey={props.id} streaming={props.streaming} />
+        <div data-slot="reasoning-content" class="max-h-80 overflow-y-auto overscroll-contain">
+          <PacedMarkdown text={props.content.text} cacheKey={props.id} streaming={props.streaming} />
+        </div>
       </BasicTool>
+      <Show when={props.streaming && !props.content.text.trim()}>
+        <p data-slot="reasoning-waiting" class="px-2 py-2 text-[12px] text-v2-text-text-weak" role="status">
+          {i18n.t("ui.message.reasoning.waiting")}
+        </p>
+      </Show>
     </div>
   )
 }
