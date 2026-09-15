@@ -1,5 +1,5 @@
 import { t } from '~/i18n';
-import { Show, createEffect, createMemo, createSignal, on } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, on } from 'solid-js';
 import { toast } from 'solid-sonner';
 import ConfirmDialog from '~/components/ui/confirm-dialog';
 import Spinner from '~/components/ui/spinner';
@@ -13,6 +13,7 @@ import {
   type FileEntry,
   type FilesSectionKey,
 } from '~/api/files';
+import { defaultFileSection, FILES_SECTION_ORDER } from './file-section-state';
 import { FILES_SECTION_LABELS, FilesSectionTabs } from './files-section-tabs';
 import { FilesBreadcrumbs } from './files-breadcrumbs';
 import { FilesDropOverlay } from './files-drop-overlay';
@@ -39,7 +40,7 @@ export interface ProjectFilesTabProps {
 }
 
 export function ProjectFilesTab(props: ProjectFilesTabProps) {
-  const [section, setSection] = createSignal<FilesSectionKey>('generated');
+  const [selectedSection, setSection] = createSignal<FilesSectionKey>();
   const [folderSegments, setFolderSegments] = createSignal<string[]>([]);
   const [view, setView] = createPersistedSignal<FilesViewMode>('opsiforce:files:view', 'table');
   const [dragDepth, setDragDepth] = createSignal(0);
@@ -49,7 +50,7 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
     on(
       () => props.environmentId,
       () => {
-        setSection('generated');
+        setSection(undefined);
         setFolderSegments([]);
         setPendingDelete(null);
       },
@@ -62,6 +63,8 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
     () => props.environmentId,
     () => ''
   );
+
+  const section = createMemo(() => selectedSection() ?? defaultFileSection(root.data));
 
   const sectionPath = (key: FilesSectionKey) =>
     root.data?.kind === 'root' ? (root.data.sections.find((s) => s.key === key)?.path ?? '') : '';
@@ -133,6 +136,7 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
 
   const open = (entry: FileEntry) => {
     if (entry.type === 'directory') {
+      setSection(section());
       setFolderSegments((prev) => [...prev, entry.name]);
       return;
     }
@@ -189,6 +193,8 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
         <FilesViewToggle mode={view()} onChange={setView} />
       </div>
 
+      <p class="px-4 pb-2 text-xs text-muted-foreground">{t('Browse app source in Project files, exported documents in Output files, and your uploads in User uploads.')}</p>
+
       <div class="px-4 pb-2 shrink-0">
         <FilesDropzone upload={upload} hint={t("Lands in {0}", { "0": uploadTargetLabel() })} dragging={dragDepth() > 0} />
       </div>
@@ -211,7 +217,16 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
           >
             <Show
               when={entries().length > 0}
-              fallback={<div class="p-8 text-center text-xs text-muted-foreground">{t("Nothing here yet.")}</div>}
+              fallback={<div class="p-8 text-center text-xs text-muted-foreground">
+                <p>{t("Nothing here yet.")}</p>
+                <Show when={folderSegments().length === 0}>
+                  <div class="mt-3 flex justify-center gap-3">
+                    <For each={FILES_SECTION_ORDER.filter(key => key !== section() && counts()[key] > 0)}>{key =>
+                      <button type="button" class="text-primary underline underline-offset-4" onClick={() => pickSection(key)}>{t('View {0}', { '0': FILES_SECTION_LABELS[key] })}</button>
+                    }</For>
+                  </div>
+                </Show>
+              </div>}
             >
               <Show
                 when={view() === 'table'}
