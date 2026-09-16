@@ -57,7 +57,7 @@ Skills are split across two locations so a UI-neutral skill is authored once for
 
 ## App template
 
-New app-builder projects start from `agents/app-builder/template/app/` — a React + Tailwind v4 + shadcn/ui frontend and a NestJS + `bun:sqlite` backend, with TanStack Query/Table, React Router, and the rest pre-installed so the agent builds features, not scaffolding. The template ships **without** `app.meta.json`; the agent writes it as the deliberate last step of the first build, which is what makes the app go live (see [App Readiness](../projects/app-readiness.md) — go-live is pushed from the pod, never polled).
+New App Builder projects start from a framework-neutral bootstrap in a shared Node.js/Python/Go environment. The single agent selects an internal scaffold from the request, preserving any existing source. See [Unified App Builder](../runtime/template-selection.md). The previous React/Nest scaffold remains available internally; it no longer determines every new project.
 
 ## See also
 

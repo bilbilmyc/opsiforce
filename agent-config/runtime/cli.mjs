@@ -2,6 +2,8 @@
 import process from 'node:process';
 import { listRecipes, resolveStartup, RuntimeConfigError } from './project-runtime.mjs';
 import { scaffold } from './scaffold.mjs';
+import { isBootstrap } from './bootstrap.mjs';
+import { setTimeout } from 'node:timers/promises';
 import { restartApp } from './restart.mjs';
 
 try {
@@ -16,7 +18,16 @@ try {
   } else if (command === 'recipes') {
     console.log(JSON.stringify(listRecipes(), null, 2));
   } else {
-    const plan = await resolveStartup(process.env.WORKSPACE || '/workspace');
+    const workspace = process.env.WORKSPACE || '/workspace';
+    if (command === 'inspect' && await isBootstrap(workspace)) {
+      console.log(JSON.stringify({ source: 'bootstrap', status: 'awaiting-initialization' }));
+      process.exit(0);
+    }
+    if (command === 'run' && await isBootstrap(workspace)) {
+      console.log('Waiting for App Builder to initialize the requested stack');
+      while (await isBootstrap(workspace)) await setTimeout(500);
+    }
+    const plan = await resolveStartup(workspace);
     if (command === 'inspect') {
       console.log(JSON.stringify(plan, null, 2));
     } else {

@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "recipe": {"id":"custom-startup","version":"1"},
+  "startup": {"script":"app/startup.sh","cwd":"app"}
+}

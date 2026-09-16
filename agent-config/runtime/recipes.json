@@ -1,14 +1,74 @@
 {
   "schemaVersion": 1,
   "recipes": [
-    { "id": "legacy-startup", "version": "1", "status": "legacy", "runner": "startup-script", "label": "Existing startup script" },
-    { "id": "custom-startup", "version": "1", "status": "experimental", "runner": "startup-script", "label": "Custom startup script" },
-    { "id": "fastapi", "version": "1", "status": "experimental", "runner": "startup-script", "template": "fastapi", "label": "Python / FastAPI backend" },
-    { "id": "go", "version": "1", "status": "experimental", "runner": "startup-script", "template": "go", "label": "Go / net/http backend" },
-    { "id": "next-fullstack", "version": "1", "status": "planned", "label": "Next.js full stack" },
-    { "id": "react-fastapi", "version": "1", "status": "planned", "label": "React + FastAPI" },
-    { "id": "vue-fastapi", "version": "1", "status": "planned", "label": "Vue + FastAPI" },
-    { "id": "react-go", "version": "1", "status": "planned", "label": "React + Go" },
-    { "id": "vue-go", "version": "1", "status": "planned", "label": "Vue + Go" }
+    {
+      "id": "legacy-startup",
+      "version": "1",
+      "status": "legacy",
+      "runner": "startup-script",
+      "label": "Existing startup script"
+    },
+    {
+      "id": "custom-startup",
+      "version": "1",
+      "status": "experimental",
+      "runner": "startup-script",
+      "label": "Custom startup script",
+      "template": "custom-startup"
+    },
+    {
+      "id": "react-nest",
+      "version": "1",
+      "status": "experimental",
+      "runner": "startup-script",
+      "template": "react-nest",
+      "label": "React / Vite + NestJS compatibility scaffold"
+    },
+    {
+      "id": "fastapi",
+      "version": "1",
+      "status": "experimental",
+      "runner": "startup-script",
+      "template": "fastapi",
+      "label": "Python / FastAPI backend"
+    },
+    {
+      "id": "go",
+      "version": "1",
+      "status": "experimental",
+      "runner": "startup-script",
+      "template": "go",
+      "label": "Go / net/http backend"
+    },
+    {
+      "id": "next-fullstack",
+      "version": "1",
+      "status": "planned",
+      "label": "Next.js full stack"
+    },
+    {
+      "id": "react-fastapi",
+      "version": "1",
+      "status": "planned",
+      "label": "React + FastAPI"
+    },
+    {
+      "id": "vue-fastapi",
+      "version": "1",
+      "status": "planned",
+      "label": "Vue + FastAPI"
+    },
+    {
+      "id": "react-go",
+      "version": "1",
+      "status": "planned",
+      "label": "React + Go"
+    },
+    {
+      "id": "vue-go",
+      "version": "1",
+      "status": "planned",
+      "label": "Vue + Go"
+    }
   ]
 }

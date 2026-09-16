@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { scaffold } from '../runtime/scaffold.mjs';
@@ -9,6 +9,13 @@ export async function composeRuntimeAgents(agentsRoot) {
   const registry = JSON.parse(await readFile(path.join(agentsRoot, 'agents.json'), 'utf8'));
   const instructions = fileURLToPath(new URL('../runtime/instructions/', import.meta.url));
   const composed = [];
+  if (registry.agents['app-builder']) {
+    // Image-owned build output only; runtime workspaces are never replaced.
+    const template = path.join(agentsRoot, 'app-builder/template');
+    await rm(template, { recursive: true, force: true });
+    await mkdir(path.join(template, 'app'), { recursive: true });
+    await cp(fileURLToPath(new URL('../runtime/bootstrap/', import.meta.url)), path.join(template, 'app'), { recursive: true });
+  }
   for (const [name, entry] of Object.entries(registry.agents)) {
     if (!entry.recipe) continue;
     if (!/^[a-z][a-z0-9-]*$/.test(name)) throw new Error('Invalid runtime agent name');

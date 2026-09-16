@@ -31,7 +31,7 @@ export function CreateMenu(props: {
       <DropdownMenuTrigger as={props.trigger} />
       <DropdownMenuContent class="w-72">
         <Show when={canCreateProject()}>
-          <MenuDividerLabel class="mb-1 mt-1">{t("Choose a project template or agent")}</MenuDividerLabel>
+          <MenuDividerLabel class="mb-1 mt-1">{t("Choose an agent")}</MenuDividerLabel>
           <Show
             when={(props.agents ?? []).length > 0}
             fallback={<div class="px-2 py-1.5 text-xs italic text-muted-foreground">{t("No agents available")}</div>}

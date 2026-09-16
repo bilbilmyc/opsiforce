@@ -1,6 +1,6 @@
 ---
 name: ui
-description: Load for ANY frontend / UI / styling work — shadcn/ui components, react-hook-form + zod forms, multi-step wizards, responsive app shells (desktop sidebar ↔ mobile hamburger drawer), React Router routing & URL-synced lists (filter/search/sort/pagination), Lucide icons, Tailwind v4 theming, accessibility (focus, ARIA, prefers-reduced-motion, hydration), and styling / composition / forms / icons / patterns rules. Use whenever building or modifying any user interface, form, modal, drawer, bottom sheet, menu, searchable selector, toast notification, icon, status indicator, card, tabs, badge, toggle, theme color, dark-mode toggle, or any styled / interactive element.
+description: For React projects only. Load for React frontend / UI / styling work — shadcn/ui components, react-hook-form + zod forms, multi-step wizards, responsive app shells (desktop sidebar ↔ mobile hamburger drawer), React Router routing & URL-synced lists (filter/search/sort/pagination), Lucide icons, Tailwind v4 theming, accessibility (focus, ARIA, prefers-reduced-motion, hydration), and styling / composition / forms / icons / patterns rules. Use when building or modifying a React user interface, form, modal, drawer, bottom sheet, menu, searchable selector, toast notification, icon, status indicator, card, tabs, badge, toggle, theme color, dark-mode toggle, or any styled / interactive element.
 ---
 
 # shadcn/ui

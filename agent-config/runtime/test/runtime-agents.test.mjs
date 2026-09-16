@@ -20,6 +20,7 @@ test('recipe profiles compose exact templates and isolated instructions, then sy
   assert.deepEqual(await composeRuntimeAgents(agents), [
     { name: 'app-builder-python', recipe: 'fastapi@1' }, { name: 'app-builder-go', recipe: 'go@1' },
   ]);
+  assert.deepEqual((await readdir(path.join(agents, 'app-builder/template/app'))).sort(), ['.gitignore', '.opsiforce-bootstrap']);
   for (const name of ['app-builder-python', 'app-builder-go']) {
     const profile = registry.agents[name];
     const agentRoot = path.join(agents, name);

@@ -2,10 +2,10 @@
   "agents": {
     "app-builder": {
       "name": "App Builder",
-      "description": "Build apps and assist with your requests.",
+      "description": "Build apps with Node.js, Python and Go in one workspace.",
       "default": true,
       "port": 3000,
-      "version": "0.2.2",
+      "version": "0.3.0",
       "model": "openai/gpt-5.6-sol",
       "variant": "high",
       "poolSize": 3
@@ -14,19 +14,31 @@
       "name": "Python / FastAPI",
       "description": "Experimental Python backend with SQLite. No frontend included.",
       "recipe": "fastapi@1",
-      "sharedSkills": ["document-generation", "llm-api", "agent-browser", "send-email"],
+      "sharedSkills": [
+        "document-generation",
+        "llm-api",
+        "agent-browser",
+        "send-email"
+      ],
       "port": 3000,
       "version": "0.1.0",
-      "poolSize": 0
+      "poolSize": 0,
+      "hidden": true
     },
     "app-builder-go": {
       "name": "Go / net/http",
       "description": "Experimental Go backend with SQLite. No frontend included.",
       "recipe": "go@1",
-      "sharedSkills": ["document-generation", "llm-api", "agent-browser", "send-email"],
+      "sharedSkills": [
+        "document-generation",
+        "llm-api",
+        "agent-browser",
+        "send-email"
+      ],
       "port": 3000,
       "version": "0.1.0",
-      "poolSize": 0
+      "poolSize": 0,
+      "hidden": true
     }
   }
 }

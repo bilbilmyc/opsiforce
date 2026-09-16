@@ -8,7 +8,7 @@ import { ProjectService } from '../src/project/project.service';
 import { ProjectImportService } from '../src/project/project-import.service';
 import { db } from '../db';
 
-test('experimental recipes require an exact deployment opt-in; legacy and private agents retain compatibility', () => {
+test('retired language profiles remain hidden even with the old deployment opt-in', () => {
   const registry = readMergedAgentRegistry({ agents: {} });
   assert.equal(isAgentEnabled(registry.agents['app-builder'], ''), true);
   assert.equal(isAgentEnabled(undefined, ''), true);
@@ -18,7 +18,8 @@ test('experimental recipes require an exact deployment opt-in; legacy and privat
     assert.equal(isAgentEnabled(entry, ''), false);
     assert.equal(isAgentEnabled(entry, '*'), false);
     assert.equal(isAgentEnabled(entry, 'fastapi@2,go@2'), false);
-    assert.equal(isAgentEnabled(entry, ' fastapi@1, go@1 '), true);
+    assert.equal(isAgentEnabled(entry, ' fastapi@1, go@1 '), false);
+    assert.equal(isAgentEnabled({ recipe: entry.recipe }, entry.recipe), true);
     assert.equal(entry.poolSize, 0);
   }
 });
@@ -35,7 +36,9 @@ test('disabled recipe creation is rejected before any pool claim, settings looku
   service.findIdByName = async () => 'python-id';
   await assert.rejects((ProjectImportService.prototype as any).resolveAgent.call({ agentService: service }, 'app-builder-python'), BadRequestException);
   process.env.ENABLED_PROJECT_RECIPES = 'fastapi@1';
-  await assert.doesNotReject(service.assertCreatable('python-id'));
+  await assert.rejects(service.assertCreatable('python-id'), BadRequestException);
+  // Existing projects still resolve their stored profile.
+  assert.equal((await service.findById('python-id')).name, 'app-builder-python');
 });
 
 test('the agent catalog hides disabled profiles even when their database rows remain', async t => {
@@ -48,5 +51,5 @@ test('the agent catalog hides disabled profiles even when their database rows re
   });
   const rows = ['app-builder', 'app-builder-python', 'app-builder-go'].map(name => ({ id: name, name, displayName: name, description: null }));
   db.select = (() => ({ from: () => ({ orderBy: async () => rows }) })) as unknown as typeof db.select;
-  assert.deepEqual((await new AgentService().findAll()).map(agent => agent.name), ['app-builder', 'app-builder-python']);
+  assert.deepEqual((await new AgentService().findAll()).map(agent => agent.name), ['app-builder']);
 });

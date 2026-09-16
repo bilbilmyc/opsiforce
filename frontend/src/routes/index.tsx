@@ -4,7 +4,6 @@ import { createSignal, For, Show } from 'solid-js';
 import { toast } from 'solid-sonner';
 import { type Project } from '~/api/client';
 import { useCreateDefaultProject } from '~/api/default-project-target';
-import { useAgents } from '~/api/agents';
 import { usePermissions } from '~/api/permissions';
 import { Permission } from '~/constants/permissions';
 import { EXAMPLES, type Example } from '~/data/examples';
@@ -41,9 +40,6 @@ function ExampleCard(props: { example: Example; onClick: () => void }) {
 function HomePage() {
   const navigate = useNavigate();
   const createDefaultProject = useCreateDefaultProject();
-  const agents = useAgents();
-  const [selectedAgentId, setSelectedAgentId] = createSignal('');
-  const selectedAgent = () => agents.data?.find(agent => agent.id === selectedAgentId());
   const { hasPermission } = usePermissions();
   const canImport = () => hasPermission(Permission.importProject);
   const [prompt, setPrompt] = createSignal('');
@@ -64,9 +60,7 @@ function HomePage() {
   const handleSubmit = async () => {
     if (isSubmitting()) return;
     try {
-      // A stale selection must fail visibly instead of silently choosing a default.
-      if (selectedAgentId() && !selectedAgent()) throw new Error('Selected template is unavailable');
-      const project = await createDefaultProject.createProject(selectedAgentId() ? { agentId: selectedAgentId() } : undefined);
+      const project = await createDefaultProject.createProject();
       toast.success(t("Project created"));
       goToProject(project);
     } catch {
@@ -121,26 +115,6 @@ function HomePage() {
                 rows={4}
                 class="w-full px-4 pt-4 pb-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 resize-none outline-none leading-relaxed"
               />
-              <Show when={(agents.data?.length ?? 0) > 1}>
-                <div class="px-4 py-2 flex flex-col gap-1.5">
-                  <label for="project-template" class="text-xs text-muted-foreground">{t("Project template")}</label>
-                  <select
-                    id="project-template"
-                    class="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
-                    value={selectedAgentId()}
-                    disabled={isSubmitting()}
-                    onChange={(event) => setSelectedAgentId(event.currentTarget.value)}
-                  >
-                    <option value="">{t("Default App Builder (React + NestJS)")}</option>
-                    <For each={agents.data?.filter(agent => agent.name !== 'app-builder')}>
-                      {(agent) => <option value={agent.id}>{t(agent.displayName ?? agent.name)}</option>}
-                    </For>
-                  </select>
-                  <Show when={selectedAgent()?.description}>
-                    <p class="text-xs text-muted-foreground">{t(selectedAgent()!.description!)}</p>
-                  </Show>
-                </div>
-              </Show>
               <div class="flex items-center justify-between px-3.5 py-2.5">
                 <span class="text-xs text-muted-foreground/40 select-none tracking-tight">{t("Enter to send · Shift+Enter for new line")}</span>
                 <button

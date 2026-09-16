@@ -1,59 +1,51 @@
-# 项目模板选择与 Agent 指令：阶段 1c
+# 统一 App Builder 与内部技术栈适配
 
-2026-09-16。本阶段把独立 FastAPI/Go 后端配方接入已有的项目创建流程，保留项目的 `agentId`，无需数据库结构迁移。
+用户只创建一个 App Builder，用自然语言说明需求和技术栈。Node.js、Python、Go 同处一个基础环境，框架依赖按项目安装。内部脚手架/运行适配不再暴露为 Python、Go 等独立产品入口。
 
-## 创建入口
+## 新项目
 
-新建菜单及首页模板选择器显示后端 `/api/agents` 返回的可用项。默认 App Builder 保持原有入口；两个新增实验项明确说明只包含后端和 SQLite：
+默认模板仅有受校验的 `.opsiforce-bootstrap` 标记和通用 `.gitignore`。后台启动器等待初始化，不启动 NestJS、Vite 或空转重启。Agent 先核对请求和源码，再内部执行 `opsiforce-runtime init <recipe>@1`：
 
-| 构建配置 | 配方 | 创建时的实际内容 |
-| --- | --- | --- |
-| `app-builder-python` / Python · FastAPI | `fastapi@1` | Python venv、FastAPI 源码、锁文件、SQLite、专属指令 |
-| `app-builder-go` / Go · net/http | `go@1` | Go 源码、go.mod/go.sum、纯 Go SQLite、专属指令 |
+- fastapi、go：复用已经验证的 Python/Go 后端源码、依赖锁、数据库与重启逻辑。
+- react-nest：保留旧 React/Vite + NestJS 脚手架，按需使用。
+- custom-startup：提供通用启动契约，供 Next.js 或其他 Node 框架实现；Agent 最后原子写入 run-app.sh 才启动。它不是已经完整验收的 Next.js 模板。
 
-`agent-config/agents.json` 将构建配置绑定到版本化配方。镜像构建时 `compose-runtime-agents.mjs` 复用运行器的模板目录生成 `/opt/agents/<name>/template/app`，不在两处维护同一份源码。Pod 原有初始化流程按项目 agentId 解析 AGENT_NAME，复制选定模板、建立 Git 基线；重启已有工作区不会再覆盖 app。
+初始化只接受不存在的 app，或平台原样的空白工作区。后者允许保留 app/data 与 opsiforce.env.json；有编辑、新增源码或目录符号链接就拒绝覆盖。复制采用排他写入；只有全部成功才移除等待标记。复制中断后保留现场供检查，不自动删除或强制重试。并发初始化由独占锁串行保护。
 
-此处的“构建配置”复用现有 Agent 选择协议，是过渡接入方式。未来前后端组合仍由配方组合生成，不为每种组合复制源码；它不是全新的通用多服务运行器。首页不根据自然语言猜模板，技术栈由显式选择确定。原 App Builder 指令新增技术栈核对，遇到不同框架请求要先说明当前模板，不能自行替换框架后宣称完成。
+完成初始化后，同一 manifest、启动脚本、文件页、预览、发布和持久化流程继续生效。Python/Go 后端可以在同一项目添加 Vue/React；Next.js 用自己的路由和生产服务。必须逐项目验证前后端代理、构建、重启与发布，不能把安装了语言工具链等同于所有组合已验收。
 
-## 指令和技能
+## 现有项目与兼容
 
-`runtime/instructions/backend.md` 维护共享的平台约定，fastapi.md/go.md 提供语言专属检查。构建时组合成对应 Agent 的 agent.md。新配置只包含明确列出的共享技能，避免把 NestJS、React 数据请求和 Node SQLite 的开发指令带入 Python/Go 项目。旧配置未指定 sharedSkills 时保持原来的技能合并行为。
+现有 app 不会因更新 Agent 指令而重新生成。原 React/Nest 工作流移到按需读取的兼容指南；统一指令按真实源码加载 Python、Go 或 Node 指南。已有独立 Python/Go Agent 注册项保留以维持项目关联和工作区同步，但标记 hidden，目录列表和新建接口即使开启旧 ENABLED_PROJECT_RECIPES 也不再暴露它们。私有业务 Agent 保留原有逻辑。
 
-工作区同步发现已有 app 的清单与选定 Agent 配方不一致时明确失败并保留源码，不自动迁移或替换技术栈。切换配方版本需要显式迁移；不能直接修改已有 Agent 名称绑定的 recipe 来强行升级旧项目。
+首页移除技术模板选择器，侧栏只展示可创建的 Agent。框架选择不需要用户另外创建项目。后续 Vue/React/Next.js 适配在这个入口内部逐步扩展，Java、Rust 后置。
 
-`opsiforce-runtime restart` 使用本地 agent-control 的认证接口重启受守护的应用，检查确实找到进程，并最多等待 120 秒直至 `/api/health` 返回 `status:ok`。错误区分控制端不可用、未找到守护进程与应用未恢复；不打印控制凭据。指令要求 Agent 修改源码、依赖或配置后使用这一入口，而不是启动重复服务。
+## 部署与验证
 
-默认 FastAPI 锁文件的 wheel 包随新镜像预下载。只有锁文件哈希和 Python 版本匹配时使用离线安装；自定义锁文件或不同 Python 版本仍从包源安装。这样默认新项目无需等待集群内访问包源，同时不会把旧缓存误用到已修改的依赖声明上。
+需要包含运行器/指令版本 0.11.0 的 Agent 镜像，并更新后端隐藏策略及前端入口。先验证候选镜像，再切换 AGENT_CONTAINER_IMAGE 与前后端；运行中的已有业务 Pod 不做技术栈迁移。
 
-后端根路径根据 Accept 返回内容：浏览器得到内置 API 说明页，API 客户端仍得到原 JSON；响应使用 Vary: Accept，公开欢迎语经过 HTML 转义。它不是 React/Vue 业务前端。此适配解决了 Chrome 嵌入预览直接加载 JSON 文档时被阻止的问题。
+- `node --test agent-config/runtime/test/*.test.mjs`：初始化、源码/数据保护、等待后激活、旧项目与历史 Agent 同步。
+- `cd backend && yarn exec tsx --test test/project-templates.test.ts`：隐藏历史记录并拒绝新建，保留项目解析。
+- `runtime/test/backend-smoke.py`：同一默认工作区分别初始化 Python/Go 后做 HTTP、SQLite、重启、配置和源码发布边界验证。
+- 平台验收需另行记录真实创建、文件页、模型选择技术栈和发布；单元测试不等于这些检查。
 
-## 部署顺序与开关
+## 聚合入口本轮验收（2026-09-16）
 
-首先构建并推送包含 0.10.3 功能的 Agent 镜像，再更新后端和前端。验收新镜像后启用：
+40 上 Agent、后端、前端均部署 `unified-v1-20260916-1`（镜像前缀 `sealos.hub:5000/opsiforce/`）。候选镜像基于上一轮镜像叠加本轮源码/构建产物；没有重建两份正式 Agent Dockerfile 的完整依赖层。实际验证 Linux amd64，arm64 尚未验证。
 
-```bash
-ENABLED_PROJECT_RECIPES=fastapi@1,go@1 bash deploy/deploy.sh deploy --tag <一致的发布版本>
-```
+- 运行器测试 28/28；后端 28 通过、1 个既有平台测试跳过；前端状态流和 i18n 测试 7/7；前后端构建通过。
+- Linux 候选镜像初始化/组合测试 12/12。默认聚合工作区分别初始化 Python、Go 后，HTTP、SQLite、认证重启、配置重载、源码归档排除开发数据与重复部署保留生产数据均通过；Python 全程在无网络容器内使用预缓存 wheel。
+- 真实浏览器首页无技术栈选择器，`/api/agents` 仅返回 App Builder。普通 Python 需求由默认 `app-builder` 和真实 `glm-5.3-flash` 完成：自行初始化 fastapi@1、编译检查、pip check、重启、验证接口与 SQLite 持久化。没有使用独立 Python Agent。
+- 该临时项目 Files 中 app 源码可见、依赖及数据库被过滤，HTML 预览正常。真实平台发布作业完成，生产公开 URL 返回正确 Python 接口、独立环境配置，且未包含开发 SQLite 测试行。
+- 临时项目及其发布环境在验收后删除。没有修改已有业务项目的源码或技术栈。
 
-Helm 使用 `config.enabledProjectRecipes: "fastapi@1,go@1"`。默认空字符串：新选项隐藏，后端也拒绝直接通过 agentId 创建、复制或导入未开启的模板项目。单独开启 `fastapi@1` 可分阶段上线 Python。关闭开关只限制新项目操作，不迁移或删除已有项目。
+证据保存在 40 的 `/root/opsiforce/deploy/.state/unified-builder-20260916/`，包括构建/推送日志、容器 smoke 结果和实际发布结果。配置快照为受限权限的 `*-before.json`。
 
-新配置 `poolSize:0`，避免一启用就额外预热多组 Pod。已存在的默认 Agent 及私有配置保持原有创建行为。禁用模板时保留 Agent 数据库记录，已有项目关联不会丢失。
+本轮完成统一入口和初始化基础。Next.js 与 Vue/React + Python/Go 的通用接入指南已经提供，但这些完整组合尚未完成本轮模型生成、生产构建和发布验收；后续在同一入口内部逐项补齐，不再增加语言 Agent。
 
-仅更新前端或后端不足以提供模板：旧镜像没有生成后的 Agent 配置及配方目录。开关是部署者对实际镜像能力的显式确认，不根据任意镜像标签猜能力；设置前须完成下面的验收。
+## 历史记录：拆分入口阶段（已被统一入口设计替代）
 
-## 验收
-
-- 运行器、重启入口、模板组合、技能隔离、工作区同步与配方冲突：`node --test agent-config/runtime/test/*.test.mjs`。
-- 后端创建门禁与兼容性：`cd backend && yarn exec tsx --test test/project-templates.test.ts`。
-- 两个真实后端与 `/restart-app`：隔离镜像中执行 `runtime/test/backend-smoke.py`。
-- 默认 Python 离线初始化：隔离镜像 `--network=none` 执行 smoke 的 `--recipe fastapi`。
-- Kubernetes 验证真实 init-config、Git 基线、`.opencode` 中的主 Agent、应用健康及重启；之后经平台 API 创建、预览和发布独立测试项目。
-
-源码/fixture 测试不等于模型生成验收；重启服务也不等于发布任务成功。上线记录须分别写明实际完成的验证，见本文件后续记录。
-
-## 40 实际上线与验收记录
-
-已部署并启用 `fastapi@1,go@1`。镜像前缀为 `sealos.hub:5000/opsiforce/`：
+此前部署并启用 `fastapi@1,go@1`。镜像前缀为 `sealos.hub:5000/opsiforce/`：
 
 | 组件 | 镜像标签 |
 | --- | --- |

@@ -11,6 +11,8 @@ export interface AgentRegistryEntry {
   variant?: string;
   poolSize?: number;
   recipe?: string;
+  /** Retained for existing projects; not available for new creation. */
+  hidden?: boolean;
   sharedSkills?: string[];
 }
 
@@ -59,7 +61,7 @@ export function readMergedAgentRegistry(privateFragment?: AgentRegistry): AgentR
 
 /** Only expose a recipe after the matching Agent image has been rolled out. */
 export function isAgentEnabled(entry: AgentRegistryEntry | undefined, enabled = process.env.ENABLED_PROJECT_RECIPES ?? ''): boolean {
-  return !entry?.recipe || enabled.split(',').map(value => value.trim()).includes(entry.recipe);
+  return entry?.hidden !== true && (!entry?.recipe || enabled.split(',').map(value => value.trim()).includes(entry.recipe));
 }
 
 export function readAgentConfig(): AgentRuntimeConfig {

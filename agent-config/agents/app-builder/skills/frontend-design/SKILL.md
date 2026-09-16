@@ -26,7 +26,7 @@ Before touching CSS or components, decide:
 
 ## Phase 2: Theme Setup
 
-Pick a brand color that fits the tone, then set it in `index.css`. The **`ui` skill owns the theming mechanics** — OKLCH variables, the `@theme inline` setup, the full semantic-token list, border radius, and the dark-mode toggle. This section is only about *which* colors to choose.
+Pick a brand color that fits the tone, then set it in `index.css`. For React projects, the **`ui` skill owns the theming mechanics** — OKLCH variables, the `@theme inline` setup, the full semantic-token list, border radius, and the dark-mode toggle. For Vue and other frameworks, implement these visual decisions with their native components and CSS. This section is only about *which* colors to choose.
 
 ### Starter palettes by app type
 

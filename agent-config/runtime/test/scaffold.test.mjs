@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
@@ -57,4 +57,65 @@ test('only implemented, explicitly versioned templates can be created', async t 
   const result = spawnSync(process.execPath, [cli, 'init', 'go@1'], { env: { ...process.env, WORKSPACE: root }, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).recipe, 'go@1');
+});
+
+for (const recipe of ['fastapi', 'go', 'react-nest', 'custom-startup']) {
+  test(`unified workspace initializes ${recipe} while preserving data and configuration`, async t => {
+    const root = await workspace(t);
+    await cp(fileURLToPath(new URL('../bootstrap/', import.meta.url)), path.join(root, 'app'), { recursive: true });
+    await mkdir(path.join(root, 'app/data'));
+    await writeFile(path.join(root, 'app/data/app.db'), 'platform-created data');
+    await writeFile(path.join(root, 'app/opsiforce.env.json'), '{"KEY":"existing"}');
+    await scaffold(root, `${recipe}@1`);
+    assert.equal((await resolveStartup(root)).recipe.id, recipe);
+    assert.equal(await readFile(path.join(root, 'app/data/app.db'), 'utf8'), 'platform-created data');
+    assert.equal(await readFile(path.join(root, 'app/opsiforce.env.json'), 'utf8'), '{"KEY":"existing"}');
+    assert.ok(!(await readdir(path.join(root, 'app'))).includes('.opsiforce-bootstrap'));
+    await assert.rejects(scaffold(root, 'go@1'), { code: 'APP_EXISTS' });
+  });
+}
+
+test('bootstrap initialization refuses edited files and symlinked data without changing them', async t => {
+  for (const kind of ['extra', 'edited-ignore', 'symlink-data', 'symlink-app']) {
+    const root = await workspace(t);
+    const app = path.join(root, 'app');
+    await cp(fileURLToPath(new URL('../bootstrap/', import.meta.url)), app, { recursive: true });
+    if (kind === 'extra') await writeFile(path.join(app, 'main.py'), 'user source');
+    if (kind === 'edited-ignore') await writeFile(path.join(app, '.gitignore'), 'user ignores');
+    if (kind === 'symlink-data') await symlink(root, path.join(app, 'data'));
+    if (kind === 'symlink-app') {
+      const { rename } = await import('node:fs/promises');
+      await rename(app, path.join(root, 'original'));
+      await symlink(path.join(root, 'original'), app);
+    }
+    const before = await readdir(app);
+    await assert.rejects(scaffold(root, 'fastapi@1'), { code: 'APP_EXISTS' });
+    assert.deepEqual(await readdir(app), before);
+  }
+});
+
+test('runtime waits quietly for initialization then starts the selected launcher', async t => {
+  const { spawn } = await import('node:child_process');
+  const { once } = await import('node:events');
+  const root = await workspace(t);
+  await cp(fileURLToPath(new URL('../bootstrap/', import.meta.url)), path.join(root, 'app'), { recursive: true });
+  const cli = fileURLToPath(new URL('../cli.mjs', import.meta.url));
+  const env = { ...process.env, WORKSPACE: root, PATH: `${root}:${process.env.PATH}` };
+  const inspect = spawnSync(process.execPath, [cli, 'inspect'], { env, encoding: 'utf8' });
+  assert.equal(JSON.parse(inspect.stdout).source, 'bootstrap');
+  // Substitute only the supervisor; exercise the actual dispatcher and startup script.
+  await writeFile(path.join(root, 'guard'), '#!/bin/sh\necho selected-app-started\n', { mode: 0o755 });
+  const child = spawn(process.execPath, [cli, 'run'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+  t.after(() => child.kill('SIGKILL'));
+  let stdout = ''; let stderr = '';
+  child.stdout.on('data', data => { stdout += data; });
+  child.stderr.on('data', data => { stderr += data; });
+  await once(child.stdout, 'data');
+  assert.match(stdout, /Waiting for App Builder/);
+  const exited = once(child, 'exit');
+  await scaffold(root, 'custom-startup@1');
+  await writeFile(path.join(root, 'app/run-app.sh'), '#!/bin/sh\nexit 0\n');
+  const [code] = await exited;
+  assert.equal(code, 0, stderr);
+  assert.match(stdout, /selected-app-started/);
 });

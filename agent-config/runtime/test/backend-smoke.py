@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import sqlite3
 import subprocess
 import tempfile
@@ -132,6 +133,7 @@ def main():
             dev, prod = root / "dev", root / "prod"
             dev.mkdir()
             prod.mkdir()
+            shutil.copytree(RUNTIME / "bootstrap", dev / "app")
             command("node", str(RUNTIME / "cli.mjs"), "init", recipe + "@1", env={**os.environ, "WORKSPACE": str(dev)})
             exercise(dev, recipe, "development", [], "development-row")
             command("git", "init", "-q", cwd=dev)
