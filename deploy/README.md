@@ -60,6 +60,8 @@ powershell -ExecutionPolicy Bypass -File .\deploy\build.ps1 -Tag v1.0.0 -NoPush
 
 将最新 `deploy` 目录复制到虚拟机。预先准备 Bash、kubectl、openssl、envsubst（gettext），确认 kubectl 指向测试集群。在 `deploy` 目录执行：
 
+部署前，在每个实际承载 Agent Pod 的 Linux 节点执行 `bash prepare-agent-node.sh --check`。若 inotify 实例额度偏低，以 root 执行 `bash prepare-agent-node.sh --apply`，将额度提升至至少 1024 并持久化；不要只在远程 kubectl 客户端上修改。多项目的文件监听会共用宿主机额度，128 的默认值可能导致 Agent、Vite 和 Code 编辑器出现 `EMFILE` 并卡住，详见 [现场记录](../docs/operations/inotify-exhaustion.md)。
+
 ```bash
 # 仓库和 tag 与构建时一致，不需要节点 IP
 bash deploy.sh deploy --tag v1.0.0 --registry sealos.hub:5000/opsiforce
