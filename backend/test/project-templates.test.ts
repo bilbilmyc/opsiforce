@@ -50,4 +50,3 @@ test('the agent catalog hides disabled profiles even when their database rows re
   db.select = (() => ({ from: () => ({ orderBy: async () => rows }) })) as unknown as typeof db.select;
   assert.deepEqual((await new AgentService().findAll()).map(agent => agent.name), ['app-builder', 'app-builder-python']);
 });
-

@@ -4,6 +4,8 @@ import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { api } from './client';
 import { projectKeys } from './projects';
 import { environmentKeys, type ProjectEnvironmentStatus } from './environments';
+import { whilePageVisible } from '~/lib/visible-stream';
+import { createStatusSource } from '~/lib/status-source';
 
 export type PublishJobStatus = 'queued' | 'committing' | 'building' | 'migrating' | 'swapping' | 'done' | 'failed';
 
@@ -118,24 +120,27 @@ export function usePublishJob(
 
     const tenant = localStorage.getItem('tenant');
     const query = tenant ? `?tenant=${encodeURIComponent(tenant)}` : '';
-    const source = new EventSource(`/api/projects/${pid}/publish/environments/${envId}/job/stream${query}`);
+    const dispose = whilePageVisible(() => {
+      const source = createStatusSource(`/api/projects/${pid}/publish/environments/${envId}/job/stream${query}`);
 
-    source.onmessage = (event) => {
-      try {
-        const job = JSON.parse(event.data) as PublishJob;
-        setData(job);
-        if (job.status === 'done' || job.status === 'failed') {
-          qc.invalidateQueries({ queryKey: environmentKeys.forProject(pid) });
-          qc.invalidateQueries({ queryKey: publishKeys.targets(pid) });
-          qc.invalidateQueries({ queryKey: projectKeys.all });
-          source.close();
+      source.onmessage = (event) => {
+        try {
+          const job = JSON.parse(event.data) as PublishJob;
+          setData(job);
+          if (job.status === 'done' || job.status === 'failed') {
+            qc.invalidateQueries({ queryKey: environmentKeys.forProject(pid) });
+            qc.invalidateQueries({ queryKey: publishKeys.targets(pid) });
+            qc.invalidateQueries({ queryKey: projectKeys.all });
+            source.close();
+          }
+        } catch {
+          // ignore malformed frames
         }
-      } catch {
-        // ignore malformed frames
-      }
-    };
+      };
 
-    onCleanup(() => source.close());
+      return () => source.close();
+    });
+    onCleanup(dispose);
   });
 
   return {

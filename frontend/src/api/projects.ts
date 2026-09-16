@@ -6,6 +6,8 @@ import { ApiError, api, type Project, type ProjectState } from './client';
 import { environmentKeys } from './environments';
 import { detectTimezone } from '~/lib/timezone';
 import { isMeaningfulSessionTitle } from '~/lib/session-title';
+import { whilePageVisible } from '~/lib/visible-stream';
+import { createStatusSource } from '~/lib/status-source';
 
 export const projectKeys = {
   all: ['projects'] as const,
@@ -40,37 +42,40 @@ export function useProjectStatus(projectId: () => string, options?: { enabled?: 
     const enabled = options?.enabled?.() ?? true;
     if (!enabled) return;
 
-    let closed = false;
-    const events = new EventSource(statusEventsUrl(id));
+    const dispose = whilePageVisible(() => {
+      let closed = false;
+      const events = createStatusSource(statusEventsUrl(id));
 
-    events.onmessage = (event) => {
-      try {
-        applyStatus(JSON.parse(event.data) as ProjectState);
-      } catch (err) {
-        setError(err);
-      }
-    };
-
-    events.addEventListener('error', (event) => {
-      if (closed) return;
-      const data = (event as MessageEvent).data;
-      if (typeof data === 'string' && data.length > 0) {
+      events.onmessage = (event) => {
         try {
-          const payload = JSON.parse(data) as ProjectStatusErrorPayload;
-          const status = statusForCode(payload.code);
-          setError(new ApiError(status, payload.message ?? t("Error: {0}", { "0": status })));
-          closed = true;
-          events.close();
-          return;
-        } catch {}
-      }
-      setError(new Error(t("Project status stream disconnected")));
-    });
+          applyStatus(JSON.parse(event.data) as ProjectState);
+        } catch (err) {
+          setError(err);
+        }
+      };
 
-    onCleanup(() => {
-      closed = true;
-      events.close();
+      events.addEventListener('error', (event) => {
+        if (closed) return;
+        const data = (event as MessageEvent).data;
+        if (typeof data === 'string' && data.length > 0) {
+          try {
+            const payload = JSON.parse(data) as ProjectStatusErrorPayload;
+            const status = statusForCode(payload.code);
+            setError(new ApiError(status, payload.message ?? t("Error: {0}", { "0": status })));
+            closed = true;
+            events.close();
+            return;
+          } catch {}
+        }
+        setError(new Error(t("Project status stream disconnected")));
+      });
+
+      return () => {
+        closed = true;
+        events.close();
+      };
     });
+    onCleanup(dispose);
   });
 
   return {

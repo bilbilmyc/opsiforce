@@ -37,6 +37,10 @@ export class AgentStatusStreamController {
       userId: dbUser.id,
     });
 
+    if ((req.query as { snapshot?: string }).snapshot === '1') {
+      return reply.send(visibleIds.map(projectId => ({ projectId, agentStatus: this.agentStatusService.statusOf(projectId) })));
+    }
+
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',

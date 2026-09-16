@@ -2,6 +2,8 @@ import { createEffect, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { createTenantState } from '~/lib/tenant-state';
 import type { AgentStatus, Project } from './client';
+import { whilePageVisible } from '~/lib/visible-stream';
+import { createStatusSource } from '~/lib/status-source';
 
 interface AgentStatusEvent {
   projectId: string;
@@ -25,14 +27,17 @@ export function useAgentStatusStream(projects: () => Project[] | undefined): voi
       setAgentStatuses(project.id, project.agentStatus ?? 'idle');
     }
 
-    const events = new EventSource(agentStatusEventsUrl(tenantName));
-    events.addEventListener('message', (event) => {
-      try {
-        const { projectId, agentStatus } = JSON.parse(event.data) as AgentStatusEvent;
-        setAgentStatuses(projectId, agentStatus);
-      } catch {}
+    const dispose = whilePageVisible(() => {
+      const events = createStatusSource(agentStatusEventsUrl(tenantName));
+      events.addEventListener('message', (event) => {
+        try {
+          const { projectId, agentStatus } = JSON.parse(event.data) as AgentStatusEvent;
+          setAgentStatuses(projectId, agentStatus);
+        } catch {}
+      });
+      return () => events.close();
     });
-    onCleanup(() => events.close());
+    onCleanup(dispose);
   });
 }
 

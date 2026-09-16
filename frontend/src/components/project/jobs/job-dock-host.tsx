@@ -14,6 +14,8 @@ import { framePhase, jobGuardsUnload, jobOnTerminal, jobSseUrl, parseJobFrame, t
 import { createImportUploadRunner } from './import-upload-runner';
 import { JobCard } from './job-card';
 import { JobDialog } from './job-dialog';
+import { whilePageVisible } from '~/lib/visible-stream';
+import { createStatusSource } from '~/lib/status-source';
 
 function warnOnUnload(event: BeforeUnloadEvent) {
   event.preventDefault();
@@ -28,7 +30,7 @@ export function JobDockHost(props: ParentProps) {
   const qc = useQueryClient();
   const [tracked, setTracked] = createStore<Record<string, TrackedJob>>({});
   const [expandedKey, setExpandedKey] = createSignal<string | null>(null);
-  const sources = new Map<string, EventSource>();
+  const sources = new Map<string, { close: () => void }>();
   const projectViews = new Map<string, ProjectViewHandlers>();
 
   const closeStream = (key: string) => {
@@ -87,25 +89,28 @@ export function JobDockHost(props: ParentProps) {
     if (!entry || sources.has(key)) return;
     const url = jobSseUrl(entry);
     if (!url) return;
-    const source = new EventSource(url);
-    source.addEventListener('message', (event) => {
-      try {
-        const current = tracked[key];
-        if (!current) return;
-        const job = parseJobFrame(event.data);
-        setTracked(key, 'job', job);
-        const phase = framePhase(current.kind, job);
-        if (phase === 'running') {
-          setTracked(key, 'lastStep', job.status);
-        } else {
-          closeStream(key);
-          jobOnTerminal(tracked[key], host);
+    const dispose = whilePageVisible(() => {
+      const source = createStatusSource(url);
+      source.addEventListener('message', (event) => {
+        try {
+          const current = tracked[key];
+          if (!current) return;
+          const job = parseJobFrame(event.data);
+          setTracked(key, 'job', job);
+          const phase = framePhase(current.kind, job);
+          if (phase === 'running') {
+            setTracked(key, 'lastStep', job.status);
+          } else {
+            closeStream(key);
+            jobOnTerminal(tracked[key], host);
+          }
+        } catch {
+          // ignore malformed frames
         }
-      } catch {
-        // ignore malformed frames
-      }
+      });
+      return () => source.close();
     });
-    sources.set(key, source);
+    sources.set(key, { close: dispose });
   };
 
   const track = (key: string, entry: TrackedJob) => {

@@ -88,6 +88,9 @@ export class ProjectController {
         userId: dbUserId,
       });
 
+    // Plain-HTTP clients use finite snapshots to avoid the per-origin SSE limit.
+    if ((req.query as { snapshot?: string }).snapshot === '1') return reply.send(await loadStatus());
+
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
