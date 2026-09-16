@@ -1,6 +1,6 @@
 # 多技术栈模板与统一运行约定
 
-状态：规划，2026-09-16。本文没有宣称 Next.js、Vue、Go、Rust、Java 模板已实现或通过发布验收。文件页修复独立交付，见 [项目文件](../operations/project-files.md)。
+状态：分步实施，2026-09-16。已完成 [阶段 1a：启动清单与旧入口兼容](../runtime/project-runtime.md) 的代码和隔离验证，未切换业务 Pod。其余是规划；Next.js、Vue、Go、Rust、Java 模板尚未实现或通过发布验收。文件页修复独立交付，见 [项目文件](../operations/project-files.md)。
 
 ## 目标与当前问题
 
@@ -40,7 +40,7 @@
 | 运行工具配置 | 固定版本的编译器、包管理器、镜像摘要、缓存规则 | Node；Node + Python；Node + Go；Node + Rust；Node + JDK |
 | 前端/后端适配 | 源码骨架、启动命令、构建输出、健康检查、专属 Agent 指令 | Vue/Vite、React/Vite、Next.js、FastAPI、Go HTTP、Axum、Spring Boot |
 | 项目配方 | 可组合的适配、路由、数据库、认证和资源默认值 | vue-fastapi、react-go、next-fullstack、next-python |
-| 项目运行清单 | 已选版本、目录、服务、任务、持久化和路由的实例配置 | app/opsiforce.project.json，建议名称，尚未实现 |
+| 项目运行清单 | 已选版本、目录、服务、任务、持久化和路由的实例配置 | app/opsiforce.project.json；版本 1 目前只支持启动脚本 |
 
 前后端共享一个组合协议，但不能把理论笛卡尔积全部标成“已支持”。注册表记录每个配方的 planned / experimental / verified / legacy 状态，以及最后通过的模板版本、镜像摘要、架构和验收记录。
 
@@ -66,11 +66,11 @@ Agent 通用指令只保留需求实现、验证和平台约定；框架目录�
 
 ## 清单最小约定
 
-建议使用带 schemaVersion 的 JSON，执行前通过严格 JSON Schema 校验，迁移清单版本时保留备份。以下是设计示例，不是当前可运行配置：
+使用带 schemaVersion 的 JSON，执行前严格校验，迁移清单版本时保留备份。已实现的版本 1 只有 startup 脚本约定，见运行入口文档。以下是未来扩展版设计示例，不是当前可运行配置，版本号及字段待适配验证后确定：
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "recipe": { "id": "vue-fastapi", "version": "1" },
   "runtimeProfile": "node-python",
   "sourceRoots": ["app"],

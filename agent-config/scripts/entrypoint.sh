@@ -12,7 +12,7 @@ mkdir -p /workspace/app/data /workspace/data
 EXTERNAL_SERVICES_DB=/workspace/data/external-services.db
 [ -f "${EXTERNAL_SERVICES_DB}" ] || sqlite3 "${EXTERNAL_SERVICES_DB}" "VACUUM;"
 
-guard webapp /workspace/app/startup.sh &
+guard webapp opsiforce-runtime run &
 
 export OPENCODE_PASSWORD="${OPENCODE_PASSWORD:-${OPSIFORCE_CONTROL_TOKEN:-opencode-pod-local}}"
 guard opencode opencode2 serve --port "${OPENCODE_INTERNAL_PORT:-4106}" --hostname 127.0.0.1 &
