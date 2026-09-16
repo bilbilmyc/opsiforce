@@ -65,10 +65,12 @@ export function ProjectPreviewPanel(props: ProjectPreviewPanelProps) {
         fallback={
           <button
             onClick={() => setOpen(true)}
-            class="shrink-0 w-8 bg-sidebar border-l border-border flex items-center justify-center hover:bg-accent transition-colors"
-            title={t("Open panel")}
+            class="shrink-0 w-9 bg-sidebar border-l border-border flex flex-col gap-2 items-center justify-center hover:bg-accent transition-colors"
+            title={t(props.hasApp ? "Show app preview" : "Open panel")}
+            aria-label={t(props.hasApp ? "Show app preview" : "Open panel")}
           >
             <PanelRightOpen class="w-4 h-4 text-muted-foreground" />
+            <span class="text-xs text-muted-foreground [writing-mode:vertical-rl]">{t(props.hasApp ? "App preview" : "Open panel")}</span>
           </button>
         }
       >

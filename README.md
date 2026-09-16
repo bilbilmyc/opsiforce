@@ -14,6 +14,56 @@ Community: [Join the Opsiforce Discord](https://discord.gg/kMUW2zR4R)
 
 [Run it locally for development](#running-it-locally) | [Running in production](#running-in-production)
 
+## 从生成代码到运行、预览和发布（图解）
+
+**完整流程：生成代码 → 配置并启动开发服务 → 预览与测试 → 发布到生产 → 分享生产链接。**
+
+不必每次都进入「代码」里的 VS Code 手动运行命令。可以直接让项目中的 AI 完成安装依赖、配置启动方式和启动验证；VS Code 终端用于自行调试。**只有源码或聊天中一句“已完成”，不代表服务已经接入平台。**
+
+### 1. 让 AI 把服务真正运行起来
+
+生成代码后，可以在项目对话里继续说：
+
+> 请把这个服务接入 Opsiforce 的开发环境，补齐依赖和启动配置，实际启动并验证接口，让右侧出现可用的应用预览。不要只给我源码、启动命令或 localhost 地址。先不要发布到生产。
+
+接入后，点击顶部「开发」打开环境菜单，确认开发环境运行中。下图中的生产环境已经发布过，因此显示「发布更新」；新应用需要先完成首次发布。
+
+![顶部开发按钮展开环境菜单，查看开发与生产运行状态](docs/assets/run-publish/01-environments.png)
+
+如果需要自己接入 Python 服务，参考 [FastAPI 启动与平台接入示例](deploy/examples/fastapi/README.md)。
+
+### 2. 找到实时预览和单独访问链接
+
+右侧是**当前所选环境正在运行的应用**。预览顶部显示「访问链接」，点击「打开应用」即可在新标签页单独访问；旁边的复制按钮可复制链接。也可以选中地址手动复制。
+
+![应用预览顶部显示访问链接、打开应用、复制与重新加载入口](docs/assets/run-publish/05-app-preview.png)
+
+如果右侧被收起，点击最右边带文字的「应用预览」竖条即可恢复。开发和生产是两个不同的环境，切换顶部环境后，预览和访问链接会一起切换。
+
+![收起后可点击右侧应用预览文字入口重新打开](docs/assets/run-publish/06-preview-collapsed.png)
+
+也可以从顶部环境菜单找到对应行的「打开应用」图标和「复制应用链接」图标。对外分享时选择**生产**这一行的链接。
+
+![生产环境行的复制应用链接入口](docs/assets/run-publish/04-link.png)
+
+### 3. 改完代码后，检查开发服务
+
+「实时预览」展示的是正在运行的页面。**保存代码是否自动生效，取决于应用有没有配置热更新。** 预览栏的「重新加载应用」只刷新页面，不会重启后端。
+
+当前 FastAPI 示例没有启用热更新。修改代码后，在环境菜单中打开**开发行右侧的 ⋮ → 重启**，确认重启并等待恢复，再刷新右侧预览，检查页面、接口和数据。其他已配置热更新的应用通常可以直接看到修改结果。
+
+![开发环境右侧更多菜单中的重启入口](docs/assets/run-publish/02-restart.png)
+
+### 4. 发布生产，再分享链接
+
+开发环境验证通过后，在环境菜单选择生产目标的「发布」或「发布更新」，检查变量和定时任务配置，按对话框完成确认。等待发布任务成功后，打开**生产链接**再次检查。
+
+![发布更新到生产的配置确认对话框](docs/assets/run-publish/03-publish.png)
+
+开发修改不会自动变成生产版本；后续更新仍需执行发布。生产运行也不依赖你一直开着 VS Code 终端。
+
+当前 40 环境的 FastAPI 示例访问地址、验证记录和运行说明见 [FastAPI 发布记录](docs/operations/fastapi-publish.md)。这些地址需要访问者能连通 40；自有公网域名、HTTPS 和公网入口需另行配置。
+
 ## Why Opsiforce Exists
 
 Most AI tools stop short in one way or another. Local coding assistants generate a real app but never host it, and the agent's context and session live only on that one machine, so they are lost on the next restart and shared with no one. Hosted builders do host the app and keep its history, but they lock it to a narrow stack on their cloud that you cannot run yourself. That is fine for a quick CRUD screen, but not if you want the platform to **build and host** the app for you in your own infrastructure, keep the agent's session alive and shared across a team, embed AI app building into a product, connect it to internal systems, or let users build more than a React + Supabase app.

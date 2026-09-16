@@ -1,7 +1,9 @@
 import { t } from '~/i18n';
+import { toast } from 'solid-sonner';
+import { copyText } from '~/lib/copy-text';
 import { publicDomain, publicScheme } from '~/lib/public-url';
 import { Show, createEffect, createSignal, on, onMount, type JSX } from 'solid-js';
-import { Check, Copy, LoaderCircle, PanelRightClose, Pencil, RefreshCw } from '~/components/icons';
+import { Check, Copy, ExternalLink, LoaderCircle, PanelRightClose, Pencil, RefreshCw } from '~/components/icons';
 import { ToolbarButton } from '~/components/ui/toolbar-button';
 import { appPublicUrl } from '~/lib/app-url';
 import { usePermissions } from '~/api/permissions';
@@ -49,10 +51,14 @@ export function AppPreviewPane(props: AppPreviewPaneProps) {
     iframe.src = iframe.src;
   }
 
-  function copyUrl() {
-    navigator.clipboard.writeText(publicUrl());
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+  async function copyUrl() {
+    try {
+      await copyText(publicUrl());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error(t('Could not copy. Select the app URL and copy it manually.'));
+    }
   }
 
   onMount(() => props.onReloadRef?.(reload));
@@ -77,7 +83,10 @@ export function AppPreviewPane(props: AppPreviewPaneProps) {
           </Show>
         </div>
         {props.switcher}
-        <div class="flex items-center shrink-0">
+        <div class="flex items-center shrink-0 gap-1">
+          <a href={publicUrl()} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-primary hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <ExternalLink class="w-3.5 h-3.5" />{t('Open app')}
+          </a>
           <ToolbarButton onClick={copyUrl} tooltip={copied() ? t("Copied!") : t("Copy URL")}>
             {copied() ? <Check class="w-3.5 h-3.5 text-green-500" /> : <Copy class="w-3.5 h-3.5" />}
           </ToolbarButton>
@@ -85,6 +94,11 @@ export function AppPreviewPane(props: AppPreviewPaneProps) {
             <RefreshCw class="w-3.5 h-3.5" />
           </ToolbarButton>
         </div>
+      </div>
+      <div class="flex items-center gap-2 border-b border-border bg-sidebar px-2 py-1.5 shrink-0">
+        <label for={`app-url-${props.environmentId}`} class="shrink-0 text-xs text-muted-foreground">{t('App URL')}</label>
+        <input id={`app-url-${props.environmentId}`} aria-label={t('App URL')} type="text" readonly value={publicUrl()} onFocus={event => event.currentTarget.select()}
+          class="min-w-0 flex-1 rounded border border-input bg-background px-2 py-1 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" />
       </div>
       <div class="flex-1 min-h-0">
         <iframe

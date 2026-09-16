@@ -1,4 +1,6 @@
 import { t } from '~/i18n';
+import { toast } from 'solid-sonner';
+import { copyText } from '~/lib/copy-text';
 import { createSignal } from 'solid-js';
 import { Check, Copy, ExternalLink } from '~/components/icons';
 import { Tooltip, TooltipContent, TooltipTrigger } from '~/components/ui/tooltip';
@@ -25,11 +27,15 @@ export default function EnvAppLinkButtons(props: EnvAppLinkButtonsProps) {
     window.open(props.appUrl, '_blank', 'noopener,noreferrer');
   };
 
-  const copyUrl = () => {
+  const copyUrl = async () => {
     if (!props.enabled) return;
-    navigator.clipboard.writeText(props.appUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    try {
+      await copyText(props.appUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      toast.error(t('Could not copy. Open the app and copy the address from your browser.'));
+    }
   };
 
   return (
