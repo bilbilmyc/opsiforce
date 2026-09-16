@@ -12,6 +12,9 @@ KUBE_CONTEXT=${KUBE_CONTEXT:-}             # 留空时使用 kubectl 当前的�
 IMAGE_PULL_SECRET=${IMAGE_PULL_SECRET:-}   # opsiforce 命名空间中已有的镜像拉取 Secret 名称。
 OPENAI_API_KEY=${OPENAI_API_KEY:-}
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+ENABLED_PROJECT_RECIPES=${ENABLED_PROJECT_RECIPES:-} # 新 Agent 镜像验收后显式开启实验模板。
+[[ -z "$ENABLED_PROJECT_RECIPES" || "$ENABLED_PROJECT_RECIPES" =~ ^[a-z][a-z0-9-]*@[0-9]+(,[a-z][a-z0-9-]*@[0-9]+)*$ ]] \
+  || { echo 'ENABLED_PROJECT_RECIPES 必须是逗号分隔的 recipe@version。' >&2; exit 1; }
 
 DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(dirname "$DIR")
@@ -247,11 +250,12 @@ fi
 export BIFROST_CONSOLE_URL
 RELEASE_ID=$(date -u +%Y%m%d%H%M%S)
 export REGISTRY TAG DOMAIN PUBLIC_SCHEME PORT_SUFFIX DOMAIN_REGEX PG_HOST PG_PORT PG_USER BIFROST_DATABASE PG_SSLMODE
-export PULL_SECRETS_JSON RELEASE_ID
+export PULL_SECRETS_JSON RELEASE_ID ENABLED_PROJECT_RECIPES
 FILES=(base apps migration)
 if [[ "$DB_MODE" == bundled ]]; then FILES+=(local-infra); fi
 if [[ "$PROFILE" == local ]]; then FILES+=(local-edge); else FILES+=(production-edge); fi
 TOKENS='${BIFROST_CONSOLE_URL} ${REGISTRY} ${TAG} ${DOMAIN} ${PUBLIC_SCHEME} ${PORT_SUFFIX} ${DOMAIN_REGEX} ${PG_HOST} ${PG_PORT} ${PG_USER} ${BIFROST_DATABASE} ${PG_SSLMODE} ${PULL_SECRETS_JSON} ${RELEASE_ID} ${DATABASE_URL_B64} ${REDIS_URL_B64} ${PG_PASSWORD_B64} ${ADMIN_PASSWORD_B64} ${PROXY_CONTROL_TOKEN_B64} ${BIFROST_ENCRYPTION_KEY_B64} ${EXTERNAL_SERVICES_ENCRYPTION_KEY_B64} ${OIDC_PLUGIN_SECRET_B64} ${OPENAI_API_KEY_B64} ${ANTHROPIC_API_KEY_B64}'
+TOKENS+=' ${ENABLED_PROJECT_RECIPES}'
 for file in "${FILES[@]}"; do envsubst "$TOKENS" < "$DIR/k8s/$file.yaml" > "$OUT/$file.yaml"; done
 [[ "$ACTION" == render ]] && { echo "YAML 已生成到：$OUT"; exit 0; }
 

@@ -31,7 +31,7 @@ export function CreateMenu(props: {
       <DropdownMenuTrigger as={props.trigger} />
       <DropdownMenuContent class="w-72">
         <Show when={canCreateProject()}>
-          <MenuDividerLabel class="mb-1 mt-1">{t("Select an agent to build a project")}</MenuDividerLabel>
+          <MenuDividerLabel class="mb-1 mt-1">{t("Choose a project template or agent")}</MenuDividerLabel>
           <Show
             when={(props.agents ?? []).length > 0}
             fallback={<div class="px-2 py-1.5 text-xs italic text-muted-foreground">{t("No agents available")}</div>}
@@ -40,8 +40,8 @@ export function CreateMenu(props: {
               {(agent) => (
                 <RichMenuItem
                   icon={<Bot class="w-4 h-4" />}
-                  title={agent.displayName ?? agent.name}
-                  description={agent.description ?? t("Start a new project with this agent.")}
+                  title={t(agent.displayName ?? agent.name)}
+                  description={t(agent.description ?? "Start a new project with this agent.")}
                   disabled={props.disabled}
                   onSelect={() => props.onCreateProject(agent.id)}
                 />

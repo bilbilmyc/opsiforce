@@ -108,6 +108,12 @@ async function applyOpenCodeConfig(model, variant) {
 
 async function copyAgentOwnedFiles() {
   const agentConfig = await loadAgentConfig()
+  if (agentConfig.recipe && await exists(path.join(workspace, 'app'))) {
+    const manifest = await readJson(path.join(workspace, 'app', 'opsiforce.project.json'), null)
+    if (`${manifest?.recipe?.id}@${manifest?.recipe?.version}` !== agentConfig.recipe) {
+      throw new Error('Project manifest does not match the selected runtime agent; preserve the project and use an explicit migration')
+    }
+  }
   const currentConfig = await readJson(opencodeConfigPath, {})
   const model = await modelOverride(agentConfig, currentConfig)
   const variant = variantOverride(agentConfig, currentConfig)

@@ -1,6 +1,6 @@
 # Python / Go 后端模板：阶段 1b
 
-2026-09-16。首批新增 `fastapi@1`、`go@1`，注册状态为 **experimental**。本阶段交付可以初始化、运行和验证的后端骨架；尚未接入创建页面、按模板生成的 Agent 指令或 React/Vue 前端组合。现有 App Builder 默认仍是 React + NestJS，不能仅在聊天中指定 Python/Go 就声称平台已切换模板。
+2026-09-16。首批新增 `fastapi@1`、`go@1`，注册状态为 **experimental**。本页记录阶段 1b 的后端骨架；后续阶段 1c 已接入可选创建入口与专属 Agent 指令，见 [模板选择](template-selection.md)。React/Vue 前端组合尚未接入。默认 App Builder 仍是 React + NestJS，不能仅在聊天中指定 Python/Go 就声称平台已切换模板。
 
 ## 初始化
 
@@ -47,7 +47,7 @@ WORKSPACE=/tmp/go-workspace opsiforce-runtime init go@1
 - 开发和生产均运行 Uvicorn，均不启用 reload 文件监听。修改源码或平台配置后使用平台“重启应用”。后续前端组合再单独设计开发热更新。
 - 使用 Python 标准库 sqlite3，连接按请求打开并关闭。
 
-锁文件目前是版本固定，尚非带分发文件哈希的离线供应链锁定；首次安装需要包源。用户新增依赖需重新生成完整锁文件。
+锁文件目前是版本固定，尚非带分发文件哈希的供应链锁定。阶段 1c 镜像预下载默认锁文件的 wheel 包以支持离线首次安装；更改依赖或 Python 版本时仍需包源。用户新增依赖需重新生成完整锁文件。
 
 ## Go / net/http
 
@@ -80,6 +80,6 @@ docker run --rm --cpus=2 --memory=3g --pids-limit=256 \
 
 本地与候选镜像内非 root 的运行入口/初始化测试均为 18/18 通过。真实服务测试按 FastAPI、Go 顺序执行，每种配方覆盖开发、首次生产源码部署和重复源码部署，并检查配置重载、坏配置拒绝、元信息更新、输入校验、敏感路径 404 和 SQLite quick_check。Go 还通过本地 go vet。未使用这些结果替代模型生成、Kubernetes 调度、域名预览和平台发布任务的端到端验收。
 
-40 的候选镜像、构建和测试记录在 `/root/opsiforce/deploy/.state/runtime-backends-20260916/`。候选镜像基于上一阶段隔离镜像叠加工具链和源码，两份正式 Dockerfile 尚未执行完整重构建。未修改集群默认 Agent 镜像或业务 Pod；当前线上旧镜像不能使用新增 init 命令。
+阶段 1b 的候选镜像、构建和测试记录在 `/root/opsiforce/deploy/.state/runtime-backends-20260916/`，当时未修改集群默认 Agent 镜像或业务 Pod。后续阶段 1c 已上线带模板选择的新版本，当前状态见 [上线记录](template-selection.md#40-实际上线与验收记录)。两份正式 Dockerfile 尚未执行完整重构建。
 
-下一步先接入项目创建时的配方选择与对应 Agent 指令，完成独立测试项目的创建、预览、首次/再次发布验收；随后逐项组合 Vue/React 前端。Java 继续后置，不扩大本轮范围。
+后续选择入口与发布验收进展见 [阶段 1c](template-selection.md)，之后逐项组合 Vue/React 前端。Java 继续后置。

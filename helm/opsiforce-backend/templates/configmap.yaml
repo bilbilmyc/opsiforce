@@ -8,6 +8,7 @@ data:
   DATABASE_URL: {{ .Values.config.databaseUrl | quote }}
   REDIS_URL: {{ .Values.config.redisUrl | quote }}
   K8S_NAMESPACE: {{ .Values.config.k8sNamespace | quote }}
+  ENABLED_PROJECT_RECIPES: {{ .Values.config.enabledProjectRecipes | default "" | quote }}
   {{- if ne (toString .Values.config.poolSizeOverride) "" }}
   POOL_SIZE_OVERRIDE: {{ .Values.config.poolSizeOverride | quote }}
   {{- end }}

@@ -67,6 +67,8 @@ The platform turns any `/workspace/...` link into a browser download. Use the pl
 
 ## Runtime environment
 
+First inspect the existing source and the user's requested technology. The workflow below applies to the bundled React/Vite + NestJS template. If a new request explicitly selects another stack, explain the mismatch before building: Python/FastAPI and Go have separate experimental project entries when enabled; Next.js and frontend combinations are still pending. Preserve the requested framework and existing files. An in-place technology change requires an explicit migration decision; silently implementing another stack does not fulfill the request.
+
 The dev servers are **already running** when you start — the container entrypoint launches them automatically.
 
 - **Frontend** (Vite): `http://localhost:3000` — hot-reloads on file save

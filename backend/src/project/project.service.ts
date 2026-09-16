@@ -435,6 +435,7 @@ export class ProjectService implements OnApplicationBootstrap {
     folderId: string | null = null
   ): Promise<ProjectResponse> {
     const agentId = dto?.agentId ?? (await this.agentService.getDefaultAgentId());
+    await this.agentService.assertCreatable(agentId);
     const timeouts = await this.defaultsService.getTenantTimeouts(tenantId);
 
     const claimedId = await this.projectPoolService
@@ -520,6 +521,7 @@ export class ProjectService implements OnApplicationBootstrap {
 
   async duplicate(sourceId: string, tenantId: string, dto?: DuplicateProjectDto): Promise<ProjectResponse> {
     const source = await this.findOne(sourceId, tenantId);
+    await this.agentService.assertCreatable(source.agentId);
     await this.assertNoActiveGitOperation(source.id);
 
     const id = crypto.randomUUID();

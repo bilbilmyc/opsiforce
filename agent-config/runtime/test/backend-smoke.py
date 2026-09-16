@@ -77,6 +77,11 @@ def exercise(root, recipe, mode, expected_names, add_name):
     try:
         eventually(lambda: request(3300, "/api/health") == (200, {"status": "ok"}))
         assert request(3300, "/")[1]["message"] == "before restart"
+        with urllib.request.urlopen(urllib.request.Request("http://127.0.0.1:3300/", headers={"Accept": "text/html"}), timeout=3) as response:
+            assert "text/html" in response.headers["Content-Type"]
+            assert response.headers["Vary"] == "Accept"
+            html = response.read().decode()
+            assert "before restart" in html and "never expose" not in html
         for route in ["/opsiforce.env.json", "/data/app.db", "/backend/main.py", "/backend/main.go"]:
             assert request(3300, route)[0] == 404, route
         assert request(3300, "/api/app-meta") == (200, {"exists": False})
@@ -95,8 +100,8 @@ def exercise(root, recipe, mode, expected_names, add_name):
         control = subprocess.Popen(["/usr/local/bin/agent-control"], env=env, stdout=log,
                                    stderr=subprocess.STDOUT, start_new_session=True)
         eventually(lambda: request(4910, "/restart-app", "POST", headers={})[0] == 403, timeout=10)
-        status, body = request(4910, "/restart-app", "POST", headers={"x-control-token": "isolated-smoke-token"})
-        assert status == 200 and body["killed"] >= 1, body
+        restarted = json.loads(command("node", str(RUNTIME / "cli.mjs"), "restart", env=env))
+        assert restarted["status"] == "ready" and restarted["restartedProcesses"] >= 1, restarted
         eventually(lambda: request(3300, "/")[1].get("message") == "after restart", timeout=60)
         assert [v["name"] for v in request(3300, "/api/items")[1]] == expected_names + [add_name]
         with sqlite3.connect(app / "data/app.db") as database:

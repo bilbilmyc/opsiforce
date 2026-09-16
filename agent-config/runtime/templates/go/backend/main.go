@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"html"
 	"io"
 	"log"
 	"net/http"
@@ -65,6 +67,12 @@ func run() error {
 		greeting = value
 	}
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Vary", "Accept")
+		if strings.Contains(r.Header.Get("Accept"), "text/html") {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = fmt.Fprintf(w, "<!doctype html><html lang='en'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>Go backend</title><style>body{font:16px system-ui;max-width:680px;margin:8vh auto;padding:24px;line-height:1.6}a{color:#09675b}</style><h1>Go backend</h1><p>%s</p><p><a href='/api/health' target='_blank' rel='noreferrer'>Health</a> · <a href='/api/items' target='_blank' rel='noreferrer'>Items API</a></p></html>", html.EscapeString(greeting))
+			return
+		}
 		writeJSON(w, 200, map[string]string{"message": greeting, "health": "/api/health"})
 	})
 	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {

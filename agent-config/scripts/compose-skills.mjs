@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { constants } from "node:fs"
-import { access, cp, mkdir, readdir, rename, rm } from "node:fs/promises"
+import { access, cp, mkdir, readFile, readdir, rename, rm } from "node:fs/promises"
 import path from "node:path"
 
 export function planCompose(sharedNames, overrideNames) {
@@ -22,8 +22,12 @@ async function listSkillDirs(dir) {
   return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
 }
 
-export async function composeSkills({ sharedDir, overridesDir, outDir }) {
-  const plan = planCompose(await listSkillDirs(sharedDir), await listSkillDirs(overridesDir))
+export async function composeSkills({ sharedDir, overridesDir, outDir, sharedSkills }) {
+  const available = await listSkillDirs(sharedDir)
+  if (sharedSkills !== undefined && (!Array.isArray(sharedSkills) || sharedSkills.some(name => !available.includes(name)))) {
+    throw new Error("sharedSkills must list existing shared skills")
+  }
+  const plan = planCompose(sharedSkills ?? available, await listSkillDirs(overridesDir))
   await rm(outDir, { recursive: true, force: true })
   await mkdir(outDir, { recursive: true })
   for (const { name, source } of plan) {
@@ -43,11 +47,13 @@ async function exists(target) {
 }
 
 async function composeAgentsRoot(sharedDir, agentsRoot) {
+  const registry = JSON.parse(await readFile(path.join(agentsRoot, "agents.json"), "utf8"))
   for (const entry of await readdir(agentsRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue
     const skillsDir = path.join(agentsRoot, entry.name, "skills")
     const stagingDir = path.join(agentsRoot, entry.name, ".skills-composed")
-    const plan = await composeSkills({ sharedDir, overridesDir: skillsDir, outDir: stagingDir })
+    const plan = await composeSkills({ sharedDir, overridesDir: skillsDir, outDir: stagingDir,
+      sharedSkills: registry.agents?.[entry.name]?.sharedSkills })
     if (await exists(skillsDir)) await rm(skillsDir, { recursive: true, force: true })
     await rename(stagingDir, skillsDir)
     console.log(`${entry.name}: composed ${plan.length} skills (${plan.filter((s) => s.source === "override").length} override)`)

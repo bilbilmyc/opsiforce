@@ -163,7 +163,10 @@ export class ProjectImportService {
   private async resolveAgent(agentName: string | null): Promise<{ agentId: string; agentFallbackFrom: string | null }> {
     if (agentName) {
       const agentId = await this.agentService.findIdByName(agentName);
-      if (agentId) return { agentId, agentFallbackFrom: null };
+      if (agentId) {
+        await this.agentService.assertCreatable(agentId);
+        return { agentId, agentFallbackFrom: null };
+      }
       this.logger.warn(`Imported agent "${agentName}" not found; falling back to the default agent`);
       return { agentId: await this.agentService.getDefaultAgentId(), agentFallbackFrom: agentName };
     }

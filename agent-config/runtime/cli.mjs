@@ -2,13 +2,16 @@
 import process from 'node:process';
 import { listRecipes, resolveStartup, RuntimeConfigError } from './project-runtime.mjs';
 import { scaffold } from './scaffold.mjs';
+import { restartApp } from './restart.mjs';
 
 try {
   const [command, ...rest] = process.argv.slice(2);
-  if (!(command === 'init' ? rest.length === 1 : rest.length === 0 && ['recipes', 'inspect', 'run'].includes(command))) {
-    throw new RuntimeConfigError('USAGE', 'Usage: opsiforce-runtime recipes|inspect|run or init recipe@version (WORKSPACE defaults to /workspace)');
+  if (!(command === 'init' ? rest.length === 1 : rest.length === 0 && ['recipes', 'inspect', 'run', 'restart'].includes(command))) {
+    throw new RuntimeConfigError('USAGE', 'Usage: opsiforce-runtime recipes|inspect|run|restart or init recipe@version (WORKSPACE defaults to /workspace)');
   }
-  if (command === 'init') {
+  if (command === 'restart') {
+    console.log(JSON.stringify(await restartApp(), null, 2));
+  } else if (command === 'init') {
     console.log(JSON.stringify(await scaffold(process.env.WORKSPACE || '/workspace', rest[0]), null, 2));
   } else if (command === 'recipes') {
     console.log(JSON.stringify(listRecipes(), null, 2));

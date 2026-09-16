@@ -1,18 +1,28 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { asc, eq } from 'drizzle-orm';
 import { db } from '../../db';
 import { agents } from '../../db/schema';
 import { DEFAULT_AGENT_NAME, type AgentResponse } from './agent.types';
+import { isAgentEnabled, readMergedAgentRegistry } from './agent-config';
 
 @Injectable()
 export class AgentService {
   private defaultAgentIdCache: string | null = null;
 
   async findAll(): Promise<AgentResponse[]> {
-    return db
+    const rows = await db
       .select({ id: agents.id, name: agents.name, displayName: agents.displayName, description: agents.description })
       .from(agents)
       .orderBy(asc(agents.name));
+    const registry = readMergedAgentRegistry();
+    return rows.filter(row => isAgentEnabled(registry.agents[row.name]));
+  }
+
+  async assertCreatable(id: string): Promise<void> {
+    const agent = await this.findById(id);
+    if (!isAgentEnabled(readMergedAgentRegistry().agents[agent.name])) {
+      throw new BadRequestException('This project template is not enabled on this deployment');
+    }
   }
 
   async findById(id: string): Promise<AgentResponse> {

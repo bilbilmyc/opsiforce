@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager, contextmanager
 import sqlite3
+from html import escape
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from platform_config import DATA_DIR, app_metadata, setting
 
@@ -42,8 +44,21 @@ class NewItem(BaseModel):
 
 
 @app.get("/")
-def index():
-    return {"message": setting("APP_GREETING", "FastAPI backend is ready"), "health": "/api/health", "docs": "/docs"}
+def index(request: Request):
+    greeting = setting("APP_GREETING", "FastAPI backend is ready")
+    headers = {"Vary": "Accept"}
+    if "text/html" in request.headers.get("accept", ""):
+        return HTMLResponse(
+            "<!doctype html><html lang='en'><meta charset='utf-8'>"
+            "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+            "<title>FastAPI backend</title><style>body{font:16px system-ui;max-width:680px;margin:8vh auto;padding:24px;line-height:1.6}a{color:#09675b}</style>"
+            "<h1>FastAPI backend</h1><p>" + escape(greeting) + "</p>"
+            "<p><a href='/docs' target='_blank' rel='noreferrer'>API documentation</a></p>"
+            "<p><a href='/api/health' target='_blank' rel='noreferrer'>Health</a> · "
+            "<a href='/api/items' target='_blank' rel='noreferrer'>Items API</a></p></html>",
+            headers=headers,
+        )
+    return JSONResponse({"message": greeting, "health": "/api/health", "docs": "/docs"}, headers=headers)
 
 
 @app.get("/api/health")

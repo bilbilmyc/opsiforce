@@ -10,6 +10,8 @@ export interface AgentRegistryEntry {
   model?: string;
   variant?: string;
   poolSize?: number;
+  recipe?: string;
+  sharedSkills?: string[];
 }
 
 export interface AgentRegistry {
@@ -55,12 +57,17 @@ export function readMergedAgentRegistry(privateFragment?: AgentRegistry): AgentR
   return mergeAgentRegistries(readPublicRegistry(), privateFragment ?? readPrivateRegistry());
 }
 
+/** Only expose a recipe after the matching Agent image has been rolled out. */
+export function isAgentEnabled(entry: AgentRegistryEntry | undefined, enabled = process.env.ENABLED_PROJECT_RECIPES ?? ''): boolean {
+  return !entry?.recipe || enabled.split(',').map(value => value.trim()).includes(entry.recipe);
+}
+
 export function readAgentConfig(): AgentRuntimeConfig {
   const poolSizes = new Map<string, number>();
   const versions = new Map<string, string>();
   const modelSelections = new Map<string, AgentModelSelection>();
   for (const [slug, conf] of Object.entries(readMergedAgentRegistry().agents)) {
-    const poolSize = typeof conf.poolSize === 'number' && conf.poolSize > 0 ? conf.poolSize : 0;
+    const poolSize = isAgentEnabled(conf) && typeof conf.poolSize === 'number' && conf.poolSize > 0 ? conf.poolSize : 0;
     poolSizes.set(slug, poolSize);
     if (typeof conf.version === 'string' && conf.version.length > 0) {
       versions.set(slug, conf.version);

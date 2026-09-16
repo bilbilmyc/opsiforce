@@ -67,6 +67,6 @@ HTTP 测试使用隔离的 Node 服务夹具，不能冒充 FastAPI/Go 或整个
 
 ## 下一步
 
-阶段 1b 按 FastAPI、Go 顺序验证独立后端模板，见 [后端模板](backend-templates.md)。接下来仍需项目创建入口、按配方提供的 Agent 指令和平台发布验收，再逐步引入前端组合。
+阶段 1b 按 FastAPI、Go 顺序验证独立后端模板，见 [后端模板](backend-templates.md)。阶段 1c 已完成 [模板选择与实际发布验收](template-selection.md)，接下来逐步引入前端组合。
 
 完整方向见 [多技术栈设计](../design/multi-stack-templates.md)。阶段 1 的多服务、统一诊断、配置和数据库适配仍待后续分步完成。

@@ -20,6 +20,7 @@ config:
   redisUrl: ""
   k8sNamespace: ""
   poolSizeOverride: ""
+  enabledProjectRecipes: "" # Opt in after rolling out Agent 0.10.3+: fastapi@1,go@1
   agentContainerImage: ""
   agentContainerImagePullPolicy: "Always"
   agentPort: "4096"

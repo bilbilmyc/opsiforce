@@ -2,6 +2,8 @@
 
 使用普通 Dockerfile、Kubernetes YAML 和 Shell 脚本部署。Windows 和 Linux 都支持构建，选择其中一台联网机器即可。
 
+Python/Go 实验模板需先构建包含 0.10.3 功能的 Agent 镜像，再通过 `ENABLED_PROJECT_RECIPES=fastapi@1,go@1` 部署启用；默认关闭，避免旧镜像显示不可用入口。完整顺序与验收见 [模板选择](../docs/runtime/template-selection.md)。
+
 - **部署**：前端、后端、运行时代理、Bifrost、Gotenberg、测试 PostgreSQL / Redis、Nginx 测试入口；Agent 在打开项目时创建。
 - **不部署**：Traefik、StorageClass、NetworkPolicy、Keycloak、OAuth2 Proxy。
 - **存储**：使用已有的 `local-path`，PVC 为 `ReadWriteOnce`。共享工作区受 PV 节点绑定限制。
