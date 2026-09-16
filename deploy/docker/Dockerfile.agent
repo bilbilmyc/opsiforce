@@ -30,6 +30,11 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/agent-c
 
 FROM registry.cn-beijing.aliyuncs.com/mayc/node:24.18.0-bookworm-slim
 
+COPY --from=log-writer-builder /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}" GOTOOLCHAIN=local \
+    GOPROXY=https://goproxy.cn \
+    GOSUMDB="sum.golang.org https://goproxy.cn/sumdb/sum.golang.org"
+
 ARG OPENCODE_CONFIG=agent-config/opencode.json
 
 # npm、Yarn、Node 编译头文件和 Python 包使用国内源。

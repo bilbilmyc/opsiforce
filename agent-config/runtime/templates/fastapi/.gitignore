@@ -1,0 +1,9 @@
+data/
+.env
+.env.*
+opsiforce.env*.json
+.venv/
+__pycache__/
+*.pyc
+.cache/
+.bin/

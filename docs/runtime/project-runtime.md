@@ -1,10 +1,10 @@
 # 项目运行入口：阶段 1a
 
-2026-09-16。本阶段完成启动清单、配方状态注册、只读预检和旧脚本入口适配。它还不是完整的多服务运行器，也不表示 Python、Go、Next.js 模板已交付。
+2026-09-16。本页记录阶段 1a 的启动清单、配方状态注册、只读预检和旧脚本入口适配。后续阶段 1b 新增 Python/Go 独立后端实验模板与 init 命令，见 [后端模板](backend-templates.md)；仍不是完整的多服务运行器。
 
 ## 已实现
 
-- `agent-config/runtime/recipes.json`：区分 legacy、experimental、planned。当前只允许 `legacy-startup@1` 和 `custom-startup@1`；Next、React/Vue + FastAPI/Go 只登记为 planned，选择时明确拒绝，不替换成其他模板。
+- `agent-config/runtime/recipes.json`：区分 legacy、experimental、planned。阶段 1a 允许 `legacy-startup@1` 和 `custom-startup@1`；阶段 1b 新增 `fastapi@1`、`go@1` 实验配方。Next、React/Vue + FastAPI/Go 仍登记为 planned，选择时明确拒绝，不替换成其他模板。
 - `app/opsiforce.project.json`：版本化启动清单，JSON Schema 在 `agent-config/runtime/project.schema.json`。严格拒绝未知字段、未知版本、错误类型和超过 64 KiB 的内容。运行时直接解释该 Schema 使用的小型约束子集，测试约束其可用关键词，尚未引入外部安装依赖。
 - `opsiforce-runtime inspect`：读取和验证，输出实际脚本、工作目录、配方与状态。不安装包、不创建清单、不改源文件，不启动应用。
 - `opsiforce-runtime run`：检查后直接替换进程，执行已有的可执行脚本；继承环境、标准输入输出、退出码和信号。路径按工作区校验，拒绝越界、不可执行文件、FIFO 和损坏清单。
@@ -67,6 +67,6 @@ HTTP 测试使用隔离的 Node 服务夹具，不能冒充 FastAPI/Go 或整个
 
 ## 下一步
 
-只推进一个 Python/FastAPI 配方：补齐工具链和锁定依赖、应用元信息与健康接口、开发/生产启动，使用独立测试项目验证创建、预览、重启和首次/再次发布。通过后再适配 Go 和前端组合，避免同时引入多个框架后无法归因。
+阶段 1b 按 FastAPI、Go 顺序验证独立后端模板，见 [后端模板](backend-templates.md)。接下来仍需项目创建入口、按配方提供的 Agent 指令和平台发布验收，再逐步引入前端组合。
 
 完整方向见 [多技术栈设计](../design/multi-stack-templates.md)。阶段 1 的多服务、统一诊断、配置和数据库适配仍待后续分步完成。

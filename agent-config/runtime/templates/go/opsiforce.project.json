@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "recipe": {
+    "id": "go",
+    "version": "1"
+  },
+  "startup": {
+    "script": "app/startup.sh",
+    "cwd": "app"
+  }
+}

@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 import process from 'node:process';
 import { listRecipes, resolveStartup, RuntimeConfigError } from './project-runtime.mjs';
+import { scaffold } from './scaffold.mjs';
 
 try {
   const [command, ...rest] = process.argv.slice(2);
-  if (rest.length || !['recipes', 'inspect', 'run'].includes(command)) {
-    throw new RuntimeConfigError('USAGE', 'Usage: opsiforce-runtime recipes|inspect|run (WORKSPACE defaults to /workspace)');
+  if (!(command === 'init' ? rest.length === 1 : rest.length === 0 && ['recipes', 'inspect', 'run'].includes(command))) {
+    throw new RuntimeConfigError('USAGE', 'Usage: opsiforce-runtime recipes|inspect|run or init recipe@version (WORKSPACE defaults to /workspace)');
   }
-  if (command === 'recipes') {
+  if (command === 'init') {
+    console.log(JSON.stringify(await scaffold(process.env.WORKSPACE || '/workspace', rest[0]), null, 2));
+  } else if (command === 'recipes') {
     console.log(JSON.stringify(listRecipes(), null, 2));
   } else {
     const plan = await resolveStartup(process.env.WORKSPACE || '/workspace');
@@ -25,7 +28,7 @@ try {
   console.error(JSON.stringify({
     stage: 'startup-config',
     code: error instanceof RuntimeConfigError ? error.code : 'STARTUP_FAILED',
-    message: error instanceof RuntimeConfigError ? error.message : 'Could not launch the project startup script',
+    message: error instanceof RuntimeConfigError ? error.message : 'Could not complete the runtime command',
   }));
   process.exitCode = 1;
 }

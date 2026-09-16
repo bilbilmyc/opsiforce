@@ -28,6 +28,10 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o /out/agent-c
 
 FROM node:24.18.0-slim
 
+# The final Agent compiles user Go projects as well as running the platform tools.
+COPY --from=log-writer-builder /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}" GOTOOLCHAIN=local
+
 ARG OPENCODE_CONFIG=agent-config/opencode.json
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
