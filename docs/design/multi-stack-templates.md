@@ -8,6 +8,29 @@
 
 当前 App Builder 的 agent.md 直接指定 React 页面、NestJS 模块和 Yarn；template/app/startup.sh 固定启动两个 Yarn 进程；entrypoint.sh 固定打开 app/data/app.db；发布写入 app/opsiforce.env.json。新项目没有独立的技术栈选择。因此不应通过换一个默认框架、堆装语言或重写平台解决。
 
+## 首批范围：覆盖主流开发者
+
+用户确认目标是让不同开发者保留熟悉的技术选择，覆盖主流即可。实现顺序按覆盖需求和维护成本安排，不按语言热度排名，也不承诺任意组合自动获得完整平台支持。
+
+| 范围 | 首批正式适配目标 | 后续扩展 |
+| --- | --- | --- |
+| 前端 | React + Vite、Vue + Vite | Angular；其他框架走自定义接入 |
+| 全栈/SSR | Next.js | Nuxt |
+| JS/TS 后端 | 兼容现有 NestJS，解除强制默认，不作为首批扩展重点 | Express、Fastify 项目按通用运行约定接入 |
+| Python 后端 | FastAPI | Django、Flask |
+| Java 后端 | 不纳入首批 | Spring Boot，随后按需扩展其他 JVM 框架 |
+| Go 后端 | Go HTTP 服务基线 | Gin 等适配配方 |
+| 其他语言 | 首批预留统一接入协议 | ASP.NET Core、Laravel、Rust/Axum |
+
+用户进一步确认：首批重点是 Python、Go，Java 放在后面。首批新增组合由 React/Vue 前端适配与 Python/Go 后端适配复用生成，并提供 Next 全栈和纯前端配方；现有 NestJS 保持兼容。它们的组合要逐项验收，不复制维护多套独立脚手架。Java、Rust、.NET/PHP 纳入后续覆盖范围，不能把“当前没预装”当“永远不支持”。
+
+面向开发者的入口分两条：
+
+1. 新建项目：自动选择或显式选择配方；界面展示实际选择，用户明确指定的栈不能被替换。
+2. 已有项目：先检查依赖、lockfile、工作目录、现有启动命令，生成可审阅的运行清单；不覆盖源码，不统一替换包管理器。基本导入能力随运行协议建设，复杂组合保持 experimental。
+
+默认 UI 只展示已验收的常用配方；“自定义项目”暴露安装、构建、启动、端口与数据目录这些必要配置。复杂度由平台消化，不要求开发者先掌握平台内部目录和控制进程。
+
 ## 设计：组合能力，发布经过验证的配方
 
 区分四种对象：
@@ -120,11 +143,11 @@ Agent 通用指令只保留需求实现、验证和平台约定；框架目录�
 | 阶段 | 交付 | 完成条件 |
 | --- | --- | --- |
 | 0 | Files 通用目录规则 | app 与根目录旧源码可见；私密路径和删除保护；读取错误可见；真实项目浏览验收 |
-| 1 | 清单 Schema、注册表、运行器和 legacy 适配 | 已有 NestJS 与已接入 FastAPI 项目不被覆盖；服务启停、日志、配置、存储协议测试通过 |
-| 2 | Next 全栈、Vue/React + FastAPI | 单服务全栈与双服务组合都通过完整生命周期；指定栈不被替换 |
-| 3 | Vue/React + Go | 复用组合机制；编译、依赖、静态资源、发布和数据保存通过 |
-| 4 | Rust、Java 后端及 Next + 独立后端 | 工具镜像、资源与系统依赖验收；Next 路由冲突测试通过 |
-| 5 | 定制项目导入、Nuxt 等扩展 | 用户可声明符合协议的项目；未认证组合标为 experimental，不冒充正式支持 |
+| 1 | 清单 Schema、注册表、运行器、legacy 适配与基本项目导入 | 已有 NestJS 与已接入 FastAPI 项目不被覆盖；服务启停、日志、配置、存储协议测试通过 |
+| 2 | Next 全栈、Vue/React + FastAPI、Vue/React + Go | 完成首批重点；单服务全栈与双服务组合通过完整生命周期、编译、依赖与数据保留验收；指定栈不被替换 |
+| 3 | Next + Python/Go 独立后端；现有 NestJS 适配收尾 | 明确路由归属；复用首批适配；存量项目保持兼容 |
+| 4 | Java/Spring Boot、Nuxt、Angular | 按实际开发者需求扩展；工具镜像、资源、SSR 与路由验收通过 |
+| 5 | ASP.NET Core、Laravel、Rust 及其他定制项目 | 工具镜像、资源与系统依赖验收；未认证组合标为 experimental，不冒充正式支持 |
 
 每个 verified 配方必须验证：空项目创建、Files 源码与配置预览、API 与页面、开发修改、进程崩溃恢复、Pod 重建、休眠恢复、首次发布、再次发布保留生产数据、开发/生产隔离、失败发布的恢复方式。建立按组合执行的 CI；适配改动触发所有引用它的已认证配方，不能只测一个示例。
 
@@ -136,5 +159,6 @@ Agent 通用指令只保留需求实现、验证和平台约定；框架目录�
 - [Vue Quick Start](https://vuejs.org/guide/quick-start)：官方脚手架采用 Vite，前端仍需 Node 构建工具。
 - [FastAPI 容器部署](https://fastapi.tiangolo.com/deployment/docker/)：应用进程与容器运行生命周期需一起配置。
 - [Spring Boot OCI 构建](https://docs.spring.io/spring-boot/maven-plugin/build-image.html)：Java 有自己的构建/运行镜像流程，适配可选择 jar 或 OCI 产物，不要求在 Agent 中启动 Docker。
+- [Stack Overflow 2025 技术调查](https://survey.stackoverflow.co/2025/technology)：作为跨生态需求的参考之一，不据此推断本站用户比例，也不以受喜爱程度替代使用需求。
 
 以上引用用于框架事实；清单、注册表、阶段顺序和适配协议是本项目的设计建议。
