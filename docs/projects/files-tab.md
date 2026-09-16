@@ -2,21 +2,25 @@
 
 > The fourth project-workspace tab, where a member browses, uploads, downloads, and deletes the Active environment's workspace files as three curated sections. Read this before changing what the listing shows, what it hides, where uploads land, or how it stays fresh.
 
-Before this tab, workspace files were reachable only in passing: a member could attach an upload to a prompt, and could click a `/workspace/...` link the Agent had put in chat ([File Downloads](file-downloads.md)). Nothing let them see what was actually *in* the workspace — an upload from last week, a report the Agent wrote and mentioned once, a stray file left mid-task. **Files** is that view: open the tab and the workspace is there — browsable, uploadable, downloadable, deletable — for every project member with no permission gate.
+Before this tab, workspace files were reachable only in passing: a member could attach an upload to a prompt, and could click a `/workspace/...` link the Agent had put in chat ([File Downloads](file-downloads.md)). Nothing let them see what was actually *in* the workspace — an upload from last week, a report the Agent wrote and mentioned once, a stray file left mid-task. **Files** is that view: open the tab and the workspace is there — browsable, with upload/download and deletion of uploads and outputs — for every project member with no permission gate.
 
-## Three sections, not a filesystem
+## Three sections and independent access rules
 
-The tab is deliberately not a file browser. The workspace root holds the App's source, the platform's own data folders, and a pile of tool dotfiles, none of which a member has any business seeing or removing. So the root listing is **curated on the server**, into exactly three sections:
+- **Project files** (`other`): workspace source including `app/` and legacy project directories. This section is read-only in Files; editing belongs in Code.
+- **Output files** (`generated`): `generated_files/`.
+- **User uploads** (`uploads`): `user_uploaded_files/`.
 
-- **Generated files** — where the Agent saves documents it produces ([Document Generation](../agents/document-generation.md)). It leads the row and is the section the tab opens on, because a finished deliverable is the thing a member most often came here for. It is created lazily on the Agent's first write, so environments that predate the convention simply show an empty section; there is no migration.
-- **User uploads** — where uploads land, whether attached in the composer or dropped on this tab.
-- **Other files** — whatever else sits at the workspace root, which in practice means strays the Agent left behind.
+The existing API keys and section paths remain stable. Project files appear first, and the first populated section is selected on initial load. Counts represent immediate entries, not recursive totals.
 
-Everything else is filtered out before the response is built: the App's `app/`, the platform's `data/` and `node_modules/`, and every dotfile. The important property is that this happens **server-side** — the listing will not name them and the drill-down endpoint 404s on them, including when a symlink from a visible root points at one, because the policy is re-applied to the *resolved* path and not just the requested one. The same curation is what makes those paths undeletable: delete is scoped to the three visible roots, so the App's internals are safe by construction rather than by a second, separately-maintained rule.
+`workspace-file-policy.ts` owns separate listing, private-path, and deletion rules. Listing includes source regardless of language or framework. It hides `node_modules`, `__pycache__`, dot directories, most dotfiles, `opsiforce.env.json`, workspace `data/`, and `app/data/`. Only `.gitignore`, `.dockerignore`, and `.editorconfig` are allowed dotfiles. Names such as `src/data`, `build`, `target`, and `vendor` are not guessed to be disposable; project-specific build exclusions belong in the future versioned runtime manifest.
 
-Two precisions worth stating, because the difference is easy to misread as a hole. **Dotfiles are refused on every endpoint** — listing, drill-down, content, and download — and that ban now survives symlinks, so a link named `notes` pointing at `.git` or `.env` cannot be read through. **Hidden roots are a curation rule, not a read boundary**: `content` and `download` will still serve `app/package.json` if asked for it by path. That is deliberate and predates this tab — chat links the Agent wrote point into `app/`, and download has always resolved them — so tightening it would break existing conversations rather than close a gap. What the hidden-root set buys is a listing a member can trust and a delete they cannot aim at the App.
+Private-path checks apply to content/download as well as listings and are repeated against the opened file's resolved path. Existing ordinary source links still work. This deliberately closes direct reads of the known runtime configuration and data paths; it is not a general secret scanner for arbitrarily named user files.
 
-Symlinks are dropped from listings entirely. A workspace is writable by the Agent, so a symlink is the obvious way to smuggle a path outside it into a view; rather than resolve each one and reason about where it points, the listing skips them and the resolved-path containment check rejects any directory reached through one.
+Listings omit symlinks and directory navigation/deletion reject symlink path components. Content resolves the opened descriptor on Linux, refuses workspace escapes, and rechecks private paths. Files does not change the project's existing membership authorization.
+
+Entries return `canDelete`; the UI only offers deletion when it is explicitly true. Only descendants of outputs/uploads may be deleted, never section roots or project files (including legacy roots). Server-side validation is authoritative even for direct DELETE requests.
+
+Missing optional upload/output sections are empty. Missing workspaces/directories return 404; malformed section paths and filesystem failures return errors rather than empty success responses. The UI distinguishes these from an empty directory and offers Retry. Reading is not a recursive scan and does not depend on the Agent process being awake.
 
 Navigation is Drive-shaped: pill tabs switch section, folders drill down with breadcrumbs, and a table ⇄ card toggle remembers the member's choice across reloads. There is no expand-all tree and no pagination — a workspace is small enough that a directory is one request.
 
@@ -42,7 +46,7 @@ Delete is a hard, immediate, recursive delete behind a confirmation dialog — n
 
 Deleting the file a member is currently previewing closes that preview the moment the delete lands, and so does deleting a folder somewhere above it — the panel is never left displaying a file the tab has just removed.
 
-Server-side, deletable paths must resolve inside the three visible roots. In practice that means anything under User uploads or Generated files, or a stray sitting directly at the workspace root — and *not* the section folders themselves, the App source, the platform's data folders, or any dotfile. Because the rule keys off the same curation the listing uses, "you can delete what you can see" holds without the two rules being able to drift apart.
+Deletion uses canonical workspace-relative paths and rejects symlink components. Source, private paths, and section roots remain protected independently of whether they are displayed.
 
 ## Backend shape
 

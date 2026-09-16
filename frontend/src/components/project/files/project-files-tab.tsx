@@ -194,6 +194,9 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
       </div>
 
       <p class="px-4 pb-2 text-xs text-muted-foreground">{t('Browse app source in Project files, exported documents in Output files, and your uploads in User uploads.')}</p>
+      <Show when={section() === 'other'}>
+        <p class="px-4 pb-2 text-xs text-muted-foreground">{t('Project files are read-only here. Edit source in Code; private runtime files and dependencies are hidden.')}</p>
+      </Show>
 
       <div class="px-4 pb-2 shrink-0">
         <FilesDropzone upload={upload} hint={t("Lands in {0}", { "0": uploadTargetLabel() })} dragging={dragDepth() > 0} />
@@ -213,7 +216,10 @@ export function ProjectFilesTab(props: ProjectFilesTabProps) {
         <Show when={!loading()} fallback={<Spinner label={t("Loading files...")} />}>
           <Show
             when={!error()}
-            fallback={<div class="p-8 text-center text-xs text-destructive">{t("Could not load files.")}</div>}
+            fallback={<div class="p-8 text-center text-xs text-destructive" role="alert">
+              <p>{t('Could not read this directory. It may be unavailable or inaccessible.')}</p>
+              <button type="button" class="mt-3 underline underline-offset-4" onClick={refresh}>{t('Retry')}</button>
+            </div>}
           >
             <Show
               when={entries().length > 0}

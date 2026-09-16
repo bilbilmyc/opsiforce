@@ -1,14 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { open, type FileHandle } from 'fs/promises';
-import { basename } from 'path';
+import { basename, relative } from 'path';
 import {
-  hasHiddenSegment,
   resolveFilePathWithinRoot,
   resolveOpenedFileRelativePath,
   resolveWorkspaceRoot,
   WORKSPACE_FILE_PATH_POLICY,
 } from './file-paths';
+import { isPrivateWorkspacePath } from './workspace-file-policy';
 
 export interface OpenedWorkspaceFile {
   handle: FileHandle;
@@ -27,13 +27,14 @@ export class WorkspaceFileService {
   async openForRead(directory: string, relativePath: string): Promise<OpenedWorkspaceFile> {
     const root = resolveWorkspaceRoot(this.storageMountPath, directory);
     const filePath = resolveFilePathWithinRoot(root, relativePath, WORKSPACE_FILE_PATH_POLICY);
+    if (isPrivateWorkspacePath(relative(root, filePath))) throw new NotFoundException('File not found');
 
     const handle = await open(filePath, 'r').catch(() => null);
     if (!handle) throw new NotFoundException('File not found');
 
     const info = await handle.stat().catch(() => null);
     const realRelativePath = await resolveOpenedFileRelativePath(root, handle.fd);
-    if (!info || !info.isFile() || realRelativePath === null || hasHiddenSegment(realRelativePath)) {
+    if (!info || !info.isFile() || realRelativePath === null || isPrivateWorkspacePath(realRelativePath)) {
       await handle.close().catch(() => {});
       throw new NotFoundException('File not found');
     }

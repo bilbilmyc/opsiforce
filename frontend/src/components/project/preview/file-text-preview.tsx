@@ -23,12 +23,6 @@ export function FileTextPreview(props: FileTextPreviewProps) {
   const state = createFileFetch(() => props.url, readText, MAX_TEXT_PREVIEW_BYTES);
   const content = () => loadedText(state());
 
-  const source = () => {
-    const current = content();
-    if (!current) return '';
-    return props.markdown ? current.text : fencedCode(current.text, textPreviewLanguage(props.name));
-  };
-
   return (
     <Switch>
       <Match when={state().status === 'loading'}>
@@ -43,7 +37,13 @@ export function FileTextPreview(props: FileTextPreviewProps) {
       <Match when={content()}>
         {(loaded) => (
           <div class="h-full overflow-auto p-4">
-            <Markdown text={source()} />
+            <Show when={props.markdown} fallback={
+              <pre class="font-mono text-xs leading-6 whitespace-pre tab-size-2" aria-label={props.name}>
+                <code data-language={textPreviewLanguage(props.name)}>{loaded().text}</code>
+              </pre>
+            }>
+              <Markdown text={loaded().text} />
+            </Show>
             <Show when={loaded().truncated}>
               <p class="mt-4 text-xs text-muted-foreground">{t("Preview truncated — download the file to read all of it.")}</p>
             </Show>
@@ -72,11 +72,4 @@ async function readText(response: Response): Promise<TextContent | null> {
   const truncated = bytes.byteLength > MAX_TEXT_PREVIEW_BYTES;
   const text = new TextDecoder().decode(truncated ? bytes.subarray(0, MAX_TEXT_PREVIEW_BYTES) : bytes);
   return { text, truncated };
-}
-
-function fencedCode(text: string, language: string): string {
-  const backtickRuns = text.match(/`+/g) ?? [];
-  const longestRun = backtickRuns.reduce((longest, run) => Math.max(longest, run.length), 2);
-  const fence = '`'.repeat(longestRun + 1);
-  return `${fence}${language}\n${text}\n${fence}`;
 }

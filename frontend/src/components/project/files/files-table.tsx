@@ -54,9 +54,11 @@ export function FilesTable(props: FilesTableProps) {
                       <Download class="w-3.5 h-3.5" />
                     </ToolbarButton>
                   </Show>
-                  <ToolbarButton tooltip={t("Delete")} onClick={() => props.onDelete(entry)}>
-                    <Trash2 class="w-3.5 h-3.5 text-destructive" />
-                  </ToolbarButton>
+                  <Show when={entry.canDelete === true}>
+                    <ToolbarButton tooltip={t("Delete")} onClick={() => props.onDelete(entry)}>
+                      <Trash2 class="w-3.5 h-3.5 text-destructive" />
+                    </ToolbarButton>
+                  </Show>
                 </div>
               </TableCell>
             </TableRow>

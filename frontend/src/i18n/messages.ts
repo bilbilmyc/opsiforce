@@ -230,6 +230,8 @@ export const chinese: Record<string, string> = {
   "Card view": "卡片视图",
   "Loading files...": "正在加载文件…",
   "Could not load files.": "无法加载文件。",
+  "Project files are read-only here. Edit source in Code; private runtime files and dependencies are hidden.": "项目文件在此处只读，请在「代码」中编辑；已隐藏运行配置、内部数据和依赖目录。",
+  "Could not read this directory. It may be unavailable or inaccessible.": "无法读取此目录，目录可能不存在或暂时无法访问。",
   "Nothing here yet.": "暂无内容。",
   "The folder and everything inside it will be permanently deleted.": "该文件夹及其中的所有内容将被永久删除。",
   "This file will be permanently deleted.": "此文件将被永久删除。",

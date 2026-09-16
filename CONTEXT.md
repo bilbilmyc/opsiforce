@@ -124,7 +124,7 @@ _Avoid_: Voice message (implies the audio itself is attached or kept); Voice cha
 ### Files
 
 **Files**:
-The project workspace tab where a user sees and manages the Active environment's workspace files — User uploads, Generated files, and any stray files the Agent left at the workspace root — with folder drill-down and breadcrumbs. Visible to every project member; the App's source, platform data, and dotfiles never appear in it.
+The project workspace tab where a user browses the Active environment's Project files (including app source and legacy roots), Output files, and User uploads, with folder drill-down and breadcrumbs. Project files are read-only here; only output/upload descendants are deletable. Platform data, known runtime secrets, dependencies, and most dotfiles are hidden. See docs/projects/files-tab.md for the exact shared policy.
 _Avoid_: File browser, File manager (dev-tool connotation — it is a curated view, not the filesystem); Workspace (the Org-level Project grouping — a different thing)
 
 **User uploads**:

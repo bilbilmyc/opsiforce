@@ -18,6 +18,22 @@ const HTML_EXTENSIONS = new Set(['html', 'htm']);
 const SPREADSHEET_EXTENSIONS = new Set(['xlsx']);
 const OFFICE_EXTENSIONS = new Set(['docx', 'pptx']);
 const NEW_TAB_KINDS = new Set<FilePreviewKind>(['pdf', 'image', 'html']);
+const TEXT_FILENAMES: Record<string, string> = {
+  'Dockerfile': 'dockerfile',
+  'Containerfile': 'dockerfile',
+  'Makefile': 'makefile',
+  '.gitignore': 'text',
+  '.dockerignore': 'text',
+  '.editorconfig': 'ini',
+  'go.mod': 'text',
+  'go.sum': 'text',
+  'Cargo.lock': 'toml',
+  'yarn.lock': 'yaml',
+  'uv.lock': 'toml',
+  'poetry.lock': 'toml',
+  'mvnw': 'bash',
+  'gradlew': 'bash',
+};
 
 const TEXT_LANGUAGES: Record<string, string> = {
   txt: 'text',
@@ -62,6 +78,8 @@ const TEXT_LANGUAGES: Record<string, string> = {
   rs: 'rust',
   java: 'java',
   kt: 'kotlin',
+  kts: 'kotlin',
+  gradle: 'groovy',
   swift: 'swift',
   c: 'c',
   h: 'c',
@@ -89,6 +107,7 @@ export function fileNameOf(path: string): string {
 }
 
 export function filePreviewKind(name: string): FilePreviewKind {
+  if (Object.hasOwn(TEXT_FILENAMES, name)) return 'text';
   const extension = fileExtensionOf(name);
   if (extension === 'pdf') return 'pdf';
   if (extension === 'svg') return 'svg';
@@ -111,5 +130,5 @@ export function opensInNewTab(kind: FilePreviewKind): boolean {
 }
 
 export function textPreviewLanguage(name: string): string {
-  return TEXT_LANGUAGES[fileExtensionOf(name)] ?? 'text';
+  return TEXT_FILENAMES[name] ?? TEXT_LANGUAGES[fileExtensionOf(name)] ?? 'text';
 }

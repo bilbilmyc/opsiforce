@@ -10,6 +10,7 @@ export interface FileEntry {
   type: FileEntryType;
   size: number;
   modifiedAt: string;
+  canDelete?: boolean;
 }
 
 export type FilesSectionKey = 'uploads' | 'generated' | 'other';

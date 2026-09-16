@@ -8,8 +8,6 @@ const WORKSPACE_LINK_PREFIX = /^\/?workspace\//;
 export const USER_UPLOADS_DIRECTORY_NAME = 'user_uploaded_files';
 export const GENERATED_FILES_DIRECTORY_NAME = 'generated_files';
 
-export const HIDDEN_ROOT_DIRECTORY_NAMES = new Set(['app', 'node_modules', 'data']);
-
 export interface FilePathPolicy {
   stripWorkspaceLinkPrefix: boolean;
   rejectHiddenSegments: boolean;
@@ -22,12 +20,12 @@ export const UPLOAD_FILE_PATH_POLICY: FilePathPolicy = {
 
 export const WORKSPACE_FILE_PATH_POLICY: FilePathPolicy = {
   stripWorkspaceLinkPrefix: true,
-  rejectHiddenSegments: true,
+  rejectHiddenSegments: false,
 };
 
 export const WORKSPACE_LISTING_PATH_POLICY: FilePathPolicy = {
   stripWorkspaceLinkPrefix: false,
-  rejectHiddenSegments: true,
+  rejectHiddenSegments: false,
 };
 
 export function resolveWorkspaceRoot(storageMountPath: string, directory: string): string {
